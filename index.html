@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>PaintWorkz Pro 2.9.6 MASTER</title>
+    <title>PaintWorkz Pro 2.9.7 MASTER</title>
     <style>
         :root {--gold: linear-gradient(145deg, #d4af37, #f9f1b0, #aa841e); --rainbow: linear-gradient(90deg, red, orange, yellow, green, blue, indigo, violet); --gs: #d4af37;}
         body {margin:0;font-family:-apple-system, sans-serif;background:#f0f0f5;padding-bottom:180px;-webkit-tap-highlight-color:transparent;}
@@ -23,17 +23,30 @@
         .view-section {display:none;} .view-section.active {display:block;}
         .card {background:#fff;border-radius:12px;padding:15px;margin-bottom:10px;border:1px solid #ddd;box-shadow: 0 2px 5px rgba(0,0,0,0.05);}
 
-        /* SYMMETRY ROW: QTY & THICKNESS */
-        .input-group {display:flex; flex-direction:column; align-items:center; gap:2px;}
-        .label-tiny {font-size:9px; font-weight:900; color:#888; text-transform:uppercase;}
-        .bubble-input {background:#f0f0f5; color:#000; padding:10px; border-radius:10px; font-weight:900; width:45px; text-align:center; border:1px solid #ccc; font-size:16px;}
+        /* SYMMETRY ROW: THICK | PROFILE | QTY */
+        .sym-row {display:flex; gap:8px; align-items:center; margin-bottom:10px;}
+        .bubble-wrap {display:flex; flex-direction:column; align-items:center; flex:0 0 60px;}
+        .bubble-wrap label {font-size:8px; font-weight:900; color:#555; text-transform:uppercase; margin-bottom:2px;}
+        .b-input {background:#f0f0f5; border:1px solid #ccc; border-radius:12px; width:100%; height:45px; text-align:center; font-weight:900; font-size:16px;}
+        
+        .prof-bubble {flex:1; height:45px; background:#f0f0f5; border:1px solid #ccc; border-radius:12px; font-weight:900; padding:0 10px;}
 
+        /* PART CARDS */
         .p-card {flex:1;background:#fff;border:2px solid #ddd;border-radius:10px;padding:8px;text-align:center;font-weight:900;font-size:11px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px;}
         .p-card svg {width:24px;height:24px;stroke:#444;fill:none;stroke-width:2;}
         .p-card.active {border-color:var(--gs);background:#fff9e6;}
+        .p-card.active svg {stroke:var(--gs);}
 
+        .t-btn {flex:1;padding:12px;border:1px solid #ccc;border-radius:8px;font-weight:900;text-align:center;background:#fff;cursor:pointer;}
+        .t-btn.active {background:#000;color:#fff;border-color:var(--gs);}
+
+        /* EDGES */
+        .edge-row {display:flex;justify-content:space-between;align-items:center;margin:15px 0;gap:8px;}
         .edge-box {flex:1;height:55px;border-radius:10px;border:2px solid #bbb;background:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;color:#ccc;cursor:pointer;}
         .edge-box.active {background:#34c759;border-color:#28a745;color:#fff;}
+
+        .cam-btn {width:70px;height:70px;background:#000;border:3px solid var(--gs);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:32px;position:relative;cursor:pointer;flex-shrink:0;}
+        .badge {position:absolute;top:-5px;right:-5px;background:var(--gold);color:#000;width:22px;height:22px;border-radius:50%;font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center;border:1px solid #000;z-index:10;}
 
         /* LIST UI */
         .mode-box {width:50px; height:50px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:16px; border:3px solid;}
@@ -44,6 +57,8 @@
         .edge-pill {padding:4px 10px; border-radius:6px; font-size:14px; font-weight:900; color:#fff; display:inline-block; margin-top:5px;}
         .edge-L {background:#f44336;} .edge-S {background:#2196f3;}
 
+        #markup-ui {display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#000; z-index:2000; flex-direction:column;}
+        canvas {background:#000; flex-grow:1; touch-action:none;}
         input,select {width:100%;padding:14px;margin:4px 0;border-radius:10px;border:1px solid #ccc;font-size:16px;box-sizing:border-box;}
         .sticky-footer {background:#000;padding:15px;position:fixed;bottom:0;width:100%;border-top:4px solid var(--gs);color:#fff;display:flex;justify-content:space-around;z-index:1001;}
     </style>
@@ -65,18 +80,30 @@
 <div class="container">
     <div id="measure" class="view-section active">
         <div class="card">
-            <div style="display:flex; gap:10px; align-items:flex-end; margin-bottom:10px;">
-                <div class="input-group">
-                    <span class="label-tiny">Thick</span>
-                    <input type="number" id="thk" value="18" class="bubble-input" inputmode="numeric">
+            <div style="display:flex;gap:8px;"><select id="cli" class="prof-bubble"></select><input type="text" id="jN" placeholder="JOB #" style="width:100px; text-align:center;"></div>
+            <div style="display:flex;gap:8px;position:relative; margin:5px 0;">
+                <input type="text" id="jNm" placeholder="JOB NAME" style="flex:1">
+                <label style="background:#000; padding:10px; border-radius:10px; color:#fff; position:relative;">📸
+                    <input type="file" multiple style="display:none" onchange="attachJobPhotos(this)">
+                    <div id="jobBadge" class="badge" style="display:none">0</div>
+                </label>
+            </div>
+            <div style="display:flex;gap:8px;"><select id="pBrand"></select><select id="pColor"></select></div>
+
+            <hr style="border:0; border-top:1px solid #eee; margin:15px 0;">
+
+            <div class="sym-row">
+                <div class="bubble-wrap">
+                    <label>Thick</label>
+                    <input type="number" id="thk" value="18" class="b-input" inputmode="numeric">
                 </div>
-                <div style="flex:1;">
-                    <span class="label-tiny">Door Profile</span>
-                    <select id="prof-select" style="margin:0;"></select>
+                <div style="flex:1; display:flex; flex-direction:column;">
+                    <label style="font-size:8px; font-weight:900; color:#555; text-transform:uppercase; margin-bottom:2px; text-align:center;">Door Profile</label>
+                    <select id="prof-select" class="prof-bubble"></select>
                 </div>
-                <div class="input-group">
-                    <span class="label-tiny">Qty</span>
-                    <input type="number" id="qty" value="1" class="bubble-input" inputmode="numeric">
+                <div class="bubble-wrap">
+                    <label>Qty</label>
+                    <input type="number" id="qty" value="1" class="b-input" inputmode="numeric">
                 </div>
             </div>
 
@@ -86,55 +113,131 @@
                 <div id="pDr" class="p-card" onclick="setP('Drawer')"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="6" rx="1"/><rect x="3" y="13" width="18" height="6" rx="1"/></svg>DRAWER</div>
             </div>
 
+            <input type="text" id="desc" placeholder="DESCRIPTION (e.g. Fridge Gable)">
             <div style="display:flex;gap:8px;"><input type="number" id="h" placeholder="LENGTH" oninput="up()" inputmode="numeric"><input type="number" id="w" placeholder="WIDTH" oninput="up()" inputmode="numeric"></div>
             
             <div style="display:flex;gap:8px;margin:10px 0"><div id="fF" class="t-btn active" onclick="setF('Flat')">Flat</div><div id="fM" class="t-btn" onclick="setF('Moulded')">Moulded</div></div>
             <div style="display:flex;gap:8px;margin-bottom:10px"><div id="mSS" class="t-btn active" onclick="setM('SS')">SS</div><div id="mDS" class="t-btn" onclick="setM('DS')">DS</div><div id="mSE" class="t-btn" onclick="setM('SE')">SE</div></div>
             
+            <div class="edge-row">
+                <div class="edge-box active" id="E1" onclick="tE(this)">L</div><div class="edge-box active" id="E2" onclick="tE(this)">L</div>
+                <label class="cam-btn">📸<input type="file" id="camInput" accept="image/*" capture="camera" style="display:none" onchange="handleMarkupImg(this)"></label>
+                <div class="edge-box active" id="E3" onclick="tE(this)">S</div><div class="edge-box active" id="E4" onclick="tE(this)">S</div>
+            </div>
+
             <div id="liveSq" style="text-align:center;font-weight:900;color:#aa841e;font-size:42px;">0.000</div>
             <button onclick="add()" style="width:100%;padding:18px;border-radius:40px;background:var(--gold);border:none;font-size:22px;font-weight:900;">ADD TO LIST</button>
         </div>
         <div id="list"></div>
     </div>
+
+    <div id="db" class="view-section">
+        <div class="card"><h3>Database</h3><div id="brandList"></div></div>
+    </div>
+
+    <div id="history" class="view-section">
+        <div id="history-list"></div>
+    </div>
+</div>
+
+<div id="markup-ui">
+    <div style="background:#1c1c1e; padding:15px; display:flex; justify-content:space-between; color:#fff;">
+        <button onclick="closeMarkup()" style="color:#0a84ff;background:0;border:0;font-size:18px">Cancel</button>
+        <b>MARK DAMAGE</b>
+        <button onclick="saveMarkup()" style="color:#34c759;background:0;border:0;font-size:18px">Done</button>
+    </div>
+    <canvas id="markup-canvas"></canvas>
+</div>
+
+<div class="sticky-footer">
+    <div style="text-align:center"><div style="font-size:10px">TOTAL AREA</div><div id="tA" style="font-size:20px;font-weight:900;color:var(--gs)">0.000</div></div>
+    <div style="text-align:center"><div style="font-size:10px">TOTAL PARTS</div><div id="tQ" style="font-size:20px;font-weight:900;color:var(--gs)">0</div></div>
 </div>
 
 <script>
-    let items=[], mode='SS', finish='Flat', pType='Panel', damagePhotos=[];
+    let items=[], jobPhotos=[], mode='SS', finish='Flat', pType='Panel', damagePhotos=[];
+    const canvas=document.getElementById('markup-canvas'), ctx=canvas.getContext('2d'), markupImg=new Image();
 
-    function setP(p){ pType=p; document.querySelectorAll('.p-card').forEach(x=>x.classList.remove('active')); document.getElementById(p==='Panel'?'pP':p==='Door'?'pD':'pDr').classList.add('active'); }
+    // Restoration of Markup, Selection, Calculation and Save logic...
+    function handleMarkupImg(i){ if(i.files[0]){ const r=new FileReader(); r.onload=e=>{markupImg.src=e.target.result; openMarkup();}; r.readAsDataURL(i.files[0]); } }
+    function openMarkup(){
+        document.getElementById('markup-ui').style.display='flex';
+        canvas.width=window.innerWidth; canvas.height=window.innerHeight-100;
+        markupImg.onload=()=>{
+            let ratio=Math.min(canvas.width/markupImg.width, canvas.height/markupImg.height);
+            ctx.drawImage(markupImg, (canvas.width-markupImg.width*ratio)/2, (canvas.height-markupImg.height*ratio)/2, markupImg.width*ratio, markupImg.height*ratio);
+        };
+        ctx.strokeStyle='red'; ctx.lineWidth=6;
+        canvas.ontouchmove=e=>{ let t=e.touches[0]; ctx.lineTo(t.clientX, t.clientY-60); ctx.stroke(); e.preventDefault(); };
+        canvas.ontouchstart=e=>{ ctx.beginPath(); let t=e.touches[0]; ctx.moveTo(t.clientX, t.clientY-60); };
+    }
+    function saveMarkup(){ damagePhotos.push(canvas.toDataURL('image/jpeg', 0.7)); closeMarkup(); }
+    function closeMarkup(){ document.getElementById('markup-ui').style.display='none'; }
+
+    function attachJobPhotos(i){ Array.from(i.files).forEach(f=>{ const r=new FileReader(); r.onload=e=>{jobPhotos.push(e.target.result); let b=document.getElementById('jobBadge'); b.innerText=jobPhotos.length; b.style.display='flex';}; r.readAsDataURL(f); }); }
+
+    function setP(p){ pType=p; document.querySelectorAll('.p-card').forEach(x=>x.classList.remove('active')); document.getElementById(p==='Panel'?'pP':p==='Door'?'pD':'pDr').classList.add('active'); def(); }
     function setM(m){ mode=m; ['SS','DS','SE'].forEach(v=>document.getElementById('m'+v).classList.toggle('active',mode===v)); up(); }
     function setF(f){ finish=f; document.getElementById('fF').classList.toggle('active',f==='Flat'); document.getElementById('fM').classList.toggle('active',f==='Moulded'); }
-    
-    function up(){ 
-        let h=Number(document.getElementById('h').value)||0, w=Number(document.getElementById('w').value)||0;
-        let f=(h*w)/1e6;
-        document.getElementById('liveSq').innerText = (mode==='DS' ? f*2 : f).toFixed(3);
+    function tE(e){ e.classList.toggle('active'); up(); }
+    function def(){ [1,2,3,4].forEach(i=>document.getElementById('E'+i).classList.remove('active')); if(mode==='SE') document.getElementById('E1').classList.add('active'); else if(pType!=='Panel') [1,2,3,4].forEach(i=>document.getElementById('E'+i).classList.add('active')); up(); }
+
+    function calc(h,w,e,m){
+        let f=(h*w)/1e6, el=((e[0]?h:0)+(e[1]?h:0)+(e[2]?w:0)+(e[3]?w:0)), es=(el*18)/1e6;
+        if(m==='SS') return f+es;
+        if(m==='DS') return (f*2)+es;
+        if(m==='SE') return f+es+(el*100/1e6);
+        return 0;
     }
+    function up(){ let h=Number(document.getElementById('h').value)||0, w=Number(document.getElementById('w').value)||0; let e=[1,2,3,4].map(i=>document.getElementById('E'+i).classList.contains('active')); document.getElementById('liveSq').innerText=calc(h,w,e,mode).toFixed(3); }
 
     function add(){
-        let h=document.getElementById('h').value, w=document.getElementById('w').value, t=document.getElementById('thk').value, q=parseInt(document.getElementById('qty').value);
+        let h=document.getElementById('h').value, w=document.getElementById('w').value, t=document.getElementById('thk').value, q=parseInt(document.getElementById('qty').value)||1;
         if(!h||!w) return;
-        items.push({h,w,t,q,mode,finish,pType,sqm:((h*w)/1e6).toFixed(3),photos:[]});
-        document.getElementById('h').value=''; document.getElementById('w').value=''; document.getElementById('qty').value=1; render();
+        let e=[1,2,3,4].map(i=>document.getElementById('E'+i).classList.contains('active'));
+        let match = items.find(it => it.h==h && it.w==w && it.t==t && it.pType==pType && it.mode==mode && it.finish==finish && JSON.stringify(it.e)==JSON.stringify(e) && it.photos.length === 0 && damagePhotos.length === 0);
+        if(match) match.q += q; else items.push({h,w,t,q,e,mode,finish,pType,sqm:calc(h,w,e,mode).toFixed(3),photos:[...damagePhotos]});
+        document.getElementById('h').value=''; document.getElementById('w').value=''; document.getElementById('qty').value=1; damagePhotos=[]; render();
     }
 
     function render(){
-        const l=document.getElementById('list'); l.innerHTML='';
+        const l=document.getElementById('list'); l.innerHTML=''; let ts=0, tq=0;
         items.forEach((it,i)=>{
-            l.innerHTML += `<div class="card" style="display:flex;align-items:center;gap:12px;padding:10px;">
-                <div class="input-group"><span class="label-tiny">Qty</span><div class="bubble-input" style="width:35px; padding:5px;">${it.q}</div></div>
+            ts += parseFloat(it.sqm)*it.q; tq += it.q;
+            let L = (it.e[0]?1:0)+(it.e[1]?1:0), S = (it.e[2]?1:0)+(it.e[3]?1:0);
+            let lbL = it.mode==='SE' && L>0 ? "1LR" : L+"L", lbS = it.mode==='SE' && S>0 ? "1SR" : S+"S";
+            l.innerHTML += `<div class="card" style="display:flex;align-items:center;gap:12px;padding:8px;">
+                <div class="bubble-wrap"><label>Qty</label><div class="b-input" style="height:35px; line-height:35px;">${it.q}</div></div>
                 <div style="flex:1">
-                    <div style="font-weight:900; font-size:18px;">${it.h} x ${it.w} x ${it.t}</div>
-                    <div style="font-size:12px; font-weight:700; color:#666; text-transform:uppercase;">${it.pType} ${it.finish==='Moulded'?'<span class="mld-bubble">MOULDED</span>':''}</div>
-                    <div style="display:flex; gap:5px;"><span class="edge-pill edge-L">2L</span><span class="edge-pill edge-S">2S</span></div>
+                    <div style="font-weight:900;font-size:18px;">${it.h} x ${it.w} x ${it.t}</div>
+                    <div style="font-size:11px; font-weight:700; color:#666; text-transform:uppercase;">${it.pType} ${it.finish==='Moulded'?'<span class="mld-bubble">MOULDED</span>':''}</div>
+                    <div style="margin-top:5px;"><span class="edge-pill edge-L">${lbL}</span> <span class="edge-pill edge-S">${lbS}</span></div>
+                </div>
+                <div style="position:relative;">
+                    ${it.photos.length > 0 ? `<img src="${it.photos[0]}" style="width:50px;height:50px;border-radius:8px;object-fit:cover;">` : `<div style="width:50px;height:50px;background:#eee;border-radius:8px;"></div>`}
+                    ${it.photos.length > 1 ? `<div class="badge">${it.photos.length}</div>` : ''}
                 </div>
                 <div class="mode-box mode-${it.mode}">${it.mode}</div>
                 <button onclick="items.splice(${i},1);render()" style="color:red;border:0;background:0;font-size:26px;">×</button>
             </div>`;
         });
+        document.getElementById('tA').innerText=ts.toFixed(3); document.getElementById('tQ').innerText=tq;
     }
 
+    function saveJob(){
+        if(items.length===0) return;
+        let job = {id:Date.now(), name:document.getElementById('jNm').value||'Untitled', num:document.getElementById('jN').value||'0', parts:[...items], photos:[...jobPhotos]};
+        let h = JSON.parse(localStorage.getItem('pw_history')||'[]'); h.unshift(job);
+        localStorage.setItem('pw_history', JSON.stringify(h));
+        alert("Job Saved! 💾"); items=[]; jobPhotos=[]; render();
+    }
+
+    function tab(t){ document.querySelectorAll('.view-section,.nav-btn').forEach(x=>x.classList.remove('active')); document.getElementById(t).classList.add('active'); document.getElementById('btn-'+t).classList.add('active'); }
+
     window.onload=()=>{
+        document.getElementById('cli').innerHTML='<option>Absolute Kitchens</option>';
+        document.getElementById('pBrand').innerHTML='<option>Wattyl</option><option>Dulux</option>';
+        document.getElementById('pColor').innerHTML='<option>Vivid White</option>';
         document.getElementById('prof-select').innerHTML='<option>Plain (101)</option><option>Shaker (401)</option>';
         setP('Panel');
     };
