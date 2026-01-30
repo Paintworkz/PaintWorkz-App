@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>PaintWorkz Pro 2.7.4 MASTER</title>
+    <title>PaintWorkz Pro 2.7.5 MASTER</title>
     <style>
         :root {--gold: linear-gradient(145deg, #d4af37, #f9f1b0, #aa841e); --rainbow: linear-gradient(90deg, red, orange, yellow, green, blue, indigo, violet); --gs: #d4af37;}
         body {margin:0;font-family:-apple-system, sans-serif;background:#f0f0f5;padding-bottom:180px;overscroll-behavior:none;-webkit-tap-highlight-color:transparent;}
@@ -34,16 +34,16 @@
         .t-btn {flex:1;padding:12px;border:1px solid #ccc;border-radius:8px;font-weight:900;text-align:center;background:#fff;cursor:pointer;}
         .t-btn.active {background:#000;color:#fff;border-color:var(--gs);}
 
-        .filter-row {display:flex;gap:6px;overflow-x:auto;padding:10px 0;margin-bottom:10px;}
-        .f-pill {padding:8px 16px;background:#fff;border:1px solid #ddd;border-radius:20px;font-size:10px;font-weight:900;white-space:nowrap;}
-        .f-pill.active {background:var(--gold);color:#000;border-color:#aa841e;}
-
-        .panel-item {background:#fff;border-radius:12px;margin-bottom:12px;border:1px solid #ddd;padding:15px;display:flex;justify-content:space-between;align-items:center;}
-        .mld-bubble {background:var(--gold);color:#000;padding:2px 10px;border-radius:15px;font-weight:900;font-size:11px;display:inline-block;border:1px solid #aa841e;}
-
         .edge-row {display:flex;justify-content:space-between;align-items:center;margin:15px 0;}
         .edge-box {width:55px;height:55px;border-radius:10px;border:2px solid #bbb;background:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;color:#ccc;cursor:pointer;}
         .edge-box.active {background:#34c759;border-color:#28a745;color:#fff;}
+
+        /* Clean Figure Display (No BG, No Label) */
+        .sqm-display {text-align:center; padding:10px; margin-bottom:10px;}
+        #partSQM {color:#aa841e; font-size:42px; font-weight:900;}
+
+        .panel-item {background:#fff;border-radius:12px;margin-bottom:12px;border:1px solid #ddd;padding:15px;display:flex;justify-content:space-between;align-items:center;}
+        .mld-bubble {background:var(--gold);color:#000;padding:2px 10px;border-radius:15px;font-weight:900;font-size:11px;display:inline-block;border:1px solid #aa841e;}
 
         .sticky-footer {background:#000;padding:15px;position:fixed;bottom:0;width:100%;border-top:4px solid var(--gs);color:#fff;display:flex;justify-content:space-between;align-items:center;z-index:1001;}
     </style>
@@ -105,21 +105,11 @@
                 <div class="edge-box active" id="E3" onclick="tE(this)">S</div><div class="edge-box active" id="E4" onclick="tE(this)">S</div>
             </div>
 
-            <div style="text-align:center; padding:15px; background:#000; border-radius:12px; margin-bottom:12px;">
-                <span id="partSQM" style="color:var(--gs); font-size:28px; font-weight:900;">0.000</span>
-                <div style="color:#fff; font-size:10px; font-weight:700; margin-top:2px;">PART SQ MTR</div>
+            <div class="sqm-display">
+                <span id="partSQM">0.000</span>
             </div>
             
             <button onclick="add()" style="width:100%;padding:20px;border-radius:40px;background:var(--gold);border:none;font-size:22px;font-weight:900;">ADD TO LIST</button>
-        </div>
-
-        <div class="filter-row">
-            <div class="f-pill active" onclick="setFil('All', this)">ALL</div>
-            <div class="f-pill" onclick="setFil('Door', this)">DOOR</div>
-            <div class="f-pill" onclick="setFil('Drawer', this)">DRAWER</div>
-            <div class="f-pill" onclick="setFil('Panel', this)">PANEL</div>
-            <div class="f-pill" onclick="setFil('Moulded', this)">MOULDED</div>
-            <div class="f-pill" onclick="setFil('Flat', this)">FLAT</div>
         </div>
 
         <div id="list"></div>
@@ -133,7 +123,7 @@
 </div>
 
 <script>
-    let items=[], mode='SS', finish='Flat', pType='Panel', activeFil='All';
+    let items=[], mode='SS', finish='Flat', pType='Panel';
     const dp = ["Plain (101)", "J-Mould (102)", "Sharknose (103)", "Bevelled Edge (104)", "Ashlee (201)", "Hamilton (202)", "Vertical Grooves (203)", "Tarrone (301)", "Bobby (302)", "Orford (303)", "Shaker (401)", "Shaker 45 (402)", "Shaker w/Lines (403)", "Jack (404)", "Georgia (501)", "Branxholme (502)", "Rosebrook (503)", "Benchtop", "Molding"];
     let db=JSON.parse(localStorage.getItem('pw_db'))||{clients:["Absolute Kitchens"],profiles:dp};
 
@@ -142,7 +132,13 @@
         let e = [1,2,3,4].map(i=>document.getElementById('E'+i).classList.contains('active'));
         let el = ((e[0]?h:0)+(e[1]?h:0)+(e[2]?w:0)+(e[3]?w:0));
         let base = (h*w)/1e6;
-        let total = (mode==='DS' ? base*2 : base) + (el*18/1e6) + (mode==='SE' ? (el*100/1e6) : 0);
+        
+        // SE Logic: Base + Edge Surface + 100mm Wrap
+        let total = 0;
+        if(mode==='SS') total = base + (el*18/1e6);
+        else if(mode==='DS') total = (base*2) + (el*18/1e6);
+        else if(mode==='SE') total = base + (el*18/1e6) + (el*100/1e6);
+        
         document.getElementById('partSQM').innerText = total.toFixed(3);
     }
 
@@ -156,29 +152,20 @@
     function render(){
         const l=document.getElementById('list'); l.innerHTML=''; let ts=0;
         items.forEach((it,i)=>{
-            const isMatch = (activeFil==='All') || (it.pType===activeFil) || (it.finish===activeFil);
-            if(isMatch){
-                ts+=parseFloat(it.sqm);
-                const goldB = it.finish==='Moulded' ? `<span class="mld-bubble">MOULDED</span>` : `<small>${it.finish}</small>`;
-                l.innerHTML+=`<div class="panel-item">
-                    <div><b>${it.h} x ${it.w}</b> ${goldB}<br><small>${it.desc} | ${it.prof}</small></div>
-                    <button onclick="items.splice(${i},1);render()" style="color:red;border:none;background:0;font-size:24px;">×</button>
-                </div>`;
-            }
+            ts+=parseFloat(it.sqm);
+            const goldB = it.finish==='Moulded' ? `<span class="mld-bubble">MOULDED</span>` : `<small>${it.finish}</small>`;
+            l.innerHTML+=`<div class="panel-item">
+                <div><b>${it.h} x ${it.w}</b> ${goldB}<br><small>${it.desc} | ${it.prof}</small></div>
+                <button onclick="items.splice(${i},1);render()" style="color:red;border:none;background:0;font-size:24px;">×</button>
+            </div>`;
         });
         document.getElementById('liveA').innerText=ts.toFixed(3);
         document.getElementById('tQ').innerText=items.length;
     }
 
-    function setFil(f, btn){
-        activeFil=f; document.querySelectorAll('.f-pill').forEach(p=>p.classList.remove('active'));
-        btn.classList.add('active'); render();
-    }
-
     function setP(p){
         pType=p; document.querySelectorAll('.m-card').forEach(c=>c.classList.remove('active'));
         document.getElementById(p==='Panel'?'pP':p==='Door'?'pD':'pDr').classList.add('active');
-        // Auto-select edges for Door/Drawer
         if(p!=='Panel') [1,2,3,4].forEach(i=>document.getElementById('E'+i).classList.add('active'));
         else [1,2,3,4].forEach(i=>document.getElementById('E'+i).classList.remove('active'));
         up();
