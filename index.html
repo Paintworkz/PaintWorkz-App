@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>PaintWorkz Pro 2.8.8 MASTER</title>
+    <title>PaintWorkz Pro 2.8.9 MASTER</title>
     <style>
         :root {--gold: linear-gradient(145deg, #d4af37, #f9f1b0, #aa841e); --rainbow: linear-gradient(90deg, red, orange, yellow, green, blue, indigo, violet); --gs: #d4af37;}
         body {margin:0;font-family:-apple-system, sans-serif;background:#f0f0f5;padding-bottom:180px;overscroll-behavior:none;-webkit-tap-highlight-color:transparent;}
@@ -33,6 +33,7 @@
         .panel-item {background:#fff;border-radius:15px;margin-bottom:10px;border:1px solid #ddd;overflow:hidden;}
         .panel-body {display:flex;padding:12px;align-items:center;}
         .item-info {flex:1;}
+        .qty-bubble {background:#000; color:var(--gs); padding:10px; border-radius:10px; font-weight:900; min-width:40px; text-align:center; border:1px solid var(--gs);}
         .sticky-footer {background:#000;padding:15px;position:fixed;bottom:0;width:100%;border-top:4px solid var(--gs);color:#fff;display:flex;justify-content:space-around;align-items:center;box-sizing:border-box;z-index:1001;}
         .btn-add {width:100%;padding:18px;border-radius:40px;background:var(--gold);border:none;font-size:22px;font-weight:900;margin-top:10px;}
         input,select {width:100%;padding:14px;margin:4px 0;border-radius:10px;border:1px solid #ccc;font-size:16px;box-sizing:border-box;}
@@ -42,7 +43,8 @@
         #markup-ui { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#000; z-index:2000; flex-direction:column; }
         #markup-canvas { background:#000; touch-action:none; width:100%; flex-grow:1; }
         .m-tools { background:#1c1c1e; padding:15px; display:flex; justify-content:space-between; color:#fff;}
-        .hist-card { background:#fff; border-radius:12px; padding:15px; margin-bottom:10px; border-left:6px solid var(--gs); display:flex; justify-content:space-between; align-items:center;}
+        .hist-card { background:#fff; border-radius:12px; padding:15px; margin-bottom:10px; border-left:6px solid var(--gs);}
+        .job-photo-thumb { width:60px; height:60px; border-radius:8px; object-fit:cover; border:1px solid #ddd; margin:5px;}
     </style>
 </head>
 <body>
@@ -67,11 +69,15 @@
             <div style="display:flex;gap:8px;"><select id="cli" style="flex:3"></select><input type="text" id="jN" placeholder="JOB #" style="flex:1;text-align:center"></div>
             <div style="display:flex;gap:8px;align-items:center;">
                 <input type="text" id="jNm" placeholder="JOB NAME" style="flex:1">
-                <label style="background:#000; color:#fff; padding:12px; border-radius:10px; font-size:14px;">📸<input type="file" id="jobPhotoInput" accept="image/*" style="display:none" onchange="attachJobPhoto(this)"></label>
+                <label style="background:#000; color:#fff; padding:12px; border-radius:10px; font-size:14px;">📸<input type="file" id="jobPhotoInput" accept="image/*" multiple style="display:none" onchange="attachJobPhoto(this)"></label>
             </div>
             <div id="jobPhotoCount" style="font-size:10px; color:var(--gs); font-weight:900; margin-bottom:5px;">0 JOB PHOTOS ATTACHED</div>
             
-            <select id="prof-select"></select>
+            <div style="display:flex;gap:8px;align-items:center;">
+                <select id="prof-select" style="flex:4"></select>
+                <input type="number" id="qty" value="1" style="flex:1; text-align:center; font-weight:900; background:#000; color:var(--gs); border-color:var(--gs);">
+            </div>
+
             <div style="display:flex;gap:8px;margin:10px 0;">
                 <div id="pP" class="p-card active" onclick="setP('Panel')"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="1"/></svg>PANEL</div>
                 <div id="pD" class="p-card" onclick="setP('Door')"><svg viewBox="0 0 24 24"><path d="M5 3h14v18H5V3zm10 9v1"/></svg>DOOR</div>
@@ -99,7 +105,7 @@
     </div>
 
     <div id="history" class="view-section">
-        <div class="card"><input type="text" id="histSearch" placeholder="Search Job Name or #..." oninput="renderHistory()"></div>
+        <div class="card"><input type="text" id="histSearch" placeholder="Search History..." oninput="renderHistory()"></div>
         <div id="history-list"></div>
     </div>
 </div>
@@ -119,7 +125,6 @@
     let items=[], jobPhotos=[], mode='SS', finish='Flat', pType='Panel', currentFilter='All', tempImg=null;
     const canvas=document.getElementById('markup-canvas'), ctx=canvas.getContext('2d'), markupImg=new Image();
 
-    // MARKUP LOGIC
     function handleImg(i){ if(i.files[0]){ const r=new FileReader(); r.onload=(e)=>{ tempImg=e.target.result; markupImg.src=tempImg; openMarkup(); }; r.readAsDataURL(i.files[0]); } }
     function openMarkup(){ 
         document.getElementById('markup-ui').style.display='flex'; 
@@ -132,7 +137,7 @@
     function saveMarkup(){ tempImg=canvas.toDataURL('image/jpeg', 0.7); closeMarkup(); }
     function closeMarkup(){ document.getElementById('markup-ui').style.display='none'; }
 
-    function attachJobPhoto(i){ if(i.files[0]){ const r=new FileReader(); r.onload=(e)=>{ jobPhotos.push(e.target.result); document.getElementById('jobPhotoCount').innerText = jobPhotos.length + " JOB PHOTOS ATTACHED"; }; r.readAsDataURL(i.files[0]); } }
+    function attachJobPhoto(i){ Array.from(i.files).forEach(f=>{ const r=new FileReader(); r.onload=e=>{jobPhotos.push(e.target.result); document.getElementById('jobPhotoCount').innerText=jobPhotos.length+" JOB PHOTOS ATTACHED";}; r.readAsDataURL(f); }); }
 
     function calc(h,w,e,m){
         let f=(h*w)/1e6, el=((e[0]?h:0)+(e[1]?h:0)+(e[2]?w:0)+(e[3]?w:0)), es=(el*18)/1e6;
@@ -150,11 +155,16 @@
     function up(){ let h=Number(document.getElementById('h').value)||0, w=Number(document.getElementById('w').value)||0; let e=[1,2,3,4].map(i=>document.getElementById('E'+i).classList.contains('active')); document.getElementById('liveSq').innerText=calc(h,w,e,mode).toFixed(3); }
 
     function add(){
-        let h=Number(document.getElementById('h').value), w=Number(document.getElementById('w').value);
+        let h=Number(document.getElementById('h').value), w=Number(document.getElementById('w').value), q=parseInt(document.getElementById('qty').value)||1;
         if(!h||!w) return;
         let e=[1,2,3,4].map(i=>document.getElementById('E'+i).classList.contains('active'));
-        items.push({h,w,e,mode,finish,pType,desc:document.getElementById('desc').value,prof:document.getElementById('prof-select').value,sqm:calc(h,w,e,mode).toFixed(3),img:tempImg});
-        tempImg=null; render();
+        let part = {h,w,e,mode,finish,pType,qty:q,desc:document.getElementById('desc').value,prof:document.getElementById('prof-select').value,sqm:calc(h,w,e,mode).toFixed(3),img:tempImg};
+        
+        // Smart Stacking Logic
+        let match = items.find(it => it.h==h && it.w==w && it.pType==pType && it.mode==mode && it.finish==finish && JSON.stringify(it.e)==JSON.stringify(e) && !it.img && !tempImg);
+        if(match) match.qty += q; else items.push(part);
+        
+        tempImg=null; document.getElementById('qty').value=1; render();
     }
 
     function saveJob(){
@@ -162,7 +172,7 @@
         let job = {id:Date.now(), name:document.getElementById('jNm').value||'Unnamed', num:document.getElementById('jN').value||'0', parts:[...items], photos:[...jobPhotos]};
         let hist = JSON.parse(localStorage.getItem('pw_history')||'[]');
         hist.unshift(job);
-        localStorage.setItem('pw_history', JSON.stringify(hist.slice(0,50)));
+        localStorage.setItem('pw_history', JSON.stringify(hist));
         alert("Job Saved Successfully - That's money in the bank! 💰");
         items=[]; jobPhotos=[]; document.getElementById('jobPhotoCount').innerText="0 JOB PHOTOS ATTACHED"; render();
     }
@@ -171,19 +181,10 @@
         let hist = JSON.parse(localStorage.getItem('pw_history')||'[]');
         let job = hist.find(j=>j.id===id);
         if(job){
-            items = [...job.parts];
-            jobPhotos = [...(job.photos||[])];
-            document.getElementById('jNm').value = job.name;
-            document.getElementById('jN').value = job.num;
+            items=[...job.parts]; jobPhotos=[...(job.photos||[])];
+            document.getElementById('jNm').value=job.name; document.getElementById('jN').value=job.num;
+            document.getElementById('jobPhotoCount').innerText=jobPhotos.length+" JOB PHOTOS ATTACHED";
             tab('measure'); render();
-        }
-    }
-
-    function deleteJob(id){
-        if(confirm("Delete this job forever?")){
-            let hist = JSON.parse(localStorage.getItem('pw_history')||'[]');
-            localStorage.setItem('pw_history', JSON.stringify(hist.filter(j=>j.id!==id)));
-            renderHistory();
         }
     }
 
@@ -193,31 +194,38 @@
         let hist = JSON.parse(localStorage.getItem('pw_history')||'[]');
         l.innerHTML = '';
         hist.filter(j => j.name.toLowerCase().includes(s) || j.num.includes(s)).forEach(j => {
+            let photoHtml = (j.photos||[]).map(p=>`<img src="${p}" class="job-photo-thumb">`).join('');
             l.innerHTML += `<div class="hist-card">
-                <div><b>${j.num} - ${j.name}</b><br><small>${j.parts.length} parts | ${(j.photos||[]).length} photos</small></div>
-                <div>
-                    <button onclick="recallJob(${j.id})" style="background:#34c759; color:#fff; border:0; padding:8px 12px; border-radius:8px; font-weight:900;">RECALL</button>
-                    <button onclick="deleteJob(${j.id})" style="background:#ff3b30; color:#fff; border:0; padding:8px 12px; border-radius:8px; font-weight:900; margin-left:5px;">DEL</button>
+                <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                    <div><b>${j.num} - ${j.name}</b><br><small>${j.parts.length} entries</small></div>
+                    <div>
+                        <button onclick="recallJob(${j.id})" style="background:#34c759; color:#fff; border:0; padding:6px 12px; border-radius:8px; font-weight:900;">RECALL</button>
+                        <button onclick="if(confirm('Delete?')){let h=JSON.parse(localStorage.getItem('pw_history')); localStorage.setItem('pw_history',JSON.stringify(h.filter(x=>x.id!=${j.id}))); renderHistory();}" style="background:#ff3b30; color:#fff; border:0; padding:6px 12px; border-radius:8px; font-weight:900; margin-left:5px;">DEL</button>
+                    </div>
+                </div>
+                <div style="margin-top:10px; border-top:1px solid #eee; padding-top:10px;">
+                    <div style="font-size:10px; font-weight:900; color:var(--gs); margin-bottom:5px;">JOB PHOTOS (${(j.photos||[]).length})</div>
+                    <div style="overflow-x:auto; white-space:nowrap;">${photoHtml || '<small>No Photos</small>'}</div>
                 </div>
             </div>`;
         });
     }
 
     function render(){
-        const l=document.getElementById('list'); l.innerHTML=''; let ts=0;
+        const l=document.getElementById('list'); l.innerHTML=''; let ts=0, tq=0;
         items.forEach((it,i)=>{
-            ts+=parseFloat(it.sqm);
+            ts += parseFloat(it.sqm) * it.qty; tq += it.qty;
             let L = (it.e[0]?1:0)+(it.e[1]?1:0), S = (it.e[2]?1:0)+(it.e[3]?1:0);
             let lbL = it.mode === 'SE' && L > 0 ? "1LR" : L + "L";
             let lbS = it.mode === 'SE' && S > 0 ? "1SR" : S + "S";
-            l.innerHTML+=`<div class="panel-item"><div class="panel-body"><div class="item-info">
-                <div style="font-size:18px;font-weight:900">${it.h}x${it.w} (${it.sqm})</div>
-                <div>${it.pType} | ${it.mode} ${it.finish==='Moulded'?'[M]':''}</div>
+            l.innerHTML+=`<div class="panel-item"><div class="panel-body"><div class="qty-bubble" style="margin-right:12px;">${it.qty}</div><div class="item-info">
+                <div style="font-size:18px;font-weight:900">${it.h}x${it.w} <span style="font-size:12px;color:#888;">(${(it.sqm*it.qty).toFixed(3)})</span></div>
+                <div style="font-size:12px;">${it.pType} | ${it.mode} ${it.finish==='Moulded'?'[M]':''}</div>
                 <div style="margin-top:5px;"><span style="background:#f44336;color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;">${lbL}</span> <span style="background:#2196f3;color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;">${lbS}</span></div>
             </div>${it.img?`<img src="${it.img}" style="width:50px;height:50px;border-radius:5px;margin:0 10px;">`:''}<button onclick="items.splice(${i},1);render()" style="color:red;border:0;background:0;font-size:24px;">×</button></div></div>`;
         });
         document.getElementById('tA').innerText=ts.toFixed(3);
-        document.getElementById('tQ').innerText=items.length;
+        document.getElementById('tQ').innerText=tq;
     }
 
     function tab(t){ document.querySelectorAll('.view-section,.nav-btn').forEach(x=>x.classList.remove('active')); document.getElementById(t).classList.add('active'); document.getElementById('btn-'+t).classList.add('active'); if(t==='history') renderHistory(); }
