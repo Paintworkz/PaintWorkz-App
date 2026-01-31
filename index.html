@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>PaintWorkz Pro 3.0 CLOUD</title>
+    <title>PaintWorkz Pro 3.1</title>
 
     <link rel="icon" type="image/png" href="logo.png">
     <link rel="apple-touch-icon" href="logo.png">
@@ -47,7 +47,7 @@
         .badge {position:absolute;top:-5px;right:-5px;background:var(--gold);color:#000;width:22px;height:22px;border-radius:50%;font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center;border:1px solid #000;z-index:10;}
 
         /* LIST UI REFINEMENTS */
-        .qty-bubble {background:#f0f0f5; color:#000; padding:10px; border-radius:10px; font-weight:900; min-width:40px; text-align:center; border:1px solid #ccc;}
+        .qty-bubble {background:#f0f0f5; color:#000; padding:10px; border-radius:10px; font-weight:900; min-width:40px; text-align:center; border:1px solid #ccc; font-size:16px;}
         .mld-bubble {background:var(--gold); color:#000; padding:2px 10px; border-radius:15px; font-weight:900; font-size:10px; border:1px solid #aa841e; display:inline-block;}
         
         .mode-box {width:50px; height:50px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:16px; border:3px solid;}
@@ -99,7 +99,9 @@
             <div style="display:flex;gap:8px;"><select id="pFinish"><option>G30 Satin</option><option>G10 Matt</option></select><input type="text" id="pFormula" placeholder="Formula (Evic)"></div>
 
             <div style="display:flex;gap:8px;margin-top:10px;align-items:center;">
-                <select id="prof-select" style="flex:4"><option>Plain (101)</option><option>Shaker (401)</option></select>
+                <input type="number" id="thk" value="18" class="qty-bubble" style="flex:1" placeholder="Thk" oninput="up()">
+                
+                <select id="prof-select" style="flex:3"><option>Plain (101)</option><option>Shaker (401)</option></select>
                 <input type="number" id="qty" value="1" class="qty-bubble" style="flex:1" inputmode="numeric">
             </div>
 
@@ -191,26 +193,37 @@
     function def(){ [1,2,3,4].forEach(i=>document.getElementById('E'+i).classList.remove('active')); if(mode==='SE') document.getElementById('E1').classList.add('active'); else if(pType!=='Panel') [1,2,3,4].forEach(i=>document.getElementById('E'+i).classList.add('active')); up(); }
     function tab(t){ document.querySelectorAll('.view-section,.nav-btn').forEach(x=>x.classList.remove('active')); document.getElementById(t).classList.add('active'); document.getElementById('btn-'+t).classList.add('active'); }
 
-    // 5. CALCULATION
-    function calc(h,w,e,m){
-        let f=(h*w)/1e6, el=((e[0]?h:0)+(e[1]?h:0)+(e[2]?w:0)+(e[3]?w:0)), es=(el*18)/1e6;
+    // 5. CALCULATION - Updated for Thickness
+    function calc(h,w,e,m,thk){
+        let f=(h*w)/1e6, el=((e[0]?h:0)+(e[1]?h:0)+(e[2]?w:0)+(e[3]?w:0));
+        let es=(el*thk)/1e6; // Uses input thickness (default 18)
+        
         if(m==='SS') return f+es;
         if(m==='DS') return (f*2)+es;
-        if(m==='SE') return f+es+(el*100/1e6);
+        if(m==='SE') return f+es+(el*100/1e6); // SE logic remains same
         return 0;
     }
-    function up(){ let h=Number(document.getElementById('h').value)||0, w=Number(document.getElementById('w').value)||0; let e=[1,2,3,4].map(i=>document.getElementById('E'+i).classList.contains('active')); document.getElementById('liveSq').innerText=calc(h,w,e,mode).toFixed(3); }
+    
+    function up(){ 
+        let h=Number(document.getElementById('h').value)||0, w=Number(document.getElementById('w').value)||0; 
+        let thk=Number(document.getElementById('thk').value)||18;
+        let e=[1,2,3,4].map(i=>document.getElementById('E'+i).classList.contains('active')); 
+        document.getElementById('liveSq').innerText=calc(h,w,e,mode,thk).toFixed(3); 
+    }
 
     // 6. LIST LOGIC
     function add(){
         let h=Number(document.getElementById('h').value), w=Number(document.getElementById('w').value), q=parseInt(document.getElementById('qty').value)||1;
+        let thk=Number(document.getElementById('thk').value)||18;
+        
         if(!h||!w) return;
         let e=[1,2,3,4].map(i=>document.getElementById('E'+i).classList.contains('active'));
         
-        let match = items.find(it => it.h==h && it.w==w && it.pType==pType && it.mode==mode && it.finish==finish && JSON.stringify(it.e)==JSON.stringify(e) && it.photos.length === 0 && damagePhotos.length === 0);
+        // Check for existing identical item to group them
+        let match = items.find(it => it.h==h && it.w==w && it.thk==thk && it.pType==pType && it.mode==mode && it.finish==finish && JSON.stringify(it.e)==JSON.stringify(e) && it.photos.length === 0 && damagePhotos.length === 0);
         
         if(match) match.qty += q; 
-        else items.push({h,w,e,mode,finish,pType,qty:q,sqm:calc(h,w,e,mode).toFixed(3),photos:[...damagePhotos],desc:document.getElementById('desc').value});
+        else items.push({h,w,thk,e,mode,finish,pType,qty:q,sqm:calc(h,w,e,mode,thk).toFixed(3),photos:[...damagePhotos],desc:document.getElementById('desc').value});
         
         document.getElementById('h').value=''; document.getElementById('w').value=''; document.getElementById('qty').value=1; damagePhotos=[]; render();
     }
@@ -225,7 +238,7 @@
             l.innerHTML += `<div class="card" style="display:flex;align-items:center;gap:10px;padding:8px;">
                 <div class="qty-bubble">${it.qty}</div>
                 <div style="flex:1">
-                    <div style="font-weight:900;font-size:18px;">${it.h} x ${it.w}</div>
+                    <div style="font-weight:900;font-size:18px;">${it.h} x ${it.w} <span style="font-size:14px;color:#888">(${it.thk}mm)</span></div>
                     ${it.finish==='Moulded'?'<div class="mld-bubble">MOULDED</div>':''}
                     <div style="margin-top:6px;">
                         <span class="edge-pill edge-L">${lbL}</span> <span class="edge-pill edge-S">${lbS}</span>
@@ -257,7 +270,6 @@
         items=[]; jobPhotos=[]; document.getElementById('jobBadge').style.display='none'; render();
     }
 
-    // Listen for new jobs in Cloud History
     db.ref('jobs').on('value', (snap) => {
         const data = snap.val(); const l = document.getElementById('history-list'); l.innerHTML = '';
         if(!data) { l.innerHTML = 'No jobs found.'; return; }
@@ -312,7 +324,8 @@
             let y = 50;
             j.parts.forEach(p => {
                 let L = (p.e[0]?1:0)+(p.e[1]?1:0), S = (p.e[2]?1:0)+(p.e[3]?1:0);
-                doc.text(`${p.qty}x   ${p.h} x ${p.w}   [${p.mode}]   Edge: ${L}L ${S}S`, 20, y);
+                // Added Thickness to PDF output
+                doc.text(`${p.qty}x   ${p.h} x ${p.w}  (${p.thk}mm)   [${p.mode}]   Edge: ${L}L ${S}S`, 20, y);
                 y += 8;
                 if(y > 280) { doc.addPage(); y = 20; }
             });
