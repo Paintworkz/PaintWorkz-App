@@ -17,7 +17,7 @@
 
     <style>
         :root {--gold: linear-gradient(145deg, #d4af37, #f9f1b0, #aa841e); --gs: #d4af37;}
-        body {margin:0;font-family:-apple-system, sans-serif;background:#f0f0f5;padding-bottom:180px;}
+        body {margin:0;font-family:-apple-system, sans-serif;background:#f0f0f5;padding-bottom:180px;-webkit-tap-highlight-color:transparent;}
         header {background:#000; padding:env(safe-area-inset-top) 15px 5px; display:flex; align-items:center; justify-content:space-between; border-bottom:4px solid var(--gs); position:sticky; top:0; z-index:1000; height:90px;}
         .logo-box {background:#000;padding:10px 20px;border-radius:50px;border:2px solid var(--gs);}
         .logo-text {font-weight:900;font-size:24px;background:var(--gold);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
@@ -32,6 +32,8 @@
         .t-btn.active {background:#000;color:#fff;border-color:var(--gs);}
         .sticky-footer {background:#000;padding:15px;position:fixed;bottom:0;width:100%;border-top:4px solid var(--gs);color:#fff;display:flex;justify-content:space-around;z-index:1001;}
         .btn-xero {background:#13b5ea; color:white; border:none; padding:8px; border-radius:5px; font-weight:bold; cursor:pointer;}
+        .btn-pdf {background:#e11d48; color:white; border:none; padding:8px; border-radius:5px; font-weight:bold; cursor:pointer;}
+        .btn-del {background:none; color:#ff3b30; border:none; font-weight:bold; cursor:pointer; font-size:18px;}
     </style>
 </head>
 <body>
@@ -68,21 +70,20 @@
     </div>
 
     <div id="history" class="view-section">
-        <div id="history-list">Loading Cloud Data...</div>
+        <div id="history-list">Connecting to Cloud...</div>
     </div>
 </div>
 
 <div class="sticky-footer">
-    <div>TOTAL AREA: <span id="tA" style="color:var(--gs)">0.000</span></div>
+    <div>TOTAL AREA: <span id="tA" style="color:var(--gs)">0.000</span> m²</div>
     <div>ITEMS: <span id="tQ" style="color:var(--gs)">0</span></div>
 </div>
 
 <script>
-    // YOUR FIREBASE CONFIG
     const firebaseConfig = {
       apiKey: "AIzaSyBvSFzaxLJd3rV9S8DGk6JWh1LY5mp5Fxk",
       authDomain: "paintworkz-app.firebaseapp.com",
-      databaseURL: "https://paintworkz-app-default-rtdb.firebaseio.com", // Common default URL
+      databaseURL: "https://paintworkz-app-default-rtdb.firebaseio.com",
       projectId: "paintworkz-app",
       storageBucket: "paintworkz-app.firebasestorage.app",
       messagingSenderId: "340750725307",
@@ -130,29 +131,54 @@
             parts:items, 
             total:document.getElementById('tA').innerText 
         };
-        db.ref('jobs/' + job.id).set(job).then(()=>alert("Synced to Cloud! ☁️"));
+        db.ref('jobs/' + job.id).set(job).then(()=>alert("Saved to Cloud!"));
         items=[]; render();
     }
 
     db.ref('jobs').on('value', (snap) => {
         const data = snap.val(); const l = document.getElementById('history-list'); l.innerHTML = '';
-        if(!data) { l.innerHTML = 'No jobs found in cloud.'; return; }
-        for(let id in data){
+        if(!data) { l.innerHTML = 'No jobs found.'; return; }
+        Object.keys(data).reverse().forEach(id => {
             let j = data[id];
             l.innerHTML += `<div class="card">
-                <b>#${j.num} - ${j.name}</b><br>
-                Area: ${j.total} m2
+                <div style="display:flex; justify-content:space-between;">
+                    <b>#${j.num} - ${j.name}</b>
+                    <button class="btn-del" onclick="deleteJob('${id}')">×</button>
+                </div>
+                Area: ${j.total} m²
                 <div style="margin-top:10px; display:flex; gap:10px;">
                     <button class="btn-xero" onclick="pushToXero('${j.num}','${j.name}','${j.total}')">XERO</button>
-                    <button style="padding:8px;" onclick="downloadJobPDF('${id}')">PDF</button>
+                    <button class="btn-pdf" onclick="generatePDF('${id}')">PDF</button>
                 </div>
             </div>`;
-        }
+        });
     });
+
+    function deleteJob(id) {
+        if(confirm("Permanently delete this job from cloud?")) db.ref('jobs/' + id).remove();
+    }
 
     function pushToXero(n, nm, a){
         const desc = encodeURIComponent(`PaintWorkz Job #${n}: ${nm}`);
         window.open(`https://go.xero.com/OrganisationAdmin/Invoicing/CreateInvoice.aspx?description=${desc}&quantity=${a}`, '_blank');
+    }
+
+    function generatePDF(id) {
+        db.ref('jobs/' + id).once('value').then((snap) => {
+            const j = snap.val();
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            doc.setFontSize(20); doc.text("PAINTWORKZ SITE SHEET", 20, 20);
+            doc.setFontSize(12); doc.text(`Job: ${j.name} (#${j.num})`, 20, 30);
+            doc.text(`Total Area: ${j.total} m2`, 20, 37);
+            doc.line(20, 42, 190, 42);
+            let y = 50;
+            j.parts.forEach(p => {
+                doc.text(`${p.qty}x ${p.h} x ${p.w} [${p.mode}]`, 20, y);
+                y += 8;
+            });
+            doc.save(`Job_${j.num}_${j.name}.pdf`);
+        });
     }
 
     function tab(t){ 
