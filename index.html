@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>PaintWorkz Pro 3.8</title>
+    <title>PaintWorkz Pro 3.8 - Full Test Build</title>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-app-compat.js"></script>
@@ -125,7 +125,9 @@
         <div id="list"></div>
     </div>
 
-    <div id="db" class="view-section"><div class="card">Database Logic Content Here</div></div>
+    <div id="db" class="view-section">
+        <div class="card"><h4>Database</h4><p>Managed via Backup/Restore in Settings.</p></div>
+    </div>
 
     <div id="history" class="view-section">
         <div id="history-list">Loading Cloud Data...</div>
@@ -134,7 +136,16 @@
     <div id="settings" class="view-section">
         <div class="card">
             <h3>App Settings</h3>
-            <button onclick="location.reload()" style="width:100%;padding:15px;background:#000;color:#fff;border-radius:10px;">RELOAD APP</button>
+            <button onclick="location.reload()" style="width:100%;padding:15px;background:#000;color:#fff;border-radius:10px;margin-bottom:10px;">RELOAD APP</button>
+            <div style="border-top:1px solid #ddd; margin-top:10px; padding-top:10px;">
+                <h4>Data Management</h4>
+                <button onclick="exportData()" style="width:100%;padding:12px;background:#34c759;color:#fff;border-radius:10px;margin-bottom:10px;border:none;font-weight:bold;">📥 EXPORT BACKUP</button>
+                <label style="width:100%;padding:12px;background:#0a84ff;color:#fff;border-radius:10px;display:block;text-align:center;font-weight:bold;box-sizing:border-box;cursor:pointer;">
+                    📤 RESTORE BACKUP
+                    <input type="file" id="restoreFile" style="display:none" onchange="importData(this)">
+                </label>
+            </div>
+            <p style="text-align:center; font-size:12px; color:#888; margin-top:20px;">PaintWorkz Pro v3.8 Stable</p>
         </div>
     </div>
 </div>
@@ -160,6 +171,7 @@
 
     let items=[], jobPhotos=[], mode='SS', finish='Flat', pType='Panel', damagePhotos=[];
     const canvas=document.getElementById('markup-canvas'), ctx=canvas.getContext('2d'), markupImg=new Image();
+    const statusColors = { 'PENDING': {bg: '#eee', text: '#666'}, 'IN PROGRESS': {bg: '#fff3e0', text: '#ff9500'}, 'COMPLETED': {bg: '#e8f5e9', text: '#34c759'} };
 
     function handleMarkupImg(i){ if(i.files[0]){ const r=new FileReader(); r.onload=e=>{markupImg.src=e.target.result; openMarkup();}; r.readAsDataURL(i.files[0]); } }
     function openMarkup(){
@@ -216,8 +228,7 @@
         let e=[1,2,3,4].map(i=>document.getElementById('E'+i).classList.contains('active'));
         items.push({h,w,thk,e,mode,finish,pType,qty:q,sqm:calc(h,w,e,mode,thk).toFixed(3),photos:[...damagePhotos],desc:document.getElementById('desc').value});
         document.getElementById('h').value=''; document.getElementById('w').value=''; document.getElementById('qty').value=1; 
-        damagePhotos=[]; document.getElementById('camBadge').style.display='none';
-        render();
+        damagePhotos=[]; document.getElementById('camBadge').style.display='none'; render();
     }
 
     function render(){
@@ -246,38 +257,46 @@
         document.getElementById('tA').innerText=ts.toFixed(3); document.getElementById('tQ').innerText=tq;
     }
 
+    function toggleStatus(id, currentStatus) {
+        const statuses = ['PENDING', 'IN PROGRESS', 'COMPLETED'];
+        let nextStatus = statuses[(statuses.indexOf(currentStatus) + 1) % statuses.length];
+        db.ref('jobs/' + id).update({ status: nextStatus });
+    }
+
     function saveJob(){
         if(items.length===0) return;
-        const job = { id:Date.now(), name:document.getElementById('jNm').value||'Untitled', num:document.getElementById('jN').value||'0', parts:items, photos:jobPhotos, total:document.getElementById('tA').innerText };
+        const job = { id:Date.now(), name:document.getElementById('jNm').value||'Untitled', num:document.getElementById('jN').value||'0', parts:items, photos:jobPhotos, total:document.getElementById('tA').innerText, status: 'PENDING' };
         db.ref('jobs/' + job.id).set(job).then(()=>alert("Saved to Cloud! ☁️"));
         items=[]; jobPhotos=[]; document.getElementById('jobBadge').style.display='none'; render();
     }
 
     db.ref('jobs').on('value', (snap) => {
         const data = snap.val(); const l = document.getElementById('history-list'); l.innerHTML = '';
-        if(!data) { l.innerHTML = 'No jobs found.'; return; }
+        if(!data) return l.innerHTML = 'No jobs found.';
         Object.keys(data).reverse().forEach(id => {
-            let j = data[id];
-            l.innerHTML += `<div class="card">
+            let j = data[id], st = j.status || 'PENDING', col = statusColors[st];
+            l.innerHTML += `<div class="card" style="border-right: 10px solid ${col.text}">
                 <div style="display:flex; justify-content:space-between;"><b>#${j.num} - ${j.name}</b><button class="btn-del" onclick="deleteJob('${id}')">×</button></div>
-                <div style="margin:5px 0;">Area: ${j.total} m² | Parts: ${j.parts.length}</div>
-                <div style="margin-top:10px; display:flex; gap:10px;">
-                    <button class="btn-xero" onclick="pushToXero('${j.num}','${j.name}','${j.total}')">XERO</button>
+                <div style="margin:5px 0; font-size:12px; color:#666;">Area: ${j.total} m² | Parts: ${j.parts.length}</div>
+                <div style="margin-top:10px; display:flex; gap:8px;">
+                    <button onclick="toggleStatus('${id}', '${st}')" style="background:${col.bg}; color:${col.text}; border:1px solid ${col.text}; padding:8px 12px; border-radius:20px; font-weight:bold; font-size:11px;">● ${st}</button>
                     <button class="btn-pdf" onclick="generatePDF('${id}')">PDF</button>
-                    <button onclick="recallJob('${id}')" style="background:#34c759;color:#fff;border:0;padding:8px 12px;border-radius:5px;font-weight:bold;">LOAD</button>
+                    <button onclick="recallJob('${id}')" style="background:#000;color:#fff;border:0;padding:8px 12px;border-radius:5px;font-weight:bold;">LOAD</button>
                 </div>
             </div>`;
         });
     });
 
-    function recallJob(id){ db.ref('jobs/' + id).once('value').then((snap) => { let j=snap.val(); if(j){ items=[...j.parts]; jobPhotos=[...(j.photos||[])]; document.getElementById('jNm').value=j.name; document.getElementById('jN').value=j.num; tab('measure'); render(); } }); }
     function deleteJob(id) { if(confirm("Delete this job from Cloud?")) db.ref('jobs/' + id).remove(); }
-    function pushToXero(n, nm, a){ const desc = encodeURIComponent(`PaintWorkz Job #${n}: ${nm}`); window.open(`https://go.xero.com/OrganisationAdmin/Invoicing/CreateInvoice.aspx?description=${desc}&quantity=${a}`, '_blank'); }
+    function recallJob(id){ db.ref('jobs/' + id).once('value').then((snap) => { let j=snap.val(); if(j){ items=[...j.parts]; document.getElementById('jNm').value=j.name; document.getElementById('jN').value=j.num; tab('measure'); render(); } }); }
+    
+    function exportData() { db.ref('jobs').once('value').then(snap => { const blob = new Blob([JSON.stringify(snap.val())], {type:'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'PaintWorkz_Cloud_Backup.json'; a.click(); }); }
+    function importData(input) { const r = new FileReader(); r.onload = e => { if(confirm("Overwrite Cloud Jobs?")) db.ref('jobs').set(JSON.parse(e.target.result)).then(()=>location.reload()); }; r.readAsText(input.files[0]); }
 
     function generatePDF(id) {
         db.ref('jobs/' + id).once('value').then((snap) => {
             const j = snap.val(); const { jsPDF } = window.jspdf; const doc = new jsPDF();
-            doc.setFontSize(20); doc.setTextColor(212, 175, 55); doc.text("PAINTWORKZ SITE SHEET", 20, 20);
+            doc.setFontSize(20); doc.setTextColor(212,175,55); doc.text("PAINTWORKZ SITE SHEET", 20, 20);
             doc.setFontSize(12); doc.setTextColor(0); doc.text(`Job: ${j.name} (#${j.num})`, 20, 30);
             doc.text(`Total Area: ${j.total} m2`, 20, 37); doc.line(20, 42, 190, 42);
             let y = 50;
