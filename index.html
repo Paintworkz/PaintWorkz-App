@@ -65,3 +65,128 @@
 <div class="container">
     <div id="measure" class="view-section active">
         <div class="card">
+            <input type="text" id="jNm" placeholder="JOB NAME / CLIENT">
+            
+            <div style="display:flex;gap:8px;margin-top:10px;align-items:center;">
+                <input type="number" id="thk" value="18" style="width:60px; text-align:center;">
+                <select id="prof_sel" style="flex:3"><option>Flat</option><option>Profile 1</option></select>
+                <input type="number" id="qty" value="1" style="width:60px; text-align:center;">
+            </div>
+
+            <div style="display:flex;gap:8px;margin:10px 0;">
+                <div id="pP" class="p-card active" onclick="setP('Panel')">PANEL</div>
+                <div id="pD" class="p-card" onclick="setP('Door')">DOOR</div>
+                <div id="pDr" class="p-card" onclick="setP('Drawer')">DRAWER</div>
+            </div>
+
+            <div style="display:flex;gap:8px;"><input type="number" id="h" placeholder="LENGTH" oninput="up()"><input type="number" id="w" placeholder="WIDTH" oninput="up()"></div>
+            
+            <div style="display:flex;gap:8px;margin:10px 0"><div id="fF" class="t-btn active" onclick="setF('Flat')">Flat</div><div id="fM" class="t-btn" onclick="setF('Moulded')">Moulded</div></div>
+            <div style="display:flex;gap:8px;margin-bottom:10px"><div id="mSS" class="t-btn active" onclick="setM('SS')">SS</div><div id="mDS" class="t-btn" onclick="setM('DS')">DS</div><div id="mSE" class="t-btn" onclick="setM('SE')">SE</div></div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin:15px 0;">
+                <div class="edge-box" id="E1" onclick="tE(this)" style="flex:1">L</div>
+                <div class="edge-box" id="E2" onclick="tE(this)" style="flex:1">L</div>
+                <label class="cam-btn">📸<input type="file" accept="image/*" capture="camera" style="display:none" onchange="handlePhoto()"><div id="camBadge" class="badge" style="display:none">0</div></label>
+                <div class="edge-box" id="E3" onclick="tE(this)" style="flex:1">S</div>
+                <div class="edge-box" id="E4" onclick="tE(this)" style="flex:1">S</div>
+            </div>
+
+            <div id="liveSq" style="text-align:center;font-weight:900;color:#aa841e;font-size:48px;">0.000</div>
+            <button onclick="add()" style="width:100%;padding:18px;border-radius:40px;background:var(--gold);border:none;font-size:22px;font-weight:900;">ADD TO LIST</button>
+        </div>
+        <div id="list"></div>
+    </div>
+
+    <div id="history" class="view-section">
+        <div id="history-list"></div>
+    </div>
+
+    <div id="settings" class="view-section">
+        <div class="card">
+            <h3>App Settings</h3>
+            <button onclick="location.reload()" style="width:100%;padding:15px;background:#000;color:#fff;border-radius:10px;">RELOAD APP</button>
+            <p style="text-align:center; font-size:12px; color:#888; margin-top:20px;">PaintWorkz Pro v3.8 Stable</p>
+        </div>
+    </div>
+</div>
+
+<div class="sticky-footer">
+    <div style="text-align:center"><div style="font-size:9px">AREA</div><div id="tA" style="font-size:18px;font-weight:900;color:var(--gs)">0.000</div></div>
+    <div style="text-align:center; font-size:24px;">📄</div>
+    <div style="text-align:center"><div style="font-size:9px">PARTS</div><div id="tQ" style="font-size:18px;font-weight:900;color:var(--gs)">0</div></div>
+</div>
+
+<script>
+    let items=[], mode='SS', finish='Flat', pType='Panel', photoCount=0;
+
+    function tab(t){
+        document.querySelectorAll('.view-section,.nav-btn').forEach(x=>x.classList.remove('active'));
+        document.getElementById(t).classList.add('active');
+        document.getElementById('btn-'+t).classList.add('active');
+    }
+
+    // PHOTO HANDLER
+    function handlePhoto(){
+        photoCount++;
+        const ts = new Date().toLocaleTimeString();
+        alert(`Damage Recorded [${ts}]`);
+        let b = document.getElementById('camBadge');
+        b.innerText = photoCount; b.style.display = 'flex';
+    }
+
+    function setP(p){ pType=p; document.querySelectorAll('.p-card').forEach(x=>x.classList.remove('active')); document.getElementById(p==='Panel'?'pP':p==='Door'?'pD':'pDr').classList.add('active'); def(); }
+    function setM(m){ mode=m; ['SS','DS','SE'].forEach(v=>document.getElementById('m'+v).classList.toggle('active',mode===v)); def(); }
+    function setF(f){ finish=f; document.getElementById('fF').classList.toggle('active',f==='Flat'); document.getElementById('fM').classList.toggle('active',f==='Moulded'); }
+    function tE(e){ e.classList.toggle('active'); up(); }
+    function def(){ [1,2,3,4].forEach(i=>document.getElementById('E'+i).classList.remove('active')); if(mode==='SE') document.getElementById('E1').classList.add('active'); up(); }
+    
+    function calc(h,w,e,m,thk){
+        let f=(h*w)/1e6, el=((e[0]?h:0)+(e[1]?h:0)+(e[2]?w:0)+(e[3]?w:0));
+        let es=(el*thk)/1e6;
+        if(m==='SS') return f+es; if(m==='DS') return (f*2)+es; if(m==='SE') return f+es+(el*100/1e6); return 0;
+    }
+
+    function up(){ 
+        let h=Number(document.getElementById('h').value), w=Number(document.getElementById('w').value);
+        let e=[1,2,3,4].map(i=>document.getElementById('E'+i).classList.contains('active'));
+        document.getElementById('liveSq').innerText=calc(h,w,e,mode,18).toFixed(3); 
+    }
+
+    function add(){
+        let h=Number(document.getElementById('h').value), w=Number(document.getElementById('w').value), q=parseInt(document.getElementById('qty').value)||1;
+        if(!h||!w) return;
+        let e=[1,2,3,4].map(i=>document.getElementById('E'+i).classList.contains('active'));
+        items.push({h,w,e,mode,finish,pType,qty:q,sqm:calc(h,w,e,mode,18).toFixed(3), photos: photoCount});
+        photoCount=0; document.getElementById('camBadge').style.display='none';
+        render();
+    }
+
+    function render(){
+        const l=document.getElementById('list'); l.innerHTML=''; let ts=0, tq=0;
+        items.forEach((it,i)=>{
+            ts += parseFloat(it.sqm)*it.qty; tq += it.qty;
+            // DYNAMIC COLOR BORDER LOGIC
+            let accent = it.pType==='Door'?'#059669':it.pType==='Drawer'?'#2563eb':'#64748b';
+            
+            l.innerHTML += `<div class="card" style="display:flex;align-items:center;gap:12px; border-left:8px solid ${accent}">
+                <div style="font-weight:900; background:#eee; padding:10px; border-radius:10px; min-width:30px; text-align:center;">${it.qty}</div>
+                <div style="flex:1">
+                    <b style="font-size:18px;">${it.h} x ${it.w}</b> [${it.mode}]
+                    ${it.photos > 0 ? `<span style="color:red; font-size:12px; margin-left:10px; font-weight:bold;">📸 ${it.photos}</span>` : ''}
+                    <br><span class="type-tag tag-${it.pType.toUpperCase()}">${it.pType}</span>
+                </div>
+                <button onclick="items.splice(${i},1);render()" style="color:red;border:0;background:0;font-size:28px;padding:10px;">×</button>
+            </div>`;
+        });
+        document.getElementById('tA').innerText=ts.toFixed(3); document.getElementById('tQ').innerText=tq;
+    }
+
+    function saveJob(){
+        if(items.length===0) return;
+        alert("Job Banked 🏦");
+        items=[]; render();
+    }
+</script>
+</body>
+</html>
