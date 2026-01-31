@@ -138,6 +138,8 @@
             </div>
 
             <input type="text" id="desc" placeholder="DESCRIPTION">
+            <div style="display:flex;gap:8px;"><input type="number" id="h" placeholder="LENGTH" oninput="up()" inputmode="numeric"><input type="number" id="w" placeholder="WIDTH" oninput="up()" inputmode="numeric"></div>
+
             <div class="toggle-row">
                 <div id="fF" class="t-btn active" onclick="setF('Flat')">Flat</div>
                 <div id="fM" class="t-btn" onclick="setF('Moulded')">Moulded</div>
@@ -147,8 +149,7 @@
                 <div id="mSS" class="t-btn active" onclick="setM('SS')">SS</div>
                 <div id="mDS" class="t-btn" onclick="setM('DS')">DS</div>
                 <div id="mSE" class="t-btn" onclick="setM('SE')">SE</div>
-            </div>            
-            <div style="display:flex;gap:8px;"><input type="number" id="h" placeholder="LENGTH" oninput="up()" inputmode="numeric"><input type="number" id="w" placeholder="WIDTH" oninput="up()" inputmode="numeric"></div>
+            </div>
             
             <div class="edge-row">
                 <div class="edge-box" id="E1" onclick="tE(this)">L</div>
@@ -164,6 +165,85 @@
         <div id="list"></div>
     </div>
 </div>
+
+<script>
+    const firebaseConfig = { apiKey: "AIzaSyBvSFzaxLJd3rV9S8DGk6JWh1LY5mp5Fxk", authDomain: "paintworkz-app.firebaseapp.com", databaseURL: "https://paintworkz-app-default-rtdb.firebaseio.com", projectId: "paintworkz-app" };
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+
+    let items=[], mode='SS', finish='Flat', pType='Panel';
+
+    function tab(t){ document.querySelectorAll('.view-section,.nav-btn').forEach(x=>x.classList.remove('active')); document.getElementById(t).classList.add('active'); document.getElementById('btn-'+t).classList.add('active'); }
+    
+    function setP(p){ pType=p; document.querySelectorAll('.p-card').forEach(x=>x.classList.remove('active')); document.getElementById(p==='Panel'?'pP':p==='Door'?'pD':'pDr').classList.add('active'); up(); }
+    
+    function setM(m) { mode = m; ['SS', 'DS', 'SE'].forEach(v => document.getElementById('m' + v).classList.toggle('active', mode === v)); up(); }
+    
+    function setF(f) { finish = f; document.getElementById('fF').classList.toggle('active', f === 'Flat'); document.getElementById('fM').classList.toggle('active', f === 'Moulded'); }
+
+    function tE(e){ e.classList.toggle('active'); up(); }
+
+    function calc(h,w,e,m,thk){
+        let f=(h*w)/1e6, el=((e[0]?h:0)+(e[1]?h:0)+(e[2]?w:0)+(e[3]?w:0));
+        let es=(el*thk)/1e6;
+        if(m==='SS') return f+es;
+        if(m==='DS') return (f*2)+es;
+        if(m==='SE') return f+es+(el*100/1e6); // Edge buffer
+        return f+es;
+    }
+
+    function up(){ 
+        let h=Number(document.getElementById('h').value)||0, w=Number(document.getElementById('w').value)||0; 
+        let thk=Number(document.getElementById('thk').value)||18; 
+        let e=[1,2,3,4].map(i=>document.getElementById('E'+i).classList.contains('active')); 
+        document.getElementById('liveSq').innerText=calc(h,w,e,mode,thk).toFixed(3); 
+    }
+
+    function add(){
+        let h=Number(document.getElementById('h').value), w=Number(document.getElementById('w').value), q=parseInt(document.getElementById('qty').value)||1;
+        if(!h||!w) return;
+        let e=[1,2,3,4].map(i=>document.getElementById('E'+i).classList.contains('active'));
+        items.push({h,w,thk:document.getElementById('thk').value,e,mode,finish,qty:q,sqm:document.getElementById('liveSq').innerText,pType});
+        document.getElementById('h').value=''; document.getElementById('w').value=''; 
+        render();
+    }
+
+    function render(){
+        const l=document.getElementById('list'); l.innerHTML=''; let ts=0, tq=0;
+        items.forEach((it, i) => {
+            ts += parseFloat(it.sqm) * it.qty; tq += it.qty;
+            let L=(it.e[0]?1:0)+(it.e[1]?1:0), S=(it.e[2]?1:0)+(it.e[3]?1:0);
+            
+            // Apply your 0S/0L blanking rule
+            let edgeText = "";
+            if(L > 0) edgeText += L + "L ";
+            if(S > 0) edgeText += S + "S";
+
+            l.innerHTML += `<div class="card" style="display:flex; justify-content:space-between; align-items:center; border-left: 5px solid var(--gs);">
+                <div style="flex:1">
+                    <div style="font-weight:900;">${it.qty}x ${it.h} x ${it.w} (${it.thk}mm)</div>
+                    <div style="font-size:11px; color:#666;">${it.pType} | ${it.mode} | ${it.finish} | ${edgeText}</div>
+                </div>
+                <button onclick="items.splice(${i},1);render()" style="color:red; border:0; background:0; font-size:24px; font-weight:900;">×</button>
+            </div>`;
+        });
+        document.getElementById('tA').innerText=ts.toFixed(3); document.getElementById('tQ').innerText=tq;
+    }
+
+    function generateLivePDF() {
+        if(items.length === 0) { alert("Add items first!"); return; }
+        const { jsPDF } = window.jspdf; const doc = new jsPDF();
+        doc.text("PAINTWORKZ SITE SHEET", 20, 20);
+        let y = 30;
+        items.forEach(p => { 
+            doc.text(`${p.qty}x ${p.h}x${p.w} [${p.pType}] - ${p.mode}`, 20, y); 
+            y += 10; 
+        });
+        doc.save("Measure.pdf");
+    }
+
+    window.onload=()=>{ setP('Panel'); };
+</script>
 
 <div class="sticky-footer">
     <div class="footer-col pdf-trigger" onclick="generateLivePDF()">
