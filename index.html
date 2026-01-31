@@ -5,11 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>PaintWorkz Pro 3.3</title>
-
-    <link rel="icon" type="image/png" href="logo.png">
-    <link rel="apple-touch-icon" href="logo.png">
-    <link rel="manifest" href="manifest.json">
+    <title>PaintWorkz Pro 3.8</title>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-app-compat.js"></script>
@@ -30,7 +26,7 @@
 
         .container {padding:10px;max-width:600px;margin:auto;}
         .view-section {display:none;} .view-section.active {display:block;}
-        .card {background:#fff;border-radius:12px;padding:15px;margin-bottom:10px;border:1px solid #ddd;box-shadow: 0 2px 5px rgba(0,0,0,0.05);}
+        .card {background:#fff;border-radius:12px;padding:15px;margin-bottom:10px;border:1px solid #ddd;box-shadow: 0 2px 5px rgba(0,0,0,0.05); position:relative;}
 
         .p-card {flex:1;background:#fff;border:2px solid #ddd;border-radius:10px;padding:8px;text-align:center;font-weight:900;font-size:11px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px;}
         .p-card svg {width:24px;height:24px;stroke:#444;fill:none;stroke-width:2;}
@@ -44,9 +40,8 @@
         .edge-box.active {background:#34c759;border-color:#28a745;color:#fff;}
 
         .cam-btn {width:70px;height:70px;background:#000;border:3px solid var(--gs);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:32px;position:relative;cursor:pointer;flex-shrink:0;}
-        .badge {position:absolute;top:-5px;right:-5px;background:var(--gold);color:#000;width:22px;height:22px;border-radius:50%;font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center;border:1px solid #000;z-index:10;}
+        .badge {position:absolute;top:-5px;right:-5px;background:red;color:#fff;width:22px;height:22px;border-radius:50%;font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center;border:1px solid #fff;z-index:10;}
 
-        /* LIST UI REFINEMENTS */
         .qty-bubble {background:#f0f0f5; color:#000; padding:10px; border-radius:10px; font-weight:900; min-width:40px; text-align:center; border:1px solid #ccc; font-size:16px;}
         .mld-bubble {background:var(--gold); color:#000; padding:4px 10px; border-radius:15px; font-weight:900; font-size:11px; border:1px solid #aa841e; display:inline-block;}
         
@@ -63,7 +58,6 @@
         input,select {width:100%;padding:14px;margin:4px 0;border-radius:10px;border:1px solid #ccc;font-size:16px;box-sizing:border-box;}
         .sticky-footer {background:#000;padding:15px;position:fixed;bottom:0;width:100%;border-top:4px solid var(--gs);color:#fff;display:flex;justify-content:space-around;z-index:1001;}
         
-        /* ACTIONS */
         .btn-xero {background:#13b5ea; color:white; border:none; padding:8px 12px; border-radius:5px; font-weight:bold; cursor:pointer;}
         .btn-pdf {background:#e11d48; color:white; border:none; padding:8px 12px; border-radius:5px; font-weight:bold; cursor:pointer;}
         .btn-del {background:none; color:#ff3b30; border:none; font-weight:bold; cursor:pointer; font-size:18px;}
@@ -81,6 +75,7 @@
     <div class="nav-btn active" id="btn-measure" onclick="tab('measure')">Measure</div>
     <div class="nav-btn" id="btn-db" onclick="tab('db')">Database</div>
     <div class="nav-btn" id="btn-history" onclick="tab('history')">Cloud History</div>
+    <div class="nav-btn" id="btn-settings" onclick="tab('settings')">Settings</div>
 </div>
 
 <div class="container">
@@ -119,7 +114,7 @@
             <div class="edge-row">
                 <div class="edge-box" id="E1" onclick="tE(this)">L</div>
                 <div class="edge-box" id="E2" onclick="tE(this)">L</div>
-                <label class="cam-btn">📸<input type="file" id="camInput" accept="image/*" capture="camera" style="display:none" onchange="handleMarkupImg(this)"></label>
+                <label class="cam-btn">📸<input type="file" id="camInput" accept="image/*" capture="camera" style="display:none" onchange="handleMarkupImg(this)"><div id="camBadge" class="badge" style="display:none">0</div></label>
                 <div class="edge-box" id="E3" onclick="tE(this)">S</div>
                 <div class="edge-box" id="E4" onclick="tE(this)">S</div>
             </div>
@@ -130,8 +125,17 @@
         <div id="list"></div>
     </div>
 
+    <div id="db" class="view-section"><div class="card">Database Logic Content Here</div></div>
+
     <div id="history" class="view-section">
         <div id="history-list">Loading Cloud Data...</div>
+    </div>
+
+    <div id="settings" class="view-section">
+        <div class="card">
+            <h3>App Settings</h3>
+            <button onclick="location.reload()" style="width:100%;padding:15px;background:#000;color:#fff;border-radius:10px;">RELOAD APP</button>
+        </div>
     </div>
 </div>
 
@@ -150,24 +154,13 @@
 </div>
 
 <script>
-    // 1. FIREBASE SETUP
-    const firebaseConfig = {
-      apiKey: "AIzaSyBvSFzaxLJd3rV9S8DGk6JWh1LY5mp5Fxk",
-      authDomain: "paintworkz-app.firebaseapp.com",
-      databaseURL: "https://paintworkz-app-default-rtdb.firebaseio.com",
-      projectId: "paintworkz-app",
-      storageBucket: "paintworkz-app.firebasestorage.app",
-      messagingSenderId: "340750725307",
-      appId: "1:340750725307:web:2f582fb0762564622e399e"
-    };
+    const firebaseConfig = { apiKey: "AIzaSyBvSFzaxLJd3rV9S8DGk6JWh1LY5mp5Fxk", authDomain: "paintworkz-app.firebaseapp.com", databaseURL: "https://paintworkz-app-default-rtdb.firebaseio.com", projectId: "paintworkz-app" };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    // 2. APP STATE
     let items=[], jobPhotos=[], mode='SS', finish='Flat', pType='Panel', damagePhotos=[];
     const canvas=document.getElementById('markup-canvas'), ctx=canvas.getContext('2d'), markupImg=new Image();
 
-    // 3. CANVAS & PHOTOS
     function handleMarkupImg(i){ if(i.files[0]){ const r=new FileReader(); r.onload=e=>{markupImg.src=e.target.result; openMarkup();}; r.readAsDataURL(i.files[0]); } }
     function openMarkup(){
         document.getElementById('markup-ui').style.display='flex';
@@ -180,11 +173,19 @@
         canvas.ontouchmove=e=>{ let t=e.touches[0]; ctx.lineTo(t.clientX, t.clientY-60); ctx.stroke(); e.preventDefault(); };
         canvas.ontouchstart=e=>{ ctx.beginPath(); let t=e.touches[0]; ctx.moveTo(t.clientX, t.clientY-60); };
     }
-    function saveMarkup(){ damagePhotos.push(canvas.toDataURL('image/jpeg', 0.7)); closeMarkup(); }
+    
+    function saveMarkup(){ 
+        damagePhotos.push(canvas.toDataURL('image/jpeg', 0.7)); 
+        const ts = new Date().toLocaleTimeString();
+        alert("Damage Recorded with a timestamp: " + ts);
+        let b = document.getElementById('camBadge');
+        b.innerText = damagePhotos.length; b.style.display = 'flex';
+        closeMarkup(); 
+    }
+    
     function closeMarkup(){ document.getElementById('markup-ui').style.display='none'; }
     function attachJobPhotos(i){ Array.from(i.files).forEach(f=>{ const r=new FileReader(); r.onload=e=>{jobPhotos.push(e.target.result); let b=document.getElementById('jobBadge'); b.innerText=jobPhotos.length; b.style.display='flex';}; r.readAsDataURL(f); }); }
 
-    // 4. UI CONTROLS
     function setP(p){ pType=p; document.querySelectorAll('.p-card').forEach(x=>x.classList.remove('active')); document.getElementById(p==='Panel'?'pP':p==='Door'?'pD':'pDr').classList.add('active'); def(); }
     function setM(m){ mode=m; ['SS','DS','SE'].forEach(v=>document.getElementById('m'+v).classList.toggle('active',mode===v)); def(); }
     function setF(f){ finish=f; document.getElementById('fF').classList.toggle('active',f==='Flat'); document.getElementById('fM').classList.toggle('active',f==='Moulded'); }
@@ -192,7 +193,6 @@
     function def(){ [1,2,3,4].forEach(i=>document.getElementById('E'+i).classList.remove('active')); if(mode==='SE') document.getElementById('E1').classList.add('active'); else if(pType!=='Panel') [1,2,3,4].forEach(i=>document.getElementById('E'+i).classList.add('active')); up(); }
     function tab(t){ document.querySelectorAll('.view-section,.nav-btn').forEach(x=>x.classList.remove('active')); document.getElementById(t).classList.add('active'); document.getElementById('btn-'+t).classList.add('active'); }
 
-    // 5. CALCULATION
     function calc(h,w,e,m,thk){
         let f=(h*w)/1e6, el=((e[0]?h:0)+(e[1]?h:0)+(e[2]?w:0)+(e[3]?w:0));
         let es=(el*thk)/1e6;
@@ -209,16 +209,15 @@
         document.getElementById('liveSq').innerText=calc(h,w,e,mode,thk).toFixed(3); 
     }
 
-    // 6. LIST LOGIC
     function add(){
         let h=Number(document.getElementById('h').value), w=Number(document.getElementById('w').value), q=parseInt(document.getElementById('qty').value)||1;
         let thk=Number(document.getElementById('thk').value)||18;
         if(!h||!w) return;
         let e=[1,2,3,4].map(i=>document.getElementById('E'+i).classList.contains('active'));
-        let match = items.find(it => it.h==h && it.w==w && it.thk==thk && it.pType==pType && it.mode==mode && it.finish==finish && JSON.stringify(it.e)==JSON.stringify(e) && it.photos.length === 0 && damagePhotos.length === 0);
-        if(match) match.qty += q; 
-        else items.push({h,w,thk,e,mode,finish,pType,qty:q,sqm:calc(h,w,e,mode,thk).toFixed(3),photos:[...damagePhotos],desc:document.getElementById('desc').value});
-        document.getElementById('h').value=''; document.getElementById('w').value=''; document.getElementById('qty').value=1; damagePhotos=[]; render();
+        items.push({h,w,thk,e,mode,finish,pType,qty:q,sqm:calc(h,w,e,mode,thk).toFixed(3),photos:[...damagePhotos],desc:document.getElementById('desc').value});
+        document.getElementById('h').value=''; document.getElementById('w').value=''; document.getElementById('qty').value=1; 
+        damagePhotos=[]; document.getElementById('camBadge').style.display='none';
+        render();
     }
 
     function render(){
@@ -227,24 +226,18 @@
             ts += parseFloat(it.sqm)*it.qty; tq += it.qty;
             let L = (it.e[0]?1:0)+(it.e[1]?1:0), S = (it.e[2]?1:0)+(it.e[3]?1:0);
             let lbL = it.mode==='SE' && L>0 ? "1LR" : L+"L", lbS = it.mode==='SE' && S>0 ? "1SR" : S+"S";
+            let accent = it.pType==='Door' ? '#059669' : it.pType==='Drawer' ? '#2563eb' : '#64748b';
             
-            l.innerHTML += `<div class="card" style="display:flex;align-items:center;gap:10px;padding:8px;">
+            l.innerHTML += `<div class="card" style="display:flex;align-items:center;gap:10px;padding:8px; border-left: 10px solid ${accent}">
                 <div class="qty-bubble">${it.qty}</div>
                 <div style="flex:1">
                     <div style="font-weight:900;font-size:18px;">${it.h} x ${it.w} x ${it.thk}mm</div>
-                    
                     <div style="display:flex; align-items:center; gap:10px; margin-top:4px;">
                         ${it.finish==='Moulded'?'<div class="mld-bubble">MOULDED</div>':''}
-                        <div style="font-size:18px; font-weight:900; color:#000; text-transform:uppercase;">${it.pType}</div>
+                        <div style="font-size:18px; font-weight:900; color:${accent}; text-transform:uppercase;">${it.pType}</div>
                     </div>
-
-                    <div style="margin-top:6px;">
-                        <span class="edge-pill edge-L">${lbL}</span> <span class="edge-pill edge-S">${lbS}</span>
-                    </div>
-                </div>
-                <div style="position:relative;">
-                    ${it.photos.length > 0 ? `<img src="${it.photos[0]}" style="width:50px;height:50px;border-radius:8px;object-fit:cover;border:1px solid #ddd;">` : `<div style="width:50px;height:50px;background:#eee;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#ccc;font-size:20px;">🖼️</div>`}
-                    ${it.photos.length > 1 ? `<div class="badge">${it.photos.length}</div>` : ''}
+                    ${it.photos.length > 0 ? `<div style="color:red; font-size:12px; font-weight:bold;">📸 Damage Recorded: ${it.photos.length}</div>` : ''}
+                    <div style="margin-top:6px;"><span class="edge-pill edge-L">${lbL}</span> <span class="edge-pill edge-S">${lbS}</span></div>
                 </div>
                 <div class="mode-box mode-${it.mode}">${it.mode}</div>
                 <button onclick="items.splice(${i},1);render()" style="color:red;border:0;background:0;font-size:26px;font-weight:900;">×</button>
@@ -253,17 +246,9 @@
         document.getElementById('tA').innerText=ts.toFixed(3); document.getElementById('tQ').innerText=tq;
     }
 
-    // 7. CLOUD SYNC & EXPORT LOGIC
     function saveJob(){
         if(items.length===0) return;
-        const job = { 
-            id:Date.now(), 
-            name:document.getElementById('jNm').value||'Untitled', 
-            num:document.getElementById('jN').value||'0', 
-            parts:items, 
-            photos:jobPhotos,
-            total:document.getElementById('tA').innerText 
-        };
+        const job = { id:Date.now(), name:document.getElementById('jNm').value||'Untitled', num:document.getElementById('jN').value||'0', parts:items, photos:jobPhotos, total:document.getElementById('tA').innerText };
         db.ref('jobs/' + job.id).set(job).then(()=>alert("Saved to Cloud! ☁️"));
         items=[]; jobPhotos=[]; document.getElementById('jobBadge').style.display='none'; render();
     }
@@ -274,10 +259,7 @@
         Object.keys(data).reverse().forEach(id => {
             let j = data[id];
             l.innerHTML += `<div class="card">
-                <div style="display:flex; justify-content:space-between;">
-                    <b>#${j.num} - ${j.name}</b>
-                    <button class="btn-del" onclick="deleteJob('${id}')">×</button>
-                </div>
+                <div style="display:flex; justify-content:space-between;"><b>#${j.num} - ${j.name}</b><button class="btn-del" onclick="deleteJob('${id}')">×</button></div>
                 <div style="margin:5px 0;">Area: ${j.total} m² | Parts: ${j.parts.length}</div>
                 <div style="margin-top:10px; display:flex; gap:10px;">
                     <button class="btn-xero" onclick="pushToXero('${j.num}','${j.name}','${j.total}')">XERO</button>
@@ -288,55 +270,28 @@
         });
     });
 
-    function recallJob(id){
-        db.ref('jobs/' + id).once('value').then((snap) => {
-            let j=snap.val();
-            if(j){ items=[...j.parts]; jobPhotos=[...(j.photos||[])]; document.getElementById('jNm').value=j.name; document.getElementById('jN').value=j.num; tab('measure'); render(); }
-        });
-    }
-
-    function deleteJob(id) {
-        if(confirm("Delete this job from Cloud?")) db.ref('jobs/' + id).remove();
-    }
-
-    function pushToXero(n, nm, a){
-        const desc = encodeURIComponent(`PaintWorkz Job #${n}: ${nm}`);
-        window.open(`https://go.xero.com/OrganisationAdmin/Invoicing/CreateInvoice.aspx?description=${desc}&quantity=${a}`, '_blank');
-    }
+    function recallJob(id){ db.ref('jobs/' + id).once('value').then((snap) => { let j=snap.val(); if(j){ items=[...j.parts]; jobPhotos=[...(j.photos||[])]; document.getElementById('jNm').value=j.name; document.getElementById('jN').value=j.num; tab('measure'); render(); } }); }
+    function deleteJob(id) { if(confirm("Delete this job from Cloud?")) db.ref('jobs/' + id).remove(); }
+    function pushToXero(n, nm, a){ const desc = encodeURIComponent(`PaintWorkz Job #${n}: ${nm}`); window.open(`https://go.xero.com/OrganisationAdmin/Invoicing/CreateInvoice.aspx?description=${desc}&quantity=${a}`, '_blank'); }
 
     function generatePDF(id) {
         db.ref('jobs/' + id).once('value').then((snap) => {
-            const j = snap.val();
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF();
-            doc.setFontSize(20); doc.setTextColor(212, 175, 55); 
-            doc.text("PAINTWORKZ SITE SHEET", 20, 20);
-            doc.setFontSize(12); doc.setTextColor(0);
-            doc.text(`Job: ${j.name} (#${j.num})`, 20, 30);
-            doc.text(`Total Area: ${j.total} m2`, 20, 37);
-            doc.line(20, 42, 190, 42);
+            const j = snap.val(); const { jsPDF } = window.jspdf; const doc = new jsPDF();
+            doc.setFontSize(20); doc.setTextColor(212, 175, 55); doc.text("PAINTWORKZ SITE SHEET", 20, 20);
+            doc.setFontSize(12); doc.setTextColor(0); doc.text(`Job: ${j.name} (#${j.num})`, 20, 30);
+            doc.text(`Total Area: ${j.total} m2`, 20, 37); doc.line(20, 42, 190, 42);
             let y = 50;
             j.parts.forEach(p => {
                 let L = (p.e[0]?1:0)+(p.e[1]?1:0), S = (p.e[2]?1:0)+(p.e[3]?1:0);
                 doc.text(`${p.qty}x   ${p.h} x ${p.w} x ${p.thk}mm   [${p.pType}]`, 20, y);
                 doc.text(`        ${p.mode} - ${L}L ${S}S`, 20, y+5);
-                y += 12;
-                if(y > 280) { doc.addPage(); y = 20; }
+                y += 12; if(y > 280) { doc.addPage(); y = 20; }
             });
             doc.save(`Job_${j.num}_${j.name}.pdf`);
         });
     }
 
-    window.onload=()=>{
-        document.getElementById('cli').innerHTML='<option>Absolute Kitchens</option>';
-        document.getElementById('pBrand').innerHTML='<option>Wattyl</option><option>Dulux</option><option>Evic</option>';
-        document.getElementById('pColor').innerHTML='<option>Vivid White</option><option>Monument</option>';
-        document.getElementById('pFinish').innerHTML='<option>G30 Satin</option><option>G10 Matt</option>';
-        document.getElementById('prof-select').innerHTML='<option>Plain (101)</option><option>Shaker (401)</option>';
-        setP('Panel');
-    };
-    if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js');
+    window.onload=()=>{ setP('Panel'); };
 </script>
-
 </body>
 </html>
