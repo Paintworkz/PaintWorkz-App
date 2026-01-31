@@ -175,9 +175,34 @@
 
     function tab(t){ document.querySelectorAll('.view-section,.nav-btn').forEach(x=>x.classList.remove('active')); document.getElementById(t).classList.add('active'); document.getElementById('btn-'+t).classList.add('active'); }
     
-    function setP(p){ pType=p; document.querySelectorAll('.p-card').forEach(x=>x.classList.remove('active')); document.getElementById(p==='Panel'?'pP':p==='Door'?'pD':'pDr').classList.add('active'); up(); }
-    
-    function setM(m) { mode = m; ['SS', 'DS', 'SE'].forEach(v => document.getElementById('m' + v).classList.toggle('active', mode === v)); up(); }
+function setP(p) { 
+        pType = p; 
+        document.querySelectorAll('.p-card').forEach(x => x.classList.remove('active')); 
+        document.getElementById(p === 'Panel' ? 'pP' : p === 'Door' ? 'pD' : 'pDr').classList.add('active'); 
+        def(); // Triggers the edge automation
+    }
+
+    function setM(m) { 
+        mode = m; 
+        ['SS', 'DS', 'SE'].forEach(v => document.getElementById('m' + v).classList.toggle('active', mode === v)); 
+        def(); // Re-checks edges if you switch to SE mode
+    }
+
+    // This is the missing logic that handles the automatic edge selection
+    function def() {
+        // First, clear all edges
+        [1, 2, 3, 4].forEach(i => document.getElementById('E' + i).classList.remove('active'));
+
+        if (mode === 'SE') {
+            // SE mode always defaults to one long edge
+            document.getElementById('E1').classList.add('active');
+        } else if (pType !== 'Panel') {
+            // Doors and Drawers default to all 4 edges active
+            [1, 2, 3, 4].forEach(i => document.getElementById('E' + i).classList.add('active'));
+        }
+        // Panels stay at 0 edges by default
+        up(); 
+    }
     
     function setF(f) { finish = f; document.getElementById('fF').classList.toggle('active', f === 'Flat'); document.getElementById('fM').classList.toggle('active', f === 'Moulded'); }
 
@@ -208,26 +233,35 @@
         render();
     }
 
-    function render(){
-        const l=document.getElementById('list'); l.innerHTML=''; let ts=0, tq=0;
+function render() {
+        const l = document.getElementById('list'); l.innerHTML = ''; let ts = 0, tq = 0;
         items.forEach((it, i) => {
             ts += parseFloat(it.sqm) * it.qty; tq += it.qty;
-            let L=(it.e[0]?1:0)+(it.e[1]?1:0), S=(it.e[2]?1:0)+(it.e[3]?1:0);
             
-            // Apply your 0S/0L blanking rule
-            let edgeText = "";
-            if(L > 0) edgeText += L + "L ";
-            if(S > 0) edgeText += S + "S";
+            let L = (it.e[0] ? 1 : 0) + (it.e[1] ? 1 : 0);
+            let S = (it.e[2] ? 1 : 0) + (it.e[3] ? 1 : 0);
 
-            l.innerHTML += `<div class="card" style="display:flex; justify-content:space-between; align-items:center; border-left: 5px solid var(--gs);">
-                <div style="flex:1">
-                    <div style="font-weight:900;">${it.qty}x ${it.h} x ${it.w} (${it.thk}mm)</div>
-                    <div style="font-size:11px; color:#666;">${it.pType} | ${it.mode} | ${it.finish} | ${edgeText}</div>
-                </div>
-                <button onclick="items.splice(${i},1);render()" style="color:red; border:0; background:0; font-size:24px; font-weight:900;">×</button>
-            </div>`;
+            // Your rule: If 0, leave blank.
+            let lbL = (L > 0) ? L + "L" : "";
+            let lbS = (S > 0) ? S + "S" : "";
+            
+            // Clean up space between L and S
+            let edgeDisplay = (lbL && lbS) ? `${lbL} ${lbS}` : `${lbL}${lbS}`;
+
+            l.innerHTML += `
+                <div class="card" style="display:flex; justify-content:space-between; align-items:center; border-left: 8px solid var(--gs);">
+                    <div style="flex:1">
+                        <div style="font-weight:900; font-size:16px;">${it.qty}x ${it.h} x ${it.w}</div>
+                        <div style="font-size:12px; font-weight:700; color:#444; margin-top:2px;">
+                            ${it.pType.toUpperCase()} | ${it.mode} | ${it.finish}
+                        </div>
+                        ${edgeDisplay ? `<div style="font-size:11px; color:var(--gs); font-weight:900;">${edgeDisplay}</div>` : ''}
+                    </div>
+                    <button onclick="items.splice(${i},1);render()" style="color:red; border:0; background:0; font-size:24px; font-weight:900;">×</button>
+                </div>`;
         });
-        document.getElementById('tA').innerText=ts.toFixed(3); document.getElementById('tQ').innerText=tq;
+        document.getElementById('tA').innerText = ts.toFixed(3); 
+        document.getElementById('tQ').innerText = tq;
     }
 
     function generateLivePDF() {
