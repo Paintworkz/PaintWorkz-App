@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>PaintWorkz Pro 3.3</title>
+    <title>PaintWorkz Pro 3.4</title>
 
     <link rel="icon" type="image/png" href="logo.png">
     <link rel="apple-touch-icon" href="logo.png">
@@ -61,7 +61,11 @@
         #markup-ui {display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#000; z-index:2000; flex-direction:column;}
         canvas {background:#000; flex-grow:1; touch-action:none;}
         input,select {width:100%;padding:14px;margin:4px 0;border-radius:10px;border:1px solid #ccc;font-size:16px;box-sizing:border-box;}
-        .sticky-footer {background:#000;padding:15px;position:fixed;bottom:0;width:100%;border-top:4px solid var(--gs);color:#fff;display:flex;justify-content:space-around;z-index:1001;}
+        
+        /* FOOTER REDESIGN */
+        .sticky-footer {background:#000;padding:10px 0;position:fixed;bottom:0;width:100%;border-top:4px solid var(--gs);color:#fff;display:grid;grid-template-columns: 1fr 1.2fr 1fr; align-items:center; z-index:1001;}
+        .footer-action-group {display:flex; justify-content:center; gap:15px; align-items:center;}
+        .footer-icon-btn {background:var(--gold); width:45px; height:45px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:22px; color:#000; border:2px solid #fff; cursor:pointer;}
         
         /* ACTIONS */
         .btn-xero {background:#13b5ea; color:white; border:none; padding:8px 12px; border-radius:5px; font-weight:bold; cursor:pointer;}
@@ -145,8 +149,14 @@
 </div>
 
 <div class="sticky-footer">
-    <div style="text-align:center"><div style="font-size:10px">TOTAL AREA</div><div id="tA" style="font-size:20px;font-weight:900;color:var(--gs)">0.000</div></div>
-    <div style="text-align:center"><div style="font-size:10px">TOTAL PARTS</div><div id="tQ" style="font-size:20px;font-weight:900;color:var(--gs)">0</div></div>
+    <div style="text-align:center"><div style="font-size:9px">AREA</div><div id="tA" style="font-size:16px;font-weight:900;color:var(--gs)">0.000</div></div>
+    
+    <div class="footer-action-group">
+        <div class="footer-icon-btn" onclick="tab('history')">⚙️</div>
+        <div class="footer-icon-btn" style="background:#e11d48; color:#fff;" onclick="quickPDF()">📄</div>
+    </div>
+
+    <div style="text-align:center"><div style="font-size:9px">PARTS</div><div id="tQ" style="font-size:16px;font-weight:900;color:var(--gs)">0</div></div>
 </div>
 
 <script>
@@ -232,12 +242,10 @@
                 <div class="qty-bubble">${it.qty}</div>
                 <div style="flex:1">
                     <div style="font-weight:900;font-size:18px;">${it.h} x ${it.w} x ${it.thk}mm</div>
-                    
                     <div style="display:flex; align-items:center; gap:10px; margin-top:4px;">
                         ${it.finish==='Moulded'?'<div class="mld-bubble">MOULDED</div>':''}
                         <div style="font-size:18px; font-weight:900; color:#000; text-transform:uppercase;">${it.pType}</div>
                     </div>
-
                     <div style="margin-top:6px;">
                         <span class="edge-pill edge-L">${lbL}</span> <span class="edge-pill edge-S">${lbS}</span>
                     </div>
@@ -253,7 +261,35 @@
         document.getElementById('tA').innerText=ts.toFixed(3); document.getElementById('tQ').innerText=tq;
     }
 
-    // 7. CLOUD SYNC & EXPORT LOGIC
+    // 7. EXPORT LOGIC
+    function quickPDF() {
+        if(items.length === 0) { alert("Add items first!"); return; }
+        const jName = document.getElementById('jNm').value || "Draft";
+        const jNum = document.getElementById('jN').value || "0";
+        const total = document.getElementById('tA').innerText;
+        generatePDFFromData({name: jName, num: jNum, parts: items, total: total});
+    }
+
+    function generatePDFFromData(j) {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        doc.setFontSize(20); doc.setTextColor(212, 175, 55); 
+        doc.text("PAINTWORKZ SITE SHEET", 20, 20);
+        doc.setFontSize(12); doc.setTextColor(0);
+        doc.text(`Job: ${j.name} (#${j.num})`, 20, 30);
+        doc.text(`Total Area: ${j.total} m2`, 20, 37);
+        doc.line(20, 42, 190, 42);
+        let y = 50;
+        j.parts.forEach(p => {
+            let L = (p.e[0]?1:0)+(p.e[1]?1:0), S = (p.e[2]?1:0)+(p.e[3]?1:0);
+            doc.text(`${p.qty}x   ${p.h} x ${p.w} x ${p.thk}mm   [${p.pType}]`, 20, y);
+            doc.text(`        ${p.mode} - ${L}L ${S}S`, 20, y+5);
+            y += 12;
+            if(y > 280) { doc.addPage(); y = 20; }
+        });
+        doc.save(`Job_${j.num}_${j.name}.pdf`);
+    }
+
     function saveJob(){
         if(items.length===0) return;
         const job = { 
@@ -281,7 +317,7 @@
                 <div style="margin:5px 0;">Area: ${j.total} m² | Parts: ${j.parts.length}</div>
                 <div style="margin-top:10px; display:flex; gap:10px;">
                     <button class="btn-xero" onclick="pushToXero('${j.num}','${j.name}','${j.total}')">XERO</button>
-                    <button class="btn-pdf" onclick="generatePDF('${id}')">PDF</button>
+                    <button class="btn-pdf" onclick="generatePDFFromData(${JSON.stringify(j).replace(/"/g, '&quot;')})">PDF</button>
                     <button onclick="recallJob('${id}')" style="background:#34c759;color:#fff;border:0;padding:8px 12px;border-radius:5px;font-weight:bold;">LOAD</button>
                 </div>
             </div>`;
@@ -302,29 +338,6 @@
     function pushToXero(n, nm, a){
         const desc = encodeURIComponent(`PaintWorkz Job #${n}: ${nm}`);
         window.open(`https://go.xero.com/OrganisationAdmin/Invoicing/CreateInvoice.aspx?description=${desc}&quantity=${a}`, '_blank');
-    }
-
-    function generatePDF(id) {
-        db.ref('jobs/' + id).once('value').then((snap) => {
-            const j = snap.val();
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF();
-            doc.setFontSize(20); doc.setTextColor(212, 175, 55); 
-            doc.text("PAINTWORKZ SITE SHEET", 20, 20);
-            doc.setFontSize(12); doc.setTextColor(0);
-            doc.text(`Job: ${j.name} (#${j.num})`, 20, 30);
-            doc.text(`Total Area: ${j.total} m2`, 20, 37);
-            doc.line(20, 42, 190, 42);
-            let y = 50;
-            j.parts.forEach(p => {
-                let L = (p.e[0]?1:0)+(p.e[1]?1:0), S = (p.e[2]?1:0)+(p.e[3]?1:0);
-                doc.text(`${p.qty}x   ${p.h} x ${p.w} x ${p.thk}mm   [${p.pType}]`, 20, y);
-                doc.text(`        ${p.mode} - ${L}L ${S}S`, 20, y+5);
-                y += 12;
-                if(y > 280) { doc.addPage(); y = 20; }
-            });
-            doc.save(`Job_${j.num}_${j.name}.pdf`);
-        });
     }
 
     window.onload=()=>{
