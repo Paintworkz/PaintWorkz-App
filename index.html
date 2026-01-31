@@ -250,6 +250,66 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js')
     .then(() => console.log("PaintWorkz Offline Ready 🚀"));
 }
+async function generatePDF(jobId) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    let h = JSON.parse(localStorage.getItem('pw_history') || '[]');
+    let job = h.find(x => x.id === jobId);
+    
+    if (!job) return;
+
+    // Header
+    doc.setFontSize(22);
+    doc.setTextColor(212, 175, 55); // PaintWorkz Gold
+    doc.text("PaintWorkz Job Summary", 20, 20);
+    
+    doc.setFontSize(12);
+    doc.setTextColor(0, 0, 0);
+    doc.text(`Job Name: ${job.name}`, 20, 35);
+    doc.text(`Job Number: #${job.num}`, 20, 42);
+    doc.text(`Date: ${new Date(job.id).toLocaleDateString()}`, 20, 49);
+
+    // Table Header
+    let y = 65;
+    doc.setFont(undefined, 'bold');
+    doc.text("Qty", 20, y);
+    doc.text("Item / Dimensions", 40, y);
+    doc.text("Mode", 130, y);
+    doc.text("SQM", 160, y);
+    doc.line(20, y+2, 190, y+2);
+    
+    // Table Rows
+    doc.setFont(undefined, 'normal');
+    let totalSqm = 0;
+    job.parts.forEach(p => {
+        y += 10;
+        totalSqm += (parseFloat(p.sqm) * p.qty);
+        doc.text(`${p.qty}`, 20, y);
+        doc.text(`${p.pType}: ${p.h} x ${p.w} (${p.finish})`, 40, y);
+        doc.text(`${p.mode}`, 130, y);
+        doc.text(`${(p.sqm * p.qty).toFixed(3)}`, 160, y);
+        
+        // Add description if exists
+        if(p.desc) {
+            y += 5;
+            doc.setFontSize(9);
+            doc.setTextColor(100);
+            doc.text(`Note: ${p.desc}`, 40, y);
+            doc.setFontSize(12);
+            doc.setTextColor(0);
+        }
+    });
+
+    // Summary
+    y += 15;
+    doc.line(20, y, 190, y);
+    y += 10;
+    doc.setFont(undefined, 'bold');
+    doc.text(`TOTAL PROJECT AREA: ${totalSqm.toFixed(3)} m2`, 20, y);
+
+    // Save PDF
+    doc.save(`Job_${job.num}_${job.name}.pdf`);
+}
     
     window.onload=()=>{
         document.getElementById('cli').innerHTML='<option>Absolute Kitchens</option>';
