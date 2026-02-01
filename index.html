@@ -189,9 +189,19 @@
         <div id="list"></div>
     </div>
 <div id="db" class="view-section">
-    <div id="db-clients" class="sub-section active">
-        <div class="card"><h3>Client List</h3></div>
+
+<div id="db-clients" class="sub-section active">
+    <div class="card" style="position: sticky; top: 0; z-index: 10; background: #fff; margin-bottom: 10px;">
+        <h3 style="margin-top:0;">Client Manager</h3>
+        <div style="display:flex; gap:8px;">
+            <input type="text" id="clientSearch" placeholder="🔍 Search clients..." oninput="filterClients()" style="flex:1;">
+            <button onclick="addClient()" style="width:50px; background:var(--gs); border:none; border-radius:10px; font-weight:900; font-size:20px;">+</button>
+        </div>
     </div>
+    <div id="client-list-container" style="max-height: 400px; overflow-y: auto;">
+        </div>
+</div>
+    
     <div id="db-profiles" class="sub-section">
         <div class="card"><h3>Profile Database</h3></div>
     </div>
@@ -276,6 +286,81 @@ const subMenus = {
     ]
 };
 
+// 1. Define the initial list
+let clients = JSON.parse(localStorage.getItem('pw_clients')) || [
+    "ABM", "Absolute Kitchens", "Advanced Cabinetry", "AKC Kitchens", "Braw Creative", 
+    "Brian Moloney", "Cabinets & Stone", "Cabinets by Michael", "Chooka", "CKK", 
+    "Clover Doors", "Complete Style Joinery", "Concept 2 Reality", "Coronet Kitchens", 
+    "Create a Kitchen", "Creative Cabinetry", "Cutting Edge Joinery", "Driscolls Joinery", 
+    "Evolution Kitchens and Joinery", "Geoff Frost Builders", "GM Cabinets", 
+    "Grampians Joinery", "Grovedale Kitchens", "Gunning Concepts", "Hamilton Sheetmetal", 
+    "Harris Cabinets", "Howe Kitchens & Joinery", "Hy-Craft", "Jardines Cabinets", 
+    "Joinery by Jarrod", "Jonassons", "Kingston Kabinets", "Kitchens U Build", 
+    "Kyle Hendy", "Leighton Park", "Matthews Joinery", "Ocean Grove Joinery", 
+    "Onshore", "R J Walter", "Richardson Joinery", "Schier Cabinet Makers", 
+    "Snaauws Kitchens", "SRT Cabinetry", "Stawell Joinery", "Stephensons Kitchens", 
+    "T&J Kitchens", "Tony Lambert Kitchens", "Total Kitchen Solutions", 
+    "Trendset Kitchens", "Troy Turner", "Ultrabuild", "VG Cabinets", 
+    "VJS Geelong", "VJS Shepparton", "Westend Cabinetry"
+];
+
+// 2. Render the list with Delete buttons
+function renderClients(filter = "") {
+    const container = document.getElementById('client-list-container');
+    if(!container) return;
+    
+    // Sort alphabetically
+    clients.sort();
+    
+    container.innerHTML = clients
+        .filter(c => c.toLowerCase().includes(filter.toLowerCase()))
+        .map((c, index) => `
+            <div class="card" style="display:flex; justify-content:space-between; align-items:center; padding:10px; margin-bottom:5px;">
+                <span style="font-weight:700;">${c}</span>
+                <button onclick="deleteClient('${c}')" style="background:none; border:none; color:#ff3b30; font-weight:900; font-size:18px; padding:5px 10px;">×</button>
+            </div>
+        `).join('');
+        
+    // Also update the dropdown in the Measure tab
+    updateClientDropdown();
+    localStorage.setItem('pw_clients', JSON.stringify(clients));
+}
+
+// 3. Search logic
+function filterClients() {
+    const val = document.getElementById('clientSearch').value;
+    renderClients(val);
+}
+
+// 4. Add new client
+function addClient() {
+    const name = prompt("Enter New Client Name:");
+    if (name && !clients.includes(name)) {
+        clients.push(name);
+        renderClients();
+    }
+}
+
+// 5. Delete client
+function deleteClient(name) {
+    if (confirm(`Remove ${name} from database?`)) {
+        clients = clients.filter(c => c !== name);
+        renderClients();
+    }
+}
+
+// 6. Keep the Measure tab dropdown in sync
+function updateClientDropdown() {
+    const select = document.getElementById('cli');
+    if(!select) return;
+    select.innerHTML = clients.map(c => `<option value="${c}">${c}</option>`).join('');
+}
+
+// Initialize on load
+window.addEventListener('DOMContentLoaded', () => {
+    renderClients();
+});
+    
     // Navigation Logic
 function tab(t) {
     // 1. Reset all main views
