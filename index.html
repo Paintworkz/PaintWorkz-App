@@ -139,19 +139,30 @@
 </div>
 
 <div class="sticky-footer">
-    <div class="footer-col" onclick="generateLivePDF()">PDF</div>
-    <div class="footer-col">AREA: <span id="tA">0.000</span></div>
-    <div class="footer-col">QTY: <span id="tQ">0</span></div>
+<div class="sticky-footer">
+    <div class="footer-col" style="cursor:pointer;" onclick="generateLivePDF()">
+        <img src="https://i.ibb.co/v6mXmPj/pdf-icon.png" alt="PDF" style="width:35px; height:auto;">
+        <div style="font-size:10px; font-weight:900; margin-top:2px; color:red;">PDF</div>
+    </div>
+    <div class="footer-col">
+        <div style="font-size:10px; color:#aaa;">TOTAL AREA</div>
+        <div id="tA" style="font-size:22px; font-weight:900; color:var(--gs)">0.000</div>
+    </div>
+    <div class="footer-col">
+        <div style="font-size:10px; color:#aaa;">TOTAL PARTS</div>
+        <div id="tQ" style="font-size:22px; font-weight:900; color:var(--gs)">0</div>
+    </div>
 </div>
 
 <script>
-    let items=[], mode='SS', finish='Flat', pType='Panel';
+    let items = [], mode = 'SS', finish = 'Flat', pType = 'Panel';
 
     const subMenus = {
         db: [{id:'clients', label:'Clients'}, {id:'profiles', label:'Profiles'}, {id:'photos', label:'Photos'}, {id:'finish', label:'Finishes'}, {id:'paint', label:'Paints'}, {id:'formulas', label:'Formulas'}],
         admin: [{id:'matrix', label:'Matrix'}, {id:'cartage', label:'Cartage'}, {id:'multi', label:'Multipliers'}, {id:'track', label:'Trackers'}, {id:'graphs', label:'Graphs'}]
     };
 
+    // Navigation Logic
     function tab(t) {
         document.querySelectorAll('.view-section, .nav-btn').forEach(x => x.classList.remove('active'));
         document.getElementById(t).classList.add('active');
@@ -170,6 +181,7 @@
         document.getElementById((p==='db'?'db-':'adm-')+c).classList.add('active');
     }
 
+    // Part & Edge Logic
     function setP(p) { pType=p; document.querySelectorAll('.p-card').forEach(x=>x.classList.remove('active')); document.getElementById(p==='Panel'?'pP':p==='Door'?'pD':'pDr').classList.add('active'); def(); }
     function setM(m) { mode=m; ['SS','DS','SE'].forEach(v=>document.getElementById('m'+v).classList.toggle('active', mode===v)); def(); }
     function setF(f) { finish=f; document.getElementById('fF').classList.toggle('active', f==='Flat'); document.getElementById('fM').classList.toggle('active', f==='Moulded'); }
@@ -182,11 +194,15 @@
     }
 
     function tE(e){ e.classList.toggle('active'); up(); }
+
     function calc(h,w,e,m,thk){
         let f=(h*w)/1e6, el=((e[0]?h:0)+(e[1]?h:0)+(e[2]?w:0)+(e[3]?w:0)), es=(el*thk)/1e6;
-        if(m==='SS') return f+es; if(m==='DS') return (f*2)+es; if(m==='SE') return f+es+(el*100/1e6);
+        if(m==='SS') return f+es; 
+        if(m==='DS') return (f*2)+es; 
+        if(m==='SE') return f+es+(el*100/1e6);
         return f+es;
     }
+
     function up(){ 
         let h=Number(document.getElementById('h').value)||0, w=Number(document.getElementById('w').value)||0, thk=Number(document.getElementById('thk').value)||18;
         let e=[1,2,3,4].map(i=>document.getElementById('E'+i).classList.contains('active'));
@@ -205,17 +221,42 @@
         const l=document.getElementById('list'); l.innerHTML=''; let ts=0, tq=0;
         items.forEach((it, i) => {
             ts += parseFloat(it.sqm)*it.qty; tq += it.qty;
+            
+            // Edge selection logic for display
             let L=(it.e[0]?1:0)+(it.e[1]?1:0), S=(it.e[2]?1:0)+(it.e[3]?1:0);
-            let ed = (L>0?L+'L ':'') + (S>0?S+'S':'');
+            
+            // Apply User Preference: 0S or 0L or 0SL then leave blank.
+            let edgeText = "";
+            if(L > 0) edgeText += L + "L ";
+            if(S > 0) edgeText += S + "S";
+
             l.innerHTML += `<div class="card" style="display:flex; justify-content:space-between; align-items:center; border-left:8px solid var(--gs);">
-                <div><b>${it.qty}x ${it.h}x${it.w}</b><br><small>${it.pType} | ${it.mode} | ${ed}</small></div>
-                <button onclick="items.splice(${i},1);render()" style="color:red;border:0;background:0;font-size:24px;">×</button>
+                <div>
+                    <div style="font-weight:900; font-size:16px;">${it.qty}x ${it.h} x ${it.w}</div>
+                    <div style="font-size:11px; font-weight:700; color:#666;">${it.pType} | ${it.mode} | ${it.finish}</div>
+                    <div style="font-size:11px; color:var(--gs); font-weight:900;">${edgeText}</div>
+                </div>
+                <button onclick="items.splice(${i},1);render()" style="color:red; border:0; background:0; font-size:24px; font-weight:900;">×</button>
             </div>`;
         });
-        document.getElementById('tA').innerText=ts.toFixed(3); document.getElementById('tQ').innerText=tq;
+        document.getElementById('tA').innerText=ts.toFixed(3); 
+        document.getElementById('tQ').innerText=tq;
+    }
+
+    function generateLivePDF() {
+        if(items.length === 0) { alert("Add items first!"); return; }
+        const { jsPDF } = window.jspdf; const doc = new jsPDF();
+        doc.text("PAINTWORKZ SITE SHEET", 20, 20);
+        let y = 30;
+        items.forEach(p => { 
+            doc.text(`${p.qty}x ${p.h}x${p.w} [${p.pType}] - ${p.mode}`, 20, y); 
+            y += 10; 
+        });
+        doc.save("Measure.pdf");
     }
 
     window.onload=()=>setP('Panel');
 </script>
+ 
 </body>
 </html>
