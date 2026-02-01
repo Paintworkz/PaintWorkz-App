@@ -235,37 +235,62 @@ const subMenus = {
 };
 
     // Navigation Logic
-   function tab(t) {
+function tab(t) {
+    // 1. Reset all main views
     document.querySelectorAll('.view-section, .nav-btn').forEach(x => x.classList.remove('active'));
-    document.getElementById(t).classList.add('active');
-    document.getElementById('btn-' + t).classList.add('active');
     
+    const targetView = document.getElementById(t);
+    const targetBtn = document.getElementById('btn-' + t);
+    
+    if(targetView) targetView.classList.add('active');
+    if(targetBtn) targetBtn.classList.add('active');
+    
+    // 2. Handle Sub-Navigation Bar
     const bar = document.getElementById('sub-nav-bar');
     if (subMenus[t]) {
         bar.style.display = 'flex';
         bar.innerHTML = subMenus[t].map((s, idx) => 
             `<button class="sub-btn ${idx===0?'active':''}" onclick="subTab('${t}','${s.id}',this)">${s.label}</button>`
         ).join('');
-        // Automatically trigger the first sub-tab
+
+        // 3. Auto-activate the first sub-section
         const firstSubId = subMenus[t][0].id;
-        const prefix = (t === 'db') ? 'db-' : (t === 'admin') ? 'adm-' : 'settings-';
+        let prefix = (t === 'db') ? 'db-' : (t === 'admin') ? 'adm-' : 'settings-';
+        
+        // Hide all sub-sections in this view first
         document.querySelectorAll(`#${t} .sub-section`).forEach(s => s.classList.remove('active'));
-        if(document.getElementById(prefix + firstSubId)) document.getElementById(prefix + firstSubId).classList.add('active');
+        
+        // Show the first one
+        const firstView = document.getElementById(prefix + firstSubId);
+        if(firstView) firstView.classList.add('active');
     } else {
         bar.style.display = 'none';
     }
+
+    // 4. Always refresh history when clicking the tab
     if(t === 'history') renderHistory();
 }
 
 function subTab(p, c, btn) {
+    // Deactivate sibling buttons
     btn.parentNode.querySelectorAll('.sub-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
+
+    // Hide all sub-sections in this parent
     document.querySelectorAll(`#${p} .sub-section`).forEach(s => s.classList.remove('active'));
     
+    // Show the target sub-section using the prefix rule
     let prefix = (p === 'db') ? 'db-' : (p === 'admin') ? 'adm-' : 'settings-';
     const targetId = prefix + c;
-    if(document.getElementById(targetId)) document.getElementById(targetId).classList.add('active');
+    const targetEl = document.getElementById(targetId);
+    
+    if(targetEl) {
+        targetEl.classList.add('active');
+    } else {
+        console.error("Missing HTML ID: " + targetId);
+    }
 }
+    
     // Part & Edge Logic
     function setP(p) { pType=p; document.querySelectorAll('.p-card').forEach(x=>x.classList.remove('active')); document.getElementById(p==='Panel'?'pP':p==='Door'?'pD':'pDr').classList.add('active'); def(); }
     function setM(m) { mode=m; ['SS','DS','SE'].forEach(v=>document.getElementById('m'+v).classList.toggle('active', mode===v)); def(); }
