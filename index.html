@@ -232,143 +232,93 @@
     };
 
     // --- PAINT DATABASE LOGIC ---
-    let paints = JSON.parse(localStorage.getItem('pw_paints')) || [
-    { brand: "Dulux", color: "Lexicon Quarter", evic: "EP-LX-Q", recipe: { "White Base": 950, "Black": 2.5, "Blue": 1.2 } },
-    { brand: "Dulux", color: "Natural White", evic: "EP-NW", recipe: { "White Base": 980, "Yellow Oxide": 4 } },
-    { brand: "Wattyl", color: "Vivid White", evic: "EP-VW-STD", recipe: { "White Base": 1000 } },
-    { brand: "Wattyl", color: "Cloud Confetti", evic: "EP-CC", recipe: { "White Base": 920, "Black": 1.5 } }
+// --- PAINT DATABASE LOGIC ---
+let paints = JSON.parse(localStorage.getItem('pw_paints')) || [
+    { brand: "Dulux", color: "Lexicon Quarter", finish: "G30 Satin", evic: "EP-LX-Q", recipe: { "White Base": 950, "Black": 2.5, "Blue": 1.2 } },
+    { brand: "Wattyl", color: "Vivid White", finish: "G10 Matt", evic: "EP-VW-STD", recipe: { "White Base": 1000 } }
 ];
 
-    function renderPaints(filter = "") {
-        const container = document.getElementById('paint-list-container');
-        if(!container) return;
+function renderPaints(filter = "") {
+    const container = document.getElementById('paint-list-container');
+    if(!container) return;
 
-        container.innerHTML = paints
-            .filter(p => p.color.toLowerCase().includes(filter.toLowerCase()) || p.brand.toLowerCase().includes(filter.toLowerCase()))
-            .map(p => {
-                let recipeSummary = p.recipe ? Object.entries(p.recipe).map(([ing, qty]) => `${ing}: ${qty}g`).join(', ') : "No recipe";
-                return `
-                <div class="card" style="border-left: 5px solid var(--gs);">
-                    <div style="display:flex; justify-content:space-between; align-items:start;">
-                        <div style="flex:1">
-                            <div style="font-size:10px; color:#888; font-weight:900;">${p.brand} | ${p.finish || 'Standard'}</div>
-                            <div style="font-weight:700; font-size:18px;">${p.color}</div>
-                            <div style="font-size:11px; color:#555; margin-top:5px;"><strong>Recipe:</strong> ${recipeSummary}</div>
-                        </div>
-                        <div style="text-align:right;">
-                            <div style="font-size:9px; color:#aaa;">EVIC</div>
-                            <div style="font-family:monospace; font-weight:900; background:#eee; padding:2px 5px;">${p.evic}</div>
-                            <div style="margin-top:10px;">
-                                <button onclick="openMixer('${p.color}', '${p.finish}')" style="background:#000; color:white; border:none; padding:5px 10px; border-radius:5px; font-size:10px; font-weight:900;">🧪 MIX</button>
-                                <button onclick="deletePaint('${p.color}', '${p.finish}')" style="background:none; border:none; color:#ff3b30; font-size:18px; margin-left:10px;">×</button>
-                            </div>
+    container.innerHTML = paints
+        .filter(p => p.color.toLowerCase().includes(filter.toLowerCase()) || p.brand.toLowerCase().includes(filter.toLowerCase()))
+        .map(p => `
+            <div class="card" style="border-left: 5px solid var(--gs);">
+                <div style="display:flex; justify-content:space-between; align-items:start;">
+                    <div style="flex:1">
+                        <div style="font-size:10px; color:#888; font-weight:900;">${p.brand} | ${p.finish || 'Standard'}</div>
+                        <div style="font-weight:700; font-size:18px;">${p.color}</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="font-family:monospace; font-weight:900; background:#eee; padding:2px 5px;">${p.evic}</div>
+                        <div style="margin-top:10px;">
+                            <button onclick="openMixer('${p.color}', '${p.finish}')" style="background:#000; color:white; border:none; padding:5px 10px; border-radius:5px; font-size:10px; font-weight:900;">🧪 MIX</button>
+                            <button onclick="deletePaint('${p.color}', '${p.finish}')" style="background:none; border:none; color:#ff3b30; font-size:18px; margin-left:10px;">×</button>
                         </div>
                     </div>
-                </div>`;
-            }).join('');
+                </div>
+            </div>`).join('');
 
-        updateMeasurePaints();
-       localStorage.setItem('pw_paints', JSON.stringify(paints));
-    }
-
-    function addPaint() {
-        const brand = prompt("Brand (e.g. Dulux/Wattyl):", "Dulux");
-        const color = prompt("Color Name:");
-        const finish = prompt("Finish (e.g. G30 Satin, G10 Matt, 2-Pack):", "G30 Satin");
-        const evic = prompt("Evic Code:");
-        
-        if(brand && color && finish && evic) { 
-            paints.push({
-                brand, 
-                color, 
-                finish, 
-                evic, 
-                recipe: {"White Base": 1000} // Default starting recipe
-            }); 
-            renderPaints(); 
-        }
-    }
-
-    function deletePaint(color, finish) { 
-        if(confirm(`Delete ${color} (${finish})?`)) { 
-            paints = paints.filter(p => !(p.color === color && p.finish === finish)); 
-            renderPaints(); 
-        } 
-    } 
-
-    function updateFinishDropdown() {
-    const brand = document.getElementById('pBrand').value;
-    const color = document.getElementById('pColor').value;
-    const finishSelect = document.getElementById('pFinish');
-    
-    const availablePaints = paints.filter(p => p.brand === brand && p.color === color);
-    finishSelect.innerHTML = availablePaints.map(p => 
-        `<option value="${p.finish}">${p.finish}</option>`
-    ).join('');
-    autoFillEvic();
+    updateMeasurePaints();
+    localStorage.setItem('pw_paints', JSON.stringify(paints));
 }
+
+function addPaint() {
+    const brand = prompt("Brand:", "Dulux");
+    const color = prompt("Color Name:");
+    const finish = prompt("Finish:", "G30 Satin");
+    const evic = prompt("Evic Code:");
     
-    function updateColorDropdown() {
-    const brand = document.getElementById('pBrand').value;
-    const colorSelect = document.getElementById('pColor');
-    const colors = [...new Set(paints.filter(p => p.brand === brand).map(p => p.color))];
-    colorSelect.innerHTML = colors.map(c => `<option value="${c}">${c}</option>`).join('');
-    updateFinishDropdown();
-    
-    function openMixer(colorName, finishName) {
+    if(brand && color && finish && evic) { 
+        paints.push({ brand, color, finish, evic, recipe: {"White Base": 1000} }); 
+        renderPaints(); 
+    }
+}
+
+function deletePaint(color, finish) { 
+    if(confirm(`Delete ${color} (${finish})?`)) { 
+        paints = paints.filter(p => !(p.color === color && p.finish === finish)); 
+        renderPaints(); 
+    } 
+}
+
+function openMixer(colorName, finishName) {
     const paint = paints.find(p => p.color === colorName && p.finish === finishName);
-    const displayPaint = paint || { color: colorName, finish: finishName, brand: "Unknown", recipe: { "Base": 1000 } };
+    const displayPaint = paint || { color: colorName, brand: "Unknown", recipe: { "Base": 1000 } };
     
-    let targetLtrs = prompt(`Mixing ${displayPaint.color} (${displayPaint.finish}). Liters?`, "1");
+    let targetLtrs = prompt(`Mixing ${displayPaint.color} (${finishName}). Liters?`, "1");
     if(!targetLtrs || isNaN(targetLtrs)) return;
 
     let resultHTML = `<div style="text-align:left; font-family:monospace; background:#f9f9f9; padding:15px; border-radius:10px; border:1px solid #ccc;">
-                        <h4 style="margin:0; color:var(--gs);">${displayPaint.brand}</h4>
-                        <div style="font-size:18px; font-weight:900;">${displayPaint.color}</div>
-                        <div style="font-size:12px; margin-bottom:10px;">FINISH: ${displayPaint.finish}</div>
-                        <p><strong>Total Volume:</strong> ${targetLtrs}L</p><hr>`;
+                        <h4 style="margin:0;">${displayPaint.brand} - ${displayPaint.color}</h4>
+                        <p>Finish: ${finishName}</p><hr>`;
 
     Object.entries(displayPaint.recipe).forEach(([ing, grams]) => {
         resultHTML += `<div style="display:flex; justify-content:space-between; margin-bottom:5px;">
                         <span>${ing}:</span><span style="font-weight:900;">${(grams * targetLtrs).toFixed(1)}g</span>
                       </div>`;
     });
-    resultHTML += `</div>`;
 
     const mixModal = document.createElement('div');
-    mixModal.style = "position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:white; padding:20px; border-radius:15px; box-shadow:0 0 100px rgba(0,0,0,0.5); z-index:3000; width:85%; max-width:400px; text-align:center;";
+    mixModal.style = "position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:white; padding:20px; border-radius:15px; box-shadow:0 0 100px rgba(0,0,0,0.5); z-index:3000; width:80%; max-width:400px; text-align:center;";
     mixModal.innerHTML = `<h3>Mixing Sheet</h3>${resultHTML}<br><button onclick="this.parentElement.remove()" style="width:100%; padding:15px; background:var(--gs); border:none; border-radius:10px; font-weight:900;">CLOSE</button>`;
     document.body.appendChild(mixModal);
 }
-        
-    function filterPaints() { renderPaints(document.getElementById('paintSearch').value); }
-    function addPaint() {
-        const brand = prompt("Brand:");
-        const color = prompt("Color:");
-        const evic = prompt("Evic Code:");
-        if(brand && color && evic) { paints.push({brand, color, evic, recipe: {"White Base": 1000}}); renderPaints(); }
-    }
-    function deletePaint(color) { if(confirm("Delete " + color + "?")) { paints = paints.filter(p => p.color !== color); renderPaints(); } }
 
-    function autoFillEvic() {
-    const brand = document.getElementById('pBrand').value;
-    const color = document.getElementById('pColor').value;
-    const finish = document.getElementById('pFinish').value;
-    
-    const match = paints.find(p => p.brand === brand && p.color === color && p.finish === finish);
-    if(match) {
-        document.getElementById('pFormula').value = match.evic;
-    }
+function autoFillEvic() {
+    const selectedColor = document.getElementById('pColor').value;
+    const paintMatch = paints.find(p => p.color === selectedColor);
+    if(paintMatch) document.getElementById('pFormula').value = paintMatch.evic;
 }
 
-    function updateMeasurePaints() {
-    const brandSelect = document.getElementById('pBrand');
-    if(!brandSelect) return;
-    const brands = [...new Set(paints.map(p => p.brand))];
-    brandSelect.innerHTML = brands.map(b => `<option value="${b}">${b}</option>`).join('');
-    updateColorDropdown();
+function updateMeasurePaints() {
+    const colorSelect = document.getElementById('pColor');
+    if(colorSelect) {
+        colorSelect.innerHTML = paints.map(p => `<option value="${p.color}">${p.color} (${p.finish})</option>`).join('');
+    }
 }
-
     // --- CLIENT LOGIC ---
     let clients = JSON.parse(localStorage.getItem('pw_clients')) || ["ABM", "Absolute Kitchens", "Westend Cabinetry"];
     function renderClients(filter = "") {
