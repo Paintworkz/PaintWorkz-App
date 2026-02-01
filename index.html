@@ -89,17 +89,14 @@
     <input type="text" id="pFormula" placeholder="EVIC Code" readonly>
 </div>
 
-            <div style="display:flex; gap:8px; margin-top:10px;">
-                <div class="bubble-unit"><input type="number" id="thk" value="18" oninput="up()"><div class="bubble-label">THICK</div></div>
-                <div style="flex:2.5"><select id="prof-select"></select></div>
-                <div class="bubble-unit"><input type="number" id="qty" value="1"><div class="bubble-label">QTY</div></div>
-            </div>
-
-            <div style="display:flex;gap:8px;margin:15px 0;">
-                <div id="pP" class="p-card active" onclick="setP('Panel')"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="1"></rect></svg>PANEL</div>
-                <div id="pD" class="p-card" onclick="setP('Door')"><svg viewBox="0 0 24 24"><path d="M5 3h14v18H5V3zm10 9v1"></path></svg>DOOR</div>
-                <div id="pDr" class="p-card" onclick="setP('Drawer')"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="6" rx="1"></rect><rect x="3" y="13" width="18" height="6" rx="1"></rect></svg>DRAWER</div>
-            </div>
+<div style="display:flex;gap:8px;">
+    <select id="pBrand" onchange="syncDropdowns()"></select>
+    <select id="pColor" onchange="updateFinishDropdown()"></select>
+</div>
+<div style="display:flex;gap:8px;">
+    <select id="pFinish" onchange="autoFillEvic()"></select>
+    <input type="text" id="pFormula" placeholder="EVIC Code" readonly>
+</div>
 
             <input type="text" id="desc" placeholder="DESCRIPTION">
             <div style="display:flex;gap:8px;"><input type="number" id="h" placeholder="LENGTH" oninput="up()"><input type="number" id="w" placeholder="WIDTH" oninput="up()"></div>
@@ -372,32 +369,67 @@ function editRecipe(idx) {
     }
 }
 
+// Updated syncDropdowns to handle cascading selections
 function syncDropdowns() {
     const bSel = document.getElementById('pBrand');
-    const cSel = document.getElementById('pColor');
-    if(!bSel || !cSel) return;
+    if(!bSel) return;
 
     const brands = [...new Set(paints.map(p => p.brand))];
     bSel.innerHTML = brands.map(b => `<option value="${b}">${b}</option>`).join('');
     
-    // Update colors based on selected brand
-    const updateColors = () => {
-        const filtered = paints.filter(p => p.brand === bSel.value);
-        cSel.innerHTML = filtered.map(p => `<option value="${p.color}">${p.color} (${p.finish})</option>`).join('');
-        autoFillEvic();
-    };
+    updateColorDropdown();
+}
 
-    bSel.onchange = updateColors;
-    cSel.onchange = autoFillEvic;
-    updateColors();
+function updateColorDropdown() {
+    const bVal = document.getElementById('pBrand').value;
+    const cSel = document.getElementById('pColor');
+    
+    // Get unique colors for this brand
+    const filteredColors = [...new Set(paints.filter(p => p.brand === bVal).map(p => p.color))];
+    cSel.innerHTML = filteredColors.map(c => `<option value="${c}">${c}</option>`).join('');
+    
+    updateFinishDropdown();
+}
+
+function updateFinishDropdown() {
+    const bVal = document.getElementById('pBrand').value;
+    const cVal = document.getElementById('pColor').value;
+    const fSel = document.getElementById('pFinish');
+    
+    // Find all finishes available for this specific brand and color
+    const availableFinishes = paints.filter(p => p.brand === bVal && p.color === cVal);
+    fSel.innerHTML = availableFinishes.map(p => `<option value="${p.finish}">${p.finish}</option>`).join('');
+    
+    autoFillEvic();
 }
 
 function autoFillEvic() {
-    const color = document.getElementById('pColor').value;
-    const match = paints.find(p => p.color === color);
+    const bVal = document.getElementById('pBrand').value;
+    const cVal = document.getElementById('pColor').value;
+    const fVal = document.getElementById('pFinish').value;
+    
+    const match = paints.find(p => p.brand === bVal && p.color === cVal && p.finish === fVal);
     if(match) document.getElementById('pFormula').value = match.evic;
 }
 
+function add(){
+    let h=document.getElementById('h').value, w=document.getElementById('w').value, q=parseInt(document.getElementById('qty').value);
+    if(!h || !w) return;
+    
+    items.push({
+        h, w, qty:q, 
+        thk:document.getElementById('thk').value, 
+        sqm: document.getElementById('liveSq').innerText, 
+        mode, 
+        finish: document.getElementById('pFinish').value, // Captured from dropdown
+        color: document.getElementById('pColor').value,
+        pType, 
+        desc: document.getElementById('desc').value, 
+        e:[1,2,3,4].map(i=>document.getElementById('E'+i).classList.contains('active'))
+    });
+    render();
+}
+    
 // --- ADD PAINT FIX ---
 function addPaint() {
     let b = prompt("Brand:"), c = prompt("Color:"), f = prompt("Finish:"), e = prompt("EVIC:");
@@ -410,30 +442,31 @@ function addPaint() {
 function deletePaint(idx) { if(confirm("Delete?")) { paints.splice(idx, 1); renderPaints(); } }
 
 // --- THE MEASUREMENT RENDER (Per instructions) ---
+// Update the render() function to show the Finish Bubble
 function render(){
     const l=document.getElementById('list'); l.innerHTML=''; let ts=0, tq=0;
     items.forEach((it,i)=>{
         ts += parseFloat(it.sqm)*it.qty; tq += it.qty;
         let L=(it.e[0]?1:0)+(it.e[1]?1:0), S=(it.e[2]?1:0)+(it.e[3]?1:0);
-        
         let lbL = (L > 0) ? (it.mode === 'SE' ? "1LR" : L + "L") : "";
         let lbS = (S > 0) ? (it.mode === 'SE' ? "1SR" : S + "S") : "";
 
-        // Applying blank text rule: 0S, 0l, 0SL, 0SR = blank
         if (["0S", "0L", "0SL", "0SR"].includes(lbL + lbS)) { lbL = ""; lbS = ""; }
 
-        l.innerHTML += `<div class="card" style="display:flex;align-items:center;gap:10px;padding:8px;">
+        l.innerHTML += `
+        <div class="card" style="display:flex;align-items:center;gap:10px;padding:8px;">
             <div class="qty-bubble">${it.qty}</div>
             <div style="flex:1">
                 <div style="font-weight:900;font-size:18px;">${it.h} x ${it.w}</div>
-                <div style="font-size:11px;color:#666;">${it.desc||'No Desc'}</div>
+                <div style="font-size:11px;color:#666;">${it.color} | <span class="mld-bubble">${it.finish}</span></div>
                 <div>${lbL?`<span class="edge-pill edge-L">${lbL}</span>`:''}${lbS?`<span class="edge-pill edge-S">${lbS}</span>`:''}</div>
             </div>
             <div class="mode-box mode-${it.mode}">${it.mode}</div>
             <button onclick="items.splice(${i},1);render()" style="color:red;border:0;background:0;font-size:26px;">×</button>
         </div>`;
     });
-    document.getElementById('tA').innerText=ts.toFixed(3); document.getElementById('tQ').innerText=tq;
+    document.getElementById('tA').innerText=ts.toFixed(3); 
+    document.getElementById('tQ').innerText=tq;
 }
 
 // --- STANDARD NAVIGATION ---
