@@ -234,7 +234,10 @@ function setF(f) {
     document.getElementById('fM').classList.toggle('active', f==='Moulded');
 }
 
-function tE(el) { el.classList.toggle('active'); up(); }
+function tE(el) { 
+    el.classList.toggle('active'); 
+    up(); // Recalculate live
+}
 
 function up() {
     let h = document.getElementById('h').value || 0, w = document.getElementById('w').value || 0;
@@ -448,21 +451,37 @@ function autoFillEvic() {
     if(match) document.getElementById('pFormula').value = match.evic;
 }
 
-function add(){
-    let h=document.getElementById('h').value, w=document.getElementById('w').value, q=parseInt(document.getElementById('qty').value);
-    if(!h || !w) return;
+function add() {
+    let h = document.getElementById('h').value, 
+        w = document.getElementById('w').value, 
+        q = parseInt(document.getElementById('qty').value);
     
+    if (!h || !w) { alert("Enter dimensions!"); return; }
+
     items.push({
-        h, w, qty:q, 
-        thk:document.getElementById('thk').value, 
-        sqm: document.getElementById('liveSq').innerText, 
-        mode, 
-        finish: document.getElementById('pFinish').value, // Captured from dropdown
+        h, w, qty: q,
+        thk: document.getElementById('thk').value,
+        sqm: document.getElementById('liveSq').innerText,
+        mode: mode, // Global variable
+        finish: document.getElementById('pFinish').value,
         color: document.getElementById('pColor').value,
-        pType, 
-        desc: document.getElementById('desc').value, 
-        e:[1,2,3,4].map(i=>document.getElementById('E'+i).classList.contains('active'))
+        pType: pType, // Global variable
+        desc: document.getElementById('desc').value,
+        // This captures the 'active' state of your E1, E2, E3, E4 boxes
+        e: [
+            document.getElementById('E1').classList.contains('active'),
+            document.getElementById('E2').classList.contains('active'),
+            document.getElementById('E3').classList.contains('active'),
+            document.getElementById('E4').classList.contains('active')
+        ]
     });
+
+    // Reset dimensions for next part
+    document.getElementById('h').value = '';
+    document.getElementById('w').value = '';
+    // Clear edge boxes for next part
+    document.querySelectorAll('.edge-box').forEach(el => el.classList.remove('active'));
+    
     render();
 }
     
@@ -479,15 +498,36 @@ function deletePaint(idx) { if(confirm("Delete?")) { paints.splice(idx, 1); rend
 
 // --- THE MEASUREMENT RENDER (Per instructions) ---
 // Update the render() function to show the Finish Bubble
-function render(){
-    const l=document.getElementById('list'); l.innerHTML=''; let ts=0, tq=0;
-    items.forEach((it,i)=>{
-        ts += parseFloat(it.sqm)*it.qty; tq += it.qty;
-        let L=(it.e[0]?1:0)+(it.e[1]?1:0), S=(it.e[2]?1:0)+(it.e[3]?1:0);
-        let lbL = (L > 0) ? (it.mode === 'SE' ? "1LR" : L + "L") : "";
-        let lbS = (S > 0) ? (it.mode === 'SE' ? "1SR" : S + "S") : "";
+function render() {
+    const l = document.getElementById('list'); 
+    l.innerHTML = ''; 
+    let ts = 0, tq = 0;
 
-        if (["0S", "0L", "0SL", "0SR"].includes(lbL + lbS)) { lbL = ""; lbS = ""; }
+    items.forEach((it, i) => {
+        ts += parseFloat(it.sqm) * it.qty; 
+        tq += it.qty;
+
+        // Calculate how many Long (L) and Short (S) edges are active
+        let L = (it.e[0] ? 1 : 0) + (it.e[1] ? 1 : 0);
+        let S = (it.e[2] ? 1 : 0) + (it.e[3] ? 1 : 0);
+
+        // Standard labels
+        let lbL = (L > 0) ? L + "L" : "";
+        let lbS = (S > 0) ? S + "S" : "";
+
+        // Special SE (Single Edge) Mode logic
+        if (it.mode === 'SE') {
+            lbL = (L > 0) ? "1LR" : "";
+            lbS = (S > 0) ? "1SR" : "";
+        }
+
+        // --- YOUR CUSTOM RULE ---
+        // If the combined result is 0L, 0S, or empty, wipe it out
+        let combined = lbL + lbS;
+        if (!combined || combined === "0L" || combined === "0S" || combined === "0SL" || combined === "0SR") {
+            lbL = "";
+            lbS = "";
+        }
 
         l.innerHTML += `
         <div class="card" style="display:flex;align-items:center;gap:10px;padding:8px;">
@@ -495,14 +535,18 @@ function render(){
             <div style="flex:1">
                 <div style="font-weight:900;font-size:18px;">${it.h} x ${it.w}</div>
                 <div style="font-size:11px;color:#666;">${it.color} | <span class="mld-bubble">${it.finish}</span></div>
-                <div>${lbL?`<span class="edge-pill edge-L">${lbL}</span>`:''}${lbS?`<span class="edge-pill edge-S">${lbS}</span>`:''}</div>
+                <div style="margin-top:4px;">
+                    ${lbL ? `<span class="edge-pill edge-L">${lbL}</span>` : ''}
+                    ${lbS ? `<span class="edge-pill edge-S">${lbS}</span>` : ''}
+                </div>
             </div>
             <div class="mode-box mode-${it.mode}">${it.mode}</div>
-            <button onclick="items.splice(${i},1);render()" style="color:red;border:0;background:0;font-size:26px;">×</button>
+            <button onclick="items.splice(${i},1);render()" style="color:red;border:0;background:0;font-size:26px;padding:0 10px;">×</button>
         </div>`;
     });
-    document.getElementById('tA').innerText=ts.toFixed(3); 
-    document.getElementById('tQ').innerText=tq;
+
+    document.getElementById('tA').innerText = ts.toFixed(3); 
+    document.getElementById('tQ').innerText = tq;
 }
 
 // --- STANDARD NAVIGATION ---
