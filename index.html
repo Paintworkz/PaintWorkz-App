@@ -225,6 +225,79 @@
         ]
     };
 
+// Grams per 1 Liter of finished paint
+let paints = JSON.parse(localStorage.getItem('pw_paints')) || [
+    {
+        brand: "Dulux", 
+        color: "Lexicon Quarter", 
+        evic: "EP-LX-Q",
+        recipe: { "White Base": 950, "Black": 2.5, "Blue": 1.2 }
+    },
+    {
+        brand: "Wattyl", 
+        color: "Vivid White", 
+        evic: "EP-VW-STD",
+        recipe: { "White Base": 1000 }
+    }
+];
+
+function openMixer(colorName) {
+    const paint = paints.find(p => p.color === colorName);
+    if(!paint) return;
+
+    let targetLtrs = prompt(`Mixing ${paint.color}. How many Liters do you need?`, "1");
+    if(!targetLtrs || isNaN(targetLtrs)) return;
+
+    let totalWeight = 0;
+    let resultHTML = `<div style="text-align:left; font-family:monospace; background:#f9f9f9; padding:15px; border-radius:10px; border:1px solid #ccc;">
+                        <h4 style="margin-top:0;">${paint.brand} - ${paint.color}</h4>
+                        <p><strong>Target Volume:</strong> ${targetLtrs}L</p><hr>`;
+
+    Object.entries(paint.recipe).forEach(([ingredient, grams]) => {
+        let mixWeight = (grams * targetLtrs).toFixed(1);
+        resultHTML += `<div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                        <span>${ingredient}:</span>
+                        <span style="font-weight:900;">${mixWeight}g</span>
+                      </div>`;
+    });
+
+    resultHTML += `</div>`;
+
+    // Displaying in a simple alert-style modal (or you can inject this into a div)
+    const mixModal = document.createElement('div');
+    mixModal.style = "position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:white; padding:20px; border-radius:15px; box-shadow:0 0 100px rgba(0,0,0,0.5); z-index:3000; width:80%; max-width:400px; text-align:center;";
+    mixModal.innerHTML = `<h3>Mixing Sheet</h3>${resultHTML}<br><button onclick="this.parentElement.remove()" style="width:100%; padding:15px; background:var(--gs); border:none; border-radius:10px; font-weight:900;">CLOSE</button>`;
+    document.body.appendChild(mixModal);
+}
+    
+function renderPaints(filter = "") {
+    const container = document.getElementById('paint-list-container');
+    if(!container) return;
+
+    container.innerHTML = paints
+        .filter(p => p.color.toLowerCase().includes(filter.toLowerCase()))
+        .map(p => {
+            // Create a small string showing the ingredients
+            let recipeSummary = Object.entries(p.recipe).map(([ing, qty]) => `${ing}: ${qty}g`).join(', ');
+            
+            return `
+            <div class="card" style="border-left: 5px solid var(--gs);">
+                <div style="display:flex; justify-content:space-between; align-items:start;">
+                    <div>
+                        <div style="font-size:10px; color:#888; font-weight:900;">${p.brand}</div>
+                        <div style="font-weight:700; font-size:18px;">${p.color}</div>
+                        <div style="font-size:11px; color:#555; margin-top:5px;"><strong>Recipe (per 1L):</strong> ${recipeSummary}</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="font-size:9px; color:#aaa;">EVIC</div>
+                        <div style="font-family:monospace; font-weight:900; background:#eee; padding:2px 5px;">${p.evic}</div>
+                        <button onclick="openMixer('${p.color}')" style="margin-top:10px; background:#000; color:white; border:none; padding:5px 10px; border-radius:5px; font-size:10px; font-weight:900;">🧪 MIX</button>
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
+}
+    
 // Master Paint Database
 let paints = JSON.parse(localStorage.getItem('pw_paints')) || [
     {brand: "Dulux", color: "Lexicon Quarter", evic: "EP-LX-Q"},
