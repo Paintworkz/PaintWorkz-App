@@ -214,292 +214,95 @@
     
 <script>
 
-// 1. Part Type Selector    
-function setP(t) {
-    pType = t;
-    document.querySelectorAll('.p-card').forEach(c => c.classList.remove('active'));
-    document.getElementById(t === 'Panel' ? 'pP' : (t === 'Door' ? 'pD' : 'pDr')).classList.add('active');
-    
-    resetEdges(); // Reset edges based on the new part type
-    up();
-}
-
-// 2. Mode Selector (SS, DS, SE)
-function setM(m) {
-    mode = m;
-    document.querySelectorAll('#mSS, #mDS, #mSE').forEach(b => b.classList.remove('active'));
-    document.getElementById('m' + m).classList.add('active');
-    
-    resetEdges(); // Reset edges because SE has special rules
-    up();
-}
-
-function setF(f) {
-    fStyle = f;
-    document.getElementById('fF').classList.toggle('active', f==='Flat');
-    document.getElementById('fM').classList.toggle('active', f==='Moulded');
-}
-
-// 1. Edge Box Toggle (Now allows multiple selections in all modes)
-function tE(el) {
-    el.classList.toggle('active');
-    up();
-}
-    
-function up() {
-    const h = parseFloat(document.getElementById('h').value) || 0;
-    const w = parseFloat(document.getElementById('w').value) || 0;
-    const qty = parseInt(document.getElementById('qty').value) || 1;
-
-    // SQM calculation: (Height x Width) / 1,000,000
-    // We calculate per-piece here for the live display
-    let sqm = (h * w) / 1000000;
-    
-    const display = document.getElementById('liveSq');
-    if (display) {
-        display.innerText = sqm.toFixed(3);
-    }
-}
-
-// 2. THE RULES: Handles the default starting points
-function resetEdges() {
-    // Clear everything first
-    document.querySelectorAll('.edge-box').forEach(el => el.classList.remove('active'));
-
-    if (mode === 'SE') {
-        // RULE: SE defaults to one long edge, but you can click others now
-        document.getElementById('E1').classList.add('active');
-    } else {
-        // RULE: Door/Drawer starts with all 4, Panel starts with 0
-        if (pType === 'Door' || pType === 'Drawer') {
-            document.querySelectorAll('.edge-box').forEach(el => el.classList.add('active'));
-        } 
-        // Panel remains empty by default
-    }
-}
-    
-// --- CLIENT RENDER LOGIC ---
-function renderClients(filter = "") {
-    const container = document.getElementById('client-list-container');
-    if(!container) return;
-    clients.sort();
-    container.innerHTML = clients.filter(c => c.toLowerCase().includes(filter.toLowerCase())).map(c => `
-        <div class="card" style="display:flex; justify-content:space-between; align-items:center; padding:10px; margin-bottom:5px;">
-            <span style="font-weight:700;">${c}</span>
-            <button onclick="deleteClient('${c}')" style="background:none; border:none; color:#ff3b30; font-weight:900; font-size:18px;">×</button>
-        </div>
-    `).join('');
-    updateClientDropdown();
-    localStorage.setItem('pw_clients', JSON.stringify(clients));
-}
-
-function updateClientDropdown() { 
-    const s = document.getElementById('cli'); 
-    if(s) s.innerHTML = clients.map(c => `<option value="${c}">${c}</option>`).join('');
-}
-
-function deleteClient(n) { if(confirm("Delete " + n + "?")) { clients = clients.filter(c => c !== n); renderClients(); } }
-
-// --- PROFILE RENDER LOGIC ---
-function renderProfiles(filter = "") {
-    const container = document.getElementById('profile-list-container');
-    if(!container) return;
-    container.innerHTML = profiles.filter(p => p.toLowerCase().includes(filter.toLowerCase())).map(p => `
-        <div class="card" style="display:flex; justify-content:space-between; align-items:center; padding:10px; margin-bottom:5px;">
-            <span style="font-weight:700;">${p}</span>
-            <button onclick="deleteProfile('${p}')" style="background:none; border:none; color:#ff3b30; font-weight:900; font-size:18px;">×</button>
-        </div>
-    `).join('');
-    updateProfileDropdown();
-    localStorage.setItem('pw_profiles', JSON.stringify(profiles));
-}
-
-function updateProfileDropdown() {
-    const s = document.getElementById('prof-select');
-    if(s) s.innerHTML = profiles.map(p => `<option value="${p}">${p}</option>`).join('');
-}
-
-function deleteProfile(n) { if(confirm("Delete " + n + "?")) { profiles = profiles.filter(p => p !== n); renderProfiles(); } }
-    
-const subMenus = {
-    db: [
-        {id:'paints', label:'Paints'}, 
-        {id:'clients', label:'Clients'},  
-        {id:'profiles', label:'Profiles'}
-    ],
-    admin: [
-        {id:'matrix', label:'Matrix'}, 
-        {id:'cartage', label:'Cartage'}, 
-        {id:'multi', label:'Multipliers'}, 
-        {id:'track', label:'Trackers'}, 
-        {id:'graphs', label:'Graphs'}
-    ],
-    settings: [
-        {id:'general', label:'General'}, 
-        {id:'defaults', label:'Defaults'}
-    ]
-}; // <--- This was the broken part!
-
-function subTab(p, c, btn) {
-    // 1. Clear active states from all sub-buttons in this nav bar
-    if (btn && btn.parentNode) {
-        btn.parentNode.querySelectorAll('.sub-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-    }
-
-    // 2. Hide ALL sub-sections everywhere to be safe
-    document.querySelectorAll('.sub-section').forEach(s => s.classList.remove('active'));
-
-    // 3. Map the ID prefix correctly
-    let pre = (p === 'db') ? 'db-' : (p === 'admin') ? 'adm-' : 'settings-';
-    
-    // 4. Show the target sub-section
-    const target = document.getElementById(pre + c);
-    if (target) {
-        target.classList.add('active');
-    } else {
-        console.error("Could not find section:", pre + c);
-    }
-
-    // 5. Trigger renders based on the sub-tab ID
-    if (c === 'paints') renderPaints();
-    if (c === 'clients') renderClients();
-    if (c === 'profiles') renderProfiles();
-}
-    
-    // --- DATABASE INITIALIZATION ---
+// --- INITIALIZATION ---
 let paints = JSON.parse(localStorage.getItem('pw_paints')) || [
-    { brand: "Dulux", color: "Lexicon Quarter", finish: "G30 Satin", evic: "EP-LX-Q", recipe: { "White Base": 950, "Black": 2.5 } },
-    { brand: "Wattyl", color: "Vivid White", finish: "G10 Matt", evic: "EP-VW-STD", recipe: { "White Base": 1000 } }
+    { brand: "Dulux", color: "Lexicon Quarter", finish: "G30 Satin", evic: "EP-LX-Q", recipe: { "White Base": 950, "Black": 2.5 } }
 ];
 let clients = JSON.parse(localStorage.getItem('pw_clients')) || ["ABM", "Absolute Kitchens"];
 let profiles = JSON.parse(localStorage.getItem('pw_profiles')) || ["Plain (101)", "Shaker (401)"];
 let items = [], mode = 'SS', fStyle = 'Flat', pType = 'Panel';
 
-// --- PAINT & MIXER LOGIC ---
-function renderPaints(filter = "") {
-    const container = document.getElementById('paint-list-container');
-    if(!container) return;
+const subMenus = {
+    db: [{id:'paints', label:'Paints'}, {id:'clients', label:'Clients'}, {id:'profiles', label:'Profiles'}],
+    admin: [{id:'matrix', label:'Matrix'}, {id:'cartage', label:'Cartage'}, {id:'multi', label:'Multipliers'}, {id:'track', label:'Trackers'}, {id:'graphs', label:'Graphs'}],
+    settings: [{id:'general', label:'General'}, {id:'defaults', label:'Defaults'}]
+};
 
-    let html = `<div style="padding:10px; font-size:12px; color:#666; font-weight:700;">ACTIVE INVENTORY</div>`;
-    
-    html += paints
-        .filter(p => p.color.toLowerCase().includes(filter.toLowerCase()))
-        .map((p, i) => `
-            <div class="card" style="border-left: 5px solid var(--gs); display:flex; justify-content:space-between; align-items:center;">
-                <div onclick="openMixer(${i})" style="flex:1; cursor:pointer;">
-                    <div style="font-weight:900;">${p.color}</div>
-                    <div style="font-size:11px; color:#666;">${p.brand} | ${p.finish}</div>
-                    <div style="font-size:10px; color:var(--gs); font-weight:700;">${p.evic}</div>
-                </div>
-                <button onclick="deletePaint(${i})" style="background:none; border:none; color:#ff3b30; font-size:20px; padding:10px;">×</button>
-            </div>`).join('');
-            
-    container.innerHTML = html;
-    localStorage.setItem('pw_paints', JSON.stringify(paints));
-    syncDropdowns();
+// --- CORE LOGIC ---
+
+function setP(t) {
+    pType = t;
+    document.querySelectorAll('.p-card').forEach(c => c.classList.remove('active'));
+    document.getElementById(t === 'Panel' ? 'pP' : (t === 'Door' ? 'pD' : 'pDr')).classList.add('active');
+    resetEdges();
+    up();
 }
 
-function openMixer(idx) {
-    const p = paints[idx];
-    let qty = prompt(`Mix ${p.color} (${p.finish}). Liters?`, "1");
-    if(!qty || isNaN(qty)) return;
-
-    let rows = Object.entries(p.recipe).map(([ing, g]) => 
-        `<div style="display:flex;justify-content:space-between"><span>${ing}:</span><b>${(g*qty).toFixed(1)}g</b></div>`
-    ).join('');
-
-    const modal = document.createElement('div');
-    modal.id = "active-modal";
-    modal.style = "position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:white; padding:20px; border-radius:15px; box-shadow:0 0 50px rgba(0,0,0,0.5); z-index:9999; width:80%; max-width:350px;";
-    modal.innerHTML = `
-        <h3 style="margin:0 0 10px 0;">Mixer</h3>
-        <div style="background:#f0f0f0; padding:10px; border-radius:8px; font-family:monospace; font-size:13px;">
-            ${rows}<hr>Total: ${qty}L
-        </div>
-        <div style="display:flex; gap:10px; margin-top:15px;">
-            <button onclick="document.getElementById('active-modal').remove()" style="flex:1; padding:10px; border-radius:8px; border:none; background:#ddd;">CLOSE</button>
-            <button onclick="editRecipe(${idx})" style="flex:1; padding:10px; border-radius:8px; border:none; background:var(--gs); font-weight:900;">EDIT</button>
-        </div>`;
-    document.body.appendChild(modal);
+function setM(m) {
+    mode = m;
+    document.querySelectorAll('#mSS, #mDS, #mSE').forEach(b => b.classList.remove('active'));
+    document.getElementById('m' + m).classList.add('active');
+    resetEdges();
+    up();
 }
 
-function editRecipe(idx) {
-    let p = paints[idx];
-    let current = Object.entries(p.recipe).map(([n, g]) => `${n}:${g}`).join(", ");
-    let val = prompt("Enter Formula (Ingredient:Grams, Ingredient:Grams):", current);
-    
-    if(val) {
-        let newRec = {};
-        val.split(",").forEach(item => {
-            let [n, g] = item.split(":");
-            if(n && g) newRec[n.trim()] = parseFloat(g.trim());
-        });
-        paints[idx].recipe = newRec;
-        document.getElementById('active-modal').remove();
-        renderPaints();
+function tE(el) {
+    el.classList.toggle('active');
+    up();
+}
+
+function resetEdges() {
+    document.querySelectorAll('.edge-box').forEach(el => el.classList.remove('active'));
+    if (mode === 'SE') {
+        document.getElementById('E1').classList.add('active');
+    } else if (pType === 'Door' || pType === 'Drawer') {
+        document.querySelectorAll('.edge-box').forEach(el => el.classList.add('active'));
     }
 }
 
-// Updated syncDropdowns to handle cascading selections
-function syncDropdowns() {
-    const bSel = document.getElementById('pBrand');
-    if(!bSel) return;
-
-    const brands = [...new Set(paints.map(p => p.brand))];
-    bSel.innerHTML = brands.map(b => `<option value="${b}">${b}</option>`).join('');
+// THE MATH ENGINE
+function up() {
+    const rawH = parseFloat(document.getElementById('h').value) || 0;
+    const rawW = parseFloat(document.getElementById('w').value) || 0;
+    const thk = parseFloat(document.getElementById('thk').value) || 18;
     
-    updateColorDropdown();
+    const L_dim = Math.max(rawH, rawW);
+    const S_dim = Math.min(rawH, rawW);
+
+    const eL1 = document.getElementById('E1').classList.contains('active') ? 1 : 0;
+    const eL2 = document.getElementById('E2').classList.contains('active') ? 1 : 0;
+    const eS1 = document.getElementById('E3').classList.contains('active') ? 1 : 0;
+    const eS2 = document.getElementById('E4').classList.contains('active') ? 1 : 0;
+
+    let totalArea = L_dim * S_dim; // Base Face
+
+    if (mode === 'DS') totalArea *= 2;
+    if (mode === 'SE') {
+        const activeEdgeLengths = ((eL1 + eL2) * L_dim) + ((eS1 + eS2) * S_dim);
+        totalArea += (activeEdgeLengths * 100); // 100mm Return
+    }
+
+    // Add Thickness area for all active edges
+    totalArea += ((eL1 + eL2) * L_dim * thk) + ((eS1 + eS2) * S_dim * thk);
+
+    const sqm = totalArea / 1000000;
+    document.getElementById('liveSq').innerText = sqm.toFixed(3);
 }
 
-function updateColorDropdown() {
-    const bVal = document.getElementById('pBrand').value;
-    const cSel = document.getElementById('pColor');
-    
-    // Get unique colors for this brand
-    const filteredColors = [...new Set(paints.filter(p => p.brand === bVal).map(p => p.color))];
-    cSel.innerHTML = filteredColors.map(c => `<option value="${c}">${c}</option>`).join('');
-    
-    updateFinishDropdown();
-}
-
-function updateFinishDropdown() {
-    const bVal = document.getElementById('pBrand').value;
-    const cVal = document.getElementById('pColor').value;
-    const fSel = document.getElementById('pFinish');
-    
-    // Find all finishes available for this specific brand and color
-    const availableFinishes = paints.filter(p => p.brand === bVal && p.color === cVal);
-    fSel.innerHTML = availableFinishes.map(p => `<option value="${p.finish}">${p.finish}</option>`).join('');
-    
-    autoFillEvic();
-}
-
-function autoFillEvic() {
-    const bVal = document.getElementById('pBrand').value;
-    const cVal = document.getElementById('pColor').value;
-    const fVal = document.getElementById('pFinish').value;
-    
-    const match = paints.find(p => p.brand === bVal && p.color === cVal && p.finish === fVal);
-    if(match) document.getElementById('pFormula').value = match.evic;
-}
-
+// ADD TO LIST
 function add() {
+    up(); // Final calc
     const h = document.getElementById('h').value;
     const w = document.getElementById('w').value;
     const q = parseInt(document.getElementById('qty').value) || 1;
+    const finalSqm = document.getElementById('liveSq').innerText;
     
     if(!h || !w) return;
 
-    // Calculate the single-item SQM again to be 100% safe
-    const unitSqm = (parseFloat(h) * parseFloat(w)) / 1000000;
-
     items.push({
-        h: h,
-        w: w,
-        qty: q,
+        h, w, qty: q,
         thk: document.getElementById('thk').value,
-        sqm: unitSqm.toFixed(3), // Store the UNIT sqm
+        sqm: finalSqm,
         mode: mode,
         finish: document.getElementById('pFinish').value,
         color: document.getElementById('pColor').value,
@@ -513,90 +316,106 @@ function add() {
         ]
     });
 
-    // Reset inputs
     document.getElementById('h').value = '';
     document.getElementById('w').value = '';
     document.getElementById('desc').value = '';
-    resetEdges(); // Returns to defaults based on your rules
+    resetEdges();
     render();
 }
-    
-// --- ADD PAINT FIX ---
-function addPaint() {
-    let b = prompt("Brand:"), c = prompt("Color:"), f = prompt("Finish:"), e = prompt("EVIC:");
-    if(b && c && f && e) {
-        paints.push({brand: b, color: c, finish: f, evic: e, recipe: {"White Base": 1000}});
-        renderPaints();
-    }
-}
 
-function deletePaint(idx) { if(confirm("Delete?")) { paints.splice(idx, 1); renderPaints(); } }
-
-// --- THE MEASUREMENT RENDER (Per instructions) ---
-// Update the render() function to show the Finish Bubble
+// LIST GENERATOR
 function render() {
     const l = document.getElementById('list');
     l.innerHTML = '';
-    let totalSqm = 0;
-    let totalQty = 0;
+    let grandSqm = 0, grandQty = 0;
 
     items.forEach((it, i) => {
-        // MATH: Unit SQM * Quantity = Row Total
-        let rowSqm = parseFloat(it.sqm) * it.qty;
-        totalSqm += rowSqm;
-        totalQty += it.qty;
+        const rowTotalSqm = parseFloat(it.sqm) * it.qty;
+        grandSqm += rowTotalSqm;
+        grandQty += it.qty;
 
-        // ... rest of your edge labeling logic ...
+        let L = (it.e[0] ? 1 : 0) + (it.e[1] ? 1 : 0);
+        let S = (it.e[2] ? 1 : 0) + (it.e[3] ? 1 : 0);
+        
+        // Edge naming logic
+        let lbL = (it.mode === 'SE') ? (L > 0 ? "1LR" : "") : (L > 0 ? L + "L" : "");
+        let lbS = (it.mode === 'SE') ? (S > 0 ? "1SR" : "") : (S > 0 ? S + "S" : "");
+
+        l.innerHTML += `
+        <div class="card" style="display:flex;align-items:center;gap:10px;padding:8px;">
+            <div class="qty-bubble">${it.qty}</div>
+            <div style="flex:1">
+                <div style="font-weight:900;font-size:18px;">${it.h} x ${it.w}</div>
+                <div style="font-size:11px;color:#666;">${it.color} | <span class="mld-bubble">${it.finish}</span></div>
+                <div style="margin-top:4px;">
+                    ${lbL ? `<span class="edge-pill edge-L">${lbL}</span>` : ''}
+                    ${lbS ? `<span class="edge-pill edge-S">${lbS}</span>` : ''}
+                </div>
+            </div>
+            <div style="text-align:right; margin-right:10px;">
+                <div style="font-size:10px; color:#888; font-weight:900;">ROW SQM</div>
+                <div style="font-weight:900; color:var(--gs); font-size:16px;">${rowTotalSqm.toFixed(3)}</div>
+            </div>
+            <div class="mode-box mode-${it.mode}">${it.mode}</div>
+            <button onclick="items.splice(${i},1);render()" style="color:red;border:0;background:0;font-size:26px;">×</button>
+        </div>`;
     });
 
-    // Update Footers
-    document.getElementById('tA').innerText = totalSqm.toFixed(3);
-    document.getElementById('tQ').innerText = totalQty;
+    document.getElementById('tA').innerText = grandSqm.toFixed(3);
+    document.getElementById('tQ').innerText = grandQty;
 }
 
-// --- STANDARD NAVIGATION ---
+// --- UI & DATABASE HELPERS ---
+
 function tab(t) {
-    // Remove active class from main tabs and views
     document.querySelectorAll('.view-section, .nav-btn').forEach(x => x.classList.remove('active'));
-    
-    const v = document.getElementById(t);
-    const b = document.getElementById('btn-' + t);
-    
-    if (v) v.classList.add('active'); 
-    if (b) b.classList.add('active');
-    
+    document.getElementById(t).classList.add('active');
+    document.getElementById('btn-' + t).classList.add('active');
     const nav = document.getElementById('sub-nav-bar');
-    
     if (subMenus[t]) {
         nav.style.display = 'flex';
-        nav.innerHTML = subMenus[t].map((s, i) => 
-            `<button class="sub-btn ${i===0?'active':''}" 
-             onclick="subTab('${t}','${s.id}',this)">${s.label}</button>`
-        ).join('');
-
-        // Automatically trigger the first sub-tab
-        const firstBtn = nav.querySelector('.sub-btn');
-        subTab(t, subMenus[t][0].id, firstBtn); 
-    } else { 
-        nav.style.display = 'none'; 
-    }
-
-    if (t === 'history') typeof renderHistory === "function" && renderHistory();
+        nav.innerHTML = subMenus[t].map((s, i) => `<button class="sub-btn ${i===0?'active':''}" onclick="subTab('${t}','${s.id}',this)">${s.label}</button>`).join('');
+        subTab(t, subMenus[t][0].id, nav.querySelector('.sub-btn'));
+    } else { nav.style.display = 'none'; }
 }
 
-// --- BOOTSTRAP ---
-window.onload = () => {
-    // Render all data into memory
-    renderPaints();
-    renderClients();
-    renderProfiles();
-    
-    // Set up the dropdowns for the first time
-    syncDropdowns();
-    
-    // Force the app to start on the 'measure' tab
-    tab('measure'); 
-};
-</script>
+function subTab(p, c, btn) {
+    if (btn) {
+        btn.parentNode.querySelectorAll('.sub-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    }
+    document.querySelectorAll('.sub-section').forEach(s => s.classList.remove('active'));
+    let pre = (p === 'db') ? 'db-' : (p === 'admin') ? 'adm-' : 'settings-';
+    const target = document.getElementById(pre + c);
+    if (target) target.classList.add('active');
+}
+
+function syncDropdowns() {
+    const brands = [...new Set(paints.map(p => p.brand))];
+    document.getElementById('pBrand').innerHTML = brands.map(b => `<option value="${b}">${b}</option>`).join('');
+    updateColorDropdown();
+}
+
+function updateColorDropdown() {
+    const b = document.getElementById('pBrand').value;
+    const colors = [...new Set(paints.filter(p => p.brand === b).map(p => p.color))];
+    document.getElementById('pColor').innerHTML = colors.map(c => `<option value="${c}">${c}</option>`).join('');
+    updateFinishDropdown();
+}
+
+function updateFinishDropdown() {
+    const b = document.getElementById('pBrand').value, c = document.getElementById('pColor').value;
+    const fins = paints.filter(p => p.brand === b && p.color === c);
+    document.getElementById('pFinish').innerHTML = fins.map(p => `<option value="${p.finish}">${p.finish}</option>`).join('');
+    autoFillEvic();
+}
+
+function autoFillEvic() {
+    const b = document.getElementById('pBrand').value, c = document.getElementById('pColor').value, f = document.getElementById('pFinish').value;
+    const m = paints.find(p => p.brand === b && p.color === c && p.finish === f);
+    if(m) document.getElementById('pFormula').value = m.evic;
+}
+
+window.onload = () => { syncDropdowns(); tab('measure'); };</script>
 </body>
 </html>  
