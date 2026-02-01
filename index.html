@@ -303,49 +303,73 @@ function add() {
 
 function saveJob() {
     if (items.length === 0) { alert("List is empty!"); return; }
+    
+    // Ensure we capture current state exactly
     const job = {
-        no: document.getElementById('jN').value || "UNTITLED",
-        name: document.getElementById('jNm').value || "NEW JOB",
-        client: document.getElementById('cli').value,
-        items: [...items],
-        total: document.getElementById('tA').innerText,
-        qty: document.getElementById('tQ').innerText,
+        no: document.getElementById('jN').value || "NO-ID",
+        name: document.getElementById('jNm').value || "UNNAMED",
+        client: document.getElementById('cli').value || "CASH",
+        items: JSON.parse(JSON.stringify(items)), // Deep copy to prevent data loss
+        total: document.getElementById('tA').innerText || "0.000",
+        qty: document.getElementById('tQ').innerText || "0",
         date: new Date().toLocaleString()
     };
-    let hist = JSON.parse(localStorage.getItem('pw_history')) || [];
+
+    let hist = [];
+    try {
+        hist = JSON.parse(localStorage.getItem('pw_history')) || [];
+    } catch(e) { hist = []; }
+    
     hist.unshift(job);
     if (hist.length > 10) hist = hist.slice(0, 10);
+    
     localStorage.setItem('pw_history', JSON.stringify(hist));
+    
     alert("-In the Bank-");
+    
+    // Clear list and refresh
     items = [];
     document.getElementById('jN').value = '';
     document.getElementById('jNm').value = '';
     render();
+    
+    // Optional: Switch to history to show the user it saved
+    tab('history');
 }
 
 // --- 4. HISTORY RENDER ---
 function renderHistory(filter = "") {
     const container = document.getElementById('history-list');
     if (!container) return;
-    const history = JSON.parse(localStorage.getItem('pw_history')) || [];
+    
+    let history = [];
+    try {
+        history = JSON.parse(localStorage.getItem('pw_history')) || [];
+    } catch(e) {
+        container.innerHTML = "Error loading history.";
+        return;
+    }
+
     const f = filter.toLowerCase();
     const filtered = history.filter(j => 
-        j.no.toLowerCase().includes(f) || j.name.toLowerCase().includes(f) || j.client.toLowerCase().includes(f)
+        (j.no || "").toLowerCase().includes(f) || 
+        (j.name || "").toLowerCase().includes(f) || 
+        (j.client || "").toLowerCase().includes(f)
     );
 
     if (filtered.length === 0) {
-        container.innerHTML = '<div class="card" style="text-align:center;padding:20px;color:#888;">No History Found</div>';
+        container.innerHTML = '<div class="card" style="text-align:center;padding:30px;color:#999;">No Jobs Found</div>';
         return;
     }
 
     container.innerHTML = filtered.map((j, i) => `
-        <div class="card" style="border-left: 5px solid var(--gs); display:flex; justify-content:space-between; align-items:center;">
-            <div>
-                <div style="font-weight:900;">${j.no} - ${j.name}</div>
-                <div style="font-size:11px;color:#666;">${j.client} | ${j.date}</div>
-                <div style="font-weight:900;color:var(--gs);">${j.total} SQM (${j.items.length} Lines)</div>
+        <div class="card" style="border-left: 6px solid var(--gs); display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <div style="flex:1;">
+                <div style="font-weight:900; font-size:16px; color:#000;">${j.no} - ${j.name}</div>
+                <div style="font-size:11px; color:#666; margin:2px 0;">${j.client} | ${j.date}</div>
+                <div style="font-weight:900; color:var(--gs); font-size:14px;">${j.total} SQM (${j.items ? j.items.length : 0} Lines)</div>
             </div>
-            <button onclick="loadHistoryJob(${i})" style="background:var(--gs);border:none;padding:10px;border-radius:8px;font-weight:900;">LOAD</button>
+            <button onclick="loadHistoryJob(${i})" style="background:#000; color:var(--gs); border:1px solid var(--gs); padding:10px 15px; border-radius:8px; font-weight:900; cursor:pointer;">LOAD</button>
         </div>
     `).join('');
 }
