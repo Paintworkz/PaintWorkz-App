@@ -211,6 +211,88 @@
     
 <script>
 
+function openMixer(idx) {
+    const p = paints[idx];
+    if (!p) { alert("Paint not found"); return; }
+    
+    let qty = prompt(`Mix ${p.color}. Liters?`, "1");
+    if(!qty || isNaN(qty)) return;
+
+    // Build the recipe list safely
+    let recipeHtml = "";
+    if (p.recipe) {
+        for (let [ing, grams] of Object.entries(p.recipe)) {
+            recipeHtml += `<div style="display:flex;justify-content:space-between;margin-bottom:5px;">
+                <span>${ing}:</span><b>${(grams * qty).toFixed(1)}g</b>
+            </div>`;
+        }
+    }
+
+    // Remove old modal if it exists
+    const old = document.getElementById('active-modal');
+    if(old) old.remove();
+
+    const modal = document.createElement('div');
+    modal.id = "active-modal";
+    // Using inline style to ensure it is ALWAYS on top
+    modal.setAttribute('style', 'position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:white; padding:20px; border-radius:15px; box-shadow:0 0 100px rgba(0,0,0,0.8); z-index:10000; width:85%; max-width:350px; color:#000; display:block !important;');
+    
+    modal.innerHTML = `
+        <h3 style="margin:0 0 10px 0; color:#000;">Mixing Sheet</h3>
+        <div style="background:#f5f5f5; padding:15px; border-radius:10px; font-family:monospace; border:1px solid #ddd;">
+            <strong>${p.brand} - ${p.color}</strong><br>
+            <small>${p.finish} | ${p.evic}</small><hr style="border:0; border-top:1px solid #ccc;">
+            ${recipeHtml}
+            <hr style="border:0; border-top:1px solid #ccc;">
+            <div style="display:flex;justify-content:space-between"><span>TOTAL:</span><b>${qty}L</b></div>
+        </div>
+        <div style="display:flex; gap:10px; margin-top:20px;">
+            <button onclick="this.closest('#active-modal').remove()" style="flex:1; padding:12px; border-radius:8px; border:1px solid #ccc; background:#eee; font-weight:900;">CLOSE</button>
+            <button onclick="editRecipe(${idx})" style="flex:1; padding:12px; border-radius:8px; border:none; background:#d4af37; color:white; font-weight:900;">EDIT</button>
+        </div>`;
+    document.body.appendChild(modal);
+}
+    
+// --- CLIENT ACTIONS ---
+function addClient() {
+    let n = prompt("New Client Name:");
+    if(n) { clients.push(n); renderClients(); }
+}
+function editClient(oldName) {
+    let n = prompt("Rename Client:", oldName);
+    if(n && n !== oldName) {
+        clients = clients.map(c => c === oldName ? n : c);
+        renderClients();
+    }
+}
+function deleteClient(n) {
+    if(confirm("Delete " + n + "?")) {
+        clients = clients.filter(c => c !== n);
+        renderClients();
+    }
+}
+
+// --- PROFILE ACTIONS ---
+
+<button onclick="editProfile('${p}')" style="background:none; border:none; color:blue; font-size:14px; margin-right:10px;">EDIT</button>    
+    function addProfile() {
+    let n = prompt("New Profile Name (e.g. Shaker 401):");
+    if(n) { profiles.push(n); renderProfiles(); }
+}
+function editProfile(oldName) {
+    let n = prompt("Rename Profile:", oldName);
+    if(n && n !== oldName) {
+        profiles = profiles.map(p => p === oldName ? n : p);
+        renderProfiles();
+    }
+}
+function deleteProfile(n) {
+    if(confirm("Delete " + n + "?")) {
+        profiles = profiles.filter(p => p !== n);
+        renderProfiles();
+    }
+}
+    
 // --- CLIENT RENDER LOGIC ---
 function renderClients(filter = "") {
     const container = document.getElementById('client-list-container');
@@ -219,7 +301,7 @@ function renderClients(filter = "") {
     container.innerHTML = clients.filter(c => c.toLowerCase().includes(filter.toLowerCase())).map(c => `
         <div class="card" style="display:flex; justify-content:space-between; align-items:center; padding:10px; margin-bottom:5px;">
             <span style="font-weight:700;">${c}</span>
-            <button onclick="deleteClient('${c}')" style="background:none; border:none; color:#ff3b30; font-weight:900; font-size:18px;">×</button>
+            <button onclick="editClient('${c}')" style="background:none; border:none; color:blue; font-size:14px; margin-right:10px;">EDIT</button>
         </div>
     `).join('');
     updateClientDropdown();
