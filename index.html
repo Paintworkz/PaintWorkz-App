@@ -22,8 +22,8 @@
         .mode-DS { border-color: #ff9500; color: #ff9500; background: #fff3e0; }
         .mode-SE { border-color: #ff3b30; color: #ff3b30; background: #ffebee; }
         :root {--gold: linear-gradient(145deg, #d4af37, #f9f1b0, #aa841e); --rainbow: linear-gradient(90deg, red, orange, yellow, green, blue, indigo, violet); --gs: #d4af37;}
-        body {margin:0;font-family:-apple-system, sans-serif;background:#f0f0f5;padding-bottom:180px;-webkit-tap-highlight-color:transparent;}
-        header {background:var(--rainbow);padding:env(safe-area-inset-top) 15px 5px;display:flex;align-items:center;justify-content:space-between;border-bottom:4px solid #aa841e;position:sticky;top:0;z-index:1000;height:90px;box-sizing:border-box;}
+         body {margin:0;font-family:-apple-system, sans-serif;background:#f0f0f5;padding-bottom:180px;-webkit-tap-highlight-color:transparent;}
+         header {background:var(--rainbow);padding:env(safe-area-inset-top) 15px 5px;display:flex;align-items:center;justify-content:space-between;border-bottom:4px solid #aa841e;position:sticky;top:0;z-index:1000;height:90px;box-sizing:border-box;}
         .logo-box {background:#000;padding:10px 30px;border-radius:50px;border:3px solid var(--gs);display:flex;align-items:center;}
         .logo-text {font-weight:900;font-size:30px;background:var(--gold);-webkit-background-clip:text;-webkit-text-fill-color:transparent;filter:drop-shadow(1px 1px 0 #fff) drop-shadow(2px 2px 2px #000);}
         .nav-btn {flex:1;min-width:75px;padding:14px 2px;color:#fff;text-align:center;font-weight:900;font-size:10px;text-transform:uppercase;border:none;background:0 0;}
@@ -39,7 +39,7 @@
         .t-btn {flex: 1; padding: 12px; border: 1px solid #ccc; border-radius: 8px; font-weight: 900; text-align: center; background: #fff; cursor: pointer;}
         .t-btn.active { background: #000; color: #fff; border-color: var(--gs); }
         .toggle-row { display: flex; gap: 8px; margin: 10px 0; }
-        input, select {width: 100%; height: 50px; padding: 0 12px; margin: 4px 0; border-radius: 10px; border: 1px solid #ccc; font-size: 16px; background: #fff; box-sizing: border-box;}
+         input, select {width: 100%; height: 50px; padding: 0 12px; margin: 4px 0; border-radius: 10px; border: 1px solid #ccc; font-size: 16px; background: #fff; box-sizing: border-box;}
         .bubble-unit {flex: 1; background: #fff; border: 1px solid #ccc; border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 65px;}
         .bubble-unit input {border: none; background: transparent; text-align: center; font-size: 18px; font-weight: 900; height: 30px; padding: 0; width: 100%;}
         .bubble-label { font-size: 9px; font-weight: 900; color: #888; text-transform: uppercase; margin-top: -2px; }
@@ -80,8 +80,14 @@
             <h3 style="margin-top:0; color:var(--gs); text-align:center; font-weight:900;">NEW MEASUREMENT</h3>
             <div style="display:flex;gap:8px;"><select id="cli"></select><input type="text" id="jN" placeholder="JOB #" style="width:100px;"></div>
             <input type="text" id="jNm" placeholder="JOB NAME">
-            <div style="display:flex;gap:8px;"><select id="pBrand"><option>Wattyl</option><option>Dulux</option></select><select id="pColor"onchange="autoFillEvic()"></select></div>
-            <div style="display:flex;gap:8px;"><select id="pFinish"><option>G30 Satin</option><option>G10 Matt</option></select><input type="text" id="pFormula" placeholder="Formula"></div>
+<div style="display:flex;gap:8px;">
+    <select id="pBrand" onchange="updateColorDropdown()"></select>
+    <select id="pColor" onchange="updateFinishDropdown()"></select>
+</div>
+<div style="display:flex;gap:8px;">
+    <select id="pFinish" onchange="autoFillEvic()"></select>
+    <input type="text" id="pFormula" placeholder="EVIC Code" readonly>
+</div>
 
             <div style="display:flex; gap:8px; margin-top:10px;">
                 <div class="bubble-unit"><input type="number" id="thk" value="18" oninput="up()"><div class="bubble-label">THICK</div></div>
@@ -226,14 +232,14 @@
     };
 
     // --- PAINT DATABASE LOGIC ---
-let paints = JSON.parse(localStorage.getItem('pw_paints')) || [
+    let paints = JSON.parse(localStorage.getItem('pw_paints')) || [
     { brand: "Dulux", color: "Lexicon Quarter", evic: "EP-LX-Q", recipe: { "White Base": 950, "Black": 2.5, "Blue": 1.2 } },
     { brand: "Dulux", color: "Natural White", evic: "EP-NW", recipe: { "White Base": 980, "Yellow Oxide": 4 } },
     { brand: "Wattyl", color: "Vivid White", evic: "EP-VW-STD", recipe: { "White Base": 1000 } },
     { brand: "Wattyl", color: "Cloud Confetti", evic: "EP-CC", recipe: { "White Base": 920, "Black": 1.5 } }
 ];
 
-function renderPaints(filter = "") {
+    function renderPaints(filter = "") {
         const container = document.getElementById('paint-list-container');
         if(!container) return;
 
@@ -289,33 +295,52 @@ function renderPaints(filter = "") {
             renderPaints(); 
         } 
     } 
+
+    function updateFinishDropdown() {
+    const brand = document.getElementById('pBrand').value;
+    const color = document.getElementById('pColor').value;
+    const finishSelect = document.getElementById('pFinish');
     
-function openMixer(colorName) {
-    const paint = paints.find(p => p.color === colorName);
+    const availablePaints = paints.filter(p => p.brand === brand && p.color === color);
+    finishSelect.innerHTML = availablePaints.map(p => 
+        `<option value="${p.finish}">${p.finish}</option>`
+    ).join('');
+    autoFillEvic();
+}
     
-    // If the paint isn't in your list yet, we'll create a default one so it doesn't "break"
-    const displayPaint = paint || { color: colorName, brand: "Unknown", recipe: { "Base": 1000 } };
+    function updateColorDropdown() {
+    const brand = document.getElementById('pBrand').value;
+    const colorSelect = document.getElementById('pColor');
+    const colors = [...new Set(paints.filter(p => p.brand === brand).map(p => p.color))];
+    colorSelect.innerHTML = colors.map(c => `<option value="${c}">${c}</option>`).join('');
+    updateFinishDropdown();
     
-    let targetLtrs = prompt(`Mixing ${displayPaint.color}. How many Liters?`, "1");
+    function openMixer(colorName, finishName) {
+    const paint = paints.find(p => p.color === colorName && p.finish === finishName);
+    const displayPaint = paint || { color: colorName, finish: finishName, brand: "Unknown", recipe: { "Base": 1000 } };
+    
+    let targetLtrs = prompt(`Mixing ${displayPaint.color} (${displayPaint.finish}). Liters?`, "1");
     if(!targetLtrs || isNaN(targetLtrs)) return;
 
     let resultHTML = `<div style="text-align:left; font-family:monospace; background:#f9f9f9; padding:15px; border-radius:10px; border:1px solid #ccc;">
-                        <h4 style="margin-top:0;">${displayPaint.brand} - ${displayPaint.color}</h4>
-                        <p><strong>Target Volume:</strong> ${targetLtrs}L</p><hr>`;
+                        <h4 style="margin:0; color:var(--gs);">${displayPaint.brand}</h4>
+                        <div style="font-size:18px; font-weight:900;">${displayPaint.color}</div>
+                        <div style="font-size:12px; margin-bottom:10px;">FINISH: ${displayPaint.finish}</div>
+                        <p><strong>Total Volume:</strong> ${targetLtrs}L</p><hr>`;
 
-    // This calculates the grams based on the liters entered
-    Object.entries(displayPaint.recipe).forEach(([ingredient, grams]) => {
+    Object.entries(displayPaint.recipe).forEach(([ing, grams]) => {
         resultHTML += `<div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-                        <span>${ingredient}:</span><span style="font-weight:900;">${(grams * targetLtrs).toFixed(1)}g</span>
+                        <span>${ing}:</span><span style="font-weight:900;">${(grams * targetLtrs).toFixed(1)}g</span>
                       </div>`;
     });
     resultHTML += `</div>`;
 
     const mixModal = document.createElement('div');
-    mixModal.style = "position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:white; padding:20px; border-radius:15px; box-shadow:0 0 100px rgba(0,0,0,0.5); z-index:3000; width:80%; max-width:400px; text-align:center;";
+    mixModal.style = "position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:white; padding:20px; border-radius:15px; box-shadow:0 0 100px rgba(0,0,0,0.5); z-index:3000; width:85%; max-width:400px; text-align:center;";
     mixModal.innerHTML = `<h3>Mixing Sheet</h3>${resultHTML}<br><button onclick="this.parentElement.remove()" style="width:100%; padding:15px; background:var(--gs); border:none; border-radius:10px; font-weight:900;">CLOSE</button>`;
     document.body.appendChild(mixModal);
 }
+        
     function filterPaints() { renderPaints(document.getElementById('paintSearch').value); }
     function addPaint() {
         const brand = prompt("Brand:");
@@ -324,15 +349,25 @@ function openMixer(colorName) {
         if(brand && color && evic) { paints.push({brand, color, evic, recipe: {"White Base": 1000}}); renderPaints(); }
     }
     function deletePaint(color) { if(confirm("Delete " + color + "?")) { paints = paints.filter(p => p.color !== color); renderPaints(); } }
+
     function autoFillEvic() {
-        const selectedColor = document.getElementById('pColor').value;
-        const paintMatch = paints.find(p => p.color === selectedColor);
-        if(paintMatch) document.getElementById('pFormula').value = paintMatch.evic;
+    const brand = document.getElementById('pBrand').value;
+    const color = document.getElementById('pColor').value;
+    const finish = document.getElementById('pFinish').value;
+    
+    const match = paints.find(p => p.brand === brand && p.color === color && p.finish === finish);
+    if(match) {
+        document.getElementById('pFormula').value = match.evic;
     }
+}
+
     function updateMeasurePaints() {
-        const colorSelect = document.getElementById('pColor');
-        if(colorSelect) colorSelect.innerHTML = paints.map(p => `<option value="${p.color}">${p.color} (${p.brand})</option>`).join('');
-    }
+    const brandSelect = document.getElementById('pBrand');
+    if(!brandSelect) return;
+    const brands = [...new Set(paints.map(p => p.brand))];
+    brandSelect.innerHTML = brands.map(b => `<option value="${b}">${b}</option>`).join('');
+    updateColorDropdown();
+}
 
     // --- CLIENT LOGIC ---
     let clients = JSON.parse(localStorage.getItem('pw_clients')) || ["ABM", "Absolute Kitchens", "Westend Cabinetry"];
