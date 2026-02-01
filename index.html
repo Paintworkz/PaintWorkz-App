@@ -232,7 +232,8 @@ let paints = JSON.parse(localStorage.getItem('pw_paints')) || [
     { brand: "Wattyl", color: "Vivid White", evic: "EP-VW-STD", recipe: { "White Base": 1000 } },
     { brand: "Wattyl", color: "Cloud Confetti", evic: "EP-CC", recipe: { "White Base": 920, "Black": 1.5 } }
 ];
-    function renderPaints(filter = "") {
+
+function renderPaints(filter = "") {
         const container = document.getElementById('paint-list-container');
         if(!container) return;
 
@@ -244,7 +245,7 @@ let paints = JSON.parse(localStorage.getItem('pw_paints')) || [
                 <div class="card" style="border-left: 5px solid var(--gs);">
                     <div style="display:flex; justify-content:space-between; align-items:start;">
                         <div style="flex:1">
-                            <div style="font-size:10px; color:#888; font-weight:900;">${p.brand}</div>
+                            <div style="font-size:10px; color:#888; font-weight:900;">${p.brand} | ${p.finish || 'Standard'}</div>
                             <div style="font-weight:700; font-size:18px;">${p.color}</div>
                             <div style="font-size:11px; color:#555; margin-top:5px;"><strong>Recipe:</strong> ${recipeSummary}</div>
                         </div>
@@ -252,8 +253,8 @@ let paints = JSON.parse(localStorage.getItem('pw_paints')) || [
                             <div style="font-size:9px; color:#aaa;">EVIC</div>
                             <div style="font-family:monospace; font-weight:900; background:#eee; padding:2px 5px;">${p.evic}</div>
                             <div style="margin-top:10px;">
-                                <button onclick="openMixer('${p.color}')" style="background:#000; color:white; border:none; padding:5px 10px; border-radius:5px; font-size:10px; font-weight:900;">🧪 MIX</button>
-                                <button onclick="deletePaint('${p.color}')" style="background:none; border:none; color:#ff3b30; font-size:18px; margin-left:10px;">×</button>
+                                <button onclick="openMixer('${p.color}', '${p.finish}')" style="background:#000; color:white; border:none; padding:5px 10px; border-radius:5px; font-size:10px; font-weight:900;">🧪 MIX</button>
+                                <button onclick="deletePaint('${p.color}', '${p.finish}')" style="background:none; border:none; color:#ff3b30; font-size:18px; margin-left:10px;">×</button>
                             </div>
                         </div>
                     </div>
@@ -261,18 +262,33 @@ let paints = JSON.parse(localStorage.getItem('pw_paints')) || [
             }).join('');
 
         updateMeasurePaints();
-        localStorage.setItem('pw_paints', JSON.stringify(paints));
+       localStorage.setItem('pw_paints', JSON.stringify(paints));
     }
 
-function updateMeasurePaints() {
-    const colorSelect = document.getElementById('pColor');
-    if(colorSelect) {
-        // This maps your database array into the actual dropdown choices
-        colorSelect.innerHTML = paints.map(p => 
-            `<option value="${p.color}">${p.color} (${p.brand})</option>`
-        ).join('');
+    function addPaint() {
+        const brand = prompt("Brand (e.g. Dulux/Wattyl):", "Dulux");
+        const color = prompt("Color Name:");
+        const finish = prompt("Finish (e.g. G30 Satin, G10 Matt, 2-Pack):", "G30 Satin");
+        const evic = prompt("Evic Code:");
+        
+        if(brand && color && finish && evic) { 
+            paints.push({
+                brand, 
+                color, 
+                finish, 
+                evic, 
+                recipe: {"White Base": 1000} // Default starting recipe
+            }); 
+            renderPaints(); 
+        }
     }
-}
+
+    function deletePaint(color, finish) { 
+        if(confirm(`Delete ${color} (${finish})?`)) { 
+            paints = paints.filter(p => !(p.color === color && p.finish === finish)); 
+            renderPaints(); 
+        } 
+    } 
     
 function openMixer(colorName) {
     const paint = paints.find(p => p.color === colorName);
