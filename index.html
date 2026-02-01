@@ -54,6 +54,24 @@
         .sub-btn {padding: 10px 15px; color: #aaa; font-size: 11px; font-weight: 700; text-transform: uppercase; border: none; background: 0 0;}
         .sub-btn.active { color: var(--gs); }
 
+#history-list {
+    padding-top: 20px;
+    padding-bottom: 100px; /* Prevents footer from covering the last job */
+    min-height: 100vh;
+}
+
+.history-card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 12px;
+    border-left: 8px solid #000;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+        
    .container {
     padding: 20px 10px 150px 10px; /* Big bottom padding so 'Add to List' isn't under footer */
     max-width: 600px;
@@ -217,7 +235,7 @@ const subMenus = {
 };
 
     // Navigation Logic
-    function tab(t) {
+   function tab(t) {
     document.querySelectorAll('.view-section, .nav-btn').forEach(x => x.classList.remove('active'));
     document.getElementById(t).classList.add('active');
     document.getElementById('btn-' + t).classList.add('active');
@@ -228,21 +246,26 @@ const subMenus = {
         bar.innerHTML = subMenus[t].map((s, idx) => 
             `<button class="sub-btn ${idx===0?'active':''}" onclick="subTab('${t}','${s.id}',this)">${s.label}</button>`
         ).join('');
+        // Automatically trigger the first sub-tab
+        const firstSubId = subMenus[t][0].id;
+        const prefix = (t === 'db') ? 'db-' : (t === 'admin') ? 'adm-' : 'settings-';
+        document.querySelectorAll(`#${t} .sub-section`).forEach(s => s.classList.remove('active'));
+        if(document.getElementById(prefix + firstSubId)) document.getElementById(prefix + firstSubId).classList.add('active');
     } else {
         bar.style.display = 'none';
     }
+    if(t === 'history') renderHistory();
 }
 
-    function subTab(p, c, btn) {
+function subTab(p, c, btn) {
     btn.parentNode.querySelectorAll('.sub-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     document.querySelectorAll(`#${p} .sub-section`).forEach(s => s.classList.remove('active'));
     
-    // This part ensures Settings, Database, and Admin all find their IDs correctly
     let prefix = (p === 'db') ? 'db-' : (p === 'admin') ? 'adm-' : 'settings-';
-    document.getElementById(prefix + c).classList.add('active');
+    const targetId = prefix + c;
+    if(document.getElementById(targetId)) document.getElementById(targetId).classList.add('active');
 }
-
     // Part & Edge Logic
     function setP(p) { pType=p; document.querySelectorAll('.p-card').forEach(x=>x.classList.remove('active')); document.getElementById(p==='Panel'?'pP':p==='Door'?'pD':'pDr').classList.add('active'); def(); }
     function setM(m) { mode=m; ['SS','DS','SE'].forEach(v=>document.getElementById('m'+v).classList.toggle('active', mode===v)); def(); }
@@ -358,7 +381,64 @@ function render(){
     document.getElementById('tA').innerText=ts.toFixed(3); 
     document.getElementById('tQ').innerText=tq;
 }    
-       
+
+function renderHistory() {
+function renderHistory() {
+    const l = document.getElementById('history-list');
+    if (!l) return;
+    
+    // Clear it and add a header
+    l.innerHTML = `<h2 style="text-align:center; color:#333; margin-bottom:20px;">SAVED JOBS</h2>`;
+    
+    let h = JSON.parse(localStorage.getItem('pw_history') || '[]');
+    
+    if (h.length === 0) {
+        l.innerHTML += `
+            <div style="text-align:center; padding:40px; color:#999;">
+                <div style="font-size:48px;">📂</div>
+                <p>No jobs saved yet.</p>
+            </div>`;
+        return;
+    }
+
+    h.forEach(j => {
+        l.innerHTML += `
+            <div class="history-card">
+                <div>
+                    <div style="font-weight:900; font-size:16px;">#${j.num} - ${j.name}</div>
+                    <div style="font-size:11px; color:#666; margin-top:4px;">
+                        ${j.date || 'No Date'} | ${j.parts ? j.parts.length : 0} Items
+                    </div>
+                </div>
+                <div style="display:flex; gap:8px;">
+                    <button onclick="recallJob(${j.id})" style="background:#34c759; color:#fff; border:0; padding:10px 15px; border-radius:8px; font-weight:900; font-size:12px;">RECALL</button>
+                    <button onclick="deleteJob(${j.id})" style="background:#ff3b30; color:#fff; border:0; width:35px; height:35px; border-radius:8px; font-weight:900;">×</button>
+                </div>
+            </div>`;
+    });
+}
+    
+function deleteJob(id) {
+    if(!confirm("Delete this job forever?")) return;
+    let h = JSON.parse(localStorage.getItem('pw_history') || '[]');
+    h = h.filter(j => j.id !== id);
+    localStorage.setItem('pw_history', JSON.stringify(h));
+    renderHistory();
+}
+
+function recallJob(id) {
+    let h = JSON.parse(localStorage.getItem('pw_history') || '[]');
+    let j = h.find(x => x.id === id);
+    if(j) {
+        items = [...j.parts];
+        document.getElementById('jNm').value = j.name;
+        document.getElementById('jN').value = j.num;
+        tab('measure');
+        render();
+        alert("Job Recalled! 📑");
+    }
+}
+    
 </script>
  
 </body>
