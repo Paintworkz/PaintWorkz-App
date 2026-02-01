@@ -214,7 +214,7 @@
 </div>
     
 <script>
-// --- 1. DATA & STATE ---
+// --- 1. GLOBALS & STATE ---
 let paints = JSON.parse(localStorage.getItem('pw_paints')) || [
     { brand: "Dulux", color: "Lexicon Quarter", finish: "G30 Satin", evic: "EP-LX-Q", recipe: { "White Base": 950, "Black": 2.5 } }
 ];
@@ -230,44 +230,29 @@ const subMenus = {
 
 // --- 2. THE MATH ENGINE ---
 function up() {
-    const hInput = document.getElementById('h');
-    const wInput = document.getElementById('w');
+    const hInput = document.getElementById('h'), wInput = document.getElementById('w');
     if (!hInput || !wInput) return;
-
-    const rawH = parseFloat(hInput.value) || 0;
-    const rawW = parseFloat(wInput.value) || 0;
+    const rawH = parseFloat(hInput.value) || 0, rawW = parseFloat(wInput.value) || 0;
     const thk = parseFloat(document.getElementById('thk').value) || 18;
-    
-    const L_dim = Math.max(rawH, rawW);
-    const S_dim = Math.min(rawH, rawW);
+    const L_dim = Math.max(rawH, rawW), S_dim = Math.min(rawH, rawW);
+    const eL = (document.getElementById('E1').classList.contains('active') ? 1 : 0) + (document.getElementById('E2').classList.contains('active') ? 1 : 0);
+    const eS = (document.getElementById('E3').classList.contains('active') ? 1 : 0) + (document.getElementById('E4').classList.contains('active') ? 1 : 0);
 
-    const eL1 = document.getElementById('E1').classList.contains('active') ? 1 : 0;
-    const eL2 = document.getElementById('E2').classList.contains('active') ? 1 : 0;
-    const eS1 = document.getElementById('E3').classList.contains('active') ? 1 : 0;
-    const eS2 = document.getElementById('E4').classList.contains('active') ? 1 : 0;
+    let area = L_dim * S_dim;
+    if (mode === 'DS') area *= 2;
+    if (mode === 'SE') area += ((eL * L_dim) + (eS * S_dim)) * 100;
+    area += (eL * L_dim * thk) + (eS * S_dim * thk);
 
-    let totalArea = L_dim * S_dim; 
-    if (mode === 'DS') totalArea *= 2;
-    if (mode === 'SE') {
-        const activeEdgeLengths = ((eL1 + eL2) * L_dim) + ((eS1 + eS2) * S_dim);
-        totalArea += (activeEdgeLengths * 100); 
-    }
-    totalArea += ((eL1 + eL2) * L_dim * thk) + ((eS1 + eS2) * S_dim * thk);
-
-    const sqm = totalArea / 1000000;
-    const display = document.getElementById('liveSq');
-    if (display) display.innerText = sqm.toFixed(3);
+    const sqm = area / 1000000;
+    document.getElementById('liveSq').innerText = sqm.toFixed(3);
 }
 
-// --- 3. LIST & SAVE LOGIC ---
+// --- 3. CORE ACTIONS (ADD & SAVE) ---
 function add() {
-    up(); 
-    const h = document.getElementById('h').value;
-    const w = document.getElementById('w').value;
+    up();
+    const h = document.getElementById('h').value, w = document.getElementById('w').value;
     const q = parseInt(document.getElementById('qty').value) || 1;
-    const sqValue = document.getElementById('liveSq').innerText;
-    
-    if(!h || !w) { alert("Enter Dimensions"); return; }
+    if(!h || !w) return alert("Enter H & W");
 
     const edges = [
         document.getElementById('E1').classList.contains('active'),
@@ -276,117 +261,72 @@ function add() {
         document.getElementById('E4').classList.contains('active')
     ];
 
-    const existingIndex = items.findIndex(it => 
-        it.h === h && it.w === w && it.thk === document.getElementById('thk').value &&
-        it.mode === mode && it.color === document.getElementById('pColor').value &&
-        JSON.stringify(it.e) === JSON.stringify(edges)
-    );
+    const existing = items.find(it => it.h === h && it.w === w && it.color === document.getElementById('pColor').value && JSON.stringify(it.e) === JSON.stringify(edges) && it.mode === mode && it.style === fStyle);
 
-    if (existingIndex > -1) {
-        items[existingIndex].qty += q;
-    } else {
-        items.push({
-            h, w, qty: q, sqm: sqValue, mode, style: fStyle, pType,
-            thk: document.getElementById('thk').value,
-            color: document.getElementById('pColor').value,
-            finish: document.getElementById('pFinish').value,
-            desc: document.getElementById('desc').value,
-            e: edges
-        });
+    if (existing) { existing.qty += q; } 
+    else {
+        items.push({ h, w, qty: q, sqm: document.getElementById('liveSq').innerText, mode, style: fStyle, pType, thk: document.getElementById('thk').value, color: document.getElementById('pColor').value, finish: document.getElementById('pFinish').value, e: edges });
     }
-
-    document.getElementById('h').value = '';
-    document.getElementById('w').value = '';
-    render();
+    document.getElementById('h').value = ''; document.getElementById('w').value = ''; render();
 }
 
 function saveJob() {
-    if (items.length === 0) { alert("List is empty!"); return; }
-    
-    // Ensure we capture current state exactly
-    const job = {
-        no: document.getElementById('jN').value || "NO-ID",
-        name: document.getElementById('jNm').value || "UNNAMED",
-        client: document.getElementById('cli').value || "CASH",
-        items: JSON.parse(JSON.stringify(items)), // Deep copy to prevent data loss
-        total: document.getElementById('tA').innerText || "0.000",
-        qty: document.getElementById('tQ').innerText || "0",
-        date: new Date().toLocaleString()
+    if (items.length === 0) return alert("Empty List");
+    const job = { 
+        no: document.getElementById('jN').value || "N/A", 
+        name: document.getElementById('jNm').value || "New Job", 
+        client: document.getElementById('cli').value, 
+        items: [...items], 
+        total: document.getElementById('tA').innerText, 
+        date: new Date().toLocaleString() 
     };
-
-    let hist = [];
-    try {
-        hist = JSON.parse(localStorage.getItem('pw_history')) || [];
-    } catch(e) { hist = []; }
-    
+    let hist = JSON.parse(localStorage.getItem('pw_history')) || [];
     hist.unshift(job);
-    if (hist.length > 10) hist = hist.slice(0, 10);
-    
-    localStorage.setItem('pw_history', JSON.stringify(hist));
-    
+    localStorage.setItem('pw_history', JSON.stringify(hist.slice(0, 10)));
     alert("-In the Bank-");
-    
-    // Clear list and refresh
-    items = [];
-    document.getElementById('jN').value = '';
-    document.getElementById('jNm').value = '';
-    render();
-    
-    // Optional: Switch to history to show the user it saved
-    tab('history');
+    items = []; document.getElementById('jN').value = ''; document.getElementById('jNm').value = ''; render();
 }
 
-// --- 4. HISTORY RENDER ---
+// --- 4. RENDERERS ---
+function render() {
+    const list = document.getElementById('list'); list.innerHTML = '';
+    let gS = 0, gQ = 0;
+    items.forEach((it, i) => {
+        const rS = parseFloat(it.sqm) * it.qty; gS += rS; gQ += it.qty;
+        let L = (it.e[0]?1:0)+(it.e[1]?1:0), S = (it.e[2]?1:0)+(it.e[3]?1:0);
+        let lbL = it.mode==='SE'?(L>0?L+"LR":''):(L>0?L+"L":''), lbS = it.mode==='SE'?(S>0?S+"SR":''):(S>0?S+"S":'');
+        list.innerHTML += `<div class="card" style="display:flex;align-items:center;gap:10px;">
+            <input type="number" value="${it.qty}" onchange="items[${i}].qty=parseInt(this.value);render();" style="width:45px;height:45px;text-align:center;font-weight:900;border:1px solid #ccc;border-radius:8px;">
+            <div style="flex:1"><b>${it.h} x ${it.w}</b> <small>(${it.thk}mm)</small><br><span style="font-size:10px;">${it.pType} | ${it.style}</span><br>
+            ${lbL?`<span class="edge-pill edge-L">${lbL}</span>`:''}${lbS?`<span class="edge-pill edge-S">${lbS}</span>`:''}</div>
+            <div style="font-weight:900;color:var(--gs);">${rS.toFixed(3)}</div>
+            <button onclick="items.splice(${i},1);render()" style="color:red;border:0;background:0;font-size:24px;">×</button></div>`;
+    });
+    document.getElementById('tA').innerText = gS.toFixed(3); document.getElementById('tQ').innerText = gQ;
+}
+
 function renderHistory(filter = "") {
-    const container = document.getElementById('history-list');
-    if (!container) return;
-    
-    let history = [];
-    try {
-        history = JSON.parse(localStorage.getItem('pw_history')) || [];
-    } catch(e) {
-        container.innerHTML = "Error loading history.";
-        return;
-    }
-
-    const f = filter.toLowerCase();
-    const filtered = history.filter(j => 
-        (j.no || "").toLowerCase().includes(f) || 
-        (j.name || "").toLowerCase().includes(f) || 
-        (j.client || "").toLowerCase().includes(f)
-    );
-
-    if (filtered.length === 0) {
-        container.innerHTML = '<div class="card" style="text-align:center;padding:30px;color:#999;">No Jobs Found</div>';
-        return;
-    }
-
-    container.innerHTML = filtered.map((j, i) => `
-        <div class="card" style="border-left: 6px solid var(--gs); display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-            <div style="flex:1;">
-                <div style="font-weight:900; font-size:16px; color:#000;">${j.no} - ${j.name}</div>
-                <div style="font-size:11px; color:#666; margin:2px 0;">${j.client} | ${j.date}</div>
-                <div style="font-weight:900; color:var(--gs); font-size:14px;">${j.total} SQM (${j.items ? j.items.length : 0} Lines)</div>
-            </div>
-            <button onclick="loadHistoryJob(${i})" style="background:#000; color:var(--gs); border:1px solid var(--gs); padding:10px 15px; border-radius:8px; font-weight:900; cursor:pointer;">LOAD</button>
-        </div>
-    `).join('');
-}
-
-function searchHistory() {
-    tab('history');
-    let term = prompt("Search History:");
-    if (term !== null) renderHistory(term);
-}
-
-function loadHistoryJob(idx) {
+    const container = document.getElementById('history-list'); if (!container) return;
     const history = JSON.parse(localStorage.getItem('pw_history')) || [];
-    items = history[idx].items;
-    render();
-    tab('measure');
+    const f = filter.toLowerCase();
+    const filtered = history.filter(j => (j.no+j.name+j.client).toLowerCase().includes(f));
+    
+    container.innerHTML = filtered.length ? filtered.map((j, i) => `
+        <div class="card" style="border-left:5px solid #000;display:flex;justify-content:space-between;align-items:center;">
+            <div><b>${j.no} - ${j.name}</b><br><small>${j.client} | ${j.date}</small><br><b style="color:var(--gs)">${j.total} SQM</b></div>
+            <button onclick="loadHistoryJob(${i})" style="background:var(--gs);border:none;padding:8px 12px;border-radius:5px;font-weight:900;">LOAD</button>
+        </div>`).join('') : '<div class="card">No History Found</div>';
 }
 
-// --- 5. UI & TABS ---
+function loadHistoryJob(i) {
+    const h = JSON.parse(localStorage.getItem('pw_history')); items = h[i].items; 
+    document.getElementById('jN').value = h[i].no; document.getElementById('jNm').value = h[i].name;
+    render(); tab('measure');
+}
+
+function searchHistory() { tab('history'); let t = prompt("Search:"); if(t!==null) renderHistory(t); }
+
+// --- 5. UI CONTROLS ---
 function tab(t) {
     document.querySelectorAll('.view-section, .nav-btn').forEach(x => x.classList.remove('active'));
     document.getElementById(t).classList.add('active');
@@ -405,47 +345,7 @@ function subTab(p, c, btn) {
     document.querySelectorAll('.sub-section').forEach(s => s.classList.remove('active'));
     const target = document.getElementById((p === 'db' ? 'db-' : p === 'admin' ? 'adm-' : 'settings-') + c);
     if (target) target.classList.add('active');
-    if (c === 'paints') renderPaints();
-    if (c === 'clients') renderClients();
-    if (c === 'profiles') renderProfiles();
 }
-
-function render() {
-    const list = document.getElementById('list');
-    list.innerHTML = '';
-    let gSqm = 0, gQty = 0;
-    items.forEach((it, i) => {
-        const rowSqm = parseFloat(it.sqm) * it.qty;
-        gSqm += rowSqm; gQty += it.qty;
-        let L = (it.e[0]?1:0)+(it.e[1]?1:0), S = (it.e[2]?1:0)+(it.e[3]?1:0);
-        let lbL = it.mode==='SE'?(L>0?L+"LR":''):(L>0?L+"L":''), lbS = it.mode==='SE'?(S>0?S+"SR":''):(S>0?S+"S":'');
-        list.innerHTML += `<div class="card" style="display:flex;align-items:center;gap:10px;">
-            <input type="number" value="${it.qty}" onchange="items[${i}].qty=parseInt(this.value);render();" style="width:40px;height:40px;text-align:center;font-weight:900;">
-            <div style="flex:1"><b>${it.h} x ${it.w}</b><div style="font-size:10px;">${it.pType} | ${it.color}</div>
-            ${lbL?`<span class="edge-pill edge-L">${lbL}</span>`:''}${lbS?`<span class="edge-pill edge-S">${lbS}</span>`:''}</div>
-            <div style="font-weight:900;">${rowSqm.toFixed(3)}</div>
-            <button onclick="items.splice(${i},1);render()" style="color:red;border:0;background:0;font-size:22px;">×</button></div>`;
-    });
-    document.getElementById('tA').innerText = gSqm.toFixed(3);
-    document.getElementById('tQ').innerText = gQty;
-}
-
-// --- 6. DB UTILS ---
-function renderPaints(f="") { 
-    const c = document.getElementById('paint-list-container');
-    c.innerHTML = paints.filter(p => p.color.toLowerCase().includes(f.toLowerCase())).map((p,i) => `<div class="card"><b>${p.color}</b><br><small>${p.brand}</small></div>`).join('');
-}
-function filterPaints() { renderPaints(document.getElementById('paintSearch').value); }
-function renderClients(f="") { 
-    const c = document.getElementById('client-list-container');
-    c.innerHTML = clients.filter(cl => cl.toLowerCase().includes(f.toLowerCase())).map(cl => `<div class="card"><b>${cl}</b></div>`).join('');
-}
-function filterClients() { renderClients(document.getElementById('clientSearch').value); }
-function renderProfiles(f="") { 
-    const c = document.getElementById('profile-list-container');
-    c.innerHTML = profiles.filter(p => p.toLowerCase().includes(f.toLowerCase())).map(p => `<div class="card"><b>${p}</b></div>`).join('');
-}
-function filterProfiles() { renderProfiles(document.getElementById('profileSearch').value); }
 
 function setP(t) { pType = t; document.querySelectorAll('.p-card').forEach(c => c.classList.remove('active')); document.getElementById(t === 'Panel' ? 'pP' : (t === 'Door' ? 'pD' : 'pDr')).classList.add('active'); resetEdges(); up(); }
 function setM(m) { mode = m; document.querySelectorAll('#mSS, #mDS, #mSE').forEach(b => b.classList.remove('active')); document.getElementById('m' + m).classList.add('active'); resetEdges(); up(); }
@@ -453,6 +353,7 @@ function setF(f) { fStyle = f; document.getElementById('fF').classList.toggle('a
 function tE(el) { el.classList.toggle('active'); up(); }
 function resetEdges() { document.querySelectorAll('.edge-box').forEach(el => el.classList.remove('active')); if (mode === 'SE') document.getElementById('E1').classList.add('active'); else if (pType !== 'Panel') document.querySelectorAll('.edge-box').forEach(el => el.classList.add('active')); }
 
+// --- 6. DB HELPERS ---
 function syncDropdowns() {
     const brands = [...new Set(paints.map(p => p.brand))];
     document.getElementById('pBrand').innerHTML = brands.map(b => `<option value="${b}">${b}</option>`).join('');
@@ -468,17 +369,10 @@ function updateFinishDropdown() {
     const b = document.getElementById('pBrand').value, co = document.getElementById('pColor').value;
     const fins = paints.filter(p => p.brand === b && p.color === co);
     document.getElementById('pFinish').innerHTML = fins.map(p => `<option value="${p.finish}">${p.finish}</option>`).join('');
-    autoFillEvic();
+    if(fins.length) document.getElementById('pFormula').value = fins[0].evic;
 }
-function autoFillEvic() {
-    const b = document.getElementById('pBrand').value, co = document.getElementById('pColor').value, f = document.getElementById('pFinish').value;
-    const m = paints.find(p => p.brand === b && p.color === co && p.finish === f);
-    if(m) document.getElementById('pFormula').value = m.evic;
-}
-function updateClientDropdown() { document.getElementById('cli').innerHTML = clients.map(c => `<option value="${c}">${c}</option>`).join(''); }
-function updateProfileDropdown() { document.getElementById('prof-select').innerHTML = profiles.map(p => `<option value="${p}">${p}</option>`).join(''); }
 
-window.onload = () => { syncDropdowns(); updateClientDropdown(); updateProfileDropdown(); tab('measure'); };
+window.onload = () => { syncDropdowns(); document.getElementById('cli').innerHTML = clients.map(c => `<option value="${c}">${c}</option>`).join(''); document.getElementById('prof-select').innerHTML = profiles.map(p => `<option value="${p}">${p}</option>`).join(''); tab('measure'); };
 </script>
 </body>
-</html>  
+</html>
