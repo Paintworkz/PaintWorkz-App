@@ -210,424 +210,159 @@
 </div>
     
 <script>
-    let items = [], mode = 'SS', finish = 'Flat', pType = 'Panel';
-
-    const subMenus = {
-        db: [
-            {id:'clients', label:'Clients'}, 
-            {id:'paints', label:'Paints'},
-            {id:'profiles', label:'Profiles'}
-        ],
-        admin: [
-            {id:'matrix', label:'Matrix'}, 
-            {id:'cartage', label:'Cartage'}, 
-            {id:'multi', label:'Multipliers'}, 
-            {id:'track', label:'Trackers'}, 
-            {id:'graphs', label:'Graphs'}
-        ],
-        settings: [
-            {id:'general', label:'General'}, 
-            {id:'defaults', label:'Defaults'}
-        ]
-    };
-
-// --- PAINT DATABASE LOGIC ---
-// --- PAINT DATABASE LOGIC (V3.9.1) ---
+ // --- DATABASE INITIALIZATION ---
 let paints = JSON.parse(localStorage.getItem('pw_paints')) || [
-    { brand: "Dulux", color: "Lexicon Quarter", finish: "G30 Satin", evic: "EP-LX-Q", recipe: { "White Base": 950, "Black": 2.5, "Blue": 1.2 } },
+    { brand: "Dulux", color: "Lexicon Quarter", finish: "G30 Satin", evic: "EP-LX-Q", recipe: { "White Base": 950, "Black": 2.5 } },
     { brand: "Wattyl", color: "Vivid White", finish: "G10 Matt", evic: "EP-VW-STD", recipe: { "White Base": 1000 } }
 ];
+let clients = JSON.parse(localStorage.getItem('pw_clients')) || ["ABM", "Absolute Kitchens"];
+let profiles = JSON.parse(localStorage.getItem('pw_profiles')) || ["Plain (101)", "Shaker (401)"];
+let items = [], mode = 'SS', fStyle = 'Flat', pType = 'Panel';
 
+// --- PAINT & MIXER LOGIC ---
 function renderPaints(filter = "") {
     const container = document.getElementById('paint-list-container');
     if(!container) return;
 
     container.innerHTML = paints
-        .filter(p => p.color.toLowerCase().includes(filter.toLowerCase()) || p.brand.toLowerCase().includes(filter.toLowerCase()))
-        .map((p, index) => `
-            <div class="card" style="border-left: 5px solid var(--gs); margin-bottom:10px;">
-                <div style="display:flex; justify-content:space-between; align-items:start;">
-                    <div style="flex:1">
+        .filter(p => p.color.toLowerCase().includes(filter.toLowerCase()))
+        .map((p, i) => `
+            <div class="card" style="border-left: 5px solid var(--gs);">
+                <div style="display:flex; justify-content:space-between;">
+                    <div>
                         <div style="font-size:10px; color:#888; font-weight:900;">${p.brand} | ${p.finish}</div>
                         <div style="font-weight:700; font-size:18px;">${p.color}</div>
                         <div style="font-size:11px; color:var(--gs); font-family:monospace;">${p.evic}</div>
                     </div>
                     <div style="text-align:right;">
-                        <button onclick="openMixer(${index})" style="background:#000; color:white; border:none; padding:8px 12px; border-radius:5px; font-size:10px; font-weight:900;">🧪 MIX / EDIT</button>
-                        <button onclick="deletePaint(${index})" style="background:none; border:none; color:#ff3b30; font-size:18px; margin-left:10px;">×</button>
+                        <button onclick="openMixer(${i})" style="background:#000; color:white; border:none; padding:8px; border-radius:5px; font-size:10px; font-weight:900;">🧪 MIX</button>
+                        <button onclick="deletePaint(${i})" style="color:red; border:none; background:none; font-size:20px; margin-left:5px;">×</button>
                     </div>
                 </div>
             </div>`).join('');
-
-    updateMeasurePaints();
+    
     localStorage.setItem('pw_paints', JSON.stringify(paints));
+    syncDropdowns();
 }
 
-function openMixer(index) {
-    const p = paints[index];
-    if(!p) return;
-    
-    let targetLtrs = prompt(`Mixing ${p.color} (${p.finish}). Liters?`, "1");
-    if(!targetLtrs || isNaN(targetLtrs)) return;
+function openMixer(idx) {
+    const p = paints[idx];
+    let qty = prompt(`Mix ${p.color} (${p.finish}). Liters?`, "1");
+    if(!qty || isNaN(qty)) return;
 
-    let recipeLines = Object.entries(p.recipe).map(([ing, grams]) => `
-        <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-            <span>${ing}:</span><span style="font-weight:900;">${(grams * targetLtrs).toFixed(1)}g</span>
-        </div>`).join('');
+    let rows = Object.entries(p.recipe).map(([ing, g]) => 
+        `<div style="display:flex;justify-content:space-between"><span>${ing}:</span><b>${(g*qty).toFixed(1)}g</b></div>`
+    ).join('');
 
-    const mixModal = document.createElement('div');
-    mixModal.id = "mix-modal";
-    mixModal.style = "position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:white; padding:20px; border-radius:15px; box-shadow:0 0 100px rgba(0,0,0,0.5); z-index:5000; width:85%; max-width:400px; text-align:center;";
-    mixModal.innerHTML = `
-        <h3 style="margin-top:0;">Mixing Sheet</h3>
-        <div style="text-align:left; background:#f9f9f9; padding:15px; border-radius:10px; border:1px solid #ccc; font-family:monospace;">
-            <strong>${p.color} (${p.finish})</strong><br>
-            <small>EVIC: ${p.evic}</small><hr>
-            ${recipeLines}
-            <hr><strong>Total Volume: ${targetLtrs}L</strong>
+    const modal = document.createElement('div');
+    modal.id = "active-modal";
+    modal.style = "position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:white; padding:20px; border-radius:15px; box-shadow:0 0 50px rgba(0,0,0,0.5); z-index:9999; width:80%; max-width:350px;";
+    modal.innerHTML = `
+        <h3 style="margin:0 0 10px 0;">Mixer</h3>
+        <div style="background:#f0f0f0; padding:10px; border-radius:8px; font-family:monospace; font-size:13px;">
+            ${rows}<hr>Total: ${qty}L
         </div>
         <div style="display:flex; gap:10px; margin-top:15px;">
-            <button onclick="this.closest('#mix-modal').remove()" style="flex:1; padding:12px; background:#eee; border:none; border-radius:10px; font-weight:900;">CLOSE</button>
-            <button onclick="editRecipe(${index})" style="flex:1; padding:12px; background:var(--gs); border:none; border-radius:10px; font-weight:900;">EDIT FORMULA</button>
+            <button onclick="document.getElementById('active-modal').remove()" style="flex:1; padding:10px; border-radius:8px; border:none; background:#ddd;">CLOSE</button>
+            <button onclick="editRecipe(${idx})" style="flex:1; padding:10px; border-radius:8px; border:none; background:var(--gs); font-weight:900;">EDIT</button>
         </div>`;
-    document.body.appendChild(mixModal);
+    document.body.appendChild(modal);
 }
 
-function editRecipe(index) {
-    const p = paints[index];
-    let currentStr = Object.entries(p.recipe).map(([ing, g]) => `${ing}:${g}`).join(", ");
-    let newRecipeStr = prompt("Edit Formula (Ingredient:Grams, Ingredient:Grams):", currentStr);
-
-    if (newRecipeStr) {
-        let newRecipe = {};
-        newRecipeStr.split(",").forEach(item => {
-            let [ing, g] = item.split(":");
-            if (ing && g) newRecipe[ing.trim()] = parseFloat(g.trim());
+function editRecipe(idx) {
+    let p = paints[idx];
+    let current = Object.entries(p.recipe).map(([n, g]) => `${n}:${g}`).join(", ");
+    let val = prompt("Enter Formula (Ingredient:Grams, Ingredient:Grams):", current);
+    
+    if(val) {
+        let newRec = {};
+        val.split(",").forEach(item => {
+            let [n, g] = item.split(":");
+            if(n && g) newRec[n.trim()] = parseFloat(g.trim());
         });
-        paints[index].recipe = newRecipe;
-        localStorage.setItem('pw_paints', JSON.stringify(paints));
+        paints[idx].recipe = newRec;
+        document.getElementById('active-modal').remove();
         renderPaints();
-        document.getElementById('mix-modal').remove();
-        alert("Formula Updated Successfully!");
     }
+}
+
+function syncDropdowns() {
+    const bSel = document.getElementById('pBrand');
+    const cSel = document.getElementById('pColor');
+    if(!bSel || !cSel) return;
+
+    const brands = [...new Set(paints.map(p => p.brand))];
+    bSel.innerHTML = brands.map(b => `<option value="${b}">${b}</option>`).join('');
+    
+    // Update colors based on selected brand
+    const updateColors = () => {
+        const filtered = paints.filter(p => p.brand === bSel.value);
+        cSel.innerHTML = filtered.map(p => `<option value="${p.color}">${p.color} (${p.finish})</option>`).join('');
+        autoFillEvic();
+    };
+
+    bSel.onchange = updateColors;
+    cSel.onchange = autoFillEvic;
+    updateColors();
 }
 
 function autoFillEvic() {
-    const selectedColor = document.getElementById('pColor').value;
-    const paintMatch = paints.find(p => p.color === selectedColor);
-    if(paintMatch) {
-        document.getElementById('pFormula').value = paintMatch.evic;
-        // Also auto-select the finish if it matches
-        document.getElementById('pFinish').value = paintMatch.finish;
-    }
+    const color = document.getElementById('pColor').value;
+    const match = paints.find(p => p.color === color);
+    if(match) document.getElementById('pFormula').value = match.evic;
 }
 
-function updateMeasurePaints() {
-    const colorSelect = document.getElementById('pColor');
-    if(!colorSelect) return;
-    // Map colors AND finishes into the dropdown so you pick the right one
-    colorSelect.innerHTML = paints.map(p => 
-        `<option value="${p.color}">${p.color} (${p.finish})</option>`
-    ).join('');
-    autoFillEvic();
-}
-
-// Cleaned up Add/Delete
+// --- ADD PAINT FIX ---
 function addPaint() {
-    const brand = prompt("Brand:", "Dulux");
-    const color = prompt("Color Name:");
-    const finish = prompt("Finish:", "G30 Satin");
-    const evic = prompt("EVIC Code:");
-    if(brand && color && finish && evic) { 
-        paints.push({ brand, color, finish, evic, recipe: {"White Base": 1000} }); 
-        renderPaints(); 
-    }
-}
-
-function deletePaint(index) { 
-    if(confirm("Delete this paint color?")) { paints.splice(index, 1); renderPaints(); } 
-}
-
-function editRecipe(index) {
-    const p = paints[index];
-    let currentStr = Object.entries(p.recipe).map(([ing, g]) => `${ing}:${g}`).join(", ");
-    let newRecipeStr = prompt("Edit Ingredients (Name:Grams, Name:Grams):", currentStr);
-
-    if (newRecipeStr) {
-        let newRecipe = {};
-        newRecipeStr.split(",").forEach(item => {
-            let [ing, g] = item.split(":");
-            if (ing && g) newRecipe[ing.trim()] = parseFloat(g.trim());
-        });
-        paints[index].recipe = newRecipe;
-        localStorage.setItem('pw_paints', JSON.stringify(paints));
+    let b = prompt("Brand:"), c = prompt("Color:"), f = prompt("Finish:"), e = prompt("EVIC:");
+    if(b && c && f && e) {
+        paints.push({brand: b, color: c, finish: f, evic: e, recipe: {"White Base": 1000}});
         renderPaints();
-        const modal = document.getElementById('mix-modal');
-        if(modal) modal.remove();
-        alert("Recipe Updated!");
     }
 }
 
-function addPaint() {
-    const brand = prompt("Brand:", "Dulux");
-    const color = prompt("Color Name:");
-    const finish = prompt("Finish:", "G30 Satin");
-    const evic = prompt("Evic Code:");
-    if(brand && color && finish && evic) { 
-        paints.push({ brand, color, finish, evic, recipe: {"White Base": 1000} }); 
-        renderPaints(); 
-    }
-}
+function deletePaint(idx) { if(confirm("Delete?")) { paints.splice(idx, 1); renderPaints(); } }
 
-function deletePaint(index) { 
-    if(confirm(`Delete this paint?`)) { 
-        paints.splice(index, 1); 
-        renderPaints(); 
-    } 
-}
+// --- THE MEASUREMENT RENDER (Per instructions) ---
+function render(){
+    const l=document.getElementById('list'); l.innerHTML=''; let ts=0, tq=0;
+    items.forEach((it,i)=>{
+        ts += parseFloat(it.sqm)*it.qty; tq += it.qty;
+        let L=(it.e[0]?1:0)+(it.e[1]?1:0), S=(it.e[2]?1:0)+(it.e[3]?1:0);
+        
+        let lbL = (L > 0) ? (it.mode === 'SE' ? "1LR" : L + "L") : "";
+        let lbS = (S > 0) ? (it.mode === 'SE' ? "1SR" : S + "S") : "";
 
-function addPaint() {
-    const brand = prompt("Brand:", "Dulux");
-    const color = prompt("Color Name:");
-    const finish = prompt("Finish:", "G30 Satin");
-    const evic = prompt("Evic Code:");
-    
-    if(brand && color && finish && evic) { 
-        paints.push({ brand, color, finish, evic, recipe: {"White Base": 1000} }); 
-        renderPaints(); 
-    }
-}
+        // Applying blank text rule: 0S, 0l, 0SL, 0SR = blank
+        if (["0S", "0L", "0SL", "0SR"].includes(lbL + lbS)) { lbL = ""; lbS = ""; }
 
-function deletePaint(color, finish) { 
-    if(confirm(`Delete ${color} (${finish})?`)) { 
-        paints = paints.filter(p => !(p.color === color && p.finish === finish)); 
-        renderPaints(); 
-    } 
-}
-
-function openMixer(colorName, finishName) {
-    const paintIndex = paints.findIndex(p => p.color === colorName && p.finish === finishName);
-    const displayPaint = paints[paintIndex] || { color: colorName, brand: "Unknown", recipe: { "White Base": 1000 } };
-    
-    let targetLtrs = prompt(`Mixing ${displayPaint.color} (${finishName}). Liters?`, "1");
-    if(!targetLtrs || isNaN(targetLtrs)) return;
-
-    let resultHTML = `<div id="recipe-display" style="text-align:left; font-family:monospace; background:#f9f9f9; padding:15px; border-radius:10px; border:1px solid #ccc;">
-                        <h4 style="margin:0;">${displayPaint.brand} - ${displayPaint.color}</h4>
-                        <p style="font-size:12px; color:#666;">Finish: ${finishName}</p><hr>`;
-
-    Object.entries(displayPaint.recipe).forEach(([ing, grams]) => {
-        resultHTML += `<div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-                        <span>${ing}:</span><span style="font-weight:900;">${(grams * targetLtrs).toFixed(1)}g</span>
-                      </div>`;
-    });
-    resultHTML += `</div>`;
-
-    const mixModal = document.createElement('div');
-    mixModal.id = "mix-modal";
-    mixModal.style = "position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:white; padding:20px; border-radius:15px; box-shadow:0 0 100px rgba(0,0,0,0.5); z-index:3000; width:85%; max-width:400px; text-align:center;";
-    mixModal.innerHTML = `
-        <h3>Mixing Sheet</h3>
-        ${resultHTML}
-        <div style="display:flex; gap:10px; margin-top:15px;">
-            <button onclick="this.closest('#mix-modal').remove()" style="flex:1; padding:12px; background:#eee; border:none; border-radius:10px; font-weight:900;">CLOSE</button>
-            <button onclick="editRecipe(${paintIndex})" style="flex:1; padding:12px; background:var(--gs); border:none; border-radius:10px; font-weight:900;">EDIT RECIPE</button>
+        l.innerHTML += `<div class="card" style="display:flex;align-items:center;gap:10px;padding:8px;">
+            <div class="qty-bubble">${it.qty}</div>
+            <div style="flex:1">
+                <div style="font-weight:900;font-size:18px;">${it.h} x ${it.w}</div>
+                <div style="font-size:11px;color:#666;">${it.desc||'No Desc'}</div>
+                <div>${lbL?`<span class="edge-pill edge-L">${lbL}</span>`:''}${lbS?`<span class="edge-pill edge-S">${lbS}</span>`:''}</div>
+            </div>
+            <div class="mode-box mode-${it.mode}">${it.mode}</div>
+            <button onclick="items.splice(${i},1);render()" style="color:red;border:0;background:0;font-size:26px;">×</button>
         </div>`;
-    document.body.appendChild(mixModal);
-}
-
-function editRecipe(index) {
-    const p = paints[index];
-    let newRecipeStr = prompt("Enter recipe (Ingredient:Grams), separated by commas:", 
-        Object.entries(p.recipe).map(([ing, g]) => `${ing}:${g}`).join(", ")
-    );
-
-    if (newRecipeStr) {
-        let newRecipe = {};
-        newRecipeStr.split(",").forEach(item => {
-            let [ing, g] = item.split(":");
-            if (ing && g) newRecipe[ing.trim()] = parseFloat(g.trim());
-        });
-        
-        paints[index].recipe = newRecipe;
-        localStorage.setItem('pw_paints', JSON.stringify(paints));
-        renderPaints();
-        document.getElementById('mix-modal').remove();
-        alert("Recipe Saved!");
-    }
-}
-    
-function autoFillEvic() {
-    const selectedColor = document.getElementById('pColor').value;
-    const paintMatch = paints.find(p => p.color === selectedColor);
-    if(paintMatch) document.getElementById('pFormula').value = paintMatch.evic;
-}
-
-function updateMeasurePaints() {
-    const colorSelect = document.getElementById('pColor');
-    if(colorSelect) {
-        colorSelect.innerHTML = paints.map(p => `<option value="${p.color}">${p.color} (${p.finish})</option>`).join('');
-    }
-}
-    // --- CLIENT LOGIC ---
-    let clients = JSON.parse(localStorage.getItem('pw_clients')) || ["ABM", "Absolute Kitchens", "Westend Cabinetry"];
-    function renderClients(filter = "") {
-        const container = document.getElementById('client-list-container');
-        if(!container) return;
-        clients.sort();
-        container.innerHTML = clients.filter(c => c.toLowerCase().includes(filter.toLowerCase())).map(c => `
-            <div class="card" style="display:flex; justify-content:space-between; align-items:center; padding:10px; margin-bottom:5px;">
-                <span style="font-weight:700;">${c}</span>
-                <button onclick="deleteClient('${c}')" style="background:none; border:none; color:#ff3b30; font-weight:900; font-size:18px;">×</button>
-            </div>
-        `).join('');
-        updateClientDropdown();
-        localStorage.setItem('pw_clients', JSON.stringify(clients));
-    }
-    function filterClients() { renderClients(document.getElementById('clientSearch').value); }
-    function addClient() { let n = prompt("New Client:"); if(n) { clients.push(n); renderClients(); } }
-    function deleteClient(n) { if(confirm("Delete " + n + "?")) { clients = clients.filter(c => c !== n); renderClients(); } }
-    function updateClientDropdown() { 
-        const s = document.getElementById('cli'); 
-        if(s) s.innerHTML = clients.map(c => `<option value="${c}">${c}</option>`).join('');
-    }
-
-    // --- PROFILE LOGIC ---
-    let profiles = JSON.parse(localStorage.getItem('pw_profiles')) || ["Plain (101)", "Shaker (401)"];
-    function renderProfiles(filter = "") {
-        const container = document.getElementById('profile-list-container');
-        if(!container) return;
-        container.innerHTML = profiles.filter(p => p.toLowerCase().includes(filter.toLowerCase())).map(p => `
-            <div class="card" style="display:flex; justify-content:space-between; align-items:center; padding:10px; margin-bottom:5px;">
-                <span style="font-weight:700;">${p}</span>
-                <button onclick="deleteProfile('${p}')" style="background:none; border:none; color:#ff3b30; font-weight:900; font-size:18px;">×</button>
-            </div>
-        `).join('');
-        updateProfileDropdown();
-        localStorage.setItem('pw_profiles', JSON.stringify(profiles));
-    }
-    function filterProfiles() { renderProfiles(document.getElementById('profileSearch').value); }
-    function addProfile() { let n = prompt("New Profile:"); if(n) { profiles.push(n); renderProfiles(); } }
-    function deleteProfile(n) { if(confirm("Delete " + n + "?")) { profiles = profiles.filter(p => p !== n); renderProfiles(); } }
-    function updateProfileDropdown() {
-        const s = document.getElementById('prof-select');
-        if(s) s.innerHTML = profiles.map(p => `<option value="${p}">${p}</option>`).join('');
-    }
-
-    // --- NAVIGATION ---
-    function tab(t) {
-        document.querySelectorAll('.view-section, .nav-btn').forEach(x => x.classList.remove('active'));
-        const v = document.getElementById(t), b = document.getElementById('btn-' + t);
-        if(v) v.classList.add('active'); if(b) b.classList.add('active');
-        const nav = document.getElementById('sub-nav-bar');
-        
-        if (t === 'history') renderHistory(); // Load history when tab clicked
-
-        if (subMenus[t]) {
-            nav.style.display = 'flex';
-            nav.innerHTML = subMenus[t].map((s, i) => `<button class="sub-btn ${i===0?'active':''}" onclick="subTab('${t}','${s.id}',this)">${s.label}</button>`).join('');
-            subTab(t, subMenus[t][0].id, {parentNode: nav, classList: {add:()=>{}} }); 
-        } else { nav.style.display = 'none'; }
-    }
-
-    function subTab(p, c, btn) {
-        if(btn.parentNode) btn.parentNode.querySelectorAll('.sub-btn').forEach(b => b.classList.remove('active'));
-        if(btn.classList) btn.classList.add('active');
-        document.querySelectorAll(`#${p} .sub-section`).forEach(s => s.classList.remove('active'));
-        let pre = (p === 'db') ? 'db-' : (p === 'admin') ? 'adm-' : 'settings-';
-        const target = document.getElementById(pre + c);
-        if(target) target.classList.add('active');
-    }
-
-    // --- MEASUREMENT LOGIC ---
-    function setP(p) { pType=p; document.querySelectorAll('.p-card').forEach(x=>x.classList.remove('active')); document.getElementById(p==='Panel'?'pP':p==='Door'?'pD':'pDr').classList.add('active'); def(); }
-    function setM(m) { mode=m; ['SS','DS','SE'].forEach(v=>document.getElementById('m'+v).classList.toggle('active', mode===v)); def(); }
-    function setF(f) { finish=f; document.getElementById('fF').classList.toggle('active', f==='Flat'); document.getElementById('fM').classList.toggle('active', f==='Moulded'); }
-    function def() {
-        [1,2,3,4].forEach(i=>document.getElementById('E'+i).classList.remove('active'));
-        if(mode==='SE') document.getElementById('E1').classList.add('active');
-        else if(pType!=='Panel') [1,2,3,4].forEach(i=>document.getElementById('E'+i).classList.add('active'));
-        up();
-    }
-    function tE(e){ e.classList.toggle('active'); up(); }
-    function up(){ 
-        let h=Number(document.getElementById('h').value)||0, w=Number(document.getElementById('w').value)||0, thk=Number(document.getElementById('thk').value)||18;
-        let e=[1,2,3,4].map(i=>document.getElementById('E'+i).classList.contains('active'));
-        let f=(h*w)/1e6, el=((e[0]?h:0)+(e[1]?h:0)+(e[2]?w:0)+(e[3]?w:0)), es=(el*thk)/1e6;
-        let res = (mode==='SS') ? f+es : (mode==='DS') ? (f*2)+es : f+es+(el*100/1e6);
-        document.getElementById('liveSq').innerText=res.toFixed(3);
-    }
-    function add(){
-        let h=Number(document.getElementById('h').value), w=Number(document.getElementById('w').value), q=parseInt(document.getElementById('qty').value)||1;
-        if(!h||!w) return;
-        items.push({ h, w, thk:document.getElementById('thk').value, e:[1,2,3,4].map(i=>document.getElementById('E'+i).classList.contains('active')), mode, finish, qty:q, sqm:document.getElementById('liveSq').innerText, pType, desc: document.getElementById('desc').value });
-        document.getElementById('h').value=''; document.getElementById('w').value=''; render();
-    }
-    function render(){
-        const l=document.getElementById('list'); l.innerHTML=''; let ts=0, tq=0;
-        items.forEach((it,i)=>{
-            ts += parseFloat(it.sqm)*it.qty; tq += it.qty;
-            let L=(it.e[0]?1:0)+(it.e[1]?1:0), S=(it.e[2]?1:0)+(it.e[3]?1:0);
-            
-            // Edge Text logic per instructions
-            let lbL = (L > 0) ? (it.mode === 'SE' ? "1LR" : L + "L") : "";
-            let lbS = (S > 0) ? (it.mode === 'SE' ? "1SR" : S + "S") : "";
-
-            l.innerHTML += `<div class="card" style="display:flex;align-items:center;gap:10px;padding:8px;"><div class="qty-bubble">${it.qty}</div><div style="flex:1"><div style="font-weight:900;font-size:18px;">${it.h} x ${it.w} x ${it.thk}</div><div style="font-size:11px;font-weight:700;color:#666;">${it.desc||'No Desc'} (${it.pType})</div><div style="margin-top:6px;">${it.finish==='Moulded'?'<div class="mld-bubble">MOULDED</div>':''}${lbL?`<span class="edge-pill edge-L">${lbL}</span>`:''}${lbS?`<span class="edge-pill edge-S">${lbS}</span>`:''}</div></div><div class="mode-box mode-${it.mode}">${it.mode}</div><button onclick="items.splice(${i},1);render()" style="color:red;border:0;background:0;font-size:26px;font-weight:900;">×</button></div>`;
-        });
-        document.getElementById('tA').innerText=ts.toFixed(3); document.getElementById('tQ').innerText=tq;
-    }
-
-    // --- STORAGE & HISTORY ---
-    function saveJob() {
-        if (items.length === 0) { alert("Add items to the list first!"); return; }
-        let job = { 
-            id: Date.now(), 
-            name: document.getElementById('jNm').value || 'Untitled', 
-            num: document.getElementById('jN').value || '000', 
-            client: document.getElementById('cli').value, 
-            parts: [...items], 
-            totalSqm: document.getElementById('tA').innerText, 
-            date: new Date().toLocaleDateString() 
-        };
-        let h = JSON.parse(localStorage.getItem('pw_history') || '[]');
-        h.unshift(job); 
-        localStorage.setItem('pw_history', JSON.stringify(h));
-        alert("Job Saved to History!");
-        items = []; 
-        render();
-    }
-
-    function renderHistory() {
-        const container = document.getElementById('history-list');
-        let h = JSON.parse(localStorage.getItem('pw_history') || '[]');
-        if (h.length === 0) { container.innerHTML = '<p style="text-align:center; padding:20px;">No saved jobs yet.</p>'; return; }
-        container.innerHTML = h.map(j => `
-            <div class="history-card">
-                <div>
-                    <div style="font-size:10px; color:#888;">${j.date} | ${j.client}</div>
-                    <div style="font-weight:900; font-size:16px;">#${j.num} - ${j.name}</div>
-                    <div style="font-size:12px; font-weight:700; color:var(--gs);">${j.totalSqm} SQM</div>
-                </div>
-                <button onclick="deleteHistory(${j.id})" style="border:0; background:0; font-size:24px;">🗑️</button>
-            </div>
-        `).join('');
-    }
-
-    function deleteHistory(id) {
-        if(confirm("Delete this job from history?")) {
-            let h = JSON.parse(localStorage.getItem('pw_history') || '[]');
-            h = h.filter(j => j.id !== id);
-            localStorage.setItem('pw_history', JSON.stringify(h));
-            renderHistory();
-        }
-    }
-
-    window.addEventListener('DOMContentLoaded', () => {
-        renderPaints();
-        renderClients();
-        renderProfiles();
     });
+    document.getElementById('tA').innerText=ts.toFixed(3); document.getElementById('tQ').innerText=tq;
+}
+
+// --- STANDARD NAVIGATION ---
+function tab(t) {
+    document.querySelectorAll('.view-section, .nav-btn').forEach(x => x.classList.remove('active'));
+    document.getElementById(t).classList.add('active');
+    document.getElementById('btn-' + t).classList.add('active');
+    if(t === 'db') renderPaints();
+}
+
+// --- BOOTSTRAP ---
+window.onload = () => {
+    renderPaints();
+    syncDropdowns();
+};   
 </script>
 </body>
 </html>  
