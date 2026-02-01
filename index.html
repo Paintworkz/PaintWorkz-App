@@ -1,90 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Paint & Panel Pro</title>
+    <style>
+        :root { --gs: #2c3e50; --accent: #d4af37; }
+        body { font-family: -apple-system, sans-serif; margin: 0; background: #f4f4f9; color: #333; padding-bottom: 70px; }
+        
+        /* HEADER & TABS */
+        header { background: #000; color: #fff; padding: 15px; text-align: center; font-weight: 900; position: sticky; top: 0; z-index: 100; }
+        .nav-bar { display: flex; background: #000; position: fixed; bottom: 0; width: 100%; z-index: 1000; }
+        .nav-btn { flex: 1; padding: 15px; color: #fff; border: none; background: #000; font-size: 10px; font-weight: 900; }
+        .nav-btn.active { background: #333; border-top: 3px solid var(--accent); }
+        
+        .sub-nav { display: none; background: #222; padding: 10px; gap: 10px; overflow-x: auto; }
+        .sub-btn { background: #444; color: white; border: none; padding: 8px 15px; border-radius: 20px; font-size: 11px; white-space: nowrap; }
+        .sub-btn.active { background: var(--accent); }
+
+        /* CONTENT SECTIONS */
+        .view-section { display: none; padding: 15px; }
+        .view-section.active { display: block; }
+        .sub-section { display: none; }
+        .sub-section.active { display: block; }
+
+        /* CARDS & UI */
+        .card { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 10px; }
+        .qty-bubble { background: var(--gs); color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 900; }
+        .edge-pill { font-size: 10px; font-weight: 900; padding: 2px 8px; border-radius: 10px; margin-right: 5px; color: white; }
+        .edge-L { background: #ff9500; } .edge-S { background: #5856d6; }
+        
+        input, select { width: 100%; padding: 12px; margin: 5px 0; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; }
+        .btn-main { background: var(--gs); color: white; padding: 15px; width: 100%; border: none; border-radius: 8px; font-weight: 900; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+<header>PAINT & PANEL PRO</header>
+
+<div id="sub-nav-bar" class="sub-nav"></div>
+
+<div id="measure" class="view-section active">
+    <div class="card">
+        <label>Client</label>
+        <select id="cli"></select>
+        <div style="display:flex; gap:10px;">
+            <div style="flex:1"><label>Brand</label><select id="pBrand"></select></div>
+            <div style="flex:1"><label>Color</label><select id="pColor"></select></div>
+        </div>
+        <label>Formula (EVIC)</label>
+        <input type="text" id="pFormula" readonly>
+    </div>
+
+    <div class="card">
+        <div style="display:flex; gap:10px;">
+            <input type="number" id="h" placeholder="Height">
+            <input type="number" id="w" placeholder="Width">
+            <input type="number" id="q" value="1">
+        </div>
+        <input type="text" id="desc" placeholder="Description (e.g. Wall Unit)">
+        <button class="btn-main" onclick="addItem()">+ ADD ITEM</button>
+    </div>
+
+    <div id="list"></div>
+    
+    <div class="card" style="background:#000; color:#fff; display:flex; justify-content:space-between;">
+        <span>TOTAL QTY: <b id="tQ">0</b></span>
+        <span>TOTAL SQM: <b id="tA">0.000</b></span>
+    </div>
+</div>
+
+<div id="db" class="view-section">
+    <div id="db-clients" class="sub-section">
+        <button class="btn-main" onclick="addClient()">+ ADD CLIENT</button>
+        <div id="client-list-container" style="margin-top:15px;"></div>
+    </div>
+    <div id="db-paints" class="sub-section">
+        <button class="btn-main" onclick="addPaint()">+ ADD PAINT</button>
+        <div id="paint-list-container" style="margin-top:15px;"></div>
+    </div>
+    <div id="db-profiles" class="sub-section">
+        <button class="btn-main" onclick="addProfile()">+ ADD PROFILE</button>
+        <div id="profile-list-container" style="margin-top:15px;"></div>
+    </div>
+</div>
+
+<nav class="nav-bar">
+    <button id="btn-measure" class="nav-btn active" onclick="tab('measure')">MEASURE</button>
+    <button id="btn-db" class="nav-btn" onclick="tab('db')">DATABASE</button>
+    <button class="nav-btn" onclick="location.reload()">REFRESH</button>
+</nav>
+
+<script>
 /* ================================================================
    1. GLOBAL DATA & INITIALIZATION
 ================================================================ */
 let paints = JSON.parse(localStorage.getItem('pw_paints')) || [
-    { brand: "Dulux", color: "Lexicon Quarter", finish: "G30 Satin", evic: "EP-LX-Q", recipe: { "White Base": 950, "Black": 2.5 } },
-    { brand: "Wattyl", color: "Vivid White", finish: "G10 Matt", evic: "EP-VW-STD", recipe: { "White Base": 1000 } }
+    { brand: "Dulux", color: "Lexicon Quarter", finish: "G30 Satin", evic: "EP-LX-Q", recipe: { "White Base": 950, "Black": 2.5 } }
 ];
 let clients = JSON.parse(localStorage.getItem('pw_clients')) || ["ABM", "Absolute Kitchens"];
-let profiles = JSON.parse(localStorage.getItem('pw_profiles')) || ["Plain (101)", "Shaker (401)"];
-let items = [], mode = 'SS', fStyle = 'Flat', pType = 'Panel';
+let profiles = JSON.parse(localStorage.getItem('pw_profiles')) || ["Plain (101)"];
+let items = [];
 
 const subMenus = {
-    db: [{id:'clients', label:'Clients'}, {id:'paints', label:'Paints'}, {id:'profiles', label:'Profiles'}],
-    admin: [{id:'matrix', label:'Matrix'}, {id:'cartage', label:'Cartage'}]
+    db: [{id:'clients', label:'Clients'}, {id:'paints', label:'Paints'}, {id:'profiles', label:'Profiles'}]
 };
 
 /* ================================================================
-   2. CLIENT & PROFILE ACTIONS (ADD/EDIT/DELETE)
+   2. APP LOGIC (ADD/DELETE/MIX)
 ================================================================ */
-
-// CLIENTS
-function addClient() {
-    let n = prompt("New Client Name:");
-    if(n) { clients.push(n); renderClients(); }
-}
-function editClient(old) {
-    let n = prompt("Rename Client:", old);
-    if(n && n !== old) { clients = clients.map(c => c === old ? n : c); renderClients(); }
-}
-function deleteClient(n) {
-    if(confirm("Delete " + n + "?")) { clients = clients.filter(c => c !== n); renderClients(); }
-}
-
-// PROFILES
-function addProfile() {
-    let n = prompt("New Profile Name:");
-    if(n) { profiles.push(n); renderProfiles(); }
-}
-function editProfile(old) {
-    let n = prompt("Rename Profile:", old);
-    if(n && n !== old) { profiles = profiles.map(p => p === old ? n : p); renderProfiles(); }
-}
-function deleteProfile(n) {
-    if(confirm("Delete " + n + "?")) { profiles = profiles.filter(p => p !== n); renderProfiles(); }
-}
-
-/* ================================================================
-   3. PAINT & MIXER LOGIC
-================================================================ */
-
-function addPaint() {
-    let b = prompt("Brand:"), c = prompt("Color:"), f = prompt("Finish:"), e = prompt("EVIC:");
-    if(b && c && f && e) {
-        paints.push({brand: b, color: c, finish: f, evic: e, recipe: {"White Base": 1000}});
-        renderPaints();
-    }
-}
-
-function deletePaint(idx) { 
-    if(confirm("Delete this paint?")) { paints.splice(idx, 1); renderPaints(); } 
+function addItem() {
+    const h = document.getElementById('h').value, w = document.getElementById('w').value, q = parseInt(document.getElementById('q').value);
+    if(!h || !w) return;
+    const sqm = (h * w / 1000000).toFixed(3);
+    items.push({h, w, qty: q, sqm, desc: document.getElementById('desc').value, e: [0,0,0,0]});
+    render();
 }
 
 function openMixer(idx) {
     const p = paints[idx];
-    if(!p) return;
     let qty = prompt(`Mix ${p.color}. Liters?`, "1");
     if(!qty || isNaN(qty)) return;
 
-    let recipeHtml = Object.entries(p.recipe).map(([ing, g]) => `
-        <div style="display:flex;justify-content:space-between;margin-bottom:5px;">
-            <span>${ing}:</span><b>${(g*qty).toFixed(1)}g</b>
-        </div>`).join('');
+    let recipeHtml = Object.entries(p.recipe).map(([ing, g]) => 
+        `<div style="display:flex;justify-content:space-between"><span>${ing}:</span><b>${(g*qty).toFixed(1)}g</b></div>`).join('');
 
     const modal = document.createElement('div');
     modal.id = "active-modal";
     modal.style = "position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:white; padding:20px; border-radius:15px; box-shadow:0 0 100px rgba(0,0,0,0.8); z-index:10000; width:85%; max-width:350px;";
-    modal.innerHTML = `
-        <h3 style="margin:0 0 10px 0;">Mixing Sheet</h3>
-        <div style="background:#f5f5f5; padding:15px; border-radius:10px; font-family:monospace;">
-            <strong>${p.brand} - ${p.color}</strong><br><small>${p.evic}</small><hr>
-            ${recipeHtml}<hr>
-            <div style="display:flex;justify-content:space-between"><span>TOTAL:</span><b>${qty}L</b></div>
-        </div>
-        <div style="display:flex; gap:10px; margin-top:20px;">
-            <button onclick="this.closest('#active-modal').remove()" style="flex:1; padding:12px; background:#eee; border:none; border-radius:8px; font-weight:900;">CLOSE</button>
-            <button onclick="editRecipe(${idx})" style="flex:1; padding:12px; background:var(--gs); color:white; border:none; border-radius:8px; font-weight:900;">EDIT</button>
-        </div>`;
+    modal.innerHTML = `<h3 style="margin:0">Mixing Sheet</h3><div style="background:#f5f5f5; padding:10px; border-radius:8px; font-family:monospace;">${recipeHtml}<hr>Total: ${qty}L</div>
+        <button onclick="this.closest('#active-modal').remove()" style="width:100%; padding:10px; margin-top:10px;">CLOSE</button>
+        <button onclick="editRecipe(${idx})" style="width:100%; padding:10px; margin-top:5px; background:var(--accent); color:white; border:none; font-weight:900;">EDIT FORMULA</button>`;
     document.body.appendChild(modal);
 }
 
@@ -102,74 +148,46 @@ function editRecipe(idx) {
 }
 
 /* ================================================================
-   4. RENDER LISTS (CLIENTS, PAINTS, PROFILES)
+   3. RENDERING & TABS
 ================================================================ */
-
-function renderClients() {
-    const c = document.getElementById('client-list-container');
-    if(c) c.innerHTML = clients.map(n => `
-        <div class="card" style="display:flex;justify-content:space-between;align-items:center;padding:10px;">
-            <b>${n}</b>
-            <div><button onclick="editClient('${n}')" style="color:blue;border:0;background:0;">EDIT</button>
-            <button onclick="deleteClient('${n}')" style="color:red;border:0;background:0;font-size:18px;">×</button></div>
-        </div>`).join('');
-    localStorage.setItem('pw_clients', JSON.stringify(clients));
-}
-
-function renderPaints() {
-    const c = document.getElementById('paint-list-container');
-    if(c) c.innerHTML = paints.map((p, i) => `
-        <div class="card" style="display:flex;justify-content:space-between;align-items:center;padding:10px;border-left:5px solid var(--gs);">
-            <div><small>${p.brand}</small><br><b>${p.color}</b></div>
-            <div><button onclick="openMixer(${i})" style="background:#000;color:#fff;border:0;padding:5px 10px;border-radius:5px;">🧪 MIX</button>
-            <button onclick="deletePaint(${i})" style="color:red;border:0;background:0;font-size:18px;">×</button></div>
-        </div>`).join('');
-    localStorage.setItem('pw_paints', JSON.stringify(paints));
-    syncDropdowns();
-}
-
-function renderProfiles() {
-    const c = document.getElementById('profile-list-container');
-    if(c) c.innerHTML = profiles.map(p => `
-        <div class="card" style="display:flex;justify-content:space-between;align-items:center;padding:10px;">
-            <b>${p}</b>
-            <div><button onclick="editProfile('${p}')" style="color:blue;border:0;background:0;">EDIT</button>
-            <button onclick="deleteProfile('${p}')" style="color:red;border:0;background:0;font-size:18px;">×</button></div>
-        </div>`).join('');
-    localStorage.setItem('pw_profiles', JSON.stringify(profiles));
-}
-
-/* ================================================================
-   5. MAIN MEASUREMENT RENDER (WITH CUSTOM EDGE RULES)
-================================================================ */
-
 function render(){
-    const list = document.getElementById('list'); 
-    list.innerHTML = ''; 
+    const list = document.getElementById('list'); list.innerHTML = '';
     let ts = 0, tq = 0;
     items.forEach((it, i) => {
         ts += parseFloat(it.sqm) * it.qty; tq += it.qty;
-        let L = (it.e[0]?1:0)+(it.e[1]?1:0), S = (it.e[2]?1:0)+(it.e[3]?1:0);
-        let lbL = (L > 0) ? (it.mode === 'SE' ? "1LR" : L + "L") : "";
-        let lbS = (S > 0) ? (it.mode === 'SE' ? "1SR" : S + "S") : "";
-
-        // Custom Rule: If edge text is 0S or 0l or 0SL or 0SR then leave blank.
-        if (["0S", "0L", "0SL", "0SR"].includes(lbL + lbS)) { lbL = ""; lbS = ""; }
-
-        list.innerHTML += `<div class="card" style="display:flex;align-items:center;gap:10px;padding:10px;">
+        // CUSTOM RULE: 0S/0L Blanking logic goes here if edges are added
+        list.innerHTML += `<div class="card" style="display:flex; align-items:center; gap:10px;">
             <div class="qty-bubble">${it.qty}</div>
-            <div style="flex:1"><b>${it.h} x ${it.w}</b><br><small>${it.desc||''}</small>
-            <div>${lbL?`<span class="edge-pill edge-L">${lbL}</span>`:''}${lbS?`<span class="edge-pill edge-S">${lbS}</span>`:''}</div></div>
-            <button onclick="items.splice(${i},1);render()" style="color:red;border:0;background:0;font-size:26px;">×</button>
+            <div style="flex:1"><b>${it.h} x ${it.w}</b><br><small>${it.desc}</small></div>
+            <button onclick="items.splice(${i},1);render()" style="color:red;border:0;background:0;font-size:24px;">×</button>
         </div>`;
     });
     document.getElementById('tA').innerText = ts.toFixed(3);
     document.getElementById('tQ').innerText = tq;
 }
 
-/* ================================================================
-   6. NAVIGATION & DROPDOWNS
-================================================================ */
+function renderPaints() {
+    const c = document.getElementById('paint-list-container');
+    if(c) c.innerHTML = paints.map((p, i) => `
+        <div class="card" style="display:flex;justify-content:space-between;border-left:5px solid var(--gs);">
+            <div><small>${p.brand}</small><br><b>${p.color}</b></div>
+            <button onclick="openMixer(${i})" style="background:#000;color:#fff;border:0;padding:5px 10px;border-radius:5px;">🧪 MIX</button>
+        </div>`).join('');
+    localStorage.setItem('pw_paints', JSON.stringify(paints));
+    syncDropdowns();
+}
+
+function renderClients() {
+    const c = document.getElementById('client-list-container');
+    if(c) c.innerHTML = clients.map(n => `<div class="card"><b>${n}</b></div>`).join('');
+    localStorage.setItem('pw_clients', JSON.stringify(clients));
+}
+
+function renderProfiles() {
+    const c = document.getElementById('profile-list-container');
+    if(c) c.innerHTML = profiles.map(p => `<div class="card"><b>${p}</b></div>`).join('');
+    localStorage.setItem('pw_profiles', JSON.stringify(profiles));
+}
 
 function tab(t) {
     document.querySelectorAll('.view-section, .nav-btn').forEach(x => x.classList.remove('active'));
@@ -187,8 +205,7 @@ function subTab(p, c, btn) {
     if(btn.parentNode) btn.parentNode.querySelectorAll('.sub-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     document.querySelectorAll(`#${p} .sub-section`).forEach(s => s.classList.remove('active'));
-    let pre = (p === 'db') ? 'db-' : 'adm-';
-    const target = document.getElementById(pre + c);
+    const target = document.getElementById(p + '-' + c);
     if(target) target.classList.add('active');
     if(c === 'paints') renderPaints();
     if(c === 'clients') renderClients();
@@ -203,11 +220,10 @@ function syncDropdowns() {
     bSel.innerHTML = brands.map(b => `<option value="${b}">${b}</option>`).join('');
     const updateColors = () => {
         const filtered = paints.filter(p => p.brand === bSel.value);
-        cSel.innerHTML = filtered.map(p => `<option value="${p.color}">${p.color} (${p.finish})</option>`).join('');
+        cSel.innerHTML = filtered.map(p => `<option value="${p.color}">${p.color}</option>`).join('');
         autoFillEvic();
     };
     bSel.onchange = updateColors;
-    cSel.onchange = autoFillEvic;
     updateColors();
 }
 
@@ -217,6 +233,7 @@ function autoFillEvic() {
     if(match) document.getElementById('pFormula').value = match.evic;
 }
 
-window.onload = () => {
-    renderPaints(); renderClients(); renderProfiles(); syncDropdowns();
-};
+window.onload = () => { syncDropdowns(); renderClients(); renderProfiles(); };
+</script>
+</body>
+</html>
