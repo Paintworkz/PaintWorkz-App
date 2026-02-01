@@ -3,231 +3,544 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>PaintWorkz Pro 3.9</title>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-database-compat.js"></script>
+    
     <style>
+        .qty-bubble { background: #f0f0f5; padding: 10px; border-radius: 10px; font-weight: 900; min-width: 35px; text-align: center; border: 1px solid #ccc; }
+        .mld-bubble { background: var(--gold); color: #000; padding: 2px 10px; border-radius: 15px; font-weight: 900; font-size: 10px; border: 1px solid #aa841e; display: inline-block; }
+        .edge-pill { padding: 4px 10px; border-radius: 6px; font-size: 14px; font-weight: 900; color: #fff; display: inline-block; margin-right: 5px; }
+        .edge-L { background: #f44336; } 
+        .edge-S { background: #2196f3; }
+        .mode-box { width: 50px; height: 50px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 16px; border: 3px solid; flex-shrink: 0; }
+        .mode-SS { border-color: #34c759; color: #34c759; background: #e8f5e9; }
+        .mode-DS { border-color: #ff9500; color: #ff9500; background: #fff3e0; }
+        .mode-SE { border-color: #ff3b30; color: #ff3b30; background: #ffebee; }
         :root {--gold: linear-gradient(145deg, #d4af37, #f9f1b0, #aa841e); --rainbow: linear-gradient(90deg, red, orange, yellow, green, blue, indigo, violet); --gs: #d4af37;}
-        body {margin:0;font-family:-apple-system, sans-serif;background:#f0f0f5;padding-bottom:120px;-webkit-tap-highlight-color:transparent;}
-        header {background:var(--rainbow);padding:env(safe-area-inset-top) 15px 5px;display:flex;align-items:center;justify-content:space-between;border-bottom:4px solid #aa841e;position:sticky;top:0;z-index:1000;height:90px;box-sizing:border-box;}
-        .logo-box {background:#000;padding:8px 25px;border-radius:50px;border:3px solid var(--gs);display:flex;align-items:center;}
-        .logo-text {font-weight:900;font-size:28px;background:var(--gold);-webkit-background-clip:text;-webkit-text-fill-color:transparent;filter:drop-shadow(1px 1px 0 #fff) drop-shadow(2px 2px 2px #000);}
-        .nav-tabs {display:flex; background:#000; overflow-x:auto; position:sticky; top:90px; z-index:999;}
-        .nav-btn {flex:1; padding:12px; color:#fff; text-align:center; font-weight:900; font-size:11px; text-transform:uppercase; border-bottom:3px solid transparent; white-space:nowrap;}
-        .nav-btn.active {border-bottom:3px solid var(--gs); color:var(--gs);}
-        .card {background:#fff; border-radius:12px; padding:15px; margin:10px; border:1px solid #ddd; box-shadow:0 2px 5px rgba(0,0,0,0.05);}
+         body {margin:0;font-family:-apple-system, sans-serif;background:#f0f0f5;padding-bottom:180px;-webkit-tap-highlight-color:transparent;}
+         header {background:var(--rainbow);padding:env(safe-area-inset-top) 15px 5px;display:flex;align-items:center;justify-content:space-between;border-bottom:4px solid #aa841e;position:sticky;top:0;z-index:1000;height:90px;box-sizing:border-box;}
+        .logo-box {background:#000;padding:10px 30px;border-radius:50px;border:3px solid var(--gs);display:flex;align-items:center;}
+        .logo-text {font-weight:900;font-size:30px;background:var(--gold);-webkit-background-clip:text;-webkit-text-fill-color:transparent;filter:drop-shadow(1px 1px 0 #fff) drop-shadow(2px 2px 2px #000);}
+        .nav-btn {flex:1;min-width:75px;padding:14px 2px;color:#fff;text-align:center;font-weight:900;font-size:10px;text-transform:uppercase;border:none;background:0 0;}
+        .nav-btn.active {background:#fff;color:#000;border-bottom:4px solid var(--gs);}
+        .nav-tabs { display: flex; background: #000; position: sticky; top: 90px; z-index: 1000; border-bottom: 1px solid #444; overflow-x: auto;}
+        .sub-nav { display: flex; background: #222; position: sticky; top: 130px; z-index: 999; overflow-x: auto; border-bottom: 2px solid var(--gs); white-space: nowrap;}
+        .sub-btn {padding: 10px 15px; color: #aaa; font-size: 11px; font-weight: 700; text-transform: uppercase; border: none; background: 0 0;}
+        .sub-btn.active { color: var(--gs); }
+        .container { padding: 20px 10px 150px 10px; max-width: 600px; margin: auto; position: relative; z-index: 1; } 
         .view-section {display:none;} .view-section.active {display:block;}
-        input, select {width:100%; padding:12px; margin:5px 0; border-radius:8px; border:1px solid #ccc; font-size:16px; font-weight:600; box-sizing:border-box;}
-        .bubble-unit {flex:1; background:#fff; border:1px solid #ccc; border-radius:10px; display:flex; flex-direction:column; align-items:center; justify-content:center; height:65px;}
-        .bubble-unit input {border:none; background:transparent; text-align:center; font-size:22px; font-weight:900; width:100%; margin:0;}
-        .bubble-label {font-size:9px; font-weight:900; color:#888; text-transform:uppercase;}
-        .p-card, .t-btn, .edge-box {background:#eee; border-radius:8px; padding:10px; text-align:center; font-weight:900; cursor:pointer; flex:1; border:2px solid transparent;}
-        .p-card.active, .t-btn.active, .edge-box.active {background:#000; color:var(--gs); border-color:var(--gs);}
-        .toggle-row, .edge-row {display:flex; gap:8px; margin:10px 0;}
-        .qty-input-node {width:55px; height:55px; text-align:center; font-size:22px; font-weight:900; background:#f0f0f5; border:2px solid #ccc; border-radius:12px; color:#000;}
-        .edge-pill {padding:4px 10px; border-radius:6px; font-size:13px; font-weight:900; color:#fff; display:inline-block; margin:2px;}
-        .edge-L {background:#f44336;} .edge-S {background:#2196f3;}
-        .sticky-footer {background:#000; position:fixed; bottom:0; width:100%; height:85px; border-top:4px solid var(--gs); color:#fff; display:grid; grid-template-columns:1fr 1fr 1fr; align-items:center; z-index:2000; text-align:center;}
-        .sub-nav {display:flex; background:#222; padding:5px; gap:5px; overflow-x:auto;}
-        .sub-btn {background:#444; color:#fff; border:none; padding:8px 15px; border-radius:5px; font-size:10px; font-weight:900;}
-        .sub-btn.active {background:var(--gs); color:#000;}
+        .sub-section { display: none; } .sub-section.active { display: block; }
+        .card {background:#fff;border-radius:12px;padding:15px;margin-bottom:10px;border:1px solid #ddd;box-shadow: 0 2px 5px rgba(0,0,0,0.05); position:relative;}
+        .t-btn {flex: 1; padding: 12px; border: 1px solid #ccc; border-radius: 8px; font-weight: 900; text-align: center; background: #fff; cursor: pointer;}
+        .t-btn.active { background: #000; color: #fff; border-color: var(--gs); }
+        .toggle-row { display: flex; gap: 8px; margin: 10px 0; }
+         input, select {width: 100%; height: 50px; padding: 0 12px; margin: 4px 0; border-radius: 10px; border: 1px solid #ccc; font-size: 16px; background: #fff; box-sizing: border-box;}
+        .bubble-unit {flex: 1; background: #fff; border: 1px solid #ccc; border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 65px;}
+        .bubble-unit input {border: none; background: transparent; text-align: center; font-size: 18px; font-weight: 900; height: 30px; padding: 0; width: 100%;}
+        .bubble-label { font-size: 9px; font-weight: 900; color: #888; text-transform: uppercase; margin-top: -2px; }
+        .p-card {flex:1;background:#fff;border:2px solid #ddd;border-radius:10px;padding:8px;text-align:center;font-weight:900;font-size:11px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px;}
+        .p-card.active {border-color:var(--gs);background:#fff9e6;}
+        .p-card svg {width:24px;height:24px;stroke:#444;fill:none;stroke-width:2;}
+        .edge-row {display:flex;justify-content:space-between;align-items:center;margin:15px 0;gap:8px;}
+        .edge-box {flex:1;height:55px;border-radius:10px;border:2px solid #bbb;background:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;color:#ccc;cursor:pointer;}
+        .edge-box.active {background:#34c759;border-color:#28a745;color:#fff;}
+        .cam-btn {width:70px;height:70px;background:#000;border:3px solid var(--gs);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:32px;position:relative;}
+        .sticky-footer { background: #000; position: fixed; bottom: 0; left: 0; right: 0; width: 100%; height: 85px; border-top: 4px solid var(--gs); color: #fff; display: grid; grid-template-columns: 1fr 1fr 1fr; align-items: center; padding-bottom: env(safe-area-inset-bottom); z-index: 2000;}
+        .footer-col { text-align: center; }
+        .history-card { background: #fff; border-radius: 12px; padding: 15px; margin-bottom: 12px; border-left: 8px solid #000; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
     </style>
 </head>
 <body>
 
 <header>
-    <div style="font-size:28px" onclick="tab('history')">🔍</div>
+    <div style="font-size:32px" onclick="tab('history')">🔍</div>
     <div class="logo-box"><span class="logo-text">PaintWorkz</span></div>
-    <div style="font-size:28px" onclick="saveJob()">💾</div>
+    <div style="font-size:32px" onclick="saveJob()">💾</div>
 </header>
 
 <div class="nav-tabs">
     <div class="nav-btn active" id="btn-measure" onclick="tab('measure')">Measure</div>
     <div class="nav-btn" id="btn-db" onclick="tab('db')">Database</div>
     <div class="nav-btn" id="btn-history" onclick="tab('history')">History</div>
+    <div class="nav-btn" id="btn-forms" onclick="tab('forms')">Forms</div>
+    <div class="nav-btn" id="btn-admin" onclick="tab('admin')">Admin</div>
     <div class="nav-btn" id="btn-settings" onclick="tab('settings')">Settings</div>
 </div>
+    
 <div id="sub-nav-bar" class="sub-nav" style="display:none;"></div>
 
+<div class="container">
 <div id="measure" class="view-section active">
     <div class="card">
-        <div style="display:flex;gap:8px;"><select id="cli"></select><input type="text" id="jN" placeholder="JOB #"></div>
+        <h3 style="margin-top:0; color:var(--gs); text-align:center; font-weight:900;">NEW MEASUREMENT</h3>
+        
+        <div style="display:flex;gap:8px;"><select id="cli"></select><input type="text" id="jN" placeholder="JOB #" style="width:100px;"></div>
         <input type="text" id="jNm" placeholder="JOB NAME">
+
+        <div style="display:flex;gap:8px;">
+            <select id="pBrand" onchange="syncDropdowns()"></select>
+            <select id="pColor" onchange="updateFinishDropdown()"></select>
+        </div>
+        <div style="display:flex;gap:8px;">
+            <select id="pFinish" onchange="autoFillEvic()"></select>
+            <input type="text" id="pFormula" placeholder="EVIC Code" readonly>
+        </div>
+
         <div style="display:flex; gap:8px; margin-top:10px;">
             <div class="bubble-unit"><input type="number" id="thk" value="18" oninput="up()"><div class="bubble-label">THICK</div></div>
-            <div class="bubble-unit" style="flex:2;"><select id="pColor" style="margin:0; border:none;"></select><div class="bubble-label">COLOR</div></div>
+            <div style="flex:2.5"><select id="prof-select"></select></div>
             <div class="bubble-unit"><input type="number" id="qty" value="1"><div class="bubble-label">QTY</div></div>
         </div>
-        <div class="toggle-row">
-            <div id="pP" class="p-card active" onclick="setP('Panel')">PANEL</div>
-            <div id="pD" class="p-card" onclick="setP('Door')">DOOR</div>
-            <div id="pDr" class="p-card" onclick="setP('Drawer')">DRAWER</div>
+
+        <div style="display:flex;gap:8px;margin:15px 0;">
+            <div id="pP" class="p-card active" onclick="setP('Panel')"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="1"></rect></svg>PANEL</div>
+            <div id="pD" class="p-card" onclick="setP('Door')"><svg viewBox="0 0 24 24"><path d="M5 3h14v18H5V3zm10 9v1"></path></svg>DOOR</div>
+            <div id="pDr" class="p-card" onclick="setP('Drawer')"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="6" rx="1"></rect><rect x="3" y="13" width="18" height="6" rx="1"></rect></svg>DRAWER</div>
         </div>
+
+        <input type="text" id="desc" placeholder="DESCRIPTION">
         <div style="display:flex;gap:8px;"><input type="number" id="h" placeholder="LENGTH" oninput="up()"><input type="number" id="w" placeholder="WIDTH" oninput="up()"></div>
+
+        <div class="toggle-row">
+            <div id="fF" class="t-btn active" onclick="setF('Flat')">Flat</div>
+            <div id="fM" class="t-btn" onclick="setF('Moulded')">Moulded</div>
+        </div>
+
         <div class="toggle-row">
             <div id="mSS" class="t-btn active" onclick="setM('SS')">SS</div>
             <div id="mDS" class="t-btn" onclick="setM('DS')">DS</div>
             <div id="mSE" class="t-btn" onclick="setM('SE')">SE</div>
         </div>
+        
         <div class="edge-row">
-            <div class="edge-box" id="E1" onclick="tE(this)">L1</div>
-            <div class="edge-box" id="E2" onclick="tE(this)">L2</div>
-            <div class="edge-box" id="E3" onclick="tE(this)">S1</div>
-            <div class="edge-box" id="E4" onclick="tE(this)">S2</div>
+            <div class="edge-box" id="E1" onclick="tE(this)">L</div>
+            <div class="edge-box" id="E2" onclick="tE(this)">L</div>
+            <div class="cam-btn">📸</div>
+            <div class="edge-box" id="E3" onclick="tE(this)">S</div>
+            <div class="edge-box" id="E4" onclick="tE(this)">S</div>
         </div>
+
         <div id="liveSq" style="text-align:center;font-weight:900;color:#aa841e;font-size:48px;">0.000</div>
         <button onclick="add()" style="width:100%;padding:18px;border-radius:40px;background:var(--gold);border:none;font-size:22px;font-weight:900;">ADD TO LIST</button>
     </div>
     <div id="list"></div>
 </div>
-
+    
 <div id="db" class="view-section">
     <div id="db-paints" class="sub-section active">
-        <div class="card">
-            <h3>Paint Manager</h3>
-            <input type="text" id="newPaint" placeholder="Color Name...">
-            <button onclick="addItem('paints', 'newPaint', renderPaints)" style="background:var(--gs); border:none; padding:10px; width:100%; font-weight:900;">ADD PAINT</button>
-            <div id="paint-list" style="margin-top:15px;"></div>
+        <div class="card" style="position: sticky; top: 0; z-index: 10; background: #fff; margin-bottom: 10px;">
+            <h3 style="margin-top:0;">Paint & Evic Database</h3>
+            <div style="display:flex; gap:8px; margin-bottom:10px;">
+                <input type="text" id="paintSearch" placeholder="🔍 Search Color or Brand..." oninput="filterPaints()" style="flex:1;">
+                <button onclick="addPaint()" style="width:50px; background:var(--gs); border:none; border-radius:10px; font-weight:900; font-size:20px;">+</button>
+            </div>
         </div>
+        <div id="paint-list-container" style="max-height: 400px; overflow-y: auto;"></div>
     </div>
-    <div id="db-clients" class="sub-section" style="display:none;">
-        <div class="card">
-            <h3>Client Manager</h3>
-            <input type="text" id="newClient" placeholder="Client Name...">
-            <button onclick="addItem('clients', 'newClient', renderClients)" style="background:var(--gs); border:none; padding:10px; width:100%; font-weight:900;">ADD CLIENT</button>
-            <div id="client-list" style="margin-top:15px;"></div>
+
+    <div id="db-clients" class="sub-section">
+        <div class="card" style="position: sticky; top: 0; z-index: 10; background: #fff; margin-bottom: 10px;">
+            <h3 style="margin-top:0;">Client Manager</h3>
+            <div style="display:flex; gap:8px;">
+                <input type="text" id="clientSearch" placeholder="🔍 Search clients..." oninput="filterClients()" style="flex:1;">
+                <button onclick="addClient()" style="width:50px; background:var(--gs); border:none; border-radius:10px; font-weight:900; font-size:20px;">+</button>
+            </div>
         </div>
+        <div id="client-list-container" style="max-height: 400px; overflow-y: auto;"></div>
+    </div>
+            
+    <div id="db-profiles" class="sub-section">
+        <div class="card" style="position: sticky; top: 0; z-index: 10; background: #fff; margin-bottom: 10px;">
+            <h3 style="margin-top:0;">Profile Database</h3>
+            <div style="display:flex; gap:8px;">
+                <input type="text" id="profileSearch" placeholder="🔍 Search profiles..." oninput="filterProfiles()" style="flex:1;">
+                <button onclick="addProfile()" style="width:50px; background:var(--gs); border:none; border-radius:10px; font-weight:900; font-size:20px;">+</button>
+            </div>
+        </div>
+        <div id="profile-list-container" style="max-height: 400px; overflow-y: auto;"></div>
     </div>
 </div>
 
-<div id="history" class="view-section">
-    <div class="card"><h3 style="margin:0">Recent Jobs</h3></div>
-    <div id="history-list"></div>
-</div>
+       
+    <div id="history" class="view-section">
+        <div id="history-list"></div>
+    </div>
 
-<div class="sticky-footer">
-    <div onclick="alert('PDF Generated')">📄<div style="font-size:10px;">PDF</div></div>
-    <div><div style="font-size:10px; color:#aaa;">TOTAL SQM</div><div id="tA" style="font-size:22px; font-weight:900; color:var(--gs)">0.000</div></div>
-    <div><div style="font-size:10px; color:#aaa;">PARTS</div><div id="tQ" style="font-size:22px; font-weight:900; color:var(--gs)">0</div></div>
-</div>
+    <div id="forms" class="view-section">
+        <div class="card"><h3>Forms & Paperwork</h3><p>Coming Soon...</p></div>
+    </div>
+        
+    <div id="admin" class="view-section">
+        <div id="adm-matrix" class="sub-section active"><div class="card"><h3>Profile Matrix</h3></div></div>
+        <div id="adm-cartage" class="sub-section"><div class="card"><h3>Cartage</h3></div></div>
+        <div id="adm-multi" class="sub-section"><div class="card"><h3>Multipliers</h3></div></div>
+        <div id="adm-track" class="sub-section"><div class="card"><h3>Trackers</h3></div></div>
+        <div id="adm-graphs" class="sub-section"><div class="card"><h3>Graphs</h3></div></div>
+    </div>
+        
+    <div id="settings" class="view-section">
+        <div id="settings-general" class="sub-section active">
+            <div class="card">
+                <h3>General Settings</h3>
+                <input type="text" id="bizName" placeholder="Business Name">
+                <input type="text" id="bizEmail" placeholder="Email Address">
+                <button class="t-btn active" style="width:100%; margin-top:10px;">Save Business Info</button>
+            </div>
+        </div>
+        <div id="settings-defaults" class="sub-section">
+            <div class="card"><h3>Application Defaults</h3><p>Default thickness: 18mm</p></div>
+        </div> 
+    </div>
 
+</div> <div class="sticky-footer">
+    <div class="footer-col" style="cursor:pointer;" onclick="alert('PDF Generated')">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M7 18H17V16H7V18Z" fill="#FF0000" /><path d="M17 14H7V12H17V14Z" fill="#FF0000" /><path d="M7 10H11V8H7V10Z" fill="#FF0000" /><path fill-rule="evenodd" clip-rule="evenodd" d="M6 2C4.34315 2 3 3.34315 3 5V19C3 20.6569 4.34315 22 6 22H18C19.6569 22 21 20.6569 21 19V9L14 2H6ZM13 4L19 10H13V4ZM5 19V5C5 4.44772 5.44772 4 6 4H11V12H19V19C19 19.5523 18.5523 20 18 20H6C5.44772 20 5 19.5523 5 19Z" fill="#FF0000" /></svg>
+        <div style="font-size:10px; font-weight:900; color:#FF0000;">PDF</div>
+    </div>
+    <div class="footer-col">
+        <div style="font-size:10px; color:#aaa;">TOTAL SQM</div>
+        <div id="tA" style="font-size:22px; font-weight:900; color:var(--gs)">0.000</div>
+    </div>
+    <div class="footer-col">
+        <div style="font-size:10px; color:#aaa;">PARTS</div>
+        <div id="tQ" style="font-size:22px; font-weight:900; color:var(--gs)">0</div>
+    </div>
+</div>
+    
 <script>
-let items = [], mode = 'SS', pType = 'Panel';
-let db = {
-    paints: JSON.parse(localStorage.getItem('pw_paints')) || ["Lexicon Quarter", "Vivid White"],
-    clients: JSON.parse(localStorage.getItem('pw_clients')) || ["Cash Customer"]
+// --- 1. INITIALIZATION & DATA ---
+let paints = JSON.parse(localStorage.getItem('pw_paints')) || [
+    { brand: "Dulux", color: "Lexicon Quarter", finish: "G30 Satin", evic: "EP-LX-Q", recipe: { "White Base": 950, "Black": 2.5 } }
+];
+let clients = JSON.parse(localStorage.getItem('pw_clients')) || ["ABM", "Absolute Kitchens"];
+let profiles = JSON.parse(localStorage.getItem('pw_profiles')) || ["Plain (101)", "Shaker (401)"];
+let items = [], mode = 'SS', fStyle = 'Flat', pType = 'Panel';
+
+const subMenus = {
+    db: [{id:'paints', label:'Paints'}, {id:'clients', label:'Clients'}, {id:'profiles', label:'Profiles'}],
+    admin: [{id:'matrix', label:'Matrix'}, {id:'cartage', label:'Cartage'}, {id:'multi', label:'Multipliers'}, {id:'track', label:'Trackers'}, {id:'graphs', label:'Graphs'}],
+    settings: [{id:'general', label:'General'}, {id:'defaults', label:'Defaults'}]
 };
 
+// --- 2. MEASUREMENT MATH ENGINE ---
+
+function setP(t) {
+    pType = t;
+    document.querySelectorAll('.p-card').forEach(c => c.classList.remove('active'));
+    document.getElementById(t === 'Panel' ? 'pP' : (t === 'Door' ? 'pD' : 'pDr')).classList.add('active');
+    resetEdges();
+    up();
+}
+
+function setM(m) {
+    mode = m;
+    document.querySelectorAll('#mSS, #mDS, #mSE').forEach(b => b.classList.remove('active'));
+    document.getElementById('m' + m).classList.add('active');
+    resetEdges();
+    up();
+}
+
+function tE(el) {
+    el.classList.toggle('active');
+    up();
+}
+
+function resetEdges() {
+    document.querySelectorAll('.edge-box').forEach(el => el.classList.remove('active'));
+    if (mode === 'SE') {
+        document.getElementById('E1').classList.add('active');
+    } else if (pType === 'Door' || pType === 'Drawer') {
+        document.querySelectorAll('.edge-box').forEach(el => el.classList.add('active'));
+    }
+}
+
 function up() {
-    const h = parseFloat(document.getElementById('h').value) || 0;
-    const w = parseFloat(document.getElementById('w').value) || 0;
+    const rawH = parseFloat(document.getElementById('h').value) || 0;
+    const rawW = parseFloat(document.getElementById('w').value) || 0;
     const thk = parseFloat(document.getElementById('thk').value) || 18;
-    const eL = (document.getElementById('E1').classList.contains('active') ? 1 : 0) + (document.getElementById('E2').classList.contains('active') ? 1 : 0);
-    const eS = (document.getElementById('E3').classList.contains('active') ? 1 : 0) + (document.getElementById('E4').classList.contains('active') ? 1 : 0);
-    let area = h * w;
-    if (mode === 'DS') area *= 2;
-    if (mode === 'SE') area += ((eL * h) + (eS * w)) * 100;
-    area += (eL * h * thk) + (eS * w * thk);
-    document.getElementById('liveSq').innerText = (area / 1000000).toFixed(3);
+    
+    const L_dim = Math.max(rawH, rawW);
+    const S_dim = Math.min(rawH, rawW);
+
+    const eL1 = document.getElementById('E1').classList.contains('active') ? 1 : 0;
+    const eL2 = document.getElementById('E2').classList.contains('active') ? 1 : 0;
+    const eS1 = document.getElementById('E3').classList.contains('active') ? 1 : 0;
+    const eS2 = document.getElementById('E4').classList.contains('active') ? 1 : 0;
+
+    let totalArea = L_dim * S_dim; 
+
+    if (mode === 'DS') totalArea *= 2;
+    if (mode === 'SE') {
+        const activeEdgeLengths = ((eL1 + eL2) * L_dim) + ((eS1 + eS2) * S_dim);
+        totalArea += (activeEdgeLengths * 100); // 100mm Return Logic
+    }
+
+    // Add Thickness area
+    totalArea += ((eL1 + eL2) * L_dim * thk) + ((eS1 + eS2) * S_dim * thk);
+
+    const sqm = totalArea / 1000000;
+    const display = document.getElementById('liveSq');
+    if (display) display.innerText = sqm.toFixed(3);
 }
 
+// --- 3. LIST MANAGEMENT ---
+
+// --- SMART ADD FUNCTION ---
 function add() {
-    const h = document.getElementById('h').value, w = document.getElementById('w').value;
+    up(); 
+    const h = document.getElementById('h').value;
+    const w = document.getElementById('w').value;
     const q = parseInt(document.getElementById('qty').value) || 1;
+    const finalSqmValue = document.getElementById('liveSq').innerText;
+    
     if(!h || !w) return;
-    const edges = [document.getElementById('E1').classList.contains('active'), document.getElementById('E2').classList.contains('active'), document.getElementById('E3').classList.contains('active'), document.getElementById('E4').classList.contains('active')];
-    
-    // Grouping Logic
-    const existing = items.find(it => it.h === h && it.w === w && JSON.stringify(it.e) === JSON.stringify(edges) && it.mode === mode);
-    if(existing) { existing.qty += q; } 
-    else { items.push({ h, w, qty: q, sqm: document.getElementById('liveSq').innerText, mode, pType, color: document.getElementById('pColor').value, e: edges }); }
-    
-    document.getElementById('h').value = ''; document.getElementById('w').value = ''; render();
+
+    // Create a unique fingerprint for this specific part configuration
+    const edges = [
+        document.getElementById('E1').classList.contains('active'),
+        document.getElementById('E2').classList.contains('active'),
+        document.getElementById('E3').classList.contains('active'),
+        document.getElementById('E4').classList.contains('active')
+    ];
+
+    // Check if an identical item already exists in the list
+    const existingIndex = items.findIndex(it => 
+        it.h === h && it.w === w && it.thk === document.getElementById('thk').value &&
+        it.mode === mode && it.color === document.getElementById('pColor').value &&
+        it.finish === document.getElementById('pFinish').value &&
+        it.style === fStyle && it.pType === pType &&
+        JSON.stringify(it.e) === JSON.stringify(edges)
+    );
+
+    if (existingIndex > -1) {
+        // Just update the quantity of the existing item
+        items[existingIndex].qty += q;
+    } else {
+        // Add as a new row
+        items.push({
+            h, w, qty: q,
+            thk: document.getElementById('thk').value,
+            sqm: finalSqmValue,
+            mode: mode,
+            style: fStyle,
+            finish: document.getElementById('pFinish').value,
+            color: document.getElementById('pColor').value,
+            pType: pType,
+            desc: document.getElementById('desc').value,
+            e: edges
+        });
+    }
+
+    document.getElementById('h').value = '';
+    document.getElementById('w').value = '';
+    document.getElementById('desc').value = '';
+    resetEdges();
+    render();
 }
 
+// --- UPDATED RENDER FUNCTION ---
 function render() {
-    const list = document.getElementById('list'); list.innerHTML = '';
-    let gS = 0, gQ = 0;
+    const l = document.getElementById('list');
+    l.innerHTML = '';
+    let grandSqm = 0, grandQty = 0;
+
     items.forEach((it, i) => {
-        const rS = parseFloat(it.sqm) * it.qty; gS += rS; gQ += it.qty;
-        const L = (it.e[0]?1:0)+(it.e[1]?1:0), S = (it.e[2]?1:0)+(it.e[3]?1:0);
-        list.innerHTML += `
-        <div class="card" style="display:flex;align-items:center;gap:15px;border-left:6px solid #000;">
-            <input type="number" value="${it.qty}" class="qty-input-node" onchange="items[${i}].qty=parseInt(this.value)||1;render();">
+        const rowTotalSqm = parseFloat(it.sqm) * it.qty;
+        grandSqm += rowTotalSqm;
+        grandQty += it.qty;
+
+        let L_count = (it.e[0] ? 1 : 0) + (it.e[1] ? 1 : 0);
+        let S_count = (it.e[2] ? 1 : 0) + (it.e[3] ? 1 : 0);
+        
+        // DYNAMIC SE LABELS: 1LR, 2LR, 1SR, 2SR
+        let lbL = (it.mode === 'SE') ? (L_count > 0 ? L_count + "LR" : "") : (L_count > 0 ? L_count + "L" : "");
+        let lbS = (it.mode === 'SE') ? (S_count > 0 ? S_count + "SR" : "") : (S_count > 0 ? S_count + "S" : "");
+
+        l.innerHTML += `
+        <div class="card" style="display:flex;align-items:center;gap:10px;padding:8px;">
+            <input type="number" value="${it.qty}" 
+                onchange="items[${i}].qty = parseInt(this.value) || 1; render();"
+                style="width: 45px; height: 45px; text-align: center; font-weight: 900; background: #f0f0f5; border: 1px solid #ccc; border-radius: 10px; padding: 0;">
+            
             <div style="flex:1">
-                <div style="font-weight:900; font-size:20px;">${it.h} x ${it.w}</div>
-                <div style="font-size:11px; font-weight:700; color:#666;">${it.pType} | ${it.color}</div>
-                <div>
-                    ${L > 0 ? `<span class="edge-pill edge-L">${L}L</span>` : ''}
-                    ${S > 0 ? `<span class="edge-pill edge-S">${S}S</span>` : ''}
+                <div style="font-weight:900;font-size:18px;">${it.h} x ${it.w} <span style="font-size:12px; color:#888;">(${it.thk}mm)</span></div>
+                <div style="font-size:11px;color:#666;">
+                    <b>${it.pType.toUpperCase()}</b> | ${it.color} | <span class="mld-bubble">${it.style}</span>
+                </div>
+                <div style="margin-top:4px;">
+                    ${lbL ? `<span class="edge-pill edge-L">${lbL}</span>` : ''}
+                    ${lbS ? `<span class="edge-pill edge-S">${lbS}</span>` : ''}
                 </div>
             </div>
-            <div style="text-align:right;"><div style="font-size:18px; font-weight:900; color:var(--gs);">${rS.toFixed(3)}</div>
-            <button onclick="items.splice(${i},1);render()" style="color:red;border:0;background:0;font-size:24px;">×</button></div>
+            <div style="text-align:right; margin-right:10px;">
+                <div style="font-size:10px; color:#888; font-weight:900;">ROW SQM</div>
+                <div style="font-weight:900; color:var(--gs); font-size:16px;">${rowTotalSqm.toFixed(3)}</div>
+            </div>
+            <div class="mode-box mode-${it.mode}">${it.mode}</div>
+            <button onclick="items.splice(${i},1);render()" style="color:red;border:0;background:0;font-size:26px;margin-left:5px;">×</button>
         </div>`;
     });
-    document.getElementById('tA').innerText = gS.toFixed(3);
-    document.getElementById('tQ').innerText = gQ;
+
+    document.getElementById('tA').innerText = grandSqm.toFixed(3);
+    document.getElementById('tQ').innerText = grandQty;
 }
+
+// --- 4. DATABASE & UI FUNCTIONS ---
+
+function renderPaints(filter = "") {
+    const container = document.getElementById('paint-list-container');
+    if(!container) return;
+    container.innerHTML = paints.filter(p => p.color.toLowerCase().includes(filter.toLowerCase()))
+        .map((p, i) => `
+            <div class="card" style="border-left: 5px solid var(--gs); display:flex; justify-content:space-between; align-items:center;">
+                <div onclick="openMixer(${i})" style="flex:1; cursor:pointer;">
+                    <div style="font-weight:900;">${p.color}</div>
+                    <div style="font-size:11px; color:#666;">${p.brand} | ${p.finish}</div>
+                </div>
+                <button onclick="deletePaint(${i})" style="background:none; border:none; color:#ff3b30; font-size:20px; padding:10px;">×</button>
+            </div>`).join('');
+    localStorage.setItem('pw_paints', JSON.stringify(paints));
+    syncDropdowns();
+}
+
+function openMixer(idx) {
+    const p = paints[idx];
+    let qty = prompt(`Mix ${p.color}. Liters?`, "1");
+    if(!qty || isNaN(qty)) return;
+    let rows = Object.entries(p.recipe).map(([ing, g]) => `<div style="display:flex;justify-content:space-between"><span>${ing}:</span><b>${(g*qty).toFixed(1)}g</b></div>`).join('');
+    const modal = document.createElement('div');
+    modal.id = "active-modal";
+    modal.style = "position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:white; padding:20px; border-radius:15px; box-shadow:0 0 50px rgba(0,0,0,0.5); z-index:9999; width:80%; max-width:350px;";
+    modal.innerHTML = `<h3>Mixer</h3><div style="background:#f0f0f0; padding:10px; border-radius:8px; font-family:monospace; font-size:13px;">${rows}<hr>Total: ${qty}L</div>
+        <button onclick="this.parentElement.remove()" style="width:100%; padding:10px; margin-top:10px; border-radius:8px; border:none; background:#ddd;">CLOSE</button>`;
+    document.body.appendChild(modal);
+}
+
+function deletePaint(idx) { if(confirm("Delete Paint?")) { paints.splice(idx, 1); renderPaints(); } }
+function addPaint() { 
+    let b = prompt("Brand:"), c = prompt("Color:"), f = prompt("Finish:"), e = prompt("EVIC:");
+    if(b && c && f && e) { paints.push({brand:b, color:c, finish:f, evic:e, recipe:{"White Base":1000}}); renderPaints(); } 
+}
+
+function renderClients(filter = "") {
+    const container = document.getElementById('client-list-container');
+    if(!container) return;
+    container.innerHTML = clients.filter(c => c.toLowerCase().includes(filter.toLowerCase())).map(c => `
+        <div class="card" style="display:flex; justify-content:space-between; padding:10px;"><span>${c}</span>
+        <button onclick="deleteClient('${c}')" style="color:red; background:none; border:none;">×</button></div>`).join('');
+    updateClientDropdown();
+    localStorage.setItem('pw_clients', JSON.stringify(clients));
+}
+
+function addClient() { let n = prompt("Client Name:"); if(n) { clients.push(n); renderClients(); } }
+function deleteClient(n) { clients = clients.filter(c => c !== n); renderClients(); }
+function updateClientDropdown() { const s = document.getElementById('cli'); if(s) s.innerHTML = clients.map(c => `<option value="${c}">${c}</option>`).join(''); }
+
+function renderProfiles(filter = "") {
+    const container = document.getElementById('profile-list-container');
+    if(!container) return;
+    container.innerHTML = profiles.filter(p => p.toLowerCase().includes(filter.toLowerCase())).map(p => `
+        <div class="card" style="display:flex; justify-content:space-between; padding:10px;"><span>${p}</span>
+        <button onclick="deleteProfile('${p}')" style="color:red; background:none; border:none;">×</button></div>`).join('');
+    updateProfileDropdown();
+    localStorage.setItem('pw_profiles', JSON.stringify(profiles));
+}
+
+function addProfile() { let n = prompt("Profile:"); if(n) { profiles.push(n); renderProfiles(); } }
+function deleteProfile(n) { profiles = profiles.filter(p => p !== n); renderProfiles(); }
+function updateProfileDropdown() { const s = document.getElementById('prof-select'); if(s) s.innerHTML = profiles.map(p => `<option value="${p}">${p}</option>`).join(''); }
+
+// --- 5. NAVIGATION ---
 
 function tab(t) {
     document.querySelectorAll('.view-section, .nav-btn').forEach(x => x.classList.remove('active'));
     document.getElementById(t).classList.add('active');
     document.getElementById('btn-' + t).classList.add('active');
-    const sub = document.getElementById('sub-nav-bar');
-    if(t==='db') {
-        sub.style.display='flex';
-        sub.innerHTML = `<button class="sub-btn active" onclick="subTab('paints')">PAINTS</button><button class="sub-btn" onclick="subTab('clients')">CLIENTS</button>`;
-        renderPaints(); renderClients();
-    } else { sub.style.display='none'; }
-    if(t==='history') renderHistory();
+    const nav = document.getElementById('sub-nav-bar');
+    if (subMenus[t]) {
+        nav.style.display = 'flex';
+        nav.innerHTML = subMenus[t].map((s, i) => `<button class="sub-btn ${i===0?'active':''}" onclick="subTab('${t}','${s.id}',this)">${s.label}</button>`).join('');
+        subTab(t, subMenus[t][0].id, nav.querySelector('.sub-btn'));
+    } else { nav.style.display = 'none'; }
 }
 
-function subTab(st) {
-    document.querySelectorAll('.sub-section').forEach(s => s.style.display='none');
-    document.getElementById('db-'+st).style.display='block';
-    document.querySelectorAll('.sub-btn').forEach(b => b.classList.toggle('active', b.innerText.toLowerCase()===st));
+function subTab(p, c, btn) {
+    if (btn) {
+        btn.parentNode.querySelectorAll('.sub-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    }
+    document.querySelectorAll('.sub-section').forEach(s => s.classList.remove('active'));
+    let pre = (p === 'db') ? 'db-' : (p === 'admin') ? 'adm-' : 'settings-';
+    const target = document.getElementById(pre + c);
+    if (target) target.classList.add('active');
+    if (c === 'paints') renderPaints();
+    if (c === 'clients') renderClients();
+    if (c === 'profiles') renderProfiles();
 }
 
-function addItem(key, inputId, callback) {
-    const val = document.getElementById(inputId).value;
-    if(!val) return;
-    db[key].push(val);
-    localStorage.setItem('pw_'+key, JSON.stringify(db[key]));
-    document.getElementById(inputId).value = '';
-    callback(); syncSelects();
+function syncDropdowns() {
+    const brands = [...new Set(paints.map(p => p.brand))];
+    const bSel = document.getElementById('pBrand');
+    if(bSel) bSel.innerHTML = brands.map(b => `<option value="${b}">${b}</option>`).join('');
+    updateColorDropdown();
 }
 
-function renderPaints() {
-    document.getElementById('paint-list').innerHTML = db.paints.map((p,i) => `<div style="display:flex; justify-content:space-between; padding:8px; border-bottom:1px solid #eee;">${p} <b onclick="db.paints.splice(${i},1);localStorage.setItem('pw_paints',JSON.stringify(db.paints));renderPaints();syncSelects()" style="color:red">DEL</b></div>`).join('');
+function updateColorDropdown() {
+    const b = document.getElementById('pBrand').value;
+    const colors = [...new Set(paints.filter(p => p.brand === b).map(p => p.color))];
+    document.getElementById('pColor').innerHTML = colors.map(c => `<option value="${c}">${c}</option>`).join('');
+    updateFinishDropdown();
 }
 
-function renderClients() {
-    document.getElementById('client-list').innerHTML = db.clients.map((c,i) => `<div style="display:flex; justify-content:space-between; padding:8px; border-bottom:1px solid #eee;">${c} <b onclick="db.clients.splice(${i},1);localStorage.setItem('pw_clients',JSON.stringify(db.clients));renderClients();syncSelects()" style="color:red">DEL</b></div>`).join('');
+function updateFinishDropdown() {
+    const b = document.getElementById('pBrand').value, c = document.getElementById('pColor').value;
+    const fins = paints.filter(p => p.brand === b && p.color === c);
+    document.getElementById('pFinish').innerHTML = fins.map(p => `<option value="${p.finish}">${p.finish}</option>`).join('');
+    autoFillEvic();
 }
 
-function syncSelects() {
-    document.getElementById('pColor').innerHTML = db.paints.map(p => `<option value="${p}">${p}</option>`).join('');
-    document.getElementById('cli').innerHTML = db.clients.map(c => `<option value="${c}">${c}</option>`).join('');
+function autoFillEvic() {
+    const b = document.getElementById('pBrand').value, c = document.getElementById('pColor').value, f = document.getElementById('pFinish').value;
+    const m = paints.find(p => p.brand === b && p.color === c && p.finish === f);
+    if(m) document.getElementById('pFormula').value = m.evic;
 }
 
-function saveJob() {
-    if (items.length === 0) return;
-    let hist = JSON.parse(localStorage.getItem('pw_history')) || [];
-    hist.unshift({ no: document.getElementById('jN').value || "N/A", items: [...items], total: document.getElementById('tA').innerText, date: new Date().toLocaleString() });
-    localStorage.setItem('pw_history', JSON.stringify(hist.slice(0, 10)));
-    alert("-In the Bank-");
-    items = []; document.getElementById('jN').value = ''; document.getElementById('jNm').value = ''; render();
+// --- STYLE SELECTOR (Flat / Moulded) ---
+function setF(f) {
+    fStyle = f;
+    // Update the UI active states
+    document.getElementById('fF').classList.toggle('active', f === 'Flat');
+    document.getElementById('fM').classList.toggle('active', f === 'Moulded');
+    
+    // Logic: If it's Moulded, you might want to trigger a math update 
+    // or just store the state for the PDF later.
+    up(); 
 }
 
-function renderHistory() {
-    const h = JSON.parse(localStorage.getItem('pw_history')) || [];
-    document.getElementById('history-list').innerHTML = h.map(j => `<div class="card" style="border-left:8px solid var(--gs);"><b>${j.no}</b> - ${j.total} SQM<br><small>${j.date}</small></div>`).join('');
+// --- SEARCH FILTERS (Restoring Database connectivity) ---
+function filterPaints() {
+    const val = document.getElementById('paintSearch').value;
+    renderPaints(val);
 }
 
-function setP(t) { pType = t; document.querySelectorAll('.p-card').forEach(c => c.classList.remove('active')); event.currentTarget.classList.add('active'); up(); }
-function setM(m) { mode = m; document.querySelectorAll('#mSS, #mDS, #mSE').forEach(b => b.classList.remove('active')); document.getElementById('m'+m).classList.add('active'); up(); }
-function tE(el) { el.classList.toggle('active'); up(); }
+function filterClients() {
+    const val = document.getElementById('clientSearch').value;
+    renderClients(val);
+}
 
-window.onload = () => { syncSelects(); tab('measure'); };
+function filterProfiles() {
+    const val = document.getElementById('profileSearch').value;
+    renderProfiles(val);
+}
+    
+window.onload = () => { syncDropdowns(); updateClientDropdown(); updateProfileDropdown(); tab('measure'); };
+</script>
+    
 </script>
 </body>
-</html>
+</html>  
