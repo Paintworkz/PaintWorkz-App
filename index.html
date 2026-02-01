@@ -80,7 +80,7 @@
             <h3 style="margin-top:0; color:var(--gs); text-align:center; font-weight:900;">NEW MEASUREMENT</h3>
             <div style="display:flex;gap:8px;"><select id="cli"></select><input type="text" id="jN" placeholder="JOB #" style="width:100px;"></div>
             <input type="text" id="jNm" placeholder="JOB NAME">
-            <div style="display:flex;gap:8px;"><select id="pBrand"><option>Wattyl</option><option>Dulux</option></select><select id="pColor"><option>Vivid White</option></select></div>
+            <div style="display:flex;gap:8px;"><select id="pBrand"><option>Wattyl</option><option>Dulux</option></select><select id="pColor"onchange="autoFillEvic()"></select></div>
             <div style="display:flex;gap:8px;"><select id="pFinish"><option>G30 Satin</option><option>G10 Matt</option></select><input type="text" id="pFormula" placeholder="Formula"></div>
 
             <div style="display:flex; gap:8px; margin-top:10px;">
@@ -146,11 +146,18 @@
             <div id="profile-list-container" style="max-height: 400px; overflow-y: auto;"></div>
         </div>
 
-        <div id="db-paints" class="sub-section">
-            <div class="card"><h3>Paint Database</h3><p>Paint formula management coming soon...</p></div>
+<div id="db-paints" class="sub-section">
+    <div class="card" style="position: sticky; top: 0; z-index: 10; background: #fff; margin-bottom: 10px;">
+        <h3 style="margin-top:0;">Paint & Evic Database</h3>
+        <div style="display:flex; gap:8px; margin-bottom:10px;">
+            <input type="text" id="paintSearch" placeholder="🔍 Search Color or Brand..." oninput="filterPaints()" style="flex:1;">
+            <button onclick="addPaint()" style="width:50px; background:var(--gs); border:none; border-radius:10px; font-weight:900; font-size:20px;">+</button>
         </div>
     </div>
-
+    <div id="paint-list-container" style="max-height: 400px; overflow-y: auto;">
+        </div>
+</div>
+        
     <div id="history" class="view-section">
         <div id="history-list"></div>
     </div>
@@ -218,6 +225,80 @@
         ]
     };
 
+// Master Paint Database
+let paints = JSON.parse(localStorage.getItem('pw_paints')) || [
+    {brand: "Dulux", color: "Lexicon Quarter", evic: "EP-LX-Q"},
+    {brand: "Dulux", color: "Natural White", evic: "EP-NW-FS"},
+    {brand: "Wattyl", color: "Vivid White", evic: "EP-VW-STD"},
+    {brand: "Taubmans", color: "Crisp White", evic: "EP-CW-01"}
+];
+
+function renderPaints(filter = "") {
+    const container = document.getElementById('paint-list-container');
+    if(!container) return;
+
+    container.innerHTML = paints
+        .filter(p => p.color.toLowerCase().includes(filter.toLowerCase()) || p.brand.toLowerCase().includes(filter.toLowerCase()))
+        .map(p => `
+            <div class="card" style="display:flex; justify-content:space-between; align-items:center; padding:10px; margin-bottom:5px; border-left: 5px solid #d4af37;">
+                <div style="flex:1">
+                    <div style="font-size:10px; color:#888; font-weight:900; text-transform:uppercase;">${p.brand}</div>
+                    <div style="font-weight:700; font-size:16px;">${p.color}</div>
+                </div>
+                <div style="text-align:right; margin-right:15px;">
+                    <div style="font-size:9px; color:#aaa;">EVIC CODE</div>
+                    <div style="font-family:monospace; font-weight:900; background:#eee; padding:2px 5px; border-radius:4px;">${p.evic}</div>
+                </div>
+                <button onclick="deletePaint('${p.color}')" style="background:none; border:none; color:#ff3b30; font-size:18px;">×</button>
+            </div>
+        `).join('');
+
+    updateMeasurePaints();
+    localStorage.setItem('pw_paints', JSON.stringify(paints));
+}
+
+function filterPaints() { renderPaints(document.getElementById('paintSearch').value); }
+
+function addPaint() {
+    const brand = prompt("Enter Brand (Dulux, Wattyl, etc):");
+    const color = prompt("Enter Color Name:");
+    const evic = prompt("Enter Evic Formula Code:");
+    if(brand && color && evic) {
+        paints.push({brand, color, evic});
+        renderPaints();
+    }
+}
+
+function deletePaint(color) {
+    if(confirm("Delete " + color + "?")) {
+        paints = paints.filter(p => p.color !== color);
+        renderPaints();
+    }
+}
+
+function autoFillEvic() {
+    const selectedColor = document.getElementById('pColor').value;
+    const paintMatch = paints.find(p => p.color === selectedColor);
+    const formulaInput = document.getElementById('pFormula');
+    
+    if(paintMatch && formulaInput) {
+        formulaInput.value = paintMatch.evic; // Puts the Evic code in the Formula box automatically
+    }
+}
+    
+// THIS UPDATES THE MEASURE TAB DROPDOWN
+function updateMeasurePaints() {
+    const colorSelect = document.getElementById('pColor');
+    if(colorSelect) {
+        colorSelect.innerHTML = paints.map(p => `<option value="${p.color}">${p.color} (${p.brand})</option>`).join('');
+    }
+}
+
+// Add this to your window.onload
+window.addEventListener('DOMContentLoaded', () => {
+    renderPaints();
+});
+    
     // --- CLIENT LOGIC ---
     let clients = JSON.parse(localStorage.getItem('pw_clients')) || ["ABM", "Absolute Kitchens", "Advanced Cabinetry", "AKC Kitchens", "Braw Creative", "Brian Moloney", "Cabinets & Stone", "Cabinets by Michael", "Chooka", "CKK", "Clover Doors", "Complete Style Joinery", "Concept 2 Reality", "Coronet Kitchens", "Create a Kitchen", "Creative Cabinetry", "Cutting Edge Joinery", "Driscolls Joinery", "Evolution Kitchens and Joinery", "Geoff Frost Builders", "GM Cabinets", "Grampians Joinery", "Grovedale Kitchens", "Gunning Concepts", "Hamilton Sheetmetal", "Harris Cabinets", "Howe Kitchens & Joinery", "Hy-Craft", "Jardines Cabinets", "Joinery by Jarrod", "Jonassons", "Kingston Kabinets", "Kitchens U Build", "Kyle Hendy", "Leighton Park", "Matthews Joinery", "Ocean Grove Joinery", "Onshore", "R J Walter", "Richardson Joinery", "Schier Cabinet Makers", "Snaauws Kitchens", "SRT Cabinetry", "Stawell Joinery", "Stephensons Kitchens", "T&J Kitchens", "Tony Lambert Kitchens", "Total Kitchen Solutions", "Trendset Kitchens", "Troy Turner", "Ultrabuild", "VG Cabinets", "VJS Geelong", "VJS Shepparton", "Westend Cabinetry"];
     
