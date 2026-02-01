@@ -240,36 +240,32 @@ function setF(f) {
     document.getElementById('fM').classList.toggle('active', f==='Moulded');
 }
 
-// 3. Edge Box Toggle
+// 1. Edge Box Toggle (Now allows multiple selections in all modes)
 function tE(el) {
-    if (mode === 'SE') {
-        // Exclusive selection: only one allowed in SE mode
-        document.querySelectorAll('.edge-box').forEach(box => box.classList.remove('active'));
-    }
     el.classList.toggle('active');
     up();
 }
+    
 function up() {
     let h = document.getElementById('h').value || 0, w = document.getElementById('w').value || 0;
     let sqm = (h * w) / 1000000;
     document.getElementById('liveSq').innerText = sqm.toFixed(3);
 }
 
-// 4. THE RULES: This function handles your specific requirements
+// 2. THE RULES: Handles the default starting points
 function resetEdges() {
     // Clear everything first
     document.querySelectorAll('.edge-box').forEach(el => el.classList.remove('active'));
 
     if (mode === 'SE') {
-        // RULE 3: SE always defaults to one long edge (E1)
+        // RULE: SE defaults to one long edge, but you can click others now
         document.getElementById('E1').classList.add('active');
     } else {
-        // RULE 1 & 2: Depend on Part Type
+        // RULE: Door/Drawer starts with all 4, Panel starts with 0
         if (pType === 'Door' || pType === 'Drawer') {
-            // Door/Drawer = All 4 edges
             document.querySelectorAll('.edge-box').forEach(el => el.classList.add('active'));
         } 
-        // Panel remains empty (Rule 1) because of the clear at the start of the function
+        // Panel remains empty by default
     }
 }
     
@@ -535,19 +531,34 @@ function render() {
         ts += parseFloat(it.sqm) * it.qty; 
         tq += it.qty;
 
-        // Calculate how many Long (L) and Short (S) edges are active
-        let L = (it.e[0] ? 1 : 0) + (it.e[1] ? 1 : 0);
-        let S = (it.e[2] ? 1 : 0) + (it.e[3] ? 1 : 0);
+// Inside the items.forEach loop in your render() function:
 
-        // Standard labels
-        let lbL = (L > 0) ? L + "L" : "";
-        let lbS = (S > 0) ? S + "S" : "";
+// 1. Calculate active edges
+let L = (it.e[0] ? 1 : 0) + (it.e[1] ? 1 : 0);
+let S = (it.e[2] ? 1 : 0) + (it.e[3] ? 1 : 0);
 
-        // Special SE (Single Edge) Mode logic
-        if (it.mode === 'SE') {
-            lbL = (L > 0) ? "1LR" : "";
-            lbS = (S > 0) ? "1SR" : "";
-        }
+// 2. Apply Naming (Standard vs SE Mode)
+let lbL = "";
+let lbS = "";
+
+if (it.mode === 'SE') {
+    lbL = (L > 0) ? "1LR" : "";
+    lbS = (S > 0) ? "1SR" : "";
+} else {
+    lbL = (L > 0) ? L + "L" : "";
+    lbS = (S > 0) ? S + "S" : "";
+}
+
+// 3. THE BLANKING RULE: If edge text would be 0S, 0L, 0SL, or 0SR, leave blank.
+// We also catch cases where L or S is 0 naturally.
+if (L === 0) lbL = "";
+if (S === 0) lbS = "";
+
+// Final check: if nothing is selected, ensure both are empty strings
+if (!lbL && !lbS) {
+    lbL = "";
+    lbS = "";
+}
 
         // --- YOUR CUSTOM RULE ---
         // If the combined result is 0L, 0S, or empty, wipe it out
