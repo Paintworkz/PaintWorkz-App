@@ -285,28 +285,57 @@ function deletePaint(color, finish) {
 }
 
 function openMixer(colorName, finishName) {
-    const paint = paints.find(p => p.color === colorName && p.finish === finishName);
-    const displayPaint = paint || { color: colorName, brand: "Unknown", recipe: { "Base": 1000 } };
+    const paintIndex = paints.findIndex(p => p.color === colorName && p.finish === finishName);
+    const displayPaint = paints[paintIndex] || { color: colorName, brand: "Unknown", recipe: { "White Base": 1000 } };
     
     let targetLtrs = prompt(`Mixing ${displayPaint.color} (${finishName}). Liters?`, "1");
     if(!targetLtrs || isNaN(targetLtrs)) return;
 
-    let resultHTML = `<div style="text-align:left; font-family:monospace; background:#f9f9f9; padding:15px; border-radius:10px; border:1px solid #ccc;">
+    let resultHTML = `<div id="recipe-display" style="text-align:left; font-family:monospace; background:#f9f9f9; padding:15px; border-radius:10px; border:1px solid #ccc;">
                         <h4 style="margin:0;">${displayPaint.brand} - ${displayPaint.color}</h4>
-                        <p>Finish: ${finishName}</p><hr>`;
+                        <p style="font-size:12px; color:#666;">Finish: ${finishName}</p><hr>`;
 
     Object.entries(displayPaint.recipe).forEach(([ing, grams]) => {
         resultHTML += `<div style="display:flex; justify-content:space-between; margin-bottom:5px;">
                         <span>${ing}:</span><span style="font-weight:900;">${(grams * targetLtrs).toFixed(1)}g</span>
                       </div>`;
     });
+    resultHTML += `</div>`;
 
     const mixModal = document.createElement('div');
-    mixModal.style = "position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:white; padding:20px; border-radius:15px; box-shadow:0 0 100px rgba(0,0,0,0.5); z-index:3000; width:80%; max-width:400px; text-align:center;";
-    mixModal.innerHTML = `<h3>Mixing Sheet</h3>${resultHTML}<br><button onclick="this.parentElement.remove()" style="width:100%; padding:15px; background:var(--gs); border:none; border-radius:10px; font-weight:900;">CLOSE</button>`;
+    mixModal.id = "mix-modal";
+    mixModal.style = "position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:white; padding:20px; border-radius:15px; box-shadow:0 0 100px rgba(0,0,0,0.5); z-index:3000; width:85%; max-width:400px; text-align:center;";
+    mixModal.innerHTML = `
+        <h3>Mixing Sheet</h3>
+        ${resultHTML}
+        <div style="display:flex; gap:10px; margin-top:15px;">
+            <button onclick="this.closest('#mix-modal').remove()" style="flex:1; padding:12px; background:#eee; border:none; border-radius:10px; font-weight:900;">CLOSE</button>
+            <button onclick="editRecipe(${paintIndex})" style="flex:1; padding:12px; background:var(--gs); border:none; border-radius:10px; font-weight:900;">EDIT RECIPE</button>
+        </div>`;
     document.body.appendChild(mixModal);
 }
 
+function editRecipe(index) {
+    const p = paints[index];
+    let newRecipeStr = prompt("Enter recipe (Ingredient:Grams), separated by commas:", 
+        Object.entries(p.recipe).map(([ing, g]) => `${ing}:${g}`).join(", ")
+    );
+
+    if (newRecipeStr) {
+        let newRecipe = {};
+        newRecipeStr.split(",").forEach(item => {
+            let [ing, g] = item.split(":");
+            if (ing && g) newRecipe[ing.trim()] = parseFloat(g.trim());
+        });
+        
+        paints[index].recipe = newRecipe;
+        localStorage.setItem('pw_paints', JSON.stringify(paints));
+        renderPaints();
+        document.getElementById('mix-modal').remove();
+        alert("Recipe Saved!");
+    }
+}
+    
 function autoFillEvic() {
     const selectedColor = document.getElementById('pColor').value;
     const paintMatch = paints.find(p => p.color === selectedColor);
