@@ -226,11 +226,12 @@
     };
 
     // --- PAINT DATABASE LOGIC ---
-    let paints = JSON.parse(localStorage.getItem('pw_paints')) || [
-        { brand: "Dulux", color: "Lexicon Quarter", evic: "EP-LX-Q", recipe: { "White Base": 950, "Black": 2.5, "Blue": 1.2 } },
-        { brand: "Wattyl", color: "Vivid White", evic: "EP-VW-STD", recipe: { "White Base": 1000 } }
-    ];
-
+let paints = JSON.parse(localStorage.getItem('pw_paints')) || [
+    { brand: "Dulux", color: "Lexicon Quarter", evic: "EP-LX-Q", recipe: { "White Base": 950, "Black": 2.5, "Blue": 1.2 } },
+    { brand: "Dulux", color: "Natural White", evic: "EP-NW", recipe: { "White Base": 980, "Yellow Oxide": 4 } },
+    { brand: "Wattyl", color: "Vivid White", evic: "EP-VW-STD", recipe: { "White Base": 1000 } },
+    { brand: "Wattyl", color: "Cloud Confetti", evic: "EP-CC", recipe: { "White Base": 920, "Black": 1.5 } }
+];
     function renderPaints(filter = "") {
         const container = document.getElementById('paint-list-container');
         if(!container) return;
@@ -263,29 +264,32 @@
         localStorage.setItem('pw_paints', JSON.stringify(paints));
     }
 
-    function openMixer(colorName) {
-        const paint = paints.find(p => p.color === colorName);
-        if(!paint || !paint.recipe) return;
-        let targetLtrs = prompt(`Mixing ${paint.color}. How many Liters?`, "1");
-        if(!targetLtrs || isNaN(targetLtrs)) return;
+function openMixer(colorName) {
+    const paint = paints.find(p => p.color === colorName);
+    
+    // If the paint isn't in your list yet, we'll create a default one so it doesn't "break"
+    const displayPaint = paint || { color: colorName, brand: "Unknown", recipe: { "Base": 1000 } };
+    
+    let targetLtrs = prompt(`Mixing ${displayPaint.color}. How many Liters?`, "1");
+    if(!targetLtrs || isNaN(targetLtrs)) return;
 
-        let resultHTML = `<div style="text-align:left; font-family:monospace; background:#f9f9f9; padding:15px; border-radius:10px; border:1px solid #ccc;">
-                            <h4 style="margin-top:0;">${paint.brand} - ${paint.color}</h4>
-                            <p><strong>Target:</strong> ${targetLtrs}L</p><hr>`;
+    let resultHTML = `<div style="text-align:left; font-family:monospace; background:#f9f9f9; padding:15px; border-radius:10px; border:1px solid #ccc;">
+                        <h4 style="margin-top:0;">${displayPaint.brand} - ${displayPaint.color}</h4>
+                        <p><strong>Target Volume:</strong> ${targetLtrs}L</p><hr>`;
 
-        Object.entries(paint.recipe).forEach(([ingredient, grams]) => {
-            resultHTML += `<div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-                            <span>${ingredient}:</span><span style="font-weight:900;">${(grams * targetLtrs).toFixed(1)}g</span>
-                          </div>`;
-        });
-        resultHTML += `</div>`;
+    // This calculates the grams based on the liters entered
+    Object.entries(displayPaint.recipe).forEach(([ingredient, grams]) => {
+        resultHTML += `<div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                        <span>${ingredient}:</span><span style="font-weight:900;">${(grams * targetLtrs).toFixed(1)}g</span>
+                      </div>`;
+    });
+    resultHTML += `</div>`;
 
-        const mixModal = document.createElement('div');
-        mixModal.style = "position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:white; padding:20px; border-radius:15px; box-shadow:0 0 100px rgba(0,0,0,0.5); z-index:3000; width:80%; max-width:400px; text-align:center;";
-        mixModal.innerHTML = `<h3>Mixing Sheet</h3>${resultHTML}<br><button onclick="this.parentElement.remove()" style="width:100%; padding:15px; background:var(--gs); border:none; border-radius:10px; font-weight:900;">CLOSE</button>`;
-        document.body.appendChild(mixModal);
-    }
-
+    const mixModal = document.createElement('div');
+    mixModal.style = "position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:white; padding:20px; border-radius:15px; box-shadow:0 0 100px rgba(0,0,0,0.5); z-index:3000; width:80%; max-width:400px; text-align:center;";
+    mixModal.innerHTML = `<h3>Mixing Sheet</h3>${resultHTML}<br><button onclick="this.parentElement.remove()" style="width:100%; padding:15px; background:var(--gs); border:none; border-radius:10px; font-weight:900;">CLOSE</button>`;
+    document.body.appendChild(mixModal);
+}
     function filterPaints() { renderPaints(document.getElementById('paintSearch').value); }
     function addPaint() {
         const brand = prompt("Brand:");
