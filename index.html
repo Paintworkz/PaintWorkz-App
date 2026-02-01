@@ -290,7 +290,7 @@ function up() {
 
 // --- 3. LIST MANAGEMENT ---
 
-// --- UPDATED ADD FUNCTION ---
+// --- SMART ADD FUNCTION ---
 function add() {
     up(); 
     const h = document.getElementById('h').value;
@@ -300,26 +300,42 @@ function add() {
     
     if(!h || !w) return;
 
-    items.push({
-        h, w, 
-        qty: q,
-        thk: document.getElementById('thk').value, // Saved Thickness
-        sqm: finalSqmValue,
-        mode: mode,
-        style: fStyle, // Saved Flat/Moulded
-        finish: document.getElementById('pFinish').value,
-        color: document.getElementById('pColor').value,
-        pType: pType, // Saved Door/Panel/Drawer
-        desc: document.getElementById('desc').value,
-        e: [
-            document.getElementById('E1').classList.contains('active'),
-            document.getElementById('E2').classList.contains('active'),
-            document.getElementById('E3').classList.contains('active'),
-            document.getElementById('E4').classList.contains('active')
-        ]
-    });
+    // Create a unique fingerprint for this specific part configuration
+    const edges = [
+        document.getElementById('E1').classList.contains('active'),
+        document.getElementById('E2').classList.contains('active'),
+        document.getElementById('E3').classList.contains('active'),
+        document.getElementById('E4').classList.contains('active')
+    ];
 
-    // Reset for next part
+    // Check if an identical item already exists in the list
+    const existingIndex = items.findIndex(it => 
+        it.h === h && it.w === w && it.thk === document.getElementById('thk').value &&
+        it.mode === mode && it.color === document.getElementById('pColor').value &&
+        it.finish === document.getElementById('pFinish').value &&
+        it.style === fStyle && it.pType === pType &&
+        JSON.stringify(it.e) === JSON.stringify(edges)
+    );
+
+    if (existingIndex > -1) {
+        // Just update the quantity of the existing item
+        items[existingIndex].qty += q;
+    } else {
+        // Add as a new row
+        items.push({
+            h, w, qty: q,
+            thk: document.getElementById('thk').value,
+            sqm: finalSqmValue,
+            mode: mode,
+            style: fStyle,
+            finish: document.getElementById('pFinish').value,
+            color: document.getElementById('pColor').value,
+            pType: pType,
+            desc: document.getElementById('desc').value,
+            e: edges
+        });
+    }
+
     document.getElementById('h').value = '';
     document.getElementById('w').value = '';
     document.getElementById('desc').value = '';
@@ -338,18 +354,19 @@ function render() {
         grandSqm += rowTotalSqm;
         grandQty += it.qty;
 
-        // Math for Edge Labels
-        let L = (it.e[0] ? 1 : 0) + (it.e[1] ? 1 : 0);
-        let S = (it.e[2] ? 1 : 0) + (it.e[3] ? 1 : 0);
+        let L_count = (it.e[0] ? 1 : 0) + (it.e[1] ? 1 : 0);
+        let S_count = (it.e[2] ? 1 : 0) + (it.e[3] ? 1 : 0);
         
-        // Apply Edge Rules (Standard vs SE)
-        let lbL = (it.mode === 'SE') ? (L > 0 ? "1LR" : "") : (L > 0 ? L + "L" : "");
-        let lbS = (it.mode === 'SE') ? (S > 0 ? "1SR" : "") : (S > 0 ? S + "S" : "");
+        // DYNAMIC SE LABELS: 1LR, 2LR, 1SR, 2SR
+        let lbL = (it.mode === 'SE') ? (L_count > 0 ? L_count + "LR" : "") : (L_count > 0 ? L_count + "L" : "");
+        let lbS = (it.mode === 'SE') ? (S_count > 0 ? S_count + "SR" : "") : (S_count > 0 ? S_count + "S" : "");
 
-        // Label Layout
         l.innerHTML += `
         <div class="card" style="display:flex;align-items:center;gap:10px;padding:8px;">
-            <div class="qty-bubble">${it.qty}</div>
+            <input type="number" value="${it.qty}" 
+                onchange="items[${i}].qty = parseInt(this.value) || 1; render();"
+                style="width: 45px; height: 45px; text-align: center; font-weight: 900; background: #f0f0f5; border: 1px solid #ccc; border-radius: 10px; padding: 0;">
+            
             <div style="flex:1">
                 <div style="font-weight:900;font-size:18px;">${it.h} x ${it.w} <span style="font-size:12px; color:#888;">(${it.thk}mm)</span></div>
                 <div style="font-size:11px;color:#666;">
@@ -358,7 +375,6 @@ function render() {
                 <div style="margin-top:4px;">
                     ${lbL ? `<span class="edge-pill edge-L">${lbL}</span>` : ''}
                     ${lbS ? `<span class="edge-pill edge-S">${lbS}</span>` : ''}
-                    <span style="font-size:10px; color:#999; margin-left:5px;">${it.desc}</span>
                 </div>
             </div>
             <div style="text-align:right; margin-right:10px;">
