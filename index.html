@@ -204,6 +204,7 @@
 </div>
     
 <script>
+   <script>
     let items = [], mode = 'SS', finish = 'Flat', pType = 'Panel';
 
     const subMenus = {
@@ -225,156 +226,87 @@
         ]
     };
 
-// Grams per 1 Liter of finished paint
-let paints = JSON.parse(localStorage.getItem('pw_paints')) || [
-    {
-        brand: "Dulux", 
-        color: "Lexicon Quarter", 
-        evic: "EP-LX-Q",
-        recipe: { "White Base": 950, "Black": 2.5, "Blue": 1.2 }
-    },
-    {
-        brand: "Wattyl", 
-        color: "Vivid White", 
-        evic: "EP-VW-STD",
-        recipe: { "White Base": 1000 }
-    }
-];
+    // --- PAINT DATABASE LOGIC ---
+    let paints = JSON.parse(localStorage.getItem('pw_paints')) || [
+        { brand: "Dulux", color: "Lexicon Quarter", evic: "EP-LX-Q", recipe: { "White Base": 950, "Black": 2.5, "Blue": 1.2 } },
+        { brand: "Wattyl", color: "Vivid White", evic: "EP-VW-STD", recipe: { "White Base": 1000 } }
+    ];
 
-function openMixer(colorName) {
-    const paint = paints.find(p => p.color === colorName);
-    if(!paint) return;
+    function renderPaints(filter = "") {
+        const container = document.getElementById('paint-list-container');
+        if(!container) return;
 
-    let targetLtrs = prompt(`Mixing ${paint.color}. How many Liters do you need?`, "1");
-    if(!targetLtrs || isNaN(targetLtrs)) return;
-
-    let totalWeight = 0;
-    let resultHTML = `<div style="text-align:left; font-family:monospace; background:#f9f9f9; padding:15px; border-radius:10px; border:1px solid #ccc;">
-                        <h4 style="margin-top:0;">${paint.brand} - ${paint.color}</h4>
-                        <p><strong>Target Volume:</strong> ${targetLtrs}L</p><hr>`;
-
-    Object.entries(paint.recipe).forEach(([ingredient, grams]) => {
-        let mixWeight = (grams * targetLtrs).toFixed(1);
-        resultHTML += `<div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-                        <span>${ingredient}:</span>
-                        <span style="font-weight:900;">${mixWeight}g</span>
-                      </div>`;
-    });
-
-    resultHTML += `</div>`;
-
-    // Displaying in a simple alert-style modal (or you can inject this into a div)
-    const mixModal = document.createElement('div');
-    mixModal.style = "position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:white; padding:20px; border-radius:15px; box-shadow:0 0 100px rgba(0,0,0,0.5); z-index:3000; width:80%; max-width:400px; text-align:center;";
-    mixModal.innerHTML = `<h3>Mixing Sheet</h3>${resultHTML}<br><button onclick="this.parentElement.remove()" style="width:100%; padding:15px; background:var(--gs); border:none; border-radius:10px; font-weight:900;">CLOSE</button>`;
-    document.body.appendChild(mixModal);
-}
-    
-function renderPaints(filter = "") {
-    const container = document.getElementById('paint-list-container');
-    if(!container) return;
-
-    container.innerHTML = paints
-        .filter(p => p.color.toLowerCase().includes(filter.toLowerCase()))
-        .map(p => {
-            // Create a small string showing the ingredients
-            let recipeSummary = Object.entries(p.recipe).map(([ing, qty]) => `${ing}: ${qty}g`).join(', ');
-            
-            return `
-            <div class="card" style="border-left: 5px solid var(--gs);">
-                <div style="display:flex; justify-content:space-between; align-items:start;">
-                    <div>
-                        <div style="font-size:10px; color:#888; font-weight:900;">${p.brand}</div>
-                        <div style="font-weight:700; font-size:18px;">${p.color}</div>
-                        <div style="font-size:11px; color:#555; margin-top:5px;"><strong>Recipe (per 1L):</strong> ${recipeSummary}</div>
+        container.innerHTML = paints
+            .filter(p => p.color.toLowerCase().includes(filter.toLowerCase()) || p.brand.toLowerCase().includes(filter.toLowerCase()))
+            .map(p => {
+                let recipeSummary = p.recipe ? Object.entries(p.recipe).map(([ing, qty]) => `${ing}: ${qty}g`).join(', ') : "No recipe";
+                return `
+                <div class="card" style="border-left: 5px solid var(--gs);">
+                    <div style="display:flex; justify-content:space-between; align-items:start;">
+                        <div style="flex:1">
+                            <div style="font-size:10px; color:#888; font-weight:900;">${p.brand}</div>
+                            <div style="font-weight:700; font-size:18px;">${p.color}</div>
+                            <div style="font-size:11px; color:#555; margin-top:5px;"><strong>Recipe:</strong> ${recipeSummary}</div>
+                        </div>
+                        <div style="text-align:right;">
+                            <div style="font-size:9px; color:#aaa;">EVIC</div>
+                            <div style="font-family:monospace; font-weight:900; background:#eee; padding:2px 5px;">${p.evic}</div>
+                            <div style="margin-top:10px;">
+                                <button onclick="openMixer('${p.color}')" style="background:#000; color:white; border:none; padding:5px 10px; border-radius:5px; font-size:10px; font-weight:900;">🧪 MIX</button>
+                                <button onclick="deletePaint('${p.color}')" style="background:none; border:none; color:#ff3b30; font-size:18px; margin-left:10px;">×</button>
+                            </div>
+                        </div>
                     </div>
-                    <div style="text-align:right;">
-                        <div style="font-size:9px; color:#aaa;">EVIC</div>
-                        <div style="font-family:monospace; font-weight:900; background:#eee; padding:2px 5px;">${p.evic}</div>
-                        <button onclick="openMixer('${p.color}')" style="margin-top:10px; background:#000; color:white; border:none; padding:5px 10px; border-radius:5px; font-size:10px; font-weight:900;">🧪 MIX</button>
-                    </div>
-                </div>
-            </div>`;
-        }).join('');
-}
-    
-// Master Paint Database
-let paints = JSON.parse(localStorage.getItem('pw_paints')) || [
-    {brand: "Dulux", color: "Lexicon Quarter", evic: "EP-LX-Q"},
-    {brand: "Dulux", color: "Natural White", evic: "EP-NW-FS"},
-    {brand: "Wattyl", color: "Vivid White", evic: "EP-VW-STD"},
-    {brand: "Taubmans", color: "Crisp White", evic: "EP-CW-01"}
-];
+                </div>`;
+            }).join('');
 
-function renderPaints(filter = "") {
-    const container = document.getElementById('paint-list-container');
-    if(!container) return;
-
-    container.innerHTML = paints
-        .filter(p => p.color.toLowerCase().includes(filter.toLowerCase()) || p.brand.toLowerCase().includes(filter.toLowerCase()))
-        .map(p => `
-            <div class="card" style="display:flex; justify-content:space-between; align-items:center; padding:10px; margin-bottom:5px; border-left: 5px solid #d4af37;">
-                <div style="flex:1">
-                    <div style="font-size:10px; color:#888; font-weight:900; text-transform:uppercase;">${p.brand}</div>
-                    <div style="font-weight:700; font-size:16px;">${p.color}</div>
-                </div>
-                <div style="text-align:right; margin-right:15px;">
-                    <div style="font-size:9px; color:#aaa;">EVIC CODE</div>
-                    <div style="font-family:monospace; font-weight:900; background:#eee; padding:2px 5px; border-radius:4px;">${p.evic}</div>
-                </div>
-                <button onclick="deletePaint('${p.color}')" style="background:none; border:none; color:#ff3b30; font-size:18px;">×</button>
-            </div>
-        `).join('');
-
-    updateMeasurePaints();
-    localStorage.setItem('pw_paints', JSON.stringify(paints));
-}
-
-function filterPaints() { renderPaints(document.getElementById('paintSearch').value); }
-
-function addPaint() {
-    const brand = prompt("Enter Brand (Dulux, Wattyl, etc):");
-    const color = prompt("Enter Color Name:");
-    const evic = prompt("Enter Evic Formula Code:");
-    if(brand && color && evic) {
-        paints.push({brand, color, evic});
-        renderPaints();
+        updateMeasurePaints();
+        localStorage.setItem('pw_paints', JSON.stringify(paints));
     }
-}
 
-function deletePaint(color) {
-    if(confirm("Delete " + color + "?")) {
-        paints = paints.filter(p => p.color !== color);
-        renderPaints();
-    }
-}
+    function openMixer(colorName) {
+        const paint = paints.find(p => p.color === colorName);
+        if(!paint || !paint.recipe) return;
+        let targetLtrs = prompt(`Mixing ${paint.color}. How many Liters?`, "1");
+        if(!targetLtrs || isNaN(targetLtrs)) return;
 
-function autoFillEvic() {
-    const selectedColor = document.getElementById('pColor').value;
-    const paintMatch = paints.find(p => p.color === selectedColor);
-    const formulaInput = document.getElementById('pFormula');
-    
-    if(paintMatch && formulaInput) {
-        formulaInput.value = paintMatch.evic; // Puts the Evic code in the Formula box automatically
-    }
-}
-    
-// THIS UPDATES THE MEASURE TAB DROPDOWN
-function updateMeasurePaints() {
-    const colorSelect = document.getElementById('pColor');
-    if(colorSelect) {
-        colorSelect.innerHTML = paints.map(p => `<option value="${p.color}">${p.color} (${p.brand})</option>`).join('');
-    }
-}
+        let resultHTML = `<div style="text-align:left; font-family:monospace; background:#f9f9f9; padding:15px; border-radius:10px; border:1px solid #ccc;">
+                            <h4 style="margin-top:0;">${paint.brand} - ${paint.color}</h4>
+                            <p><strong>Target:</strong> ${targetLtrs}L</p><hr>`;
 
-// Add this to your window.onload
-window.addEventListener('DOMContentLoaded', () => {
-    renderPaints();
-});
-    
+        Object.entries(paint.recipe).forEach(([ingredient, grams]) => {
+            resultHTML += `<div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                            <span>${ingredient}:</span><span style="font-weight:900;">${(grams * targetLtrs).toFixed(1)}g</span>
+                          </div>`;
+        });
+        resultHTML += `</div>`;
+
+        const mixModal = document.createElement('div');
+        mixModal.style = "position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:white; padding:20px; border-radius:15px; box-shadow:0 0 100px rgba(0,0,0,0.5); z-index:3000; width:80%; max-width:400px; text-align:center;";
+        mixModal.innerHTML = `<h3>Mixing Sheet</h3>${resultHTML}<br><button onclick="this.parentElement.remove()" style="width:100%; padding:15px; background:var(--gs); border:none; border-radius:10px; font-weight:900;">CLOSE</button>`;
+        document.body.appendChild(mixModal);
+    }
+
+    function filterPaints() { renderPaints(document.getElementById('paintSearch').value); }
+    function addPaint() {
+        const brand = prompt("Brand:");
+        const color = prompt("Color:");
+        const evic = prompt("Evic Code:");
+        if(brand && color && evic) { paints.push({brand, color, evic, recipe: {"White Base": 1000}}); renderPaints(); }
+    }
+    function deletePaint(color) { if(confirm("Delete " + color + "?")) { paints = paints.filter(p => p.color !== color); renderPaints(); } }
+    function autoFillEvic() {
+        const selectedColor = document.getElementById('pColor').value;
+        const paintMatch = paints.find(p => p.color === selectedColor);
+        if(paintMatch) document.getElementById('pFormula').value = paintMatch.evic;
+    }
+    function updateMeasurePaints() {
+        const colorSelect = document.getElementById('pColor');
+        if(colorSelect) colorSelect.innerHTML = paints.map(p => `<option value="${p.color}">${p.color} (${p.brand})</option>`).join('');
+    }
+
     // --- CLIENT LOGIC ---
-    let clients = JSON.parse(localStorage.getItem('pw_clients')) || ["ABM", "Absolute Kitchens", "Advanced Cabinetry", "AKC Kitchens", "Braw Creative", "Brian Moloney", "Cabinets & Stone", "Cabinets by Michael", "Chooka", "CKK", "Clover Doors", "Complete Style Joinery", "Concept 2 Reality", "Coronet Kitchens", "Create a Kitchen", "Creative Cabinetry", "Cutting Edge Joinery", "Driscolls Joinery", "Evolution Kitchens and Joinery", "Geoff Frost Builders", "GM Cabinets", "Grampians Joinery", "Grovedale Kitchens", "Gunning Concepts", "Hamilton Sheetmetal", "Harris Cabinets", "Howe Kitchens & Joinery", "Hy-Craft", "Jardines Cabinets", "Joinery by Jarrod", "Jonassons", "Kingston Kabinets", "Kitchens U Build", "Kyle Hendy", "Leighton Park", "Matthews Joinery", "Ocean Grove Joinery", "Onshore", "R J Walter", "Richardson Joinery", "Schier Cabinet Makers", "Snaauws Kitchens", "SRT Cabinetry", "Stawell Joinery", "Stephensons Kitchens", "T&J Kitchens", "Tony Lambert Kitchens", "Total Kitchen Solutions", "Trendset Kitchens", "Troy Turner", "Ultrabuild", "VG Cabinets", "VJS Geelong", "VJS Shepparton", "Westend Cabinetry"];
-    
+    let clients = JSON.parse(localStorage.getItem('pw_clients')) || ["ABM", "Absolute Kitchens", "Westend Cabinetry"];
     function renderClients(filter = "") {
         const container = document.getElementById('client-list-container');
         if(!container) return;
@@ -397,8 +329,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- PROFILE LOGIC ---
-    let profiles = JSON.parse(localStorage.getItem('pw_profiles')) || ["Plain (101)", "J-Mould (102)", "Sharknose (103)", "Bevelled Edge (104)", "Ashlee (201)", "Hamilton (202)", "Vertical Grooves (203)", "Tarrone (301)", "Bobby (302)", "Orford (303)", "Shaker (401)", "Shaker 45 (402)", "Shaker w/Lines (403)", "Jack (404)", "Georgia (501)", "Branxholme (502)", "Rosebrook (503)", "Benchtop", "Molding"];
-    
+    let profiles = JSON.parse(localStorage.getItem('pw_profiles')) || ["Plain (101)", "Shaker (401)"];
     function renderProfiles(filter = "") {
         const container = document.getElementById('profile-list-container');
         if(!container) return;
@@ -430,7 +361,6 @@ window.addEventListener('DOMContentLoaded', () => {
             nav.innerHTML = subMenus[t].map((s, i) => `<button class="sub-btn ${i===0?'active':''}" onclick="subTab('${t}','${s.id}',this)">${s.label}</button>`).join('');
             subTab(t, subMenus[t][0].id, {parentNode: nav, classList: {add:()=>{}} }); 
         } else { nav.style.display = 'none'; }
-        if(t === 'history') renderHistory();
     }
 
     function subTab(p, c, btn) {
@@ -471,8 +401,11 @@ window.addEventListener('DOMContentLoaded', () => {
         items.forEach((it,i)=>{
             ts += parseFloat(it.sqm)*it.qty; tq += it.qty;
             let L=(it.e[0]?1:0)+(it.e[1]?1:0), S=(it.e[2]?1:0)+(it.e[3]?1:0);
+            
+            // Apply Edge Label Logic (Rule: 0S, 0L, 0SL, 0SR = blank)
             let lbL = (L > 0) ? (it.mode === 'SE' ? "1LR" : L + "L") : "";
             let lbS = (S > 0) ? (it.mode === 'SE' ? "1SR" : S + "S") : "";
+
             l.innerHTML += `<div class="card" style="display:flex;align-items:center;gap:10px;padding:8px;"><div class="qty-bubble">${it.qty}</div><div style="flex:1"><div style="font-weight:900;font-size:18px;">${it.h} x ${it.w} x ${it.thk}</div><div style="font-size:11px;font-weight:700;color:#666;">${it.desc||'No Desc'} (${it.pType})</div><div style="margin-top:6px;">${it.finish==='Moulded'?'<div class="mld-bubble">MOULDED</div>':''}${lbL?`<span class="edge-pill edge-L">${lbL}</span>`:''}${lbS?`<span class="edge-pill edge-S">${lbS}</span>`:''}</div></div><div class="mode-box mode-${it.mode}">${it.mode}</div><button onclick="items.splice(${i},1);render()" style="color:red;border:0;background:0;font-size:26px;font-weight:900;">×</button></div>`;
         });
         document.getElementById('tA').innerText=ts.toFixed(3); document.getElementById('tQ').innerText=tq;
@@ -481,29 +414,29 @@ window.addEventListener('DOMContentLoaded', () => {
     // --- STORAGE ---
     function saveJob() {
         if (items.length === 0) return;
-        let job = { id: Date.now(), name: document.getElementById('jNm').value || 'Untitled', num: document.getElementById('jN').value || '000', client: document.getElementById('cli').value, parts: [...items], totalSqm: document.getElementById('tA').innerText, date: new Date().toLocaleDateString() };
+        let job = { 
+            id: Date.now(), 
+            name: document.getElementById('jNm').value || 'Untitled', 
+            num: document.getElementById('jN').value || '000', 
+            client: document.getElementById('cli').value, 
+            parts: [...items], 
+            totalSqm: document.getElementById('tA').innerText, 
+            date: new Date().toLocaleDateString() 
+        };
         let h = JSON.parse(localStorage.getItem('pw_history') || '[]');
-        h.unshift(job); localStorage.setItem('pw_history', JSON.stringify(h));
-        items = []; render(); alert("Job Saved!");
-    }
-    function renderHistory() {
-        const l = document.getElementById('history-list'); l.innerHTML = `<h2 style="text-align:center;">SAVED JOBS</h2>`;
-        let h = JSON.parse(localStorage.getItem('pw_history') || '[]');
-        h.forEach(j => {
-            l.innerHTML += `<div class="history-card"><div><div style="font-weight:900;">#${j.num} - ${j.name}</div><div style="font-size:11px;color:#666;">${j.date} | ${j.parts.length} Items</div></div><div style="display:flex;gap:8px;"><button onclick="recallJob(${j.id})" style="background:#34c759;color:#fff;border:0;padding:8px;border-radius:5px;">RECALL</button><button onclick="deleteJob(${j.id})" style="background:#ff3b30;color:#fff;border:0;width:30px;border-radius:5px;">×</button></div></div>`;
-        });
-    }
-    function deleteJob(id) { if(confirm("Delete?")) { let h = JSON.parse(localStorage.getItem('pw_history') || '[]'); h = h.filter(j => j.id !== id); localStorage.setItem('pw_history', JSON.stringify(h)); renderHistory(); } }
-    function recallJob(id) {
-        let h = JSON.parse(localStorage.getItem('pw_history') || '[]'); let j = h.find(x => x.id === id);
-        if(j) { items = [...j.parts]; document.getElementById('jNm').value = j.name; document.getElementById('jN').value = j.num; tab('measure'); render(); }
+        h.unshift(job); 
+        localStorage.setItem('pw_history', JSON.stringify(h));
+        alert("Job Saved to History!");
+        items = []; 
+        render();
     }
 
-    window.onload = () => {
+    window.addEventListener('DOMContentLoaded', () => {
+        renderPaints();
         renderClients();
         renderProfiles();
-        tab('measure');
-    };
+    });
 </script>
+
 </body>
 </html>
