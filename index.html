@@ -58,7 +58,7 @@
 <body>
 
 <header>
-    <div style="font-size:32px" onclick="tab('history')">🔍</div>
+    <div style="font-size:32px" onclick="searchHistory()">🔍</div>
     <div class="logo-box"><span class="logo-text">PaintWorkz</span></div>
     <div style="font-size:32px" onclick="saveJob()">💾</div>
 </header>
@@ -300,21 +300,87 @@ function add() {
     render();
 }
 
-function saveJob() {
+// --- UPDATED SAVE & HISTORY LOGIC ---
+
+// Function for the Search Icon in Header
+function searchHistory() {
+    tab('history'); // Switch to history tab first
+    let term = prompt("Search History (Job No, Name, or Client):");
+    if (term !== null) renderHistory(term);
+}
+
+function loadHistoryJob(idx) {
+    const history = JSON.parse(localStorage.getItem('pw_history')) || [];
+    const job = history[idx];
+    if (confirm("Restore this job? This will replace your current list.")) {
+        items = job.items;
+        document.getElementById('jN').value = job.no;
+        document.getElementById('jNm').value = job.name;
+        document.getElementById('cli').value = job.client;
+        tab('measure');
+        render();
+    }
+}
+    
+    function renderHistory(filter = "") {
+    const container = document.getElementById('history-list');
+    if (!container) return;
+    
+    const history = JSON.parse(localStorage.getItem('pw_history')) || [];
+    const f = filter.toLowerCase();
+
+    // Filter by Job No, Job Name, or Client
+    const filtered = history.filter(j => 
+        j.no.toLowerCase().includes(f) || 
+        j.name.toLowerCase().includes(f) || 
+        j.client.toLowerCase().includes(f)
+    );
+
+    if (filtered.length === 0) {
+        container.innerHTML = '<div class="card" style="text-align:center; padding:20px; color:#888;">No matching history found.</div>';
+        return;
+    }
+
+    container.innerHTML = filtered.map((j, i) => `
+        <div class="card" style="border-left: 5px solid var(--gs); display:flex; justify-content:space-between; align-items:center;">
+            <div style="flex:1">
+                <div style="font-weight:900; font-size:16px;">${j.no} - ${j.name}</div>
+                <div style="font-size:11px; color:#666;">${j.client} | ${j.date}</div>
+                <div style="font-weight:900; color:var(--gs); margin-top:5px;">${j.total} SQM (${j.qty} Parts)</div>
+            </div>
+            <button onclick="loadHistoryJob(${i})" style="background:var(--gs); color:white; border:none; padding:8px 15px; border-radius:8px; font-weight:900;">LOAD</button>
+        </div>
+    `).join('');
+}
+       
+    function saveJob() {
     if (items.length === 0) { alert("List is empty!"); return; }
+    
     const job = {
         no: document.getElementById('jN').value || "UNTITLED",
         name: document.getElementById('jNm').value || "NEW JOB",
         client: document.getElementById('cli').value,
         items: [...items],
         total: document.getElementById('tA').innerText,
+        qty: document.getElementById('tQ').innerText,
         date: new Date().toLocaleString()
     };
+
     let hist = JSON.parse(localStorage.getItem('pw_history')) || [];
+    
+    // Add new job to the top
     hist.unshift(job);
+    
+    // STRICT RULE: Keep only last 10 saves
+    if (hist.length > 10) hist = hist.slice(0, 10);
+    
     localStorage.setItem('pw_history', JSON.stringify(hist));
-    alert("Job Saved to Global History");
+    
+    alert("-In the Bank-"); // Your custom confirmation
+    
     items = [];
+    document.getElementById('jN').value = '';
+    document.getElementById('jNm').value = '';
     render();
 }
 
