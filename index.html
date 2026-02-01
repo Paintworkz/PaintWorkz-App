@@ -167,9 +167,10 @@
 </div>
 
        
-    <div id="history" class="view-section">
-        <div id="history-list"></div>
-    </div>
+<div id="history" class="view-section">
+    <h2 style="padding:15px 15px 0 15px;">Recent Jobs</h2>
+    <div id="history-list" style="padding:15px;"></div> 
+</div>
 
     <div id="forms" class="view-section">
         <div class="card"><h3>Forms & Paperwork</h3><p>Coming Soon...</p></div>
@@ -322,14 +323,19 @@ function loadHistoryJob(idx) {
     }
 }
     
-    function renderHistory(filter = "") {
+// --- 2. THE RENDER FIX ---
+function renderHistory(filter = "") {
     const container = document.getElementById('history-list');
-    if (!container) return;
+    
+    // Check if the container exists in your HTML
+    if (!container) {
+        console.error("Missing <div id='history-list'></div> in your HTML!");
+        return;
+    }
     
     const history = JSON.parse(localStorage.getItem('pw_history')) || [];
     const f = filter.toLowerCase();
 
-    // Filter by Job No, Job Name, or Client
     const filtered = history.filter(j => 
         j.no.toLowerCase().includes(f) || 
         j.name.toLowerCase().includes(f) || 
@@ -337,18 +343,22 @@ function loadHistoryJob(idx) {
     );
 
     if (filtered.length === 0) {
-        container.innerHTML = '<div class="card" style="text-align:center; padding:20px; color:#888;">No matching history found.</div>';
+        container.innerHTML = `
+            <div style="text-align:center; padding:50px; color:#aaa;">
+                <div style="font-size:40px;">📂</div>
+                <p>No History Found</p>
+            </div>`;
         return;
     }
 
     container.innerHTML = filtered.map((j, i) => `
-        <div class="card" style="border-left: 5px solid var(--gs); display:flex; justify-content:space-between; align-items:center;">
+        <div class="card" style="border-left: 5px solid var(--gs); display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
             <div style="flex:1">
                 <div style="font-weight:900; font-size:16px;">${j.no} - ${j.name}</div>
                 <div style="font-size:11px; color:#666;">${j.client} | ${j.date}</div>
-                <div style="font-weight:900; color:var(--gs); margin-top:5px;">${j.total} SQM (${j.qty} Parts)</div>
+                <div style="font-weight:900; color:var(--gs); margin-top:5px;">${j.total} SQM (${j.items.length} Lines)</div>
             </div>
-            <button onclick="loadHistoryJob(${i})" style="background:var(--gs); color:white; border:none; padding:8px 15px; border-radius:8px; font-weight:900;">LOAD</button>
+            <button onclick="loadHistoryJob(${i})" style="background:var(--gs); color:white; border:none; padding:10px 15px; border-radius:8px; font-weight:900; cursor:pointer;">LOAD</button>
         </div>
     `).join('');
 }
@@ -424,17 +434,35 @@ function setF(f) { fStyle = f; document.getElementById('fF').classList.toggle('a
 function tE(el) { el.classList.toggle('active'); up(); }
 function resetEdges() { document.querySelectorAll('.edge-box').forEach(el => el.classList.remove('active')); if (mode === 'SE') document.getElementById('E1').classList.add('active'); else if (pType !== 'Panel') document.querySelectorAll('.edge-box').forEach(el => el.classList.add('active')); }
 
+// --- 1. THE TRIGGER FIX ---
 function tab(t) {
+    // Hide all sections and remove active class from buttons
     document.querySelectorAll('.view-section, .nav-btn').forEach(x => x.classList.remove('active'));
-    document.getElementById(t).classList.add('active');
-    document.getElementById('btn-' + t).classList.add('active');
+    
+    // Show the selected section
+    const targetSection = document.getElementById(t);
+    if (targetSection) targetSection.classList.add('active');
+    
+    // Set button to active
+    const btn = document.getElementById('btn-' + t);
+    if (btn) btn.classList.add('active');
+
+    // IMPORTANT: If switching to History tab, force a render immediately
+    if (t === 'history') {
+        renderHistory(); 
+    }
+
+    // Handle sub-navigation (Paints/Clients/Profiles)
     const nav = document.getElementById('sub-nav-bar');
     if (subMenus[t]) {
         nav.style.display = 'flex';
-        nav.innerHTML = subMenus[t].map((s, i) => `<button class="sub-btn ${i===0?'active':''}" onclick="subTab('${t}','${s.id}',this)">${s.label}</button>`).join('');
+        nav.innerHTML = subMenus[t].map((s, i) => 
+            `<button class="sub-btn ${i===0?'active':''}" onclick="subTab('${t}','${s.id}',this)">${s.label}</button>`
+        ).join('');
         subTab(t, subMenus[t][0].id, nav.querySelector('.sub-btn'));
-    } else { nav.style.display = 'none'; }
-    if(t==='history') renderHistory();
+    } else { 
+        nav.style.display = 'none'; 
+    }
 }
 
 function subTab(p, c, btn) {
