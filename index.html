@@ -1,98 +1,197 @@
-<script>
-    // --- UPDATED RENDER FUNCTION WITH EDGE RULES ---
-    function render(){
-        const l=document.getElementById('list'); 
-        l.innerHTML=''; 
-        let ts=0, tq=0;
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>PaintWorkz Pro 3.9</title>
 
-        items.forEach((it,i)=>{
-            ts += parseFloat(it.sqm)*it.qty; 
-            tq += it.qty;
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    
+    <style>
+        /* ================================================================
+           1. STYLES & UI DESIGN
+        ================================================================ */
+        :root {--gold: linear-gradient(145deg, #d4af37, #f9f1b0, #aa841e); --rainbow: linear-gradient(90deg, red, orange, yellow, green, blue, indigo, violet); --gs: #d4af37;}
+        body {margin:0;font-family:-apple-system, sans-serif;background:#f0f0f5;padding-bottom:180px;-webkit-tap-highlight-color:transparent;}
+        
+        header {background:var(--rainbow);padding:env(safe-area-inset-top) 15px 5px;display:flex;align-items:center;justify-content:space-between;border-bottom:4px solid #aa841e;position:sticky;top:0;z-index:1000;height:90px;box-sizing:border-box;}
+        .logo-box {background:#000;padding:10px 30px;border-radius:50px;border:3px solid var(--gs);display:flex;align-items:center;}
+        .logo-text {font-weight:900;font-size:30px;background:var(--gold);-webkit-background-clip:text;-webkit-text-fill-color:transparent;filter:drop-shadow(1px 1px 0 #fff) drop-shadow(2px 2px 2px #000);}
+        
+        .nav-tabs { display: flex; background: #000; position: sticky; top: 90px; z-index: 1000; border-bottom: 1px solid #444; overflow-x: auto;}
+        .nav-btn {flex:1;min-width:75px;padding:14px 2px;color:#fff;text-align:center;font-weight:900;font-size:10px;text-transform:uppercase;border:none;background:0 0;}
+        .nav-btn.active {background:#fff;color:#000;border-bottom:4px solid var(--gs);}
 
-            // Calculate Edge Counts
-            let L=(it.e[0]?1:0)+(it.e[1]?1:0);
-            let S=(it.e[2]?1:0)+(it.e[3]?1:0);
+        .sub-nav { display: flex; background: #222; position: sticky; top: 130px; z-index: 999; overflow-x: auto; border-bottom: 2px solid var(--gs); white-space: nowrap;}
+        .sub-btn {padding: 10px 15px; color: #aaa; font-size: 11px; font-weight: 700; text-transform: uppercase; border: none; background: 0 0;}
+        .sub-btn.active { color: var(--gs); }
+
+        .container { padding: 20px 10px 150px 10px; max-width: 600px; margin: auto; } 
+        .view-section {display:none;} .view-section.active {display:block;}
+        .sub-section { display: none; } .sub-section.active { display: block; }
+
+        .card {background:#fff;border-radius:12px;padding:15px;margin-bottom:10px;border:1px solid #ddd;box-shadow: 0 2px 5px rgba(0,0,0,0.05); position:relative;}
+        input, select {width: 100%; height: 50px; padding: 0 12px; margin: 4px 0; border-radius: 10px; border: 1px solid #ccc; font-size: 16px; background: #fff; box-sizing: border-box;}
+        
+        .qty-bubble { background: #f0f0f5; padding: 10px; border-radius: 10px; font-weight: 900; min-width: 35px; text-align: center; border: 1px solid #ccc; }
+        .edge-pill { padding: 4px 10px; border-radius: 6px; font-size: 14px; font-weight: 900; color: #fff; display: inline-block; margin-right: 5px; }
+        .edge-L { background: #f44336; } .edge-S { background: #2196f3; }
+        
+        .mode-box { width: 50px; height: 50px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 16px; border: 3px solid; flex-shrink: 0; }
+        .mode-SS { border-color: #34c759; color: #34c759; background: #e8f5e9; }
+        .mode-DS { border-color: #ff9500; color: #ff9500; background: #fff3e0; }
+        .mode-SE { border-color: #ff3b30; color: #ff3b30; background: #ffebee; }
+
+        .edge-row {display:flex;justify-content:space-between;align-items:center;margin:15px 0;gap:8px;}
+        .edge-box {flex:1;height:55px;border-radius:10px;border:2px solid #bbb;background:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;color:#ccc;cursor:pointer;}
+        .edge-box.active {background:#34c759;border-color:#28a745;color:#fff;}
+
+        .sticky-footer { background: #000; position: fixed; bottom: 0; left: 0; right: 0; width: 100%; height: 85px; border-top: 4px solid var(--gs); color: #fff; display: grid; grid-template-columns: 1fr 1fr 1fr; align-items: center; z-index: 2000;}
+    </style>
+</head>
+<body>
+
+<header>
+    <div style="font-size:32px" onclick="tab('history')">🔍</div>
+    <div class="logo-box"><span class="logo-text">PaintWorkz</span></div>
+    <div style="font-size:32px" onclick="saveJob()">💾</div>
+</header>
+
+<div class="nav-tabs">
+    <div class="nav-btn active" id="btn-measure" onclick="tab('measure')">Measure</div>
+    <div class="nav-btn" id="btn-db" onclick="tab('db')">Database</div>
+    <div class="nav-btn" id="btn-history" onclick="tab('history')">History</div>
+</div>
+
+<div id="sub-nav-bar" class="sub-nav" style="display:none;"></div>
+
+<div class="container">
+    <div id="measure" class="view-section active">
+        <div class="card">
+            <select id="cli"></select>
+            <input type="text" id="jNm" placeholder="JOB NAME">
+            <div style="display:flex;gap:8px;"><input type="number" id="h" placeholder="LENGTH" oninput="up()"><input type="number" id="w" placeholder="WIDTH" oninput="up()"></div>
+            <input type="text" id="desc" placeholder="DESCRIPTION">
             
-            // Generate Labels
-            let lbL = (L > 0) ? (it.mode === 'SE' ? "1LR" : L + "L") : "";
-            let lbS = (S > 0) ? (it.mode === 'SE' ? "1SR" : S + "S") : "";
+            <div class="edge-row">
+                <div class="edge-box" id="E1" onclick="tE(this)">L</div>
+                <div class="edge-box" id="E2" onclick="tE(this)">L</div>
+                <div class="edge-box" id="E3" onclick="tE(this)">S</div>
+                <div class="edge-box" id="E4" onclick="tE(this)">S</div>
+            </div>
 
-            // --- YOUR CUSTOM RULE ---
-            // If text results in 0S, 0L, 0SL, or 0SR, leave blank.
-            const combined = lbL + lbS;
-            if (["0S", "0L", "0SL", "0SR"].includes(combined)) {
-                lbL = "";
-                lbS = "";
-            }
+            <div id="liveSq" style="text-align:center;font-weight:900;color:#aa841e;font-size:48px;">0.000</div>
+            <button onclick="add()" style="width:100%;padding:18px;border-radius:40px;background:var(--gold);border:none;font-size:22px;font-weight:900;">ADD TO LIST</button>
+        </div>
+        <div id="list"></div>
+    </div>
 
-            l.innerHTML += `
-                <div class="card" style="display:flex;align-items:center;gap:10px;padding:8px;">
-                    <div class="qty-bubble">${it.qty}</div>
-                    <div style="flex:1">
-                        <div style="font-weight:900;font-size:18px;">${it.h} x ${it.w} x ${it.thk}</div>
-                        <div style="font-size:11px;font-weight:700;color:#666;">${it.desc||'No Desc'} (${it.pType})</div>
-                        <div style="margin-top:6px;">
-                            ${it.finish==='Moulded'?'<div class="mld-bubble">MOULDED</div>':''}
-                            ${lbL?`<span class="edge-pill edge-L">${lbL}</span>`:''}
-                            ${lbS?`<span class="edge-pill edge-S">${lbS}</span>`:''}
-                        </div>
-                    </div>
-                    <div class="mode-box mode-${it.mode}">${it.mode}</div>
-                    <button onclick="items.splice(${i},1);render()" style="color:red;border:0;background:0;font-size:26px;font-weight:900;">×</button>
-                </div>`;
+    <div id="db" class="view-section">
+        <div id="db-clients" class="sub-section active">
+            <div class="card">
+                <h3>Client Manager</h3>
+                <button onclick="addClient()" style="width:100%; padding:10px; background:var(--gs); border:none; border-radius:10px; font-weight:900;">+ ADD NEW CLIENT</button>
+                <div id="client-list-container" style="margin-top:10px;"></div>
+            </div>
+        </div>
+        <div id="db-profiles" class="sub-section">
+            <div class="card">
+                <h3>Profile Manager</h3>
+                <button onclick="addProfile()" style="width:100%; padding:10px; background:var(--gs); border:none; border-radius:10px; font-weight:900;">+ ADD NEW PROFILE</button>
+                <div id="profile-list-container" style="margin-top:10px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="history" class="view-section">
+        <div id="history-list"></div>
+    </div>
+</div>
+
+<div class="sticky-footer">
+    <div class="footer-col" style="text-align:center">PDF</div>
+    <div class="footer-col" style="text-align:center">SQM: <b id="tA">0.000</b></div>
+    <div class="footer-col" style="text-align:center">QTY: <b id="tQ">0</b></div>
+</div>
+
+<script>
+    /* ================================================================
+       2. JAVASCRIPT LOGIC
+    ================================================================ */
+    let items = [], mode = 'SS';
+    let clients = JSON.parse(localStorage.getItem('pw_clients')) || ["ABM", "Absolute Kitchens"];
+    let profiles = JSON.parse(localStorage.getItem('pw_profiles')) || ["Plain (101)"];
+
+    const subMenus = {
+        db: [{id:'clients', label:'Clients'}, {id:'profiles', label:'Profiles'}]
+    };
+
+    function tab(t) {
+        document.querySelectorAll('.view-section, .nav-btn').forEach(x => x.classList.remove('active'));
+        document.getElementById(t).classList.add('active');
+        document.getElementById('btn-' + t).classList.add('active');
+        
+        const nav = document.getElementById('sub-nav-bar');
+        if (subMenus[t]) {
+            nav.style.display = 'flex';
+            nav.innerHTML = subMenus[t].map(s => `<button class="sub-btn" onclick="subTab('${t}','${s.id}',this)">${s.label}</button>`).join('');
+            subTab(t, subMenus[t][0].id, nav.firstChild); 
+        } else { nav.style.display = 'none'; }
+        if(t === 'history') renderHistory();
+    }
+
+    function subTab(p, c, btn) {
+        document.querySelectorAll(`#${p} .sub-section`).forEach(s => s.classList.remove('active'));
+        document.getElementById(p + '-' + c).classList.add('active');
+        if(c === 'clients') renderClients();
+        if(c === 'profiles') renderProfiles();
+    }
+
+    // --- YOUR CUSTOM EDGE RULE ---
+    function render(){
+        const l=document.getElementById('list'); l.innerHTML=''; 
+        let ts=0, tq=0;
+        items.forEach((it,i)=>{
+            ts += parseFloat(it.sqm)*it.qty; tq += it.qty;
+            let L=(it.e[0]?1:0)+(it.e[1]?1:0), S=(it.e[2]?1:0)+(it.e[3]?1:0);
+            let lbL = (L > 0) ? L + "L" : "";
+            let lbS = (S > 0) ? S + "S" : "";
+
+            // Apply Rule: 0S, 0L, 0SL, 0SR = blank
+            if (["0S", "0L", "0SL", "0SR"].includes(lbL + lbS)) { lbL = ""; lbS = ""; }
+
+            l.innerHTML += `<div class="card" style="display:flex;align-items:center;gap:10px;">
+                <div class="qty-bubble">${it.qty}</div>
+                <div style="flex:1"><b>${it.h} x ${it.w}</b><br>
+                ${lbL?`<span class="edge-pill edge-L">${lbL}</span>`:''}${lbS?`<span class="edge-pill edge-S">${lbS}</span>`:''}</div>
+                <button onclick="items.splice(${i},1);render()" style="color:red;border:0;background:0;font-size:24px;">×</button>
+            </div>`;
         });
-        document.getElementById('tA').innerText=ts.toFixed(3); 
+        document.getElementById('tA').innerText=ts.toFixed(3);
         document.getElementById('tQ').innerText=tq;
     }
 
-    // --- UPDATED CLIENT RENDER WITH EDIT BUTTONS ---
-    function renderClients(filter = "") {
-        const container = document.getElementById('client-list-container');
-        if(!container) return;
-        clients.sort();
-        container.innerHTML = clients.filter(c => c.toLowerCase().includes(filter.toLowerCase())).map(c => `
-            <div class="card" style="display:flex; justify-content:space-between; align-items:center; padding:10px; margin-bottom:5px;">
-                <span style="font-weight:700;">${c}</span>
-                <div>
-                    <button onclick="editClient('${c}')" style="background:none; border:none; color:blue; font-size:12px; font-weight:900; margin-right:10px;">EDIT</button>
-                    <button onclick="deleteClient('${c}')" style="background:none; border:none; color:#ff3b30; font-weight:900; font-size:18px;">×</button>
-                </div>
-            </div>
-        `).join('');
-        updateClientDropdown();
-        localStorage.setItem('pw_clients', JSON.stringify(clients));
+    function tE(e){ e.classList.toggle('active'); up(); }
+    function up(){ 
+        let h=Number(document.getElementById('h').value), w=Number(document.getElementById('w').value);
+        document.getElementById('liveSq').innerText = (h*w/1000000).toFixed(3);
+    }
+    function add(){
+        let h=document.getElementById('h').value, w=document.getElementById('w').value;
+        if(!h || !w) return;
+        items.push({h, w, qty:1, sqm: document.getElementById('liveSq').innerText, e:[1,2,3,4].map(i=>document.getElementById('E'+i).classList.contains('active'))});
+        render();
     }
 
-    function editClient(oldName) {
-        let newName = prompt("Rename Client:", oldName);
-        if(newName && newName !== oldName) {
-            clients = clients.map(c => c === oldName ? newName : c);
-            renderClients();
-        }
+    function renderClients() {
+        document.getElementById('client-list-container').innerHTML = clients.map(c => `<div class="card"><b>${c}</b></div>`).join('');
+        const cliSelect = document.getElementById('cli');
+        if(cliSelect) cliSelect.innerHTML = clients.map(c => `<option>${c}</option>`).join('');
     }
 
-    // --- UPDATED PROFILE RENDER WITH EDIT BUTTONS ---
-    function renderProfiles(filter = "") {
-        const container = document.getElementById('profile-list-container');
-        if(!container) return;
-        container.innerHTML = profiles.filter(p => p.toLowerCase().includes(filter.toLowerCase())).map(p => `
-            <div class="card" style="display:flex; justify-content:space-between; align-items:center; padding:10px; margin-bottom:5px;">
-                <span style="font-weight:700;">${p}</span>
-                <div>
-                    <button onclick="editProfile('${p}')" style="background:none; border:none; color:blue; font-size:12px; font-weight:900; margin-right:10px;">EDIT</button>
-                    <button onclick="deleteProfile('${p}')" style="background:none; border:none; color:#ff3b30; font-weight:900; font-size:18px;">×</button>
-                </div>
-            </div>
-        `).join('');
-        updateProfileDropdown();
-        localStorage.setItem('pw_profiles', JSON.stringify(profiles));
-    }
-
-    function editProfile(oldName) {
-        let newName = prompt("Rename Profile:", oldName);
-        if(newName && newName !== oldName) {
-            profiles = profiles.map(p => p === oldName ? newName : p);
-            renderProfiles();
-        }
-    }
+    window.onload = () => { renderClients(); tab('measure'); };
 </script>
+</body>
+</html>
