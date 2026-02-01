@@ -214,6 +214,7 @@
 </div>
     
 <script>
+<script>
 // --- 1. DATA & STATE ---
 let paints = JSON.parse(localStorage.getItem('pw_paints')) || [
     { brand: "Dulux", color: "Lexicon Quarter", finish: "G30 Satin", evic: "EP-LX-Q", recipe: { "White Base": 950, "Black": 2.5 } }
@@ -259,7 +260,7 @@ function up() {
     if (display) display.innerText = sqm.toFixed(3);
 }
 
-// --- 3. ADD & SAVE BUTTONS ---
+// --- 3. LIST & SAVE LOGIC ---
 function add() {
     up(); 
     const h = document.getElementById('h').value;
@@ -267,7 +268,7 @@ function add() {
     const q = parseInt(document.getElementById('qty').value) || 1;
     const sqValue = document.getElementById('liveSq').innerText;
     
-    if(!h || !w) { alert("Enter Height & Width"); return; }
+    if(!h || !w) { alert("Enter Dimensions"); return; }
 
     const edges = [
         document.getElementById('E1').classList.contains('active'),
@@ -297,75 +298,11 @@ function add() {
 
     document.getElementById('h').value = '';
     document.getElementById('w').value = '';
-    resetEdges();
     render();
 }
 
-// --- UPDATED SAVE & HISTORY LOGIC ---
-
-// Function for the Search Icon in Header
-function searchHistory() {
-    tab('history'); // Switch to history tab first
-    let term = prompt("Search History (Job No, Name, or Client):");
-    if (term !== null) renderHistory(term);
-}
-
-function loadHistoryJob(idx) {
-    const history = JSON.parse(localStorage.getItem('pw_history')) || [];
-    const job = history[idx];
-    if (confirm("Restore this job? This will replace your current list.")) {
-        items = job.items;
-        document.getElementById('jN').value = job.no;
-        document.getElementById('jNm').value = job.name;
-        document.getElementById('cli').value = job.client;
-        tab('measure');
-        render();
-    }
-}
-    
-// --- 2. THE RENDER FIX ---
-function renderHistory(filter = "") {
-    const container = document.getElementById('history-list');
-    
-    // Check if the container exists in your HTML
-    if (!container) {
-        console.error("Missing <div id='history-list'></div> in your HTML!");
-        return;
-    }
-    
-    const history = JSON.parse(localStorage.getItem('pw_history')) || [];
-    const f = filter.toLowerCase();
-
-    const filtered = history.filter(j => 
-        j.no.toLowerCase().includes(f) || 
-        j.name.toLowerCase().includes(f) || 
-        j.client.toLowerCase().includes(f)
-    );
-
-    if (filtered.length === 0) {
-        container.innerHTML = `
-            <div style="text-align:center; padding:50px; color:#aaa;">
-                <div style="font-size:40px;">📂</div>
-                <p>No History Found</p>
-            </div>`;
-        return;
-    }
-
-    container.innerHTML = filtered.map((j, i) => `
-        <div class="card" style="border-left: 5px solid var(--gs); display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-            <div style="flex:1">
-                <div style="font-weight:900; font-size:16px;">${j.no} - ${j.name}</div>
-                <div style="font-size:11px; color:#666;">${j.client} | ${j.date}</div>
-                <div style="font-weight:900; color:var(--gs); margin-top:5px;">${j.total} SQM (${j.items.length} Lines)</div>
-            </div>
-            <button onclick="loadHistoryJob(${i})" style="background:var(--gs); color:white; border:none; padding:10px 15px; border-radius:8px; font-weight:900; cursor:pointer;">LOAD</button>
-        </div>
-    `).join('');
-}
-       
-    function saveJob() {
+function saveJob() {
     if (items.length === 0) { alert("List is empty!"); return; }
-    
     const job = {
         no: document.getElementById('jN').value || "UNTITLED",
         name: document.getElementById('jNm').value || "NEW JOB",
@@ -375,105 +312,124 @@ function renderHistory(filter = "") {
         qty: document.getElementById('tQ').innerText,
         date: new Date().toLocaleString()
     };
-
     let hist = JSON.parse(localStorage.getItem('pw_history')) || [];
-    
-    // Add new job to the top
     hist.unshift(job);
-    
-    // STRICT RULE: Keep only last 10 saves
     if (hist.length > 10) hist = hist.slice(0, 10);
-    
     localStorage.setItem('pw_history', JSON.stringify(hist));
-    
-    alert("-In the Bank-"); // Your custom confirmation
-    
+    alert("-In the Bank-");
     items = [];
     document.getElementById('jN').value = '';
     document.getElementById('jNm').value = '';
     render();
 }
 
-// --- 4. RENDER & UI ---
+// --- 4. HISTORY RENDER ---
+function renderHistory(filter = "") {
+    const container = document.getElementById('history-list');
+    if (!container) return;
+    const history = JSON.parse(localStorage.getItem('pw_history')) || [];
+    const f = filter.toLowerCase();
+    const filtered = history.filter(j => 
+        j.no.toLowerCase().includes(f) || j.name.toLowerCase().includes(f) || j.client.toLowerCase().includes(f)
+    );
+
+    if (filtered.length === 0) {
+        container.innerHTML = '<div class="card" style="text-align:center;padding:20px;color:#888;">No History Found</div>';
+        return;
+    }
+
+    container.innerHTML = filtered.map((j, i) => `
+        <div class="card" style="border-left: 5px solid var(--gs); display:flex; justify-content:space-between; align-items:center;">
+            <div>
+                <div style="font-weight:900;">${j.no} - ${j.name}</div>
+                <div style="font-size:11px;color:#666;">${j.client} | ${j.date}</div>
+                <div style="font-weight:900;color:var(--gs);">${j.total} SQM (${j.items.length} Lines)</div>
+            </div>
+            <button onclick="loadHistoryJob(${i})" style="background:var(--gs);border:none;padding:10px;border-radius:8px;font-weight:900;">LOAD</button>
+        </div>
+    `).join('');
+}
+
+function searchHistory() {
+    tab('history');
+    let term = prompt("Search History:");
+    if (term !== null) renderHistory(term);
+}
+
+function loadHistoryJob(idx) {
+    const history = JSON.parse(localStorage.getItem('pw_history')) || [];
+    items = history[idx].items;
+    render();
+    tab('measure');
+}
+
+// --- 5. UI & TABS ---
+function tab(t) {
+    document.querySelectorAll('.view-section, .nav-btn').forEach(x => x.classList.remove('active'));
+    document.getElementById(t).classList.add('active');
+    document.getElementById('btn-' + t).classList.add('active');
+    if (t === 'history') renderHistory();
+    const nav = document.getElementById('sub-nav-bar');
+    if (subMenus[t]) {
+        nav.style.display = 'flex';
+        nav.innerHTML = subMenus[t].map((s, i) => `<button class="sub-btn ${i===0?'active':''}" onclick="subTab('${t}','${s.id}',this)">${s.label}</button>`).join('');
+        subTab(t, subMenus[t][0].id, nav.querySelector('.sub-btn'));
+    } else { nav.style.display = 'none'; }
+}
+
+function subTab(p, c, btn) {
+    if (btn) { btn.parentNode.querySelectorAll('.sub-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
+    document.querySelectorAll('.sub-section').forEach(s => s.classList.remove('active'));
+    const target = document.getElementById((p === 'db' ? 'db-' : p === 'admin' ? 'adm-' : 'settings-') + c);
+    if (target) target.classList.add('active');
+    if (c === 'paints') renderPaints();
+    if (c === 'clients') renderClients();
+    if (c === 'profiles') renderProfiles();
+}
+
 function render() {
     const list = document.getElementById('list');
     list.innerHTML = '';
     let gSqm = 0, gQty = 0;
-
     items.forEach((it, i) => {
         const rowSqm = parseFloat(it.sqm) * it.qty;
         gSqm += rowSqm; gQty += it.qty;
-
-        let L_cnt = (it.e[0]?1:0) + (it.e[1]?1:0);
-        let S_cnt = (it.e[2]?1:0) + (it.e[3]?1:0);
-        let lbL = (it.mode === 'SE') ? (L_cnt > 0 ? L_cnt + "LR" : "") : (L_cnt > 0 ? L_cnt + "L" : "");
-        let lbS = (it.mode === 'SE') ? (S_cnt > 0 ? S_cnt + "SR" : "") : (S_cnt > 0 ? S_cnt + "S" : "");
-
-        list.innerHTML += `
-        <div class="card" style="display:flex;align-items:center;gap:10px;padding:8px;">
-            <input type="number" value="${it.qty}" onchange="items[${i}].qty=parseInt(this.value);render();" style="width:40px;height:40px;text-align:center;font-weight:900;border-radius:8px;border:1px solid #ccc;">
-            <div style="flex:1">
-                <div style="font-weight:900;">${it.h} x ${it.w} (${it.thk}mm)</div>
-                <div style="font-size:10px;color:#666;">${it.pType} | ${it.color} | ${it.style}</div>
-                <div>${lbL ? `<span class="edge-pill edge-L">${lbL}</span>`:''}${lbS ? `<span class="edge-pill edge-S">${lbS}</span>`:''}</div>
-            </div>
-            <div style="text-align:right">
-                <div style="font-size:10px;font-weight:900;">${rowSqm.toFixed(3)}</div>
-            </div>
-            <button onclick="items.splice(${i},1);render()" style="color:red;border:0;background:0;font-size:22px;">×</button>
-        </div>`;
+        let L = (it.e[0]?1:0)+(it.e[1]?1:0), S = (it.e[2]?1:0)+(it.e[3]?1:0);
+        let lbL = it.mode==='SE'?(L>0?L+"LR":''):(L>0?L+"L":''), lbS = it.mode==='SE'?(S>0?S+"SR":''):(S>0?S+"S":'');
+        list.innerHTML += `<div class="card" style="display:flex;align-items:center;gap:10px;">
+            <input type="number" value="${it.qty}" onchange="items[${i}].qty=parseInt(this.value);render();" style="width:40px;height:40px;text-align:center;font-weight:900;">
+            <div style="flex:1"><b>${it.h} x ${it.w}</b><div style="font-size:10px;">${it.pType} | ${it.color}</div>
+            ${lbL?`<span class="edge-pill edge-L">${lbL}</span>`:''}${lbS?`<span class="edge-pill edge-S">${lbS}</span>`:''}</div>
+            <div style="font-weight:900;">${rowSqm.toFixed(3)}</div>
+            <button onclick="items.splice(${i},1);render()" style="color:red;border:0;background:0;font-size:22px;">×</button></div>`;
     });
     document.getElementById('tA').innerText = gSqm.toFixed(3);
     document.getElementById('tQ').innerText = gQty;
 }
 
-// --- 5. UI TOGGLES ---
+// --- 6. DB UTILS ---
+function renderPaints(f="") { 
+    const c = document.getElementById('paint-list-container');
+    c.innerHTML = paints.filter(p => p.color.toLowerCase().includes(f.toLowerCase())).map((p,i) => `<div class="card"><b>${p.color}</b><br><small>${p.brand}</small></div>`).join('');
+}
+function filterPaints() { renderPaints(document.getElementById('paintSearch').value); }
+function renderClients(f="") { 
+    const c = document.getElementById('client-list-container');
+    c.innerHTML = clients.filter(cl => cl.toLowerCase().includes(f.toLowerCase())).map(cl => `<div class="card"><b>${cl}</b></div>`).join('');
+}
+function filterClients() { renderClients(document.getElementById('clientSearch').value); }
+function renderProfiles(f="") { 
+    const c = document.getElementById('profile-list-container');
+    c.innerHTML = profiles.filter(p => p.toLowerCase().includes(f.toLowerCase())).map(p => `<div class="card"><b>${p}</b></div>`).join('');
+}
+function filterProfiles() { renderProfiles(document.getElementById('profileSearch').value); }
+
 function setP(t) { pType = t; document.querySelectorAll('.p-card').forEach(c => c.classList.remove('active')); document.getElementById(t === 'Panel' ? 'pP' : (t === 'Door' ? 'pD' : 'pDr')).classList.add('active'); resetEdges(); up(); }
 function setM(m) { mode = m; document.querySelectorAll('#mSS, #mDS, #mSE').forEach(b => b.classList.remove('active')); document.getElementById('m' + m).classList.add('active'); resetEdges(); up(); }
 function setF(f) { fStyle = f; document.getElementById('fF').classList.toggle('active', f === 'Flat'); document.getElementById('fM').classList.toggle('active', f === 'Moulded'); up(); }
 function tE(el) { el.classList.toggle('active'); up(); }
 function resetEdges() { document.querySelectorAll('.edge-box').forEach(el => el.classList.remove('active')); if (mode === 'SE') document.getElementById('E1').classList.add('active'); else if (pType !== 'Panel') document.querySelectorAll('.edge-box').forEach(el => el.classList.add('active')); }
 
-// --- 1. THE TRIGGER FIX ---
-function tab(t) {
-    // Hide all sections and remove active class from buttons
-    document.querySelectorAll('.view-section, .nav-btn').forEach(x => x.classList.remove('active'));
-    
-    // Show the selected section
-    const targetSection = document.getElementById(t);
-    if (targetSection) targetSection.classList.add('active');
-    
-    // Set button to active
-    const btn = document.getElementById('btn-' + t);
-    if (btn) btn.classList.add('active');
-
-    // IMPORTANT: If switching to History tab, force a render immediately
-    if (t === 'history') {
-        renderHistory(); 
-    }
-
-    // Handle sub-navigation (Paints/Clients/Profiles)
-    const nav = document.getElementById('sub-nav-bar');
-    if (subMenus[t]) {
-        nav.style.display = 'flex';
-        nav.innerHTML = subMenus[t].map((s, i) => 
-            `<button class="sub-btn ${i===0?'active':''}" onclick="subTab('${t}','${s.id}',this)">${s.label}</button>`
-        ).join('');
-        subTab(t, subMenus[t][0].id, nav.querySelector('.sub-btn'));
-    } else { 
-        nav.style.display = 'none'; 
-    }
-}
-
-function subTab(p, c, btn) {
-    if (btn) { btn.parentNode.querySelectorAll('.sub-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
-    document.querySelectorAll('.sub-section').forEach(s => s.classList.remove('active'));
-    let pre = (p === 'db') ? 'db-' : (p === 'admin') ? 'adm-' : 'settings-';
-    const target = document.getElementById(pre + c);
-    if (target) target.classList.add('active');
-}
-
-// --- 6. DB HELPERS ---
 function syncDropdowns() {
     const brands = [...new Set(paints.map(p => p.brand))];
     document.getElementById('pBrand').innerHTML = brands.map(b => `<option value="${b}">${b}</option>`).join('');
@@ -486,24 +442,20 @@ function updateColorDropdown() {
     updateFinishDropdown();
 }
 function updateFinishDropdown() {
-    const b = document.getElementById('pBrand').value, c = document.getElementById('pColor').value;
-    const fins = paints.filter(p => p.brand === b && p.color === c);
+    const b = document.getElementById('pBrand').value, co = document.getElementById('pColor').value;
+    const fins = paints.filter(p => p.brand === b && p.color === co);
     document.getElementById('pFinish').innerHTML = fins.map(p => `<option value="${p.finish}">${p.finish}</option>`).join('');
     autoFillEvic();
 }
 function autoFillEvic() {
-    const b = document.getElementById('pBrand').value, c = document.getElementById('pColor').value, f = document.getElementById('pFinish').value;
-    const m = paints.find(p => p.brand === b && p.color === c && p.finish === f);
+    const b = document.getElementById('pBrand').value, co = document.getElementById('pColor').value, f = document.getElementById('pFinish').value;
+    const m = paints.find(p => p.brand === b && p.color === co && p.finish === f);
     if(m) document.getElementById('pFormula').value = m.evic;
 }
-
 function updateClientDropdown() { document.getElementById('cli').innerHTML = clients.map(c => `<option value="${c}">${c}</option>`).join(''); }
 function updateProfileDropdown() { document.getElementById('prof-select').innerHTML = profiles.map(p => `<option value="${p}">${p}</option>`).join(''); }
 
 window.onload = () => { syncDropdowns(); updateClientDropdown(); updateProfileDropdown(); tab('measure'); };
-    
-</script>
-    
 </script>
 </body>
 </html>  
