@@ -232,8 +232,9 @@
     };
 
 // --- PAINT DATABASE LOGIC ---
+// --- PAINT DATABASE LOGIC (V3.9.1) ---
 let paints = JSON.parse(localStorage.getItem('pw_paints')) || [
-    { brand: "Dulux", color: "Lexicon Quarter", finish: "G30 Satin", evic: "EP-LX-Q", recipe: { "White Base": 950, "Black": 2.5 } },
+    { brand: "Dulux", color: "Lexicon Quarter", finish: "G30 Satin", evic: "EP-LX-Q", recipe: { "White Base": 950, "Black": 2.5, "Blue": 1.2 } },
     { brand: "Wattyl", color: "Vivid White", finish: "G10 Matt", evic: "EP-VW-STD", recipe: { "White Base": 1000 } }
 ];
 
@@ -244,18 +245,16 @@ function renderPaints(filter = "") {
     container.innerHTML = paints
         .filter(p => p.color.toLowerCase().includes(filter.toLowerCase()) || p.brand.toLowerCase().includes(filter.toLowerCase()))
         .map((p, index) => `
-            <div class="card" style="border-left: 5px solid var(--gs);">
+            <div class="card" style="border-left: 5px solid var(--gs); margin-bottom:10px;">
                 <div style="display:flex; justify-content:space-between; align-items:start;">
                     <div style="flex:1">
-                        <div style="font-size:10px; color:#888; font-weight:900;">${p.brand} | ${p.finish || 'Standard'}</div>
+                        <div style="font-size:10px; color:#888; font-weight:900;">${p.brand} | ${p.finish}</div>
                         <div style="font-weight:700; font-size:18px;">${p.color}</div>
+                        <div style="font-size:11px; color:var(--gs); font-family:monospace;">${p.evic}</div>
                     </div>
                     <div style="text-align:right;">
-                        <div style="font-family:monospace; font-weight:900; background:#eee; padding:2px 5px;">${p.evic}</div>
-                        <div style="margin-top:10px;">
-                            <button onclick="openMixer(${index})" style="background:#000; color:white; border:none; padding:8px 12px; border-radius:5px; font-size:10px; font-weight:900;">🧪 MIX</button>
-                            <button onclick="deletePaint(${index})" style="background:none; border:none; color:#ff3b30; font-size:18px; margin-left:10px;">×</button>
-                        </div>
+                        <button onclick="openMixer(${index})" style="background:#000; color:white; border:none; padding:8px 12px; border-radius:5px; font-size:10px; font-weight:900;">🧪 MIX / EDIT</button>
+                        <button onclick="deletePaint(${index})" style="background:none; border:none; color:#ff3b30; font-size:18px; margin-left:10px;">×</button>
                     </div>
                 </div>
             </div>`).join('');
@@ -271,28 +270,82 @@ function openMixer(index) {
     let targetLtrs = prompt(`Mixing ${p.color} (${p.finish}). Liters?`, "1");
     if(!targetLtrs || isNaN(targetLtrs)) return;
 
-    let resultHTML = `<div id="recipe-display" style="text-align:left; font-family:monospace; background:#f9f9f9; padding:15px; border-radius:10px; border:1px solid #ccc;">
-                        <h4 style="margin:0;">${p.brand} - ${p.color}</h4>
-                        <p style="font-size:12px; color:#666;">Finish: ${p.finish}</p><hr>`;
-
-    Object.entries(p.recipe).forEach(([ing, grams]) => {
-        resultHTML += `<div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-                        <span>${ing}:</span><span style="font-weight:900;">${(grams * targetLtrs).toFixed(1)}g</span>
-                      </div>`;
-    });
-    resultHTML += `</div>`;
+    let recipeLines = Object.entries(p.recipe).map(([ing, grams]) => `
+        <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+            <span>${ing}:</span><span style="font-weight:900;">${(grams * targetLtrs).toFixed(1)}g</span>
+        </div>`).join('');
 
     const mixModal = document.createElement('div');
     mixModal.id = "mix-modal";
-    mixModal.style = "position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:white; padding:20px; border-radius:15px; box-shadow:0 0 100px rgba(0,0,0,0.5); z-index:4000; width:85%; max-width:400px; text-align:center;";
+    mixModal.style = "position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:white; padding:20px; border-radius:15px; box-shadow:0 0 100px rgba(0,0,0,0.5); z-index:5000; width:85%; max-width:400px; text-align:center;";
     mixModal.innerHTML = `
         <h3 style="margin-top:0;">Mixing Sheet</h3>
-        ${resultHTML}
+        <div style="text-align:left; background:#f9f9f9; padding:15px; border-radius:10px; border:1px solid #ccc; font-family:monospace;">
+            <strong>${p.color} (${p.finish})</strong><br>
+            <small>EVIC: ${p.evic}</small><hr>
+            ${recipeLines}
+            <hr><strong>Total Volume: ${targetLtrs}L</strong>
+        </div>
         <div style="display:flex; gap:10px; margin-top:15px;">
             <button onclick="this.closest('#mix-modal').remove()" style="flex:1; padding:12px; background:#eee; border:none; border-radius:10px; font-weight:900;">CLOSE</button>
-            <button onclick="editRecipe(${index})" style="flex:1; padding:12px; background:var(--gs); border:none; border-radius:10px; font-weight:900;">EDIT RECIPE</button>
+            <button onclick="editRecipe(${index})" style="flex:1; padding:12px; background:var(--gs); border:none; border-radius:10px; font-weight:900;">EDIT FORMULA</button>
         </div>`;
     document.body.appendChild(mixModal);
+}
+
+function editRecipe(index) {
+    const p = paints[index];
+    let currentStr = Object.entries(p.recipe).map(([ing, g]) => `${ing}:${g}`).join(", ");
+    let newRecipeStr = prompt("Edit Formula (Ingredient:Grams, Ingredient:Grams):", currentStr);
+
+    if (newRecipeStr) {
+        let newRecipe = {};
+        newRecipeStr.split(",").forEach(item => {
+            let [ing, g] = item.split(":");
+            if (ing && g) newRecipe[ing.trim()] = parseFloat(g.trim());
+        });
+        paints[index].recipe = newRecipe;
+        localStorage.setItem('pw_paints', JSON.stringify(paints));
+        renderPaints();
+        document.getElementById('mix-modal').remove();
+        alert("Formula Updated Successfully!");
+    }
+}
+
+function autoFillEvic() {
+    const selectedColor = document.getElementById('pColor').value;
+    const paintMatch = paints.find(p => p.color === selectedColor);
+    if(paintMatch) {
+        document.getElementById('pFormula').value = paintMatch.evic;
+        // Also auto-select the finish if it matches
+        document.getElementById('pFinish').value = paintMatch.finish;
+    }
+}
+
+function updateMeasurePaints() {
+    const colorSelect = document.getElementById('pColor');
+    if(!colorSelect) return;
+    // Map colors AND finishes into the dropdown so you pick the right one
+    colorSelect.innerHTML = paints.map(p => 
+        `<option value="${p.color}">${p.color} (${p.finish})</option>`
+    ).join('');
+    autoFillEvic();
+}
+
+// Cleaned up Add/Delete
+function addPaint() {
+    const brand = prompt("Brand:", "Dulux");
+    const color = prompt("Color Name:");
+    const finish = prompt("Finish:", "G30 Satin");
+    const evic = prompt("EVIC Code:");
+    if(brand && color && finish && evic) { 
+        paints.push({ brand, color, finish, evic, recipe: {"White Base": 1000} }); 
+        renderPaints(); 
+    }
+}
+
+function deletePaint(index) { 
+    if(confirm("Delete this paint color?")) { paints.splice(index, 1); renderPaints(); } 
 }
 
 function editRecipe(index) {
