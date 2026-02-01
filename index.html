@@ -204,7 +204,6 @@
 </div>
     
 <script>
-   <script>
     let items = [], mode = 'SS', finish = 'Flat', pType = 'Panel';
 
     const subMenus = {
@@ -356,6 +355,9 @@
         const v = document.getElementById(t), b = document.getElementById('btn-' + t);
         if(v) v.classList.add('active'); if(b) b.classList.add('active');
         const nav = document.getElementById('sub-nav-bar');
+        
+        if (t === 'history') renderHistory(); // Load history when tab clicked
+
         if (subMenus[t]) {
             nav.style.display = 'flex';
             nav.innerHTML = subMenus[t].map((s, i) => `<button class="sub-btn ${i===0?'active':''}" onclick="subTab('${t}','${s.id}',this)">${s.label}</button>`).join('');
@@ -402,7 +404,7 @@
             ts += parseFloat(it.sqm)*it.qty; tq += it.qty;
             let L=(it.e[0]?1:0)+(it.e[1]?1:0), S=(it.e[2]?1:0)+(it.e[3]?1:0);
             
-            // Apply Edge Label Logic (Rule: 0S, 0L, 0SL, 0SR = blank)
+            // Edge Text logic per instructions
             let lbL = (L > 0) ? (it.mode === 'SE' ? "1LR" : L + "L") : "";
             let lbS = (S > 0) ? (it.mode === 'SE' ? "1SR" : S + "S") : "";
 
@@ -411,9 +413,9 @@
         document.getElementById('tA').innerText=ts.toFixed(3); document.getElementById('tQ').innerText=tq;
     }
 
-    // --- STORAGE ---
+    // --- STORAGE & HISTORY ---
     function saveJob() {
-        if (items.length === 0) return;
+        if (items.length === 0) { alert("Add items to the list first!"); return; }
         let job = { 
             id: Date.now(), 
             name: document.getElementById('jNm').value || 'Untitled', 
@@ -431,12 +433,36 @@
         render();
     }
 
+    function renderHistory() {
+        const container = document.getElementById('history-list');
+        let h = JSON.parse(localStorage.getItem('pw_history') || '[]');
+        if (h.length === 0) { container.innerHTML = '<p style="text-align:center; padding:20px;">No saved jobs yet.</p>'; return; }
+        container.innerHTML = h.map(j => `
+            <div class="history-card">
+                <div>
+                    <div style="font-size:10px; color:#888;">${j.date} | ${j.client}</div>
+                    <div style="font-weight:900; font-size:16px;">#${j.num} - ${j.name}</div>
+                    <div style="font-size:12px; font-weight:700; color:var(--gs);">${j.totalSqm} SQM</div>
+                </div>
+                <button onclick="deleteHistory(${j.id})" style="border:0; background:0; font-size:24px;">🗑️</button>
+            </div>
+        `).join('');
+    }
+
+    function deleteHistory(id) {
+        if(confirm("Delete this job from history?")) {
+            let h = JSON.parse(localStorage.getItem('pw_history') || '[]');
+            h = h.filter(j => j.id !== id);
+            localStorage.setItem('pw_history', JSON.stringify(h));
+            renderHistory();
+        }
+    }
+
     window.addEventListener('DOMContentLoaded', () => {
         renderPaints();
         renderClients();
         renderProfiles();
     });
 </script>
-
 </body>
-</html>
+</html>  
