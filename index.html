@@ -1,7 +1,6 @@
 /* ================================================================
    1. GLOBAL DATA & INITIALIZATION
-================================================================
-*/
+================================================================ */
 let paints = JSON.parse(localStorage.getItem('pw_paints')) || [
     { brand: "Dulux", color: "Lexicon Quarter", finish: "G30 Satin", evic: "EP-LX-Q", recipe: { "White Base": 950, "Black": 2.5 } },
     { brand: "Wattyl", color: "Vivid White", finish: "G10 Matt", evic: "EP-VW-STD", recipe: { "White Base": 1000 } }
@@ -12,212 +11,196 @@ let items = [], mode = 'SS', fStyle = 'Flat', pType = 'Panel';
 
 const subMenus = {
     db: [{id:'clients', label:'Clients'}, {id:'paints', label:'Paints'}, {id:'profiles', label:'Profiles'}],
-    admin: [{id:'matrix', label:'Matrix'}, {id:'cartage', label:'Cartage'}, {id:'multi', label:'Multipliers'}]
+    admin: [{id:'matrix', label:'Matrix'}, {id:'cartage', label:'Cartage'}]
 };
 
 /* ================================================================
-   2. PAINT & MIXER LOGIC
-================================================================
-*/
+   2. CLIENT & PROFILE ACTIONS (ADD/EDIT/DELETE)
+================================================================ */
 
-// Renders the list of paints in the Database tab
-function renderPaints(filter = "") {
-    const container = document.getElementById('paint-list-container');
-    if(!container) return;
-
-    container.innerHTML = paints
-        .filter(p => p.color.toLowerCase().includes(filter.toLowerCase()))
-        .map((p, i) => `
-            <div class="card" style="border-left: 5px solid var(--gs); margin-bottom:10px;">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <div>
-                        <div style="font-size:10px; color:#888; font-weight:900;">${p.brand} | ${p.finish}</div>
-                        <div style="font-weight:700; font-size:18px;">${p.color}</div>
-                        <div style="font-size:11px; color:var(--gs); font-family:monospace;">${p.evic}</div>
-                    </div>
-                    <div style="text-align:right;">
-                        <button onclick="openMixer(${i})" style="background:#000; color:white; border:none; padding:8px 12px; border-radius:5px; font-size:10px; font-weight:900;">🧪 MIX</button>
-                        <button onclick="deletePaint(${i})" style="color:red; border:none; background:none; font-size:20px; margin-left:10px;">×</button>
-                    </div>
-                </div>
-            </div>`).join('');
-    
-    localStorage.setItem('pw_paints', JSON.stringify(paints));
-    syncDropdowns(); // Keeps Measure tab in sync
+// CLIENTS
+function addClient() {
+    let n = prompt("New Client Name:");
+    if(n) { clients.push(n); renderClients(); }
+}
+function editClient(old) {
+    let n = prompt("Rename Client:", old);
+    if(n && n !== old) { clients = clients.map(c => c === old ? n : c); renderClients(); }
+}
+function deleteClient(n) {
+    if(confirm("Delete " + n + "?")) { clients = clients.filter(c => c !== n); renderClients(); }
 }
 
-// Opens the calculation card for mixing paint
+// PROFILES
+function addProfile() {
+    let n = prompt("New Profile Name:");
+    if(n) { profiles.push(n); renderProfiles(); }
+}
+function editProfile(old) {
+    let n = prompt("Rename Profile:", old);
+    if(n && n !== old) { profiles = profiles.map(p => p === old ? n : p); renderProfiles(); }
+}
+function deleteProfile(n) {
+    if(confirm("Delete " + n + "?")) { profiles = profiles.filter(p => p !== n); renderProfiles(); }
+}
+
+/* ================================================================
+   3. PAINT & MIXER LOGIC
+================================================================ */
+
+function addPaint() {
+    let b = prompt("Brand:"), c = prompt("Color:"), f = prompt("Finish:"), e = prompt("EVIC:");
+    if(b && c && f && e) {
+        paints.push({brand: b, color: c, finish: f, evic: e, recipe: {"White Base": 1000}});
+        renderPaints();
+    }
+}
+
+function deletePaint(idx) { 
+    if(confirm("Delete this paint?")) { paints.splice(idx, 1); renderPaints(); } 
+}
+
 function openMixer(idx) {
     const p = paints[idx];
     if(!p) return;
-    
     let qty = prompt(`Mix ${p.color}. Liters?`, "1");
     if(!qty || isNaN(qty)) return;
 
-    let recipeLines = Object.entries(p.recipe).map(([ing, g]) => `
-        <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-            <span>${ing}:</span><b>${(g * qty).toFixed(1)}g</b>
+    let recipeHtml = Object.entries(p.recipe).map(([ing, g]) => `
+        <div style="display:flex;justify-content:space-between;margin-bottom:5px;">
+            <span>${ing}:</span><b>${(g*qty).toFixed(1)}g</b>
         </div>`).join('');
 
     const modal = document.createElement('div');
     modal.id = "active-modal";
     modal.style = "position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:white; padding:20px; border-radius:15px; box-shadow:0 0 100px rgba(0,0,0,0.8); z-index:10000; width:85%; max-width:350px;";
     modal.innerHTML = `
-        <h3 style="margin-top:0;">Mixing Sheet</h3>
-        <div style="background:#f9f9f9; padding:15px; border-radius:10px; border:1px solid #ddd; font-family:monospace;">
-            <strong>${p.color} (${p.finish})</strong><br><small>${p.evic}</small><hr>
-            ${recipeLines}<hr>
-            <div style="display:flex; justify-content:space-between"><span>TOTAL:</span><b>${qty}L</b></div>
+        <h3 style="margin:0 0 10px 0;">Mixing Sheet</h3>
+        <div style="background:#f5f5f5; padding:15px; border-radius:10px; font-family:monospace;">
+            <strong>${p.brand} - ${p.color}</strong><br><small>${p.evic}</small><hr>
+            ${recipeHtml}<hr>
+            <div style="display:flex;justify-content:space-between"><span>TOTAL:</span><b>${qty}L</b></div>
         </div>
         <div style="display:flex; gap:10px; margin-top:20px;">
             <button onclick="this.closest('#active-modal').remove()" style="flex:1; padding:12px; background:#eee; border:none; border-radius:8px; font-weight:900;">CLOSE</button>
-            <button onclick="editRecipe(${idx})" style="flex:1; padding:12px; background:var(--gs); color:white; border:none; border-radius:8px; font-weight:900;">EDIT FORMULA</button>
+            <button onclick="editRecipe(${idx})" style="flex:1; padding:12px; background:var(--gs); color:white; border:none; border-radius:8px; font-weight:900;">EDIT</button>
         </div>`;
     document.body.appendChild(modal);
 }
 
-// Allows changing ingredients for a specific paint
 function editRecipe(idx) {
-    const p = paints[idx];
-    let current = Object.entries(p.recipe).map(([n, g]) => `${n}:${g}`).join(", ");
-    let val = prompt("Edit Ingredients (Name:Grams, Name:Grams):", current);
-    
+    let p = paints[idx];
+    let cur = Object.entries(p.recipe).map(([n, g]) => `${n}:${g}`).join(", ");
+    let val = prompt("Formula (Ing:Grams, Ing:Grams):", cur);
     if(val) {
-        let newRec = {};
-        val.split(",").forEach(item => {
-            let [n, g] = item.split(":");
-            if(n && g) newRec[n.trim()] = parseFloat(g.trim());
-        });
-        paints[idx].recipe = newRec;
+        let newR = {};
+        val.split(",").forEach(i => { let [n, g] = i.split(":"); if(n && g) newR[n.trim()] = parseFloat(g.trim()); });
+        paints[idx].recipe = newR;
         document.getElementById('active-modal').remove();
         renderPaints();
     }
 }
 
 /* ================================================================
-   3. CLIENT & PROFILE DATABASE LOGIC
-================================================================
-*/
+   4. RENDER LISTS (CLIENTS, PAINTS, PROFILES)
+================================================================ */
 
-function renderClients(filter = "") {
-    const container = document.getElementById('client-list-container');
-    if(!container) return;
-    container.innerHTML = clients.filter(c => c.toLowerCase().includes(filter.toLowerCase())).map(c => `
-        <div class="card" style="display:flex; justify-content:space-between; align-items:center; padding:10px; margin-bottom:5px;">
-            <span style="font-weight:700;">${c}</span>
-            <div>
-                <button onclick="editClient('${c}')" style="color:blue; border:none; background:none; margin-right:10px;">EDIT</button>
-                <button onclick="deleteClient('${c}')" style="color:red; border:none; background:none; font-size:18px;">×</button>
-            </div>
+function renderClients() {
+    const c = document.getElementById('client-list-container');
+    if(c) c.innerHTML = clients.map(n => `
+        <div class="card" style="display:flex;justify-content:space-between;align-items:center;padding:10px;">
+            <b>${n}</b>
+            <div><button onclick="editClient('${n}')" style="color:blue;border:0;background:0;">EDIT</button>
+            <button onclick="deleteClient('${n}')" style="color:red;border:0;background:0;font-size:18px;">×</button></div>
         </div>`).join('');
-    updateClientDropdown();
     localStorage.setItem('pw_clients', JSON.stringify(clients));
 }
 
-function renderProfiles(filter = "") {
-    const container = document.getElementById('profile-list-container');
-    if(!container) return;
-    container.innerHTML = profiles.filter(p => p.toLowerCase().includes(filter.toLowerCase())).map(p => `
-        <div class="card" style="display:flex; justify-content:space-between; align-items:center; padding:10px; margin-bottom:5px;">
-            <span style="font-weight:700;">${p}</span>
-            <div>
-                <button onclick="editProfile('${p}')" style="color:blue; border:none; background:none; margin-right:10px;">EDIT</button>
-                <button onclick="deleteProfile('${p}')" style="color:red; border:none; background:none; font-size:18px;">×</button>
-            </div>
+function renderPaints() {
+    const c = document.getElementById('paint-list-container');
+    if(c) c.innerHTML = paints.map((p, i) => `
+        <div class="card" style="display:flex;justify-content:space-between;align-items:center;padding:10px;border-left:5px solid var(--gs);">
+            <div><small>${p.brand}</small><br><b>${p.color}</b></div>
+            <div><button onclick="openMixer(${i})" style="background:#000;color:#fff;border:0;padding:5px 10px;border-radius:5px;">🧪 MIX</button>
+            <button onclick="deletePaint(${i})" style="color:red;border:0;background:0;font-size:18px;">×</button></div>
         </div>`).join('');
-    updateProfileDropdown();
+    localStorage.setItem('pw_paints', JSON.stringify(paints));
+    syncDropdowns();
+}
+
+function renderProfiles() {
+    const c = document.getElementById('profile-list-container');
+    if(c) c.innerHTML = profiles.map(p => `
+        <div class="card" style="display:flex;justify-content:space-between;align-items:center;padding:10px;">
+            <b>${p}</b>
+            <div><button onclick="editProfile('${p}')" style="color:blue;border:0;background:0;">EDIT</button>
+            <button onclick="deleteProfile('${p}')" style="color:red;border:0;background:0;font-size:18px;">×</button></div>
+        </div>`).join('');
     localStorage.setItem('pw_profiles', JSON.stringify(profiles));
 }
 
 /* ================================================================
-   4. MEASUREMENT & RENDER LOGIC (WITH EDGE RULES)
-================================================================
-*/
+   5. MAIN MEASUREMENT RENDER (WITH CUSTOM EDGE RULES)
+================================================================ */
 
 function render(){
     const list = document.getElementById('list'); 
     list.innerHTML = ''; 
-    let totalSqm = 0, totalQty = 0;
-
+    let ts = 0, tq = 0;
     items.forEach((it, i) => {
-        totalSqm += parseFloat(it.sqm) * it.qty; 
-        totalQty += it.qty;
-
-        let L = (it.e[0] ? 1 : 0) + (it.e[1] ? 1 : 0);
-        let S = (it.e[2] ? 1 : 0) + (it.e[3] ? 1 : 0);
-        
+        ts += parseFloat(it.sqm) * it.qty; tq += it.qty;
+        let L = (it.e[0]?1:0)+(it.e[1]?1:0), S = (it.e[2]?1:0)+(it.e[3]?1:0);
         let lbL = (L > 0) ? (it.mode === 'SE' ? "1LR" : L + "L") : "";
         let lbS = (S > 0) ? (it.mode === 'SE' ? "1SR" : S + "S") : "";
 
-        // Applying blank text rule for specific combinations
-        if (["0S", "0L", "0SL", "0SR"].includes(lbL + lbS)) { 
-            lbL = ""; 
-            lbS = ""; 
-        }
+        // Custom Rule: If edge text is 0S or 0l or 0SL or 0SR then leave blank.
+        if (["0S", "0L", "0SL", "0SR"].includes(lbL + lbS)) { lbL = ""; lbS = ""; }
 
-        list.innerHTML += `
-        <div class="card" style="display:flex; align-items:center; gap:10px; padding:10px; margin-bottom:8px;">
+        list.innerHTML += `<div class="card" style="display:flex;align-items:center;gap:10px;padding:10px;">
             <div class="qty-bubble">${it.qty}</div>
-            <div style="flex:1">
-                <div style="font-weight:900; font-size:18px;">${it.h} x ${it.w}</div>
-                <div style="font-size:11px; color:#666;">${it.desc || 'No Description'}</div>
-                <div>
-                    ${lbL ? `<span class="edge-pill edge-L">${lbL}</span>` : ''}
-                    ${lbS ? `<span class="edge-pill edge-S">${lbS}</span>` : ''}
-                </div>
-            </div>
-            <button onclick="items.splice(${i},1); render()" style="color:red; border:0; background:0; font-size:26px;">×</button>
+            <div style="flex:1"><b>${it.h} x ${it.w}</b><br><small>${it.desc||''}</small>
+            <div>${lbL?`<span class="edge-pill edge-L">${lbL}</span>`:''}${lbS?`<span class="edge-pill edge-S">${lbS}</span>`:''}</div></div>
+            <button onclick="items.splice(${i},1);render()" style="color:red;border:0;background:0;font-size:26px;">×</button>
         </div>`;
     });
-    
-    document.getElementById('tA').innerText = totalSqm.toFixed(3);
-    document.getElementById('tQ').innerText = totalQty;
+    document.getElementById('tA').innerText = ts.toFixed(3);
+    document.getElementById('tQ').innerText = tq;
 }
 
 /* ================================================================
-   5. NAVIGATION & UTILITIES
-================================================================
-*/
+   6. NAVIGATION & DROPDOWNS
+================================================================ */
 
 function tab(t) {
     document.querySelectorAll('.view-section, .nav-btn').forEach(x => x.classList.remove('active'));
     document.getElementById(t).classList.add('active');
     document.getElementById('btn-' + t).classList.add('active');
-    
     const nav = document.getElementById('sub-nav-bar');
     if (subMenus[t]) {
         nav.style.display = 'flex';
-        nav.innerHTML = subMenus[t].map((s, i) => 
-            `<button class="sub-btn ${i===0?'active':''}" onclick="subTab('${t}','${s.id}',this)">${s.label}</button>`
-        ).join('');
+        nav.innerHTML = subMenus[t].map((s, i) => `<button class="sub-btn ${i===0?'active':''}" onclick="subTab('${t}','${s.id}',this)">${s.label}</button>`).join('');
         subTab(t, subMenus[t][0].id, nav.firstChild); 
     } else { nav.style.display = 'none'; }
-
-    if(t === 'db') renderPaints();
 }
 
-function subTab(parent, child, btn) {
+function subTab(p, c, btn) {
     if(btn.parentNode) btn.parentNode.querySelectorAll('.sub-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    document.querySelectorAll(`#${parent} .sub-section`).forEach(s => s.classList.remove('active'));
-    
-    let pre = (parent === 'db') ? 'db-' : 'adm-';
-    const target = document.getElementById(pre + child);
+    document.querySelectorAll(`#${p} .sub-section`).forEach(s => s.classList.remove('active'));
+    let pre = (p === 'db') ? 'db-' : 'adm-';
+    const target = document.getElementById(pre + c);
     if(target) target.classList.add('active');
-
-    if(child === 'paints') renderPaints();
-    if(child === 'clients') renderClients();
-    if(child === 'profiles') renderProfiles();
+    if(c === 'paints') renderPaints();
+    if(c === 'clients') renderClients();
+    if(c === 'profiles') renderProfiles();
 }
 
 function syncDropdowns() {
     const bSel = document.getElementById('pBrand');
     const cSel = document.getElementById('pColor');
     if(!bSel || !cSel) return;
-
     const brands = [...new Set(paints.map(p => p.brand))];
     bSel.innerHTML = brands.map(b => `<option value="${b}">${b}</option>`).join('');
-    
     const updateColors = () => {
         const filtered = paints.filter(p => p.brand === bSel.value);
         cSel.innerHTML = filtered.map(p => `<option value="${p.color}">${p.color} (${p.finish})</option>`).join('');
@@ -234,10 +217,6 @@ function autoFillEvic() {
     if(match) document.getElementById('pFormula').value = match.evic;
 }
 
-// BOOTSTRAP: Load everything on start
 window.onload = () => {
-    renderPaints();
-    renderClients();
-    renderProfiles();
-    syncDropdowns();
+    renderPaints(); renderClients(); renderProfiles(); syncDropdowns();
 };
