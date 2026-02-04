@@ -100,13 +100,35 @@
             <label>Job Name / Reference</label>
             <input type="text" id="jNm" placeholder="e.g. Smith Residence">
 
-            <div style="background:#f9f9f9; padding:10px; border-radius:8px; border:1px solid #eee; margin-bottom:10px;">
-                <div style="display:flex; gap:8px;">
-                    <div style="flex:1"><label>Brand</label><input type="text" id="p-brand" placeholder="e.g. Dulux" style="height:35px; font-size:12px;"></div>
-                    <div style="flex:1"><label>Formula</label><input type="text" id="p-code" style="height:35px; font-size:12px;"></div>
-                </div>
-            </div>
-
+<div style="background:#f9f9f9; padding:10px; border-radius:8px; border:1px solid #eee; margin-bottom:10px;">
+    <div style="display:flex; gap:8px; margin-bottom:8px;">
+        <div style="flex:1">
+            <label>Brand</label>
+            <input type="text" id="p-brand" placeholder="e.g. Wattyl" style="height:35px; font-size:12px; margin-bottom:0;">
+        </div>
+        <div style="flex:1">
+            <label>Color Name</label>
+            <input type="text" id="p-color" placeholder="e.g. Lexicon" style="height:35px; font-size:12px; margin-bottom:0;">
+        </div>
+    </div>
+    <div style="display:flex; gap:8px;">
+        <div style="flex:1">
+            <label>Code / Formula</label>
+            <input type="text" id="p-code" placeholder="Formula" style="height:35px; font-size:12px; margin-bottom:0;">
+        </div>
+        <div style="flex:1">
+            <label>Finish</label>
+            <select id="p-finish" style="height:35px; font-size:12px; margin-bottom:0; padding:0 5px;">
+                <option>Satin</option>
+                <option>Gloss</option>
+                <option>Matt</option>
+                <option>20% Gloss</option>
+                <option>30% Gloss</option>
+            </select>
+        </div>
+    </div>
+</div>
+            
             <label>Part Type</label>
             <div class="bubble-row">
                 <div id="pP" class="p-card active" onclick="setP('Panel')"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"></rect></svg>PANEL</div>
@@ -217,45 +239,56 @@
         document.getElementById('liveSq').innerText = (area / 1000000).toFixed(3);
     }
 
-    function addPart() {
-        const h = document.getElementById('h').value;
-        const w = document.getElementById('w').value;
-        const q = parseInt(document.getElementById('qty').value) || 1;
-        if(!h || !w) return;
+function addPart() {
+    const h = document.getElementById('h').value;
+    const w = document.getElementById('w').value;
+    const q = parseInt(document.getElementById('qty').value) || 1;
+    if(!h || !w) return;
 
-        const edgeArr = [
-            document.getElementById('E1').classList.contains('active'),
-            document.getElementById('E2').classList.contains('active'),
-            document.getElementById('E3').classList.contains('active'),
-            document.getElementById('E4').classList.contains('active')
-        ];
+    const edgeArr = [
+        document.getElementById('E1').classList.contains('active'),
+        document.getElementById('E2').classList.contains('active'),
+        document.getElementById('E3').classList.contains('active'),
+        document.getElementById('E4').classList.contains('active')
+    ];
 
-        // SMART MERGE LOGIC
-        const existing = items.find(it => 
-            it.h === h && it.w === w && it.type === pType && 
-            it.prof === document.getElementById('prof-select').value &&
-            it.fm === fmState && it.mode === mode &&
-            JSON.stringify(it.e) === JSON.stringify(edgeArr)
-        );
+    // Added Paint Details to the object
+    const partData = {
+        h, w, qty: q, 
+        thk: document.getElementById('thk').value,
+        type: pType, 
+        mode: mode, 
+        fm: fmState,
+        desc: document.getElementById('desc').value || pType,
+        sqm: document.getElementById('liveSq').innerText,
+        prof: document.getElementById('prof-select').value,
+        e: edgeArr,
+        // Captured Paint Info:
+        brand: document.getElementById('p-brand').value,
+        color: document.getElementById('p-color').value,
+        code: document.getElementById('p-code').value,
+        finish: document.getElementById('p-finish').value
+    };
 
-        if(existing) {
-            existing.qty += q;
-            notify("Added to existing line");
-        } else {
-            items.push({
-                h, w, qty: q, thk: document.getElementById('thk').value,
-                type: pType, mode: mode, fm: fmState,
-                desc: document.getElementById('desc').value || pType,
-                sqm: document.getElementById('liveSq').innerText,
-                prof: document.getElementById('prof-select').value,
-                e: edgeArr
-            });
-            notify("Part Added");
-        }
+    // SMART MERGE
+    const existing = items.find(it => 
+        it.h === h && it.w === w && it.type === pType && 
+        it.prof === partData.prof && it.fm === fmState && 
+        it.mode === mode && JSON.stringify(it.e) === JSON.stringify(edgeArr)
+    );
 
-        render();
-        document.getElementById('h').value = ''; document.getElementById('w').value = '';
+    if(existing) {
+        existing.qty += q;
+        notify("Added to existing line");
+    } else {
+        items.push(partData);
+        notify("Part Added");
     }
+
+    render();
+    document.getElementById('h').value = ''; 
+    document.getElementById('w').value = '';
+}
 
     function render() {
         const l = document.getElementById('list'); l.innerHTML = '';
