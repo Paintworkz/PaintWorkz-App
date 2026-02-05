@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-    <title>PaintWorkz Pro 4.6 Fixed</title>
+    <title>PaintWorkz Pro 4.6 Stable</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         :root {
@@ -21,7 +21,7 @@
         .icon-btn { font-size: 28px; padding: 0 10px; cursor: pointer; }
 
         .nav-tabs { display: flex; background: #000; position: sticky; top: 80px; z-index: 999; overflow-x: auto; border-bottom: 1px solid #333; }
-        .nav-btn { flex:1; min-width:85px; padding:12px 0; color:#888; text-align:center; font-weight:900; font-size:10px; text-transform:uppercase; border:none; background:0 0; white-space: nowrap; }
+        .nav-btn { flex:1; min-width:80px; padding:12px 0; color:#888; text-align:center; font-weight:900; font-size:10px; text-transform:uppercase; border:none; background:0 0; }
         .nav-btn.active { color:#fff; border-bottom:4px solid var(--gs); background:#111; }
 
         .container { padding: 15px; max-width: 600px; margin: auto; }
@@ -44,6 +44,7 @@
 
         .p-card { flex:1; background:#fff; border:2px solid #ddd; border-radius:8px; padding:8px 2px; text-align:center; font-weight:900; font-size:9px; color:#444; display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer; }
         .p-card.active { border-color:var(--gs); background:#fff9e6; color:#000; }
+        .p-card svg { width:22px; height:22px; stroke: currentColor; fill:none; stroke-width:2; }
 
         .edge-row { display:flex; justify-content:space-between; align-items:center; margin:15px 0; gap:6px; }
         .edge-box { flex:1; height:45px; border-radius:8px; border:2px solid #ddd; background:#fff; display:flex; align-items:center; justify-content:center; font-weight:900; color:#ccc; font-size:14px; user-select:none; }
@@ -59,6 +60,7 @@
         .qty-btn { border:none; background:#eee; width:100%; font-weight:900; font-size:18px; height: 30px; cursor: pointer; }
         .pl-center { flex:1; }
         .pl-dims { font-size: 18px; font-weight: 900; color: #000; line-height:1.1; }
+        .edge-pill { display:inline-block; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 900; color: #fff; margin-right: 3px; }
         
         .sticky-footer { background: #000; position: fixed; bottom: 0; left: 0; right: 0; height: 80px; border-top: 3px solid var(--gs); color: #fff; display: flex; justify-content: space-around; align-items: center; z-index: 2000; }
         #toast { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); background: #222; color: #fff; padding: 12px 25px; border-radius: 30px; font-weight: 900; z-index: 3000; display: none; border: 1px solid var(--gs); }
@@ -154,22 +156,6 @@
         </div>
         <div id="list"></div>
     </div>
-
-    <div id="history" class="view-section">
-        <div class="card"><h3>Job History</h3><p>Past jobs will appear here.</p></div>
-    </div>
-    
-    <div id="db" class="view-section">
-        <div class="card"><h3>Database</h3><p>Manage Profiles & Clients here.</p></div>
-    </div>
-
-    <div id="forms" class="view-section">
-        <div class="card"><h3>Forms</h3><p>Generate Invoices & Dockets.</p></div>
-    </div>
-
-    <div id="admin" class="view-section">
-        <div class="card"><h3>Admin Matrix</h3><p>Pricing controls coming here.</p></div>
-    </div>
 </div>
 
 <div class="sticky-footer">
@@ -179,19 +165,18 @@
 
 <script>
     let items = [], mode = 'SS', pType = 'Panel', fmState = 'Flat';
-    const profiles = ["Plain (101)", "J-Mould (102)", "Sharknose (103)", "Shaker (401)", "Hamilton (202)", "Rosebrook (503)"];
-    const clients = ["T&J Kitchens", "Smith Joinery", "Walk in Client", "VJS Geelong"];
+    const profiles = ["Plain (101)", "J-Mould (102)", "Sharknose (103)", "Shaker (401)", "Hamilton (202)"];
+    const clients = ["T&J Kitchens", "Smith Joinery", "Walk in Client"];
 
     window.onload = () => {
         const ps = document.getElementById('prof-select');
-        profiles.sort().forEach(p => ps.innerHTML += `<option>${p}</option>`);
+        profiles.forEach(p => ps.innerHTML += `<option>${p}</option>`);
         const cs = document.getElementById('cli');
         clients.sort().forEach(c => cs.innerHTML += `<option>${c}</option>`);
     };
 
     function tab(t) {
-        document.querySelectorAll('.view-section').forEach(x => x.classList.remove('active'));
-        document.querySelectorAll('.nav-btn').forEach(x => x.classList.remove('active'));
+        document.querySelectorAll('.view-section, .nav-btn').forEach(x => x.classList.remove('active'));
         document.getElementById(t).classList.add('active');
         document.getElementById('btn-' + t).classList.add('active');
     }
@@ -241,7 +226,7 @@
         if(!h || !w) return;
         const eArr = [document.getElementById('E1').classList.contains('active'),document.getElementById('E2').classList.contains('active'),document.getElementById('E3').classList.contains('active'),document.getElementById('E4').classList.contains('active')];
         
-        const existing = items.find(it => it.h === h && it.w === w && it.prof === document.getElementById('prof-select').value && it.mode === mode && JSON.stringify(it.e) === JSON.stringify(eArr) && it.fm === fmState);
+        const existing = items.find(it => it.h === h && it.w === w && it.prof === document.getElementById('prof-select').value && it.mode === mode && JSON.stringify(it.e) === JSON.stringify(eArr));
         if(existing) { existing.qty += q; } else {
             items.push({ h, w, qty: q, thk: document.getElementById('thk').value, type: pType, mode: mode, fm: fmState, desc: document.getElementById('desc').value || pType, sqm: document.getElementById('liveSq').innerText, prof: document.getElementById('prof-select').value, e: eArr });
         }
@@ -263,13 +248,13 @@
                     <button class="qty-btn" style="border-radius:0 0 4px 4px" onclick="if(items[${i}].qty>1)items[${i}].qty--;render()">-</button>
                 </div>
                 <div class="pl-center">
-                    <div style="font-size:10px; font-weight:900; text-transform:uppercase;">${it.desc} (${it.fm})</div>
+                    <div style="font-size:10px; font-weight:900; text-transform:uppercase;">${it.desc}</div>
                     <div class="pl-dims">${it.h} x ${it.w}</div>
                     <div style="font-size:10px; color:#666;">${it.prof} | ${tL} ${tS}</div>
                 </div>
                 <div style="text-align:right">
                     <div style="font-weight:900;">${rowS.toFixed(3)}</div>
-                    <div onclick="items.splice(${i},1);render()" style="color:red; font-size:10px; font-weight:900; cursor:pointer;">REMOVE</div>
+                    <div onclick="items.splice(${i},1);render()" style="color:red; font-weight:900; cursor:pointer;">REMOVE</div>
                 </div>
             </div>`;
         });
