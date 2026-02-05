@@ -93,43 +93,78 @@ button:active { opacity: 0.5; }
 
 <div class="container">
 
-<div id="history" class="view-section">
-    <div class="card">
-        <h3>Job History</h3>
-        <p style="font-size: 12px; color: #666;">Recent saved jobs will appear here.</p>
-        <div id="history-list"></div>
-    </div>
-</div>
+<div class="container">
 
-<div id="forms" class="view-section">
-    <div class="card">
-        <h3>Generate Forms</h3>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-            <button class="add-main-btn" style="font-size:12px; padding:15px;" onclick="genForm('Estimate')">ESTIMATE</button>
-            <button class="add-main-btn" style="font-size:12px; padding:15px;" onclick="genForm('Supply')">SUPPLY DOCKET</button>
-            <button class="add-main-btn" style="font-size:12px; padding:15px;" onclick="genForm('Mixing')">MIXING CARD</button>
-            <button class="add-main-btn" style="font-size:12px; padding:15px;" onclick="genForm('Invoice')">INVOICE</button>
+    <div id="measure" class="view-section active">
+        </div>
+
+    <div id="history" class="view-section">
+        <div class="card">
+            <h3>Job History</h3>
+            <div style="display:flex; gap:10px; margin-bottom:15px;">
+                <input type="text" placeholder="Search jobs..." style="margin:0;">
+            </div>
+            <div id="history-list">
+                <p style="text-align:center; color:#999; padding:20px;">No saved jobs found.</p>
+            </div>
         </div>
     </div>
+
+    <div id="db" class="view-section">
+        <div class="card">
+            <h3>Master Database</h3>
+            <div class="fm-row">
+                <div class="fm-opt active" onclick="setDBView('clients')">CLIENTS</div>
+                <div class="fm-opt" onclick="setDBView('pricing')">PRICING</div>
+            </div>
+            <div id="db-clients" class="db-subview">
+                <div style="display:flex; gap:5px; margin-bottom:15px;">
+                    <input type="text" id="new-client" placeholder="New Client Name" style="margin:0;">
+                    <button class="add-main-btn" style="width:60px; padding:0; margin:0; height:45px;" onclick="addClient()">+</button>
+                </div>
+                <div id="db-client-list" style="max-height:300px; overflow-y:auto; border:1px solid #eee; border-radius:8px;"></div>
+            </div>
+            <div id="db-pricing" class="db-subview" style="display:none;">
+                </div>
+        </div>
+    </div>
+
+    <div id="forms" class="view-section">
+        <div class="card">
+            <h3>Generate Paperwork</h3>
+            <div style="display:grid; grid-template-columns: 1fr; gap:12px;">
+                <button class="add-main-btn" onclick="genForm('Estimate')">ESTIMATE FORM</button>
+                <button class="add-main-btn" onclick="genForm('Supply')">SUPPLY DOCKET</button>
+                <button class="add-main-btn" onclick="genForm('Mixing')">MIXING CARD</button>
+                <button class="add-main-btn" onclick="genForm('Invoice')">INVOICE (DYNAMIC)</button>
+                <button class="add-main-btn" onclick="genForm('Quote')">QUOTE FORM</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="schedule" class="view-section">
+        <div class="card">
+            <h3>Production Schedule</h3>
+            <div style="background:#f9f9f9; height:200px; display:flex; align-items:center; justify-content:center; border-radius:10px; border:2px dashed #ccc;">
+                <span style="color:#999; font-weight:900;">CALENDAR COMING SOON</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="admin" class="view-section">
+        <div class="card">
+            <h3>System Settings</h3>
+            <label>Business Name</label>
+            <input type="text" value="PaintWorkz Pro">
+            <label>ABN</label>
+            <input type="text" placeholder="XX XXX XXX XXX">
+            <button class="add-main-btn" onclick="saveSettings()">SAVE SETTINGS</button>
+        </div>
+    </div>
+
 </div>
 
-<div id="schedule" class="view-section">
-    <div class="card">
-        <h3>Production Schedule</h3>
-        <p>Calendar view coming soon...</p>
-    </div>
-</div>
-
-<div id="admin" class="view-section">
-    <div class="card">
-        <h3>Admin & Settings</h3>
-        <label>Company Name</label>
-        <input type="text" value="PaintWorkz Pro">
-        <button class="add-main-btn" onclick="saveSettings()">SAVE SETTINGS</button>
-    </div>
-</div>
-    
-<div id="db" class="view-section">
+  <div id="db" class="view-section">
     <div class="card">
         <h3>Master Database</h3>
         
@@ -318,25 +353,6 @@ window.onload = function() {
     tab('measure'); // Ensure we start on the measure page
 };
 
-function setDBView(view) {
-    // Hide both sub-views
-    document.getElementById('db-clients').style.display = 'none';
-    document.getElementById('db-pricing').style.display = 'none';
-    
-    // Remove active state from both buttons
-    document.querySelectorAll('#db .fm-opt').forEach(o => o.classList.remove('active'));
-    
-    // Show the selected one
-    if(view === 'clients') {
-        document.getElementById('db-clients').style.display = 'block';
-        // We find the first fm-opt to highlight it
-        document.querySelectorAll('#db .fm-opt')[0].classList.add('active');
-    } else {
-        document.getElementById('db-pricing').style.display = 'block';
-        document.querySelectorAll('#db .fm-opt')[1].classList.add('active');
-    }
-}
-
 function addClient() {
     const name = document.getElementById('new-client').value;
     if(name) {
@@ -359,12 +375,43 @@ function changeQty(index, delta) {
     render(); // Refresh the list and totals
 }
     
-    function tab(t) {
-        document.querySelectorAll('.view-section, .nav-btn').forEach(x => x.classList.remove('active'));
-        document.getElementById(t).classList.add('active');
-        document.getElementById('btn-' + t).classList.add('active');
-    }
+function tab(t) {
+    // 1. Hide all sections
+    document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
+    // 2. Deactivate all buttons
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    
+    // 3. Show the target section
+    const targetSection = document.getElementById(t);
+    const targetBtn = document.getElementById('btn-' + t);
+    
+    if(targetSection) targetSection.classList.add('active');
+    if(targetBtn) targetBtn.classList.add('active');
 
+    // Special case: if opening database, refresh the list
+    if(t === 'db') renderDB();
+}
+
+function setDBView(view) {
+    document.getElementById('db-clients').style.display = view === 'clients' ? 'block' : 'none';
+    document.getElementById('db-pricing').style.display = view === 'pricing' ? 'block' : 'none';
+    
+    const opts = document.querySelectorAll('#db .fm-opt');
+    opts[0].classList.toggle('active', view === 'clients');
+    opts[1].classList.toggle('active', view === 'pricing');
+}
+
+function renderDB() {
+    const listDiv = document.getElementById('db-client-list');
+    listDiv.innerHTML = '';
+    clientList.sort().forEach(name => {
+        const row = document.createElement('div');
+        row.style = "padding:12px; border-bottom:1px solid #eee; font-weight:600; font-size:14px; display:flex; justify-content:space-between;";
+        row.innerHTML = `<span>${name}</span><span style="color:#ccc">Edit</span>`;
+        listDiv.appendChild(row);
+    });
+}
+    
     function setFM(v) {
         fmState = v;
         document.querySelectorAll('.fm-opt').forEach(o => o.classList.remove('active'));
