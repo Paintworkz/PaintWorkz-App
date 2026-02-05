@@ -194,34 +194,37 @@ button:active { opacity: 0.5; }
         </div>
     </div>
 
-    <div id="db" class="view-section">
-        <div class="card">
-            <h3>Master Database</h3>
-            <div class="fm-row">
-                <div class="fm-opt active" onclick="setDBView('clients')">CLIENTS</div>
-                <div class="fm-opt" onclick="setDBView('pricing')">PRICING</div>
+   <div id="db" class="view-section">
+    <div class="card">
+        <h3>Master Database</h3>
+        <div class="fm-row">
+            <div class="fm-opt active" id="sub-btn-clients" onclick="setDBView('clients')">CLIENTS</div>
+            <div class="fm-opt" id="sub-btn-pricing" onclick="setDBView('pricing')">PRICING</div>
+        </div>
+
+        <div id="db-clients" class="db-subview">
+            <div style="display:flex; gap:5px; margin-bottom:15px;">
+                <input type="text" id="new-client" placeholder="New Client Name" style="margin:0;">
+                <button class="add-main-btn" style="width:60px; padding:0; margin:0; height:45px;" onclick="addClient()">+</button>
             </div>
-            <div id="db-clients" class="db-subview">
-                <div style="display:flex; gap:5px; margin-bottom:15px;">
-                    <input type="text" id="new-client" placeholder="New Client Name" style="margin:0;">
-                    <button class="add-main-btn" style="width:60px; padding:0; margin:0; height:45px;" onclick="addClient()">+</button>
+            <div id="db-client-list" style="max-height:300px; overflow-y:auto; border:1px solid #eee; border-radius:8px;">
                 </div>
-                <div id="db-client-list" style="max-height:300px; overflow-y:auto; border:1px solid #eee; border-radius:8px;"></div>
-            </div>
-            <div id="db-pricing" class="db-subview" style="display:none;">
-                <p style="font-size:11px; color:#666;">Edit prices per series m²</p>
-                <table style="width:100%; font-size:13px; border-collapse:collapse;">
-                    <tr style="border-bottom:2px solid #ddd; text-align:left;">
-                        <th style="padding:8px;">Series</th>
-                        <th>Flat Rate</th>
-                        <th>Moulded</th>
-                    </tr>
-                    <tr><td style="padding:8px;">100 (Plain)</td><td><input type="number" value="85" style="height:30px;"></td><td>-</td></tr>
-                    <tr><td style="padding:8px;">400 (Shaker)</td><td><input type="number" value="110" style="height:30px;"></td><td><input type="number" value="145" style="height:30px;"></td></tr>
-                </table>
-            </div>
+        </div>
+
+        <div id="db-pricing" class="db-subview" style="display:none;">
+            <p style="font-size:11px; color:#666;">Edit prices per series m²</p>
+            <table style="width:100%; font-size:13px; border-collapse:collapse;">
+                <tr style="border-bottom:2px solid #ddd; text-align:left;">
+                    <th style="padding:8px;">Series</th>
+                    <th>Flat Rate</th>
+                    <th>Moulded</th>
+                </tr>
+                <tr><td style="padding:8px;">100 (Plain)</td><td><input type="number" value="85"></td><td>-</td></tr>
+                <tr><td style="padding:8px;">400 (Shaker)</td><td><input type="number" value="110"></td><td><input type="number" value="145"></td></tr>
+            </table>
         </div>
     </div>
+</div>
 
     <div id="forms" class="view-section">
         <div class="card">
@@ -295,28 +298,29 @@ const doorProfiles = [
     
 // UPDATED ONLOAD TO POPULATE DROPDOWNS
 window.onload = function() {
+    // 1. Populate Clients Dropdown (Measure Tab)
     const cliSelect = document.getElementById('cli');
+    if(cliSelect) {
+        cliSelect.innerHTML = "";
+        clientList.sort().forEach(c => {
+            let o = document.createElement('option');
+            o.value = c; o.innerText = c;
+            cliSelect.appendChild(o);
+        });
+    }
+
+    // 2. Populate Door Profiles Dropdown (Measure Tab)
     const profSelect = document.getElementById('prof-select');
+    if(profSelect) {
+        profSelect.innerHTML = "";
+        doorProfiles.forEach(p => {
+            let o = document.createElement('option');
+            o.value = p; o.innerText = p;
+            profSelect.appendChild(o);
+        });
+    }
     
-    // Clear defaults
-    cliSelect.innerHTML = "";
-    profSelect.innerHTML = "";
-
-    // Populate Clients
-    clientList.sort().forEach(c => {
-        let o = document.createElement('option');
-        o.value = c; o.innerText = c;
-        cliSelect.appendChild(o);
-    });
-
-    // Populate Profiles
-    doorProfiles.forEach(p => {
-        let o = document.createElement('option');
-        o.value = p; o.innerText = p;
-        profSelect.appendChild(o);
-    });
-    
-    tab('measure'); // Ensure we start on the measure page
+    tab('measure'); // Start on measure page
 };
 
 function addClient() {
@@ -359,12 +363,23 @@ function tab(t) {
 }
 
 function setDBView(view) {
-    document.getElementById('db-clients').style.display = view === 'clients' ? 'block' : 'none';
-    document.getElementById('db-pricing').style.display = view === 'pricing' ? 'block' : 'none';
+    // Hide all subviews
+    document.getElementById('db-clients').style.display = 'none';
+    document.getElementById('db-pricing').style.display = 'none';
     
-    const opts = document.querySelectorAll('#db .fm-opt');
-    opts[0].classList.toggle('active', view === 'clients');
-    opts[1].classList.toggle('active', view === 'pricing');
+    // Deactivate sub-buttons
+    document.getElementById('sub-btn-clients').classList.remove('active');
+    document.getElementById('sub-btn-pricing').classList.remove('active');
+    
+    // Show selected
+    if(view === 'clients') {
+        document.getElementById('db-clients').style.display = 'block';
+        document.getElementById('sub-btn-clients').classList.add('active');
+        renderDB(); // Refresh the list
+    } else {
+        document.getElementById('db-pricing').style.display = 'block';
+        document.getElementById('sub-btn-pricing').classList.add('active');
+    }
 }
 
 function renderDB() {
