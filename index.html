@@ -198,86 +198,97 @@
     <div style="text-align:center;"><div style="font-size:9px; color:#aaa;">PARTS</div><div id="tQ" style="font-size:20px; font-weight:900; color:var(--gs)">0</div></div>
 </div>
 
-<script>
-    let items = [], mode = 'SS', pType = 'Panel', fmState = 'Flat';
+let items = [], mode = 'SS', pType = 'Panel', fmState = 'Flat';
+    
+    // Combined into one 'let' so we can add/remove from the list
     let doorProfiles = ["Plain (101)", "J-Mould (102)", "Sharknose (103)", "Bevelled Edge (104)", "Ashlee (201)", "Hamilton (202)", "Vertical Grooves (203)", "Tarrone (301)", "Bobby (302)", "Orford (303)", "Shaker (401)", "Shaker 45 (402)", "Shaker w/Lines (403)", "Jack (404)", "Georgia (501)", "Branxholme (502)", "Rosebrook (503)", "Benchtop", "Molding"];
     
     const clientList = ["12345ABM", "Absolute Kitchens", "Advanced Cabinetry", "AKC Kitchens", "Braw Creative", "Brian Moloney", "Cabinets & Stone", "Cabinets by Michael", "Chooka", "CKK", "Clover Doors", "Complete Style Joinery", "Concept 2 Reality", "Coronet Kitchens", "Create a Kitchen", "Creative Cabinetry", "Cutting Edge Joinery", "Driscolls Joinery", "Evolution Kitchens and Joinery", "Geoff Frost Builders", "GM Cabinets", "Grampians Joinery", "Grovedale Kitchens", "Gunning Concepts", "Hamilton Sheetmetal", "Harris Cabinets", "Howe Kitchens & Joinery", "Hy-Craft", "Jardines Cabinets", "Joinery by Jarrod", "Jonassons", "Kingston Kabinets", "Kitchens U Build", "Kyle Hendy", "Leighton Park", "Matthews Joinery", "Ocean Grove Joinery", "Onshore", "R J Walter", "Richardson Joinery", "Schier Cabinet Makers", "Snaauws Kitchens", "SRT Cabinetry", "Stawell Joinery", "Stephensons Kitchens", "T&J Kitchens", "Tony Lambert Kitchens", "Total Kitchen Solutions", "Trendset Kitchens", "Troy Turner", "Ultrabuild", "VG Cabinets", "VJS Geelong", "VJS Shepparton", "Walk in Client", "Westend Cabinetry"];
-    
-    const doorProfiles = ["Plain (101)", "J-Mould (102)", "Sharknose (103)", "Bevelled Edge (104)", "Ashlee (201)", "Hamilton (202)", "Vertical Grooves (203)", "Tarrone (301)", "Bobby (302)", "Orford (303)", "Shaker (401)", "Shaker 45 (402)", "Shaker w/Lines (403)", "Jack (404)", "Georgia (501)", "Branxholme (502)", "Rosebrook (503)", "Benchtop", "Molding"];
 
-window.onload = function() {
-    const cliSelect = document.getElementById('cli');
-    cliSelect.innerHTML = "";
-    clientList.sort().forEach(c => {
-        let o = document.createElement('option'); o.value = c; o.innerText = c;
-        cliSelect.appendChild(o);
-    });
-    syncProfiles(); 
-    tab('measure');
-};
+    window.onload = function() {
+        const cliSelect = document.getElementById('cli');
+        if(cliSelect) {
+            cliSelect.innerHTML = "";
+            clientList.sort().forEach(c => {
+                let o = document.createElement('option'); o.value = c; o.innerText = c;
+                cliSelect.appendChild(o);
+            });
+        }
+        syncProfiles(); 
+        tab('measure');
+    };
 
     function tab(t) {
         document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-        document.getElementById(t).classList.add('active');
-        document.getElementById('btn-' + t).classList.add('active');
-        if(t === 'db') renderDB();
+        const target = document.getElementById(t);
+        if(target) target.classList.add('active');
+        const btn = document.getElementById('btn-' + t);
+        if(btn) btn.classList.add('active');
+        
+        // Refresh data when entering database
+        if(t === 'db') {
+            renderDB();
+            renderProfiles();
+        }
     }
 
-function setSubView(v) {
-    document.getElementById('view-clients').style.display = v === 'clients' ? 'block' : 'none';
-    document.getElementById('view-profiles').style.display = v === 'profiles' ? 'block' : 'none';
-    
-    document.getElementById('sub-btn-clients').classList.toggle('active', v === 'clients');
-    document.getElementById('sub-btn-profiles').classList.toggle('active', v === 'profiles');
-    
-    if(v === 'profiles') renderProfiles();
-}
+    // Consolidated SubView Switcher for Database
+    function setSubView(v) {
+        const vCli = document.getElementById('view-clients');
+        const vProf = document.getElementById('view-profiles');
+        const bCli = document.getElementById('sub-btn-clients');
+        const bProf = document.getElementById('sub-btn-profiles');
 
-function addProfile() {
-    const p = document.getElementById('new-profile').value;
-    if(p) {
-        doorProfiles.push(p);
-        document.getElementById('new-profile').value = '';
-        renderProfiles();
-        syncProfiles(); // Updates the measure dropdown
+        if(vCli) vCli.style.display = (v === 'clients' ? 'block' : 'none');
+        if(vProf) vProf.style.display = (v === 'profiles' ? 'block' : 'none');
+        
+        if(bCli) bCli.classList.toggle('active', v === 'clients');
+        if(bProf) bProf.classList.toggle('active', v === 'profiles');
+        
+        if(v === 'profiles') renderProfiles();
+        if(v === 'clients') renderDB();
     }
-}
 
-function renderProfiles() {
-    const div = document.getElementById('db-profile-list');
-    div.innerHTML = '';
-    doorProfiles.sort().forEach((p, i) => {
-        div.innerHTML += `<div style="padding:12px; border-bottom:1px solid #eee; display:flex; justify-content:space-between;">${p} <button onclick="doorProfiles.splice(${i},1);renderProfiles();syncProfiles();" style="border:none; color:red; background:none;">×</button></div>`;
-    });
-}
+    function addProfile() {
+        const p = document.getElementById('new-profile').value;
+        if(p) {
+            doorProfiles.push(p);
+            document.getElementById('new-profile').value = '';
+            renderProfiles();
+            syncProfiles(); 
+        }
+    }
 
-function syncProfiles() {
-    const profSelect = document.getElementById('prof-select');
-    if(!profSelect) return;
-    profSelect.innerHTML = "";
-    doorProfiles.sort().forEach(p => {
-        let o = document.createElement('option'); o.value = p; o.innerText = p;
-        profSelect.appendChild(o);
-    });
-}
-    
-    function setDBView(v) {
-        document.getElementById('db-clients').style.display = v === 'clients' ? 'block' : 'none';
-        document.getElementById('db-pricing').style.display = v === 'pricing' ? 'block' : 'none';
-        document.getElementById('sub-btn-clients').classList.toggle('active', v === 'clients');
-        document.getElementById('sub-btn-pricing').classList.toggle('active', v === 'pricing');
+    function renderProfiles() {
+        const div = document.getElementById('db-profile-list');
+        if(!div) return;
+        div.innerHTML = '';
+        doorProfiles.sort().forEach((p, i) => {
+            div.innerHTML += `<div style="padding:12px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">${p} <button onclick="doorProfiles.splice(${i},1);renderProfiles();syncProfiles();" style="border:none; color:red; background:none; font-weight:bold;">×</button></div>`;
+        });
+    }
+
+    function syncProfiles() {
+        const profSelect = document.getElementById('prof-select');
+        if(!profSelect) return;
+        profSelect.innerHTML = "";
+        doorProfiles.sort().forEach(p => {
+            let o = document.createElement('option'); o.value = p; o.innerText = p;
+            profSelect.appendChild(o);
+        });
     }
 
     function renderDB() {
         const div = document.getElementById('db-client-list');
+        if(!div) return;
         div.innerHTML = '';
         clientList.sort().forEach(n => {
             div.innerHTML += `<div style="padding:12px; border-bottom:1px solid #eee; font-weight:600; display:flex; justify-content:space-between;">${n} <span style="color:#ccc">Edit</span></div>`;
         });
     }
 
+    // --- Core Measure Logic ---
     function setFM(v) { 
         fmState = v; 
         document.querySelectorAll('#measure .fm-opt').forEach(o => o.classList.remove('active'));
