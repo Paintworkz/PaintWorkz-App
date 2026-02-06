@@ -98,24 +98,23 @@
         /* COMPLETE JOB STAMP */
         .job-complete-stamp {
             position: absolute;
-            top: 40%;
+            top: 35%;
             left: 50%;
             transform: translate(-50%, -50%) rotate(-45deg);
-            font-size: 90px;
+            font-size: 48px;
             font-weight: 900;
             color: #34c759;
             text-transform: uppercase;
-            letter-spacing: 6px;
+            letter-spacing: 2px;
             pointer-events: none;
-            text-shadow: 4px 4px 8px rgba(52, 199, 89, 0.3);
-            z-index: 100;
-            border: 6px solid #34c759;
-            padding: 15px 50px;
-            border-radius: 16px;
-            background: rgba(255, 255, 255, 0.95);
+            text-shadow: 2px 2px 4px rgba(52, 199, 89, 0.2);
+            z-index: 50;
+            border: 3px solid #34c759;
+            padding: 6px 20px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.9);
             white-space: nowrap;
             line-height: 1;
-            box-shadow: 0 4px 20px rgba(52, 199, 89, 0.4);
         }
     </style>
 </head>
@@ -489,7 +488,7 @@
             const dateStr = jobDate.toLocaleDateString('en-AU');
             const isComplete = job.completed || false;
             
-            historyList.innerHTML += `<div class="card" style="border-left:5px solid ${isComplete ? '#34c759' : 'var(--gs)'}; position:relative; ${isComplete ? 'opacity:0.75;' : ''}">
+            historyList.innerHTML += `<div class="card" style="border-left:5px solid ${isComplete ? '#34c759' : 'var(--gs)'}; position:relative; ${isComplete ? 'background:#f0fff4;' : ''}">
                 ${isComplete ? '<div class="job-complete-stamp">✓ COMPLETE</div>' : ''}
                 <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:8px;">
                     <div style="flex:1;">
@@ -1253,7 +1252,7 @@
         let ganttHTML = '<div style="display:flex; gap:1px; margin-bottom:15px;">';
         
         // Job names column
-        ganttHTML += '<div style="width:150px; min-width:150px; font-weight:900; font-size:11px; padding:8px; border-right:2px solid #ddd; color:#000;">JOB / TIMELINE</div>';
+        ganttHTML += '<div style="width:180px; min-width:180px; font-weight:900; font-size:11px; padding:8px; border-right:2px solid #ddd; color:#000;">JOB / TIMELINE</div>';
         
         // Date columns
         for (let day = 1; day <= daysInMonth; day++) {
@@ -1270,30 +1269,37 @@
                 const [day, jobMonth, jobYear] = job.dateReceived.split('/');
                 const jobDate = new Date(parseInt('20' + jobYear), parseInt(jobMonth) - 1, parseInt(day));
                 
-                // Calculate timelines
-                const measureDate = jobDate;
-                const sandingDate = new Date(jobDate.getTime() + 7 * 24 * 60 * 60 * 1000); // Day 7
-                const completionDate = new Date(jobDate.getTime() + 14 * 24 * 60 * 60 * 1000); // Day 14
+                // Default timeline (editable in future)
+                const measuringEnd = 2;
+                const sandingEnd = 16;
+                const topCoatEnd = 18;
+                const inspectEnd = 20;
+                const completionDay = 21;
                 
                 // Row header
                 ganttHTML += `<div style="display:flex; gap:1px; margin-bottom:8px; align-items:center;">
-                    <div style="width:150px; min-width:150px; font-weight:900; font-size:10px; padding:8px; border-right:2px solid #ddd; color:#000; word-break:break-word;">
-                        Job #${job.jobNum}<br><span style="font-size:9px; color:#666;">${job.client}</span>
+                    <div style="width:180px; min-width:180px; font-weight:900; font-size:10px; padding:8px; border-right:2px solid #ddd; color:#000; word-break:break-word; cursor:pointer;" onclick="editJobTimeline(${jobIdx})" title="Click to edit timeline">
+                        Job #${job.jobNum}<br><span style="font-size:9px; color:#666;">${job.client}</span><br><span style="font-size:8px; color:#2196f3; margin-top:3px;">✏️ Edit Timeline</span>
                     </div>`;
                 
                 // Timeline bars
                 for (let day = 1; day <= daysInMonth; day++) {
                     const cellDate = new Date(year, month, day);
-                    let barHTML = '';
-                    let bgColor = '#f9f9f9';
+                    const dayOffset = Math.floor((cellDate - jobDate) / (24 * 60 * 60 * 1000));
                     
-                    // Check which phase this day is in
-                    if (cellDate >= measureDate && cellDate < sandingDate) {
-                        barHTML = `<div style="width:30px; height:30px; background:#2196f3; border:1px solid #1976d2; display:flex; align-items:center; justify-content:center; font-size:8px; color:#fff; font-weight:900;" title="Measuring Phase">M</div>`;
-                    } else if (cellDate >= sandingDate && cellDate < completionDate) {
-                        barHTML = `<div style="width:30px; height:30px; background:#ff9500; border:1px solid #f57c00; display:flex; align-items:center; justify-content:center; font-size:8px; color:#fff; font-weight:900;" title="Sanding Phase">S</div>`;
-                    } else if (cellDate >= completionDate && cellDate <= new Date(completionDate.getTime() + 2 * 24 * 60 * 60 * 1000)) {
-                        barHTML = `<div style="width:30px; height:30px; background:#34c759; border:1px solid #28a745; display:flex; align-items:center; justify-content:center; font-size:8px; color:#fff; font-weight:900;" title="Completion Phase">C</div>`;
+                    let barHTML = '';
+                    
+                    // Check which phase this day is in (0-indexed from job date)
+                    if (dayOffset >= 0 && dayOffset < measuringEnd) {
+                        barHTML = `<div style="width:30px; height:30px; background:#2196f3; border:1px solid #1976d2; display:flex; align-items:center; justify-content:center; font-size:7px; color:#fff; font-weight:900;" title="Measuring (Day ${dayOffset})">M</div>`;
+                    } else if (dayOffset >= measuringEnd && dayOffset < sandingEnd) {
+                        barHTML = `<div style="width:30px; height:30px; background:#ff9500; border:1px solid #f57c00; display:flex; align-items:center; justify-content:center; font-size:7px; color:#fff; font-weight:900;" title="Sanding (Day ${dayOffset})">S</div>`;
+                    } else if (dayOffset >= sandingEnd && dayOffset < topCoatEnd) {
+                        barHTML = `<div style="width:30px; height:30px; background:#9c27b0; border:1px solid #7b1fa2; display:flex; align-items:center; justify-content:center; font-size:7px; color:#fff; font-weight:900;" title="Top Coat (Day ${dayOffset})">T</div>`;
+                    } else if (dayOffset >= topCoatEnd && dayOffset < inspectEnd) {
+                        barHTML = `<div style="width:30px; height:30px; background:#673ab7; border:1px solid #512da8; display:flex; align-items:center; justify-content:center; font-size:7px; color:#fff; font-weight:900;" title="Inspect & Wrap (Day ${dayOffset})">I</div>`;
+                    } else if (dayOffset >= inspectEnd && dayOffset <= completionDay) {
+                        barHTML = `<div style="width:30px; height:30px; background:#34c759; border:1px solid #28a745; display:flex; align-items:center; justify-content:center; font-size:7px; color:#fff; font-weight:900;" title="Completion (Day ${dayOffset})">C</div>`;
                     } else {
                         barHTML = `<div style="width:30px; height:30px; background:#f9f9f9; border:1px solid #eee;"></div>`;
                     }
@@ -1307,22 +1313,38 @@
         ganttHTML += '</div>';
         
         // Legend
-        ganttHTML += `<div style="margin-top:15px; display:flex; gap:20px; font-size:11px; font-weight:900;">
-            <div style="display:flex; align-items:center; gap:8px;">
-                <div style="width:20px; height:20px; background:#2196f3; border:1px solid #1976d2; border-radius:3px;"></div>
-                <span>Measuring (Day 0-7)</span>
+        ganttHTML += `<div style="margin-top:15px; display:grid; grid-template-columns:repeat(5, 1fr); gap:15px; font-size:10px; font-weight:900;">
+            <div style="display:flex; align-items:center; gap:6px;">
+                <div style="width:16px; height:16px; background:#2196f3; border:1px solid #1976d2; border-radius:2px;"></div>
+                <span>Measuring (0-2)</span>
             </div>
-            <div style="display:flex; align-items:center; gap:8px;">
-                <div style="width:20px; height:20px; background:#ff9500; border:1px solid #f57c00; border-radius:3px;"></div>
-                <span>Sanding (Day 7-14)</span>
+            <div style="display:flex; align-items:center; gap:6px;">
+                <div style="width:16px; height:16px; background:#ff9500; border:1px solid #f57c00; border-radius:2px;"></div>
+                <span>Sanding (2-16)</span>
             </div>
-            <div style="display:flex; align-items:center; gap:8px;">
-                <div style="width:20px; height:20px; background:#34c759; border:1px solid #28a745; border-radius:3px;"></div>
-                <span>Completion (Day 14+)</span>
+            <div style="display:flex; align-items:center; gap:6px;">
+                <div style="width:16px; height:16px; background:#9c27b0; border:1px solid #7b1fa2; border-radius:2px;"></div>
+                <span>Top Coat (16-18)</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px;">
+                <div style="width:16px; height:16px; background:#673ab7; border:1px solid #512da8; border-radius:2px;"></div>
+                <span>Inspect (18-20)</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px;">
+                <div style="width:16px; height:16px; background:#34c759; border:1px solid #28a745; border-radius:2px;"></div>
+                <span>Complete (20-21)</span>
             </div>
         </div>`;
         
         ganttChart.innerHTML = ganttHTML;
+    }
+
+    function editJobTimeline(jobIdx) {
+        const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
+        const job = history[jobIdx];
+        
+        const message = `Edit Timeline for Job #${job.jobNum}\n\nCurrent phases:\n- Measuring: Days 0-2\n- Sanding: Days 2-16\n- Top Coat: Days 16-18\n- Inspect & Wrap: Days 18-20\n- Complete: Day 21 (3 weeks)\n\nCustom timelines coming soon!`;
+        alert(message);
     }
 
     function renderGlobalNotifications() {
