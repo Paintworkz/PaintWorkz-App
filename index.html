@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-    <title>PaintWorkz Pro 4.6 Fixed</title>
+    <title>PaintWorkz Pro 4.6</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         :root {
@@ -39,6 +39,8 @@
         .bubble-unit { flex: 1; background: #fff; border: 1px solid #ccc; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 50px; box-sizing: border-box; }
         .bubble-unit input { border: none; background: transparent; text-align: center; font-size: 18px; font-weight: 900; height: 25px; margin:0; padding:0; width: 100%; }
 
+        #prof-select { height: 50px !important; margin: 0; }
+
         .p-card { flex:1; background:#fff; border:2px solid #ddd; border-radius:8px; padding:8px 2px; text-align:center; font-weight:900; font-size:9px; color:#444; display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer; }
         .p-card.active { border-color:var(--gs); background:#fff9e6; color:#000; }
         .p-card svg { width:22px; height:22px; stroke: currentColor; fill:none; stroke-width:2; }
@@ -53,6 +55,7 @@
 
         /* PART LABEL */
         .part-label { display: flex; align-items: center; gap: 10px; padding: 10px; background: #fff; border-radius: 10px; margin-bottom: 8px; border: 1px solid #eee; position:relative; }
+        .pl-qty { background: #000; color: var(--gs); min-width: 40px; height: 40px; border-radius: 8px; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:16px; }
         .pl-center { flex:1; }
         .pl-dims { font-size: 18px; font-weight: 900;color: #000;line-height:1.1; }
         .edge-pill { display:inline-block; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 900; color: #fff; margin-right: 3px; }
@@ -79,6 +82,7 @@
     <div class="nav-btn" id="btn-history" onclick="tab('history')">History</div>
     <div class="nav-btn" id="btn-db" onclick="tab('db')">Database</div>
     <div class="nav-btn" id="btn-forms" onclick="tab('forms')">Forms</div>
+    <div class="nav-btn" id="btn-schedule" onclick="tab('schedule')">Schedule</div>
     <div class="nav-btn" id="btn-admin" onclick="tab('admin')">Admin</div>
 </div>
 
@@ -127,7 +131,11 @@
                     <div style="flex:1">
                         <label>Finish</label>
                         <select id="p-finish" style="height:35px; font-size:12px; margin-bottom:0; padding:0 5px;">
-                            <option>Satin</option><option>Gloss</option><option>Matt</option><option>20% Gloss</option><option>30% Gloss</option>
+                            <option>Satin</option>
+                            <option>Gloss</option>
+                            <option>Matt</option>
+                            <option>20% Gloss</option>
+                            <option>30% Gloss</option>
                         </select>
                     </div>
                 </div>
@@ -186,10 +194,11 @@
         <div id="list"></div>
     </div>
 
-    <div id="history" class="view-section"><div class="card"><h3>History</h3><p>No jobs saved.</p></div></div>
-    <div id="db" class="view-section"><div class="card"><h3>Database</h3><p>Manage DB here.</p></div></div>
-    <div id="forms" class="view-section"><div class="card"><h3>Forms</h3><p>Generate PDFs here.</p></div></div>
-    <div id="admin" class="view-section"><div class="card"><h3>Admin</h3><p>Settings here.</p></div></div>
+    <div id="history" class="view-section"><div class="card"><h3>Job History</h3><p>No saved jobs.</p></div></div>
+    <div id="db" class="view-section"><div class="card"><h3>Database</h3><p>Manage Profiles & Clients.</p></div></div>
+    <div id="forms" class="view-section"><div class="card"><h3>Forms</h3><p>Generate PDF Dockets.</p></div></div>
+    <div id="schedule" class="view-section"><div class="card"><h3>Schedule</h3><p>Production Timeline.</p></div></div>
+    <div id="admin" class="view-section"><div class="card"><h3>Admin</h3><p>Settings & Pricing.</p></div></div>
 
 </div>
 
@@ -202,29 +211,39 @@
 <script>
     let items = [], mode = 'SS', pType = 'Panel', fmState = 'Flat';
     
-    // DATA RESTORED FROM MEMORY
+    // DATA INJECTED
     const clientList = ["12345ABM", "Absolute Kitchens", "Advanced Cabinetry", "AKC Kitchens", "Braw Creative", "Brian Moloney", "Cabinets & Stone", "Cabinets by Michael", "Chooka", "CKK", "Clover Doors", "Complete Style Joinery", "Concept 2 Reality", "Coronet Kitchens", "Create a Kitchen", "Creative Cabinetry", "Cutting Edge Joinery", "Driscolls Joinery", "Evolution Kitchens and Joinery", "Geoff Frost Builders", "GM Cabinets", "Grampians Joinery", "Grovedale Kitchens", "Gunning Concepts", "Hamilton Sheetmetal", "Harris Cabinets", "Howe Kitchens & Joinery", "Hy-Craft", "Jardines Cabinets", "Joinery by Jarrod", "Jonassons", "Kingston Kabinets", "Kitchens U Build", "Kyle Hendy", "Leighton Park", "Matthews Joinery", "Ocean Grove Joinery", "Onshore", "R J Walter", "Richardson Joinery", "Schier Cabinet Makers", "Snaauws Kitchens", "SRT Cabinetry", "Stawell Joinery", "Stephensons Kitchens", "T&J Kitchens", "Tony Lambert Kitchens", "Total Kitchen Solutions", "Trendset Kitchens", "Troy Turner", "Ultrabuild", "VG Cabinets", "VJS Geelong", "VJS Shepparton", "Walk in Client", "Westend Cabinetry"];
-    const profiles = ["Plain (101)", "J-Mould (102)", "Sharknose (103)", "Bevelled Edge (104)", "Ashlee (201)", "Hamilton (202)", "Vertical Grooves (203)", "Tarrone (301)", "Bobby (302)", "Orford (303)", "Shaker (401)", "Shaker 45 (402)", "Shaker w/Lines (403)", "Jack (404)", "Georgia (501)", "Branxholme (502)", "Rosebrook (503)", "Benchtop", "Molding"];
+    const profiles = ["Plain (101)", "J-Mould (102)", "Sharknose (103)", "Bevelled Edge (104)", "Ashlee (201)", "Hamilton (202)", "Vertical Grooves (203)", "Tarrone (301)", "Bobby (302)", "Orford (303)", "Shaker (401)", "Shaker 45 (402)", "Shaker w/Lines (403)", "Jack (404)", "Georgia (501)", "Branxholme (502)", "Rosebrook (503)", "Benchtop", "Molding", "Custom"];
 
     window.onload = () => {
         // Load Clients
         const cliSel = document.getElementById('cli');
-        clientList.sort().forEach(c => { let o = document.createElement('option'); o.innerText=c; cliSel.appendChild(o); });
+        if(cliSel) {
+             clientList.sort().forEach(c => { let o = document.createElement('option'); o.innerText=c; cliSel.appendChild(o); });
+        }
         
         // Load Profiles
         const ps = document.getElementById('prof-select');
         profiles.forEach(p => { let o = document.createElement('option'); o.value=p; o.innerText=p; ps.appendChild(o); });
     };
 
+    function changeQty(index, delta) {
+        items[index].qty += delta;
+        if (items[index].qty < 1) items[index].qty = 1;
+        render(); 
+    }
+    
     function tab(t) {
+        // 1. Reset all buttons and sections
         document.querySelectorAll('.view-section').forEach(x => x.classList.remove('active'));
         document.querySelectorAll('.nav-btn').forEach(x => x.classList.remove('active'));
         
-        let sec = document.getElementById(t);
-        let btn = document.getElementById('btn-' + t);
+        // 2. Activate target
+        const targetSec = document.getElementById(t);
+        const targetBtn = document.getElementById('btn-' + t);
         
-        if(sec) sec.classList.add('active');
-        if(btn) btn.classList.add('active');
+        if (targetSec) targetSec.classList.add('active');
+        if (targetBtn) targetBtn.classList.add('active');
     }
 
     function setFM(v) {
@@ -254,7 +273,9 @@
         mode = m;
         document.querySelectorAll('.mode-sel').forEach(b => b.classList.remove('active'));
         document.getElementById('m' + m).classList.add('active');
-        if (m === 'SE') document.getElementById('E1').classList.add('active');
+        if (m === 'SE') {
+            document.getElementById('E1').classList.add('active');
+        }
         up();
     }
     
@@ -329,7 +350,7 @@
             tA += rowSqm; tQ += it.qty;
             const clr = `var(--${it.type.toLowerCase()}-clr)`;
             let Lc = (it.e[0]?1:0) + (it.e[1]?1:0), Sc = (it.e[2]?1:0) + (it.e[3]?1:0);
-            let tL = (Lc > 0 ? Lc+'L' : ''), tS = (Sc > 0 ? Sc+'S' : '');
+            let tL = (Lc ? Lc+'L' : ''), tS = (Sc ? Sc+'S' : '');
             let mC = it.mode === 'SS' ? '#34c759' : (it.mode === 'DS' ? '#ff9500' : '#ff3b30');
 
             l.innerHTML += `
@@ -344,10 +365,13 @@
                     <div style="font-size:10px; font-weight:900; color:${clr}; text-transform:uppercase; line-height:1;">
                         ${it.desc} (${it.fm})
                     </div>
+                    
                     <div style="font-size:10px; font-weight:700; color:#666; margin-bottom:2px; text-transform:uppercase;">
                         ${it.brand ? it.brand : ''} ${it.color ? '- ' + it.color : ''} ${it.finish ? ' • ' + it.finish : ''}
                     </div>
+                    
                     <div class="pl-dims">${it.h} x ${it.w} x ${it.thk}</div>
+                    
                     <div class="pl-meta" style="margin-top:2px;">
                         <span style="font-weight:700;">${it.prof}</span> 
                         ${tL ? `<span class="edge-pill" style="background:#f44336">${tL}</span>` : ''}
@@ -364,12 +388,6 @@
         });
         document.getElementById('tA').innerText = tA.toFixed(3);
         document.getElementById('tQ').innerText = tQ;
-    }
-
-    function changeQty(index, delta) {
-        items[index].qty += delta;
-        if (items[index].qty < 1) items[index].qty = 1;
-        render();
     }
 
     function notify(m) { const t = document.getElementById('toast'); t.innerText = m; t.style.display = 'block'; setTimeout(()=>t.style.display='none', 1500); }
