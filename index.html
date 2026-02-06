@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-    <title>PaintWorkz Pro 4.6</title>
+    <title>PaintWorkz Pro 4.7 iOS DB</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         :root {
@@ -31,6 +31,14 @@
         label { font-size: 10px; font-weight: 900; color: #666; text-transform: uppercase; margin-bottom: 2px; display: block; }
         input, select { width:100%; height:45px; border-radius:8px; border:1px solid #ccc; padding:0 10px; font-size:16px; box-sizing:border-box; background:#fff; margin-bottom: 8px; font-weight: 600; }
         
+        /* DATABASE STYLES */
+        .db-list { max-height: 250px; overflow-y: auto; background: #f9f9f9; border: 1px solid #eee; border-radius: 8px; margin-bottom: 15px; }
+        .db-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #eee; font-size: 14px; font-weight: 600; }
+        .db-item:last-child { border-bottom: none; }
+        .db-del { color: red; font-weight: 900; cursor: pointer; padding: 0 10px; }
+        .add-row { display: flex; gap: 8px; margin-bottom: 10px; }
+        .btn-small { background: var(--gs); color: white; border: none; border-radius: 8px; font-weight: 900; width: 60px; }
+
         .bubble-row { display: flex; gap: 6px; margin: 8px 0; }
         .fm-row { display:flex; background:#eee; border-radius:8px; padding:4px; margin-bottom:10px; height: 50px; align-items: center; box-sizing: border-box; }
         .fm-opt { flex:1; text-align:center; height: 42px; line-height: 42px; font-weight:900; font-size:12px; border-radius:6px; color:#aaa; cursor:pointer; }
@@ -97,7 +105,7 @@
                 </div>
                 <div style="flex:1">
                     <label>Date Received</label>
-                    <input type="text" id="dRec" placeholder="DD/MM/YY" style="text-align:center;">
+                    <input type="text" id="dRec" placeholder="DD/MM/YY" inputmode="numeric" style="text-align:center;">
                 </div>
             </div>
 
@@ -108,7 +116,7 @@
                 </div>
                 <div style="flex:1">
                     <label>Job #</label>
-                    <input type="text" id="jN" style="text-align:center;">
+                    <input type="number" id="jN" inputmode="numeric" style="text-align:center;">
                 </div>
             </div>
 
@@ -158,14 +166,19 @@
             </div>
 
             <div class="bubble-row">
-                <div class="bubble-unit" style="flex:0.8"><input type="number" id="thk" value="18" oninput="up()"><div style="font-size:9px;color:#888;">THICK</div></div>
+                <div class="bubble-unit" style="flex:0.8">
+                    <input type="number" id="thk" value="18" inputmode="decimal" oninput="up()">
+                    <div style="font-size:9px;color:#888;">THICK</div>
+                </div>
                 <div style="flex:2"><select id="prof-select"></select></div>
-                <div class="bubble-unit" style="flex:0.8"><input type="number" id="qty" value="1"><div style="font-size:9px;color:#888;">QTY</div></div>
+                <div class="bubble-unit" style="flex:0.8">
+                    <input type="number" id="qty" value="1" inputmode="numeric"><div style="font-size:9px;color:#888;">QTY</div>
+                </div>
             </div>
 
             <div class="bubble-row">
-                <input type="number" id="h" placeholder="Length" oninput="up()" style="height:55px; font-size:22px; text-align:center;">
-                <input type="number" id="w" placeholder="Width" oninput="up()" style="height:55px; font-size:22px; text-align:center;">
+                <input type="number" id="h" placeholder="Length" inputmode="decimal" oninput="up()" style="height:55px; font-size:22px; text-align:center;">
+                <input type="number" id="w" placeholder="Width" inputmode="decimal" oninput="up()" style="height:55px; font-size:22px; text-align:center;">
             </div>
 
             <label>Edge Treatment</label>
@@ -195,7 +208,25 @@
     </div>
 
     <div id="history" class="view-section"><div class="card"><h3>Job History</h3><p>No saved jobs.</p></div></div>
-    <div id="db" class="view-section"><div class="card"><h3>Database</h3><p>Manage Profiles & Clients.</p></div></div>
+    
+    <div id="db" class="view-section">
+        <div class="card">
+            <h3>Clients</h3>
+            <div class="add-row">
+                <input type="text" id="new-client" placeholder="Client Name" style="margin-bottom:0;">
+                <button class="btn-small" onclick="addClient()">ADD</button>
+            </div>
+            <div class="db-list" id="db-clients-list"></div>
+
+            <h3>Profiles</h3>
+            <div class="add-row">
+                <input type="text" id="new-profile" placeholder="Profile Name" style="margin-bottom:0;">
+                <button class="btn-small" onclick="addProfile()">ADD</button>
+            </div>
+            <div class="db-list" id="db-profiles-list"></div>
+        </div>
+    </div>
+
     <div id="forms" class="view-section"><div class="card"><h3>Forms</h3><p>Generate PDF Dockets.</p></div></div>
     <div id="schedule" class="view-section"><div class="card"><h3>Schedule</h3><p>Production Timeline.</p></div></div>
     <div id="admin" class="view-section"><div class="card"><h3>Admin</h3><p>Settings & Pricing.</p></div></div>
@@ -211,21 +242,59 @@
 <script>
     let items = [], mode = 'SS', pType = 'Panel', fmState = 'Flat';
     
-    // DATA INJECTED
-    const clientList = ["12345ABM", "Absolute Kitchens", "Advanced Cabinetry", "AKC Kitchens", "Braw Creative", "Brian Moloney", "Cabinets & Stone", "Cabinets by Michael", "Chooka", "CKK", "Clover Doors", "Complete Style Joinery", "Concept 2 Reality", "Coronet Kitchens", "Create a Kitchen", "Creative Cabinetry", "Cutting Edge Joinery", "Driscolls Joinery", "Evolution Kitchens and Joinery", "Geoff Frost Builders", "GM Cabinets", "Grampians Joinery", "Grovedale Kitchens", "Gunning Concepts", "Hamilton Sheetmetal", "Harris Cabinets", "Howe Kitchens & Joinery", "Hy-Craft", "Jardines Cabinets", "Joinery by Jarrod", "Jonassons", "Kingston Kabinets", "Kitchens U Build", "Kyle Hendy", "Leighton Park", "Matthews Joinery", "Ocean Grove Joinery", "Onshore", "R J Walter", "Richardson Joinery", "Schier Cabinet Makers", "Snaauws Kitchens", "SRT Cabinetry", "Stawell Joinery", "Stephensons Kitchens", "T&J Kitchens", "Tony Lambert Kitchens", "Total Kitchen Solutions", "Trendset Kitchens", "Troy Turner", "Ultrabuild", "VG Cabinets", "VJS Geelong", "VJS Shepparton", "Walk in Client", "Westend Cabinetry"];
-    const profiles = ["Plain (101)", "J-Mould (102)", "Sharknose (103)", "Bevelled Edge (104)", "Ashlee (201)", "Hamilton (202)", "Vertical Grooves (203)", "Tarrone (301)", "Bobby (302)", "Orford (303)", "Shaker (401)", "Shaker 45 (402)", "Shaker w/Lines (403)", "Jack (404)", "Georgia (501)", "Branxholme (502)", "Rosebrook (503)", "Benchtop", "Molding", "Custom"];
+    // DATA MEMORY
+    let clientList = ["12345ABM", "Absolute Kitchens", "Advanced Cabinetry", "AKC Kitchens", "Braw Creative", "Brian Moloney", "Cabinets & Stone", "Cabinets by Michael", "Chooka", "CKK", "Clover Doors", "Complete Style Joinery", "Concept 2 Reality", "Coronet Kitchens", "Create a Kitchen", "Creative Cabinetry", "Cutting Edge Joinery", "Driscolls Joinery", "Evolution Kitchens and Joinery", "Geoff Frost Builders", "GM Cabinets", "Grampians Joinery", "Grovedale Kitchens", "Gunning Concepts", "Hamilton Sheetmetal", "Harris Cabinets", "Howe Kitchens & Joinery", "Hy-Craft", "Jardines Cabinets", "Joinery by Jarrod", "Jonassons", "Kingston Kabinets", "Kitchens U Build", "Kyle Hendy", "Leighton Park", "Matthews Joinery", "Ocean Grove Joinery", "Onshore", "R J Walter", "Richardson Joinery", "Schier Cabinet Makers", "Snaauws Kitchens", "SRT Cabinetry", "Stawell Joinery", "Stephensons Kitchens", "T&J Kitchens", "Tony Lambert Kitchens", "Total Kitchen Solutions", "Trendset Kitchens", "Troy Turner", "Ultrabuild", "VG Cabinets", "VJS Geelong", "VJS Shepparton", "Walk in Client", "Westend Cabinetry"];
+    let profiles = ["Plain (101)", "J-Mould (102)", "Sharknose (103)", "Bevelled Edge (104)", "Ashlee (201)", "Hamilton (202)", "Vertical Grooves (203)", "Tarrone (301)", "Bobby (302)", "Orford (303)", "Shaker (401)", "Shaker 45 (402)", "Shaker w/Lines (403)", "Jack (404)", "Georgia (501)", "Branxholme (502)", "Rosebrook (503)", "Benchtop", "Molding", "Custom"];
 
     window.onload = () => {
-        // Load Clients
-        const cliSel = document.getElementById('cli');
-        if(cliSel) {
-             clientList.sort().forEach(c => { let o = document.createElement('option'); o.innerText=c; cliSel.appendChild(o); });
-        }
-        
-        // Load Profiles
-        const ps = document.getElementById('prof-select');
-        profiles.forEach(p => { let o = document.createElement('option'); o.value=p; o.innerText=p; ps.appendChild(o); });
+        refreshDropdowns();
     };
+
+    function refreshDropdowns() {
+        // Refresh Client Dropdown
+        const cliSel = document.getElementById('cli');
+        cliSel.innerHTML = '<option>Select Client...</option>';
+        clientList.sort().forEach(c => { let o = document.createElement('option'); o.innerText=c; cliSel.appendChild(o); });
+        
+        // Refresh Profile Dropdown
+        const ps = document.getElementById('prof-select');
+        const currVal = ps.value; // Try to keep selected value if exists
+        ps.innerHTML = '';
+        profiles.forEach(p => { let o = document.createElement('option'); o.value=p; o.innerText=p; ps.appendChild(o); });
+        if(currVal && profiles.includes(currVal)) ps.value = currVal;
+    }
+
+    // DATABASE FUNCTIONS
+    function renderDB() {
+        // Clients
+        const cList = document.getElementById('db-clients-list');
+        cList.innerHTML = '';
+        clientList.sort().forEach((c, i) => {
+            cList.innerHTML += `<div class="db-item"><span>${c}</span><span class="db-del" onclick="delClient(${i})">×</span></div>`;
+        });
+
+        // Profiles
+        const pList = document.getElementById('db-profiles-list');
+        pList.innerHTML = '';
+        profiles.forEach((p, i) => {
+            pList.innerHTML += `<div class="db-item"><span>${p}</span><span class="db-del" onclick="delProfile(${i})">×</span></div>`;
+        });
+    }
+
+    function addClient() {
+        const n = document.getElementById('new-client').value;
+        if(n) { clientList.push(n); document.getElementById('new-client').value=''; renderDB(); refreshDropdowns(); notify("Client Added"); }
+    }
+    function delClient(i) {
+        if(confirm("Delete Client?")) { clientList.splice(i,1); renderDB(); refreshDropdowns(); }
+    }
+    function addProfile() {
+        const n = document.getElementById('new-profile').value;
+        if(n) { profiles.push(n); document.getElementById('new-profile').value=''; renderDB(); refreshDropdowns(); notify("Profile Added"); }
+    }
+    function delProfile(i) {
+        if(confirm("Delete Profile?")) { profiles.splice(i,1); renderDB(); refreshDropdowns(); }
+    }
 
     function changeQty(index, delta) {
         items[index].qty += delta;
@@ -234,16 +303,17 @@
     }
     
     function tab(t) {
-        // 1. Reset all buttons and sections
         document.querySelectorAll('.view-section').forEach(x => x.classList.remove('active'));
         document.querySelectorAll('.nav-btn').forEach(x => x.classList.remove('active'));
         
-        // 2. Activate target
         const targetSec = document.getElementById(t);
         const targetBtn = document.getElementById('btn-' + t);
         
         if (targetSec) targetSec.classList.add('active');
         if (targetBtn) targetBtn.classList.add('active');
+
+        // If DB tab, render the lists
+        if (t === 'db') renderDB();
     }
 
     function setFM(v) {
