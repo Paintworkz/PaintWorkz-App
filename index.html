@@ -122,7 +122,7 @@
     <!-- Firebase SDK - Modern Modular Approach -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
-        import { getAuth } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js";
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js";
         import { getFirestore } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
         
         const firebaseConfig = {
@@ -135,14 +135,25 @@
         };
         
         const app = initializeApp(firebaseConfig);
-        window.auth = getAuth(app);
-        window.db = getFirestore(app);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        
+        // Export auth functions to window so HTML can call them
+        window.firebaseAuth = auth;
+        window.firebaseDb = db;
+        window.createUserWithEmailAndPassword = (email, password) => createUserWithEmailAndPassword(auth, email, password);
+        window.signInWithEmailAndPassword = (email, password) => signInWithEmailAndPassword(auth, email, password);
+        window.signOut = () => signOut(auth);
+        window.onAuthStateChanged = (callback) => onAuthStateChanged(auth, callback);
+        
         window.currentUser = null;
-        window.firebaseReady = true;  // Firebase is initialized!
+        window.firebaseReady = true;
         
         console.log('✅ Firebase initialized via modular SDK');
+        console.log('[Firebase] createUserWithEmailAndPassword available?', typeof window.createUserWithEmailAndPassword);
         
-        window.auth.onAuthStateChanged(user => {
+        // Set up auth listener
+        onAuthStateChanged(auth, user => {
             window.currentUser = user;
             console.log('[Firebase] Auth state:', user ? user.email : 'logged out');
             if (user) {
@@ -636,7 +647,7 @@
             errorDiv.innerHTML = '❌ ' + error.message;
           });
       } else {
-        window.auth.signInWithEmailAndPassword(email, password)
+        window.signInWithEmailAndPassword(email, password)
           .then(result => {
             errorDiv.innerHTML = '✅ Logged in successfully!';
             document.getElementById('loginEmail').value = '';
@@ -657,7 +668,7 @@
     }
 
     function logout() {
-      window.auth.signOut().then(() => {
+      window.signOut().then(() => {
         console.log('✅ Logged out');
       });
     }
@@ -3072,7 +3083,7 @@
             return;
         }
         
-        window.auth.signInWithEmailAndPassword(email, password)
+        window.signInWithEmailAndPassword(email, password)
             .then(() => {
                 errorDiv.style.display = 'none';
                 document.getElementById('loginEmail').value = '';
@@ -3141,7 +3152,7 @@
         }
         
         console.log('🔐 Calling Firebase createUserWithEmailAndPassword...');
-        window.auth.createUserWithEmailAndPassword(email, password)
+        window.createUserWithEmailAndPassword(email, password)
             .then(() => {
                 console.log('✅ Account created successfully!');
                 errorDiv.style.display = 'none';
@@ -3159,7 +3170,7 @@
     // Logout function
     function handleLogout() {
         if (confirm('Log out?')) {
-            window.auth.signOut();
+            window.signOut();
         }
     }
 
@@ -3259,4 +3270,4 @@
 
 </div> <!-- Close appContainer -->
 </body>
-</html>
+</html> 
