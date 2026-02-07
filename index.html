@@ -166,6 +166,12 @@
                 const appContainer = document.getElementById('appContainer');
                 if (loginScreen) loginScreen.style.display = 'none';
                 if (appContainer) appContainer.style.display = 'block';
+                
+                // Load jobs from Firebase after a short delay to ensure DOM is ready
+                setTimeout(() => {
+                    if (window.loadAllDataFromFirebase) window.loadAllDataFromFirebase();
+                    if (window.setupRealtimeSync) window.setupRealtimeSync();
+                }, 100);
             } else {
                 const loginScreen = document.getElementById('loginScreen');
                 const appContainer = document.getElementById('appContainer');
@@ -3105,7 +3111,9 @@
         if (!window.currentUser) return;
         
         try {
-            const jobsCollectionRef = window.collection(window.firebaseDb, 'users', window.currentUser.uid, 'jobs');
+            // Build reference to jobs subcollection properly
+            const userDocRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid);
+            const jobsCollectionRef = window.collection(userDocRef, 'jobs');
             const snapshot = await window.getDocs(jobsCollectionRef);
             const jobs = [];
             snapshot.forEach(doc => {
@@ -3131,7 +3139,8 @@
     function setupRealtimeSync() {
         if (!window.currentUser) return;
         
-        const jobsCollectionRef = window.collection(window.firebaseDb, 'users', window.currentUser.uid, 'jobs');
+        const userDocRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid);
+        const jobsCollectionRef = window.collection(userDocRef, 'jobs');
         window.onSnapshot(jobsCollectionRef, snapshot => {
             const jobs = [];
             snapshot.forEach(doc => {
