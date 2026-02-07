@@ -123,7 +123,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
         import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js";
-        import { getFirestore } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
+        import { getFirestore, collection, doc, setDoc, addDoc } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
         
         const firebaseConfig = {
             apiKey: "AIzaSyCddhnoWoJczM2yXemz2evZc-W2x7OnP00",
@@ -138,29 +138,37 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
         
-        // Export to window for global access
-        window.auth = auth;  // For compatibility checks
-        window.firebaseAuth = auth;
-        window.db = db;
+        // Export to window for global access - with proper function wrappers
         window.firebaseDb = db;
+        window.firebaseAuth = auth;
+        window.firebaseReady = true;
+        
+        // Export Firestore functions as window methods
+        window.doc = doc;
+        window.setDoc = setDoc;
+        window.collection = collection;
+        window.addDoc = addDoc;
+        
+        // Auth functions
         window.createUserWithEmailAndPassword = (email, password) => createUserWithEmailAndPassword(auth, email, password);
         window.signInWithEmailAndPassword = (email, password) => signInWithEmailAndPassword(auth, email, password);
         window.signOut = () => signOut(auth);
-        window.onAuthStateChanged = (callback) => onAuthStateChanged(auth, callback);
         
         window.currentUser = null;
-        window.firebaseReady = true;
-        
         
         // Set up auth listener
         onAuthStateChanged(auth, user => {
             window.currentUser = user;
             if (user) {
-                document.getElementById('loginScreen').style.display = 'none';
-                document.getElementById('appContainer').style.display = 'block';
+                const loginScreen = document.getElementById('loginScreen');
+                const appContainer = document.getElementById('appContainer');
+                if (loginScreen) loginScreen.style.display = 'none';
+                if (appContainer) appContainer.style.display = 'block';
             } else {
-                document.getElementById('loginScreen').style.display = 'block';
-                document.getElementById('appContainer').style.display = 'none';
+                const loginScreen = document.getElementById('loginScreen');
+                const appContainer = document.getElementById('appContainer');
+                if (loginScreen) loginScreen.style.display = 'block';
+                if (appContainer) appContainer.style.display = 'none';
             }
         });
     </script>
@@ -3131,18 +3139,27 @@
 
     // Helper function to sync all jobs to Firebase
     function syncJobsToFirebase() {
-        if (!window.currentUser || !window.firebaseDb) return;
+        // Guard: Wait for Firebase to be ready and user to be logged in
+        if (!window.firebaseReady || !window.currentUser || !window.firebaseDb || !window.doc || !window.setDoc) {
+            console.warn('Firebase not ready or user not logged in. Sync delayed.');
+            return;
+        }
         
-        const jobHistory = JSON.parse(localStorage.getItem('jobHistory') || '[]');
-        jobHistory.forEach(job => {
-            const jobId = job.id || job.jobNum || Date.now().toString();
-            window.firebaseDb.collection('users').doc(window.currentUser.uid).collection('jobs').doc(jobId).set({
-                ...job,
-                id: jobId,
-                lastModified: new Date().toISOString(),
-                userId: window.currentUser.uid
-            }, { merge: true }).catch(err => console.error('Sync error:', err));
-        });
+        try {
+            const jobHistory = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+            jobHistory.forEach(job => {
+                const jobId = job.id || job.jobNum || Date.now().toString();
+                const jobDoc = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'jobs', jobId);
+                window.setDoc(jobDoc, {
+                    ...job,
+                    id: jobId,
+                    lastModified: new Date().toISOString(),
+                    userId: window.currentUser.uid
+                }, { merge: true }).catch(err => console.error('Firestore sync error:', err));
+            });
+        } catch (error) {
+            console.error('syncJobsToFirebase error:', error);
+        }
     }
 
     // Override localStorage.setItem to auto-sync to Firebase
@@ -3151,8 +3168,15 @@
         originalSetItem.call(this, key, value);
         
         // Whenever jobHistory is updated, sync to Firebase
-        if (key === 'jobHistory' && currentUser) {
-            syncJobsToFirebase();
+        if (key === 'jobHistory' && window.currentUser) {
+            // Retry sync if Firebase isn't quite ready yet
+            if (!window.firebaseReady) {
+                setTimeout(() => {
+                    if (window.currentUser) syncJobsToFirebase();
+                }, 500);
+            } else {
+                syncJobsToFirebase();
+            }
         }
     };
 </script>
