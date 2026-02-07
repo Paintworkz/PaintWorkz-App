@@ -5,10 +5,6 @@
     <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
     <title>PaintWorkz Pro 4.8</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
-    <!-- Firebase SDK - MUST load synchronously -->
-    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js"></script>
     <style>
         :root {
             --gold: linear-gradient(145deg, #d4af37, #f9f1b0, #aa841e);
@@ -123,53 +119,37 @@
     </style>
 </head>
 <body>
-    <!-- FIREBASE INITIALIZATION -->
-    <script>
-        let auth, db, currentUser = null;
+    <!-- Firebase SDK - Modern Modular Approach -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
+        import { getAuth } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js";
+        import { getFirestore } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
+        
         const firebaseConfig = {
-          apiKey: "AIzaSyCddhnoWoJczM2yXemz2evZc-W2x7OnP00",
-          authDomain: "paintworkz-42bc0.firebaseapp.com",
-          projectId: "paintworkz-42bc0",
-          storageBucket: "paintworkz-42bc0.firebasestorage.app",
-          messagingSenderId: "298786193879",
-          appId: "1:298786193879:web:8fd63ca63c109f8cd14b92"
+            apiKey: "AIzaSyCddhnoWoJczM2yXemz2evZc-W2x7OnP00",
+            authDomain: "paintworkz-42bc0.firebaseapp.com",
+            projectId: "paintworkz-42bc0",
+            storageBucket: "paintworkz-42bc0.firebasestorage.app",
+            messagingSenderId: "298786193879",
+            appId: "1:298786193879:web:8fd63ca63c109f8cd14b92"
         };
         
-        console.log('[Firebase] SDK check:', !!window.firebase);
+        const app = initializeApp(firebaseConfig);
+        window.auth = getAuth(app);
+        window.db = getFirestore(app);
+        window.currentUser = null;
         
-        // Initialize Firebase when window loads
-        window.addEventListener('load', function() {
-            console.log('[Firebase] Window loaded, firebase available?', typeof firebase !== 'undefined');
-            
-            if (typeof firebase === 'undefined') {
-                console.error('[Firebase] CRITICAL ERROR - Firebase SDK not loaded!');
-                console.error('[Firebase] Check Network tab for failed requests');
-                return;
-            }
-            
-            if (!firebase.apps || firebase.apps.length === 0) {
-                try {
-                    console.log('[Firebase] Initializing...');
-                    firebase.initializeApp(firebaseConfig);
-                    auth = firebase.auth();
-                    db = firebase.firestore();
-                    console.log('[Firebase] ✅ SUCCESS!');
-                    
-                    auth.onAuthStateChanged(user => {
-                        currentUser = user;
-                        if (user) {
-                            document.getElementById('loginScreen').style.display = 'none';
-                            document.getElementById('appContainer').style.display = 'block';
-                            loadAllDataFromFirebase();
-                            setupRealtimeSync();
-                        } else {
-                            document.getElementById('loginScreen').style.display = 'block';
-                            document.getElementById('appContainer').style.display = 'none';
-                        }
-                    });
-                } catch (error) {
-                    console.error('[Firebase] Error:', error);
-                }
+        console.log('✅ Firebase initialized via modular SDK');
+        
+        window.window.auth.onAuthStateChanged(user => {
+            window.currentUser = user;
+            console.log('[Firebase] Auth state:', user ? user.email : 'logged out');
+            if (user) {
+                document.getElementById('loginScreen').style.display = 'none';
+                document.getElementById('appContainer').style.display = 'block';
+            } else {
+                document.getElementById('loginScreen').style.display = 'block';
+                document.getElementById('appContainer').style.display = 'none';
             }
         });
     </script>
@@ -607,9 +587,9 @@
     function waitForFirebase() {
         if (typeof auth !== 'undefined' && auth !== null) {
             // Firebase is ready, set up auth listener
-            auth.onAuthStateChanged((user) => {
+            window.auth.onAuthStateChanged((user) => {
               if (user) {
-                currentUser = user;
+                window.currentUser = user;
                 document.getElementById('loginScreen').classList.add('hidden');
                 document.getElementById('userInfo').innerHTML = `
                   <span style="font-weight:900;">👤 ${user.email.split('@')[0]}</span>
@@ -617,7 +597,7 @@
                 `;
                 loadDataFromFirestore();
               } else {
-                currentUser = null;
+                window.currentUser = null;
                 document.getElementById('loginScreen').classList.remove('hidden');
                 document.getElementById('userInfo').innerHTML = '';
               }
@@ -643,7 +623,7 @@
       }
       
       if (isSignup) {
-        auth.createUserWithEmailAndPassword(email, password)
+        window.auth.createUserWithEmailAndPassword(email, password)
           .then(result => {
             errorDiv.innerHTML = '✅ Account created! Logging in...';
             setTimeout(() => {
@@ -655,7 +635,7 @@
             errorDiv.innerHTML = '❌ ' + error.message;
           });
       } else {
-        auth.signInWithEmailAndPassword(email, password)
+        window.auth.signInWithEmailAndPassword(email, password)
           .then(result => {
             errorDiv.innerHTML = '✅ Logged in successfully!';
             document.getElementById('loginEmail').value = '';
@@ -676,14 +656,14 @@
     }
 
     function logout() {
-      auth.signOut().then(() => {
+      window.auth.signOut().then(() => {
         console.log('✅ Logged out');
       });
     }
 
     // Save data to Firestore
     async function saveDataToFirestore() {
-      if (!currentUser) {
+      if (!window.currentUser) {
         console.log('⚠️ Not logged in, data not saved to cloud');
         return;
       }
@@ -699,8 +679,8 @@
           lastSaved: new Date().toISOString()
         };
         
-        await db.collection('users').doc(currentUser.uid).collection('data').doc('measureData').set(data);
-        await db.collection('users').doc(currentUser.uid).collection('history').doc('jobs').set({
+        await window.db.collection('users').doc(window.currentUser.uid).collection('data').doc('measureData').set(data);
+        await window.db.collection('users').doc(window.currentUser.uid).collection('history').doc('jobs').set({
           history: history,
           lastUpdated: new Date().toISOString()
         });
@@ -713,11 +693,11 @@
 
     // Load data from Firestore
     async function loadDataFromFirestore() {
-      if (!currentUser) return;
+      if (!window.currentUser) return;
       
       try {
         // Load measure data
-        const measureDoc = await db.collection('users').doc(currentUser.uid).collection('data').doc('measureData').get();
+        const measureDoc = await window.db.collection('users').doc(window.currentUser.uid).collection('data').doc('measureData').get();
         if (measureDoc.exists) {
           const data = measureDoc.data();
           items = data.items || [];
@@ -729,7 +709,7 @@
         }
         
         // Load job history
-        const historyDoc = await db.collection('users').doc(currentUser.uid).collection('history').doc('jobs').get();
+        const historyDoc = await window.db.collection('users').doc(window.currentUser.uid).collection('history').doc('jobs').get();
         if (historyDoc.exists) {
           history = historyDoc.data().history || [];
         }
@@ -3076,7 +3056,7 @@
 
     // Login function
     function handleLogin() {
-        if (!auth) {
+        if (!window.auth) {
             alert('Firebase not ready yet, please wait a moment and try again');
             return;
         }
@@ -3091,7 +3071,7 @@
             return;
         }
         
-        auth.signInWithEmailAndPassword(email, password)
+        window.auth.signInWithEmailAndPassword(email, password)
             .then(() => {
                 errorDiv.style.display = 'none';
                 document.getElementById('loginEmail').value = '';
@@ -3106,7 +3086,7 @@
     // Signup wrapper function  
     function trySignup() {
         console.log('🔐 Signup button clicked - checking Firebase status...');
-        if (!auth) {
+        if (!window.auth) {
             console.warn('⚠️ Firebase auth not ready yet');
             alert('Firebase is still loading (usually takes 1-2 seconds)...\n\nPlease wait a moment and try again!');
             return;
@@ -3117,7 +3097,7 @@
 
     // Signup function
     function handleSignup() {
-        if (!auth) {
+        if (!window.auth) {
             alert('Firebase not ready yet, please wait a moment and try again');
             return;
         }
@@ -3138,7 +3118,7 @@
             return;
         }
         
-        auth.createUserWithEmailAndPassword(email, password)
+        window.auth.createUserWithEmailAndPassword(email, password)
             .then(() => {
                 errorDiv.style.display = 'none';
                 document.getElementById('loginEmail').value = '';
@@ -3154,29 +3134,29 @@
     // Logout function
     function handleLogout() {
         if (confirm('Log out?')) {
-            auth.signOut();
+            window.auth.signOut();
         }
     }
 
     // Save job data to Firebase
     function saveJobToFirebase(jobData) {
-        if (!currentUser) return;
+        if (!window.currentUser) return;
         
         const jobId = jobData.id || Date.now().toString();
-        db.collection('users').doc(currentUser.uid).collection('jobs').doc(jobId).set({
+        window.db.collection('users').doc(window.currentUser.uid).collection('jobs').doc(jobId).set({
             ...jobData,
             lastModified: new Date().toISOString(),
-            userId: currentUser.uid
+            userId: window.currentUser.uid
         }, { merge: true })
         .catch(err => console.error('Error saving job:', err));
     }
 
     // Load all jobs from Firebase
     async function loadAllDataFromFirebase() {
-        if (!currentUser) return;
+        if (!window.currentUser) return;
         
         try {
-            const snapshot = await db.collection('users').doc(currentUser.uid).collection('jobs').get();
+            const snapshot = await window.db.collection('users').doc(window.currentUser.uid).collection('jobs').get();
             const jobs = [];
             snapshot.forEach(doc => {
                 jobs.push({ ...doc.data(), id: doc.id });
@@ -3200,9 +3180,9 @@
 
     // Set up real-time listener for jobs
     function setupRealtimeSync() {
-        if (!currentUser) return;
+        if (!window.currentUser) return;
         
-        db.collection('users').doc(currentUser.uid).collection('jobs')
+        window.db.collection('users').doc(window.currentUser.uid).collection('jobs')
             .onSnapshot(snapshot => {
                 const jobs = [];
                 snapshot.forEach(doc => {
@@ -3225,16 +3205,16 @@
 
     // Helper function to sync all jobs to Firebase
     function syncJobsToFirebase() {
-        if (!currentUser) return;
+        if (!window.currentUser) return;
         
         const jobHistory = JSON.parse(localStorage.getItem('jobHistory') || '[]');
         jobHistory.forEach(job => {
             const jobId = job.id || job.jobNum || Date.now().toString();
-            db.collection('users').doc(currentUser.uid).collection('jobs').doc(jobId).set({
+            window.db.collection('users').doc(window.currentUser.uid).collection('jobs').doc(jobId).set({
                 ...job,
                 id: jobId,
                 lastModified: new Date().toISOString(),
-                userId: currentUser.uid
+                userId: window.currentUser.uid
             }, { merge: true })
             .catch(err => console.error('Error syncing job:', err));
         });
