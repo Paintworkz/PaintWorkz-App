@@ -138,10 +138,11 @@
         window.auth = getAuth(app);
         window.db = getFirestore(app);
         window.currentUser = null;
+        window.firebaseReady = true;  // Firebase is initialized!
         
         console.log('✅ Firebase initialized via modular SDK');
         
-        window.window.auth.onAuthStateChanged(user => {
+        window.auth.onAuthStateChanged(user => {
             window.currentUser = user;
             console.log('[Firebase] Auth state:', user ? user.email : 'logged out');
             if (user) {
@@ -3056,7 +3057,7 @@
 
     // Login function
     function handleLogin() {
-        if (!window.auth) {
+        if (!window.firebaseReady || !window.auth) {
             alert('Firebase not ready yet, please wait a moment and try again');
             return;
         }
@@ -3086,18 +3087,29 @@
     // Signup wrapper function  
     function trySignup() {
         console.log('🔐 Signup button clicked - checking Firebase status...');
-        if (!window.auth) {
-            console.warn('⚠️ Firebase auth not ready yet');
-            alert('Firebase is still loading (usually takes 1-2 seconds)...\n\nPlease wait a moment and try again!');
+        console.log('Firebase ready?', window.firebaseReady);
+        
+        if (!window.firebaseReady) {
+            console.warn('⚠️ Firebase not ready yet, waiting...');
+            // Wait a moment and try again
+            setTimeout(() => {
+                if (window.firebaseReady) {
+                    console.log('✅ Firebase now ready!');
+                    handleSignup();
+                } else {
+                    alert('Firebase is still loading. Please wait a moment and try again.');
+                }
+            }, 1000);
             return;
         }
+        
         console.log('✅ Firebase ready, calling handleSignup()');
         handleSignup();
     }
 
     // Signup function
     function handleSignup() {
-        if (!window.auth) {
+        if (!window.firebaseReady || !window.auth) {
             alert('Firebase not ready yet, please wait a moment and try again');
             return;
         }
