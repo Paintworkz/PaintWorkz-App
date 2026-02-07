@@ -120,6 +120,9 @@
 </head>
 <body>
 
+<!-- TOAST NOTIFICATION -->
+<div id="toast" style="display:none; position:fixed; bottom:100px; left:50%; transform:translateX(-50%); background:#34c759; color:#fff; padding:12px 25px; border-radius:25px; font-weight:900; z-index:5000; font-size:11px; box-shadow:0 4px 12px rgba(52, 199, 89, 0.3);"></div>
+
 <!-- TIMELINE EDITOR MODAL -->
 <div id="timelineModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; justify-content:center; align-items:center; flex-wrap:wrap;">
     <div style="background:#fff; padding:25px; border-radius:12px; width:90%; max-width:500px; max-height:80vh; overflow-y:auto; box-shadow:0 10px 40px rgba(0,0,0,0.3); z-index:1001;">
@@ -266,17 +269,13 @@
                 <div style="display:flex; gap:8px;">
                     <div style="flex:1">
                         <label>Code / Formula</label>
-                        <input type="text" id="p-code" placeholder="Formula" style="height:35px; font-size:12px;">
+                        <input type="text" id="p-code" placeholder="Formula (auto-search when typing)" style="height:35px; font-size:12px;" oninput="autoSearchFormulaOnType()">
                     </div>
                     <div style="flex:1">
                         <label>Finish</label>
                         <select id="p-finish" style="height:35px; font-size:12px;">
                             <option>Satin</option><option>Gloss</option><option>Matt</option><option>20% Gloss</option><option>30% Gloss</option>
                         </select>
-                    </div>
-                    <div style="display:flex; gap:4px; align-items:flex-end;">
-                        <button onclick="autoSearchFormula()" style="height:35px; background:#2196f3; color:#fff; border:none; padding:0 12px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer; white-space:nowrap;">🔍 SEARCH</button>
-                        <button onclick="openPaintFormulaDatabase()" style="height:35px; background:var(--gs); color:#000; border:none; padding:0 12px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer; white-space:nowrap;">📚 DATABASE</button>
                     </div>
                 </div>
             </div>
@@ -338,6 +337,7 @@
         <div class="sub-nav">
             <button class="sub-btn active" id="sub-btn-clients" onclick="subTab('clients')">CLIENTS</button>
             <button class="sub-btn" id="sub-btn-profiles" onclick="subTab('profiles')">DOOR PROFILES</button>
+            <button class="sub-btn" id="sub-btn-paint" onclick="subTab('paint')">PAINT</button>
         </div>
 
         <div id="sub-clients" class="sub-section active">
@@ -352,11 +352,34 @@
 
         <div id="sub-profiles" class="sub-section" style="display:none;">
             <div class="card">
+                <h4 style="margin-bottom:15px; font-weight:900;">Door Profiles</h4>
+                <p style="font-size:11px; color:#666; margin-bottom:15px;">Add new profiles or edit existing names. Profiles are used in your pricing matrix tiers.</p>
+                
                 <div class="add-row">
-                    <input type="text" id="new-profile" placeholder="New Profile Name" style="margin-bottom:0;">
+                    <input type="text" id="new-profile" placeholder="New Profile Name (e.g., Shaker, Ashlee)" style="margin-bottom:0;">
                     <button class="btn-small" onclick="addProfile()">ADD</button>
                 </div>
-                <div class="db-list" id="list-profiles"></div>
+                <div class="db-list" id="list-profiles" style="margin-top:15px;"></div>
+            </div>
+        </div>
+
+        <div id="sub-paint" class="sub-section" style="display:none;">
+            <div class="card">
+                <h4 style="margin-bottom:15px; font-weight:900;">Paint Formula Database</h4>
+                <div style="margin-bottom:20px;">
+                    <h5 style="margin-bottom:10px; font-weight:900; font-size:12px;">Add New Formula</h5>
+                    <div style="background:#f9f9f9; padding:15px; border-radius:8px; border:1px solid #ddd;">
+                        <input type="text" id="newPaintBrand" placeholder="Brand (e.g., Wattyl)" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; margin-bottom:10px; box-sizing:border-box; font-size:12px;">
+                        <input type="text" id="newPaintColor" placeholder="Color (e.g., White)" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; margin-bottom:10px; box-sizing:border-box; font-size:12px;">
+                        <textarea id="newPaintFormula" placeholder="Formula in grams (e.g., Base 800g + Hard 200g)" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; margin-bottom:10px; box-sizing:border-box; font-size:12px; min-height:60px;"></textarea>
+                        <button onclick="addNewPaintFormula()" style="width:100%; padding:10px; background:#34c759; color:#fff; border:none; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">+ ADD FORMULA</button>
+                    </div>
+                </div>
+                
+                <div>
+                    <h5 style="margin-bottom:10px; font-weight:900; font-size:12px;">Existing Formulas</h5>
+                    <div id="paintFormulaList" style="background:#fff; border:1px solid #ddd; border-radius:8px; overflow:hidden;"></div>
+                </div>
             </div>
         </div>
     </div>
@@ -402,8 +425,20 @@
         </div>
 
         <!-- Gantt Chart Timeline - Full Width -->
-        <div style="width:100vw; margin-left:calc(-50vw + 50%); background:#fff; padding:15px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow-x:auto;">
-            <div id="ganttChart" style="min-width:1200px; padding:0;">
+        <div id="ganttWrapper" style="width:100vw; margin-left:calc(-50vw + 50%); background:#fff; padding:15px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow-x:auto; min-height:600px; display:block; visibility:visible;">
+            <div style="background:#fff3cd; border:2px solid #ff9500; border-radius:8px; padding:15px; margin-bottom:15px; display:none;" id="duplicateWarning">
+                <div style="font-weight:900; color:#ff6600; margin-bottom:8px;">⚠️ Duplicate Jobs Detected!</div>
+                <p style="font-size:12px; color:#666; margin:0 0 10px 0;">Your job history contains duplicate entries. This is why you only see 1 job displayed but the Workload Summary shows 7.</p>
+                <button onclick="tab('admin'); setTimeout(() => switchAdminTab('general'), 200)" style="background:#ff9500; color:#fff; border:none; padding:8px 15px; border-radius:6px; font-weight:900; cursor:pointer;">Go to Admin → Remove Duplicates</button>
+            </div>
+            <!-- DEBUG PANEL -->
+            <div style="background:#e3f2fd; border:2px solid #2196f3; border-radius:8px; padding:15px; margin-bottom:15px;">
+                <div style="font-weight:900; color:#1976d2; margin-bottom:8px;">🔍 DEBUG: Jobs in Storage</div>
+                <div id="debugJobCount" style="font-size:12px; color:#333; margin-bottom:8px;">Loading...</div>
+                <div id="debugJobList" style="font-size:11px; color:#666; max-height:200px; overflow-y:auto; background:#fff; padding:8px; border-radius:4px; border:1px solid #90caf9;"></div>
+                <button onclick="location.reload()" style="margin-top:10px; padding:6px 12px; background:#2196f3; color:#fff; border:none; border-radius:4px; font-weight:900; font-size:10px; cursor:pointer;">🔄 RELOAD PAGE</button>
+            </div>
+            <div id="ganttChart" style="min-width:1200px; padding:0; display:flex; flex-direction:column;">
                 <!-- Gantt chart will render here -->
             </div>
         </div>
@@ -442,15 +477,38 @@
             <label>App Version</label>
             <input type="text" value="PaintWorkz Pro 4.8" disabled style="background:#f5f5f5; cursor:not-allowed;">
             
-            <h4 style="margin-top:20px; margin-bottom:10px; font-weight:900;">Default Timeline Settings</h4>
-            <p style="font-size:11px; color:#666; margin-bottom:10px;">Edit the default timeline phases for all new jobs</p>
-            <button onclick="editDefaultTimeline()" style="border:none; background:#2196f3; color:#fff; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">⚙️ EDIT DEFAULT TIMELINE</button>
+            <!-- Admin Sub-Tabs -->
+            <div class="sub-nav" style="margin-top:15px;">
+                <button class="sub-btn active" onclick="switchAdminTab('general')" id="admin-tab-general">General Settings</button>
+                <button class="sub-btn" onclick="switchAdminTab('colors')" id="admin-tab-colors">Colors</button>
+                <button class="sub-btn" onclick="switchAdminTab('pricing')" id="admin-tab-pricing">Price Matrix</button>
+            </div>
             
-            <h4 style="margin-top:20px; margin-bottom:10px; font-weight:900;">Job Completion Alerts</h4>
-            <div id="admin-alerts"></div>
+            <!-- General Settings Tab -->
+            <div id="admin-tab-general-content">
+                <h4 style="margin-top:20px; margin-bottom:10px; font-weight:900;">Default Timeline Settings</h4>
+                <p style="font-size:11px; color:#666; margin-bottom:10px;">Edit the default timeline phases for all new jobs</p>
+                <button onclick="editDefaultTimeline()" style="border:none; background:#2196f3; color:#fff; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">⚙️ EDIT DEFAULT TIMELINE</button>
+                
+                <h4 style="margin-top:20px; margin-bottom:10px; font-weight:900;">Job Completion Alerts</h4>
+                <div id="admin-alerts"></div>
+                
+                <h4 style="margin-top:20px; margin-bottom:10px; font-weight:900;">⚠️ Database Maintenance (FIX DUPLICATES)</h4>
+                <p style="font-size:11px; color:#d32f2f; margin-bottom:10px; background:#ffebee; padding:10px; border-radius:6px;"><strong>Your history has duplicate jobs!</strong> Click the button below to remove them and see all your jobs in Schedule.</p>
+                <button onclick="removeDuplicateJobs()" style="border:none; background:#ff9500; color:#fff; padding:12px 20px; border-radius:6px; font-weight:900; font-size:12px; cursor:pointer; width:100%;">🧹 REMOVE DUPLICATES NOW</button>
+            </div>
             
-            <button class="add-main-btn" style="background:#ff3b30; box-shadow:0 4px 15px rgba(255, 59, 48, 0.4); margin-top:15px;" onclick="clearAllData()">CLEAR ALL DATA</button>
-            <p style="font-size:12px; color:#888; margin-top:10px; text-align:center;">⚠️ This cannot be undone</p>
+            <!-- Colors Tab -->
+            <div id="admin-tab-colors-content" style="display:none;">
+                <h4 style="margin-top:20px; margin-bottom:10px; font-weight:900;">Theme Colors</h4>
+                <p style="font-size:11px; color:#666; margin-bottom:15px;">Customize colors throughout the app</p>
+                <div id="colorCustomizerContent" style="display:grid; grid-template-columns:1fr 1fr; gap:15px;"></div>
+            </div>
+            
+            <!-- Price Matrix Tab -->
+            <div id="admin-tab-pricing-content" style="display:none;">
+                <div id="admin-pricing-matrix" style="margin-top:15px;"></div>
+            </div>
         </div>
     </div>
 </div>
@@ -472,7 +530,7 @@
         refreshLists();
         loadData();
         renderHistory();
-        renderScheduleCalendar();
+        // renderScheduleCalendar(); // Don't render until Schedule tab is clicked
     };
 
     // LOCAL STORAGE
@@ -509,6 +567,62 @@
         }
     }
 
+    // Function to clean up duplicate jobs
+    function checkForDuplicates() {
+        const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
+        const seen = new Set();
+        let hasDuplicates = false;
+        
+        history.forEach(job => {
+            const key = `${job.jobNum}|${job.dateReceived}|${job.client}`;
+            if (seen.has(key)) {
+                hasDuplicates = true;
+            }
+            seen.add(key);
+        });
+        
+        const warningEl = document.getElementById('duplicateWarning');
+        if (warningEl) {
+            warningEl.style.display = hasDuplicates ? 'block' : 'none';
+        }
+    }
+    
+    function removeDuplicateJobs() {
+        let history = JSON.parse(localStorage.getItem('jobHistory')) || [];
+        const seen = new Map();
+        let cleaned = [];
+        let duplicates = 0;
+        
+        history.forEach(job => {
+            // Skip jobs with missing critical fields
+            if (!job.jobNum || !job.dateReceived || !job.client) {
+                console.log(`⚠️ Skipped invalid job (missing fields):`, job);
+                duplicates++;
+                return;
+            }
+            
+            const key = `${job.jobNum}|${job.dateReceived}|${job.client}`;
+            if (!seen.has(key)) {
+                seen.set(key, true);
+                cleaned.push(job);
+            } else {
+                console.log(`⚠️ Removed duplicate: Job #${job.jobNum} - ${job.client} (${job.dateReceived})`);
+                duplicates++;
+            }
+        });
+        
+        if (duplicates > 0) {
+            console.log(`🧹 Cleanup complete. Before: ${history.length}, After: ${cleaned.length}, Removed: ${duplicates}`);
+            localStorage.setItem('jobHistory', JSON.stringify(cleaned));
+            renderHistory();
+            renderJobTasks();
+            renderScheduleCalendar();
+            notify(`✓ Cleaned ${duplicates} duplicate/invalid jobs!`);
+        } else {
+            notify('✓ No duplicates found');
+        }
+    }
+    
     function saveJobToHistory() {
         const jobData = {
             items: items,
@@ -520,23 +634,57 @@
             color: document.getElementById('p-color').value,
             code: document.getElementById('p-code').value,
             finish: document.getElementById('p-finish').value,
-            totalSqm: document.getElementById('tA').innerText,
-            totalParts: document.getElementById('tQ').innerText,
+            totalSqm: document.getElementById('tA')?.innerText || '0.000',
+            totalParts: document.getElementById('tQ')?.innerText || '0',
             timestamp: new Date().toISOString(),
-            savedDate: new Date().toLocaleString('en-AU')
+            savedDate: new Date().toLocaleString('en-AU'),
+            completed: false  // Always false when saving new
         };
+        
+        console.log('💾 SAVING JOB:', jobData);
         
         // Get existing history
         let history = JSON.parse(localStorage.getItem('jobHistory')) || [];
+        console.log('📋 History before save:', history.length, 'jobs');
         
-        // Add new job to history
-        history.unshift(jobData);
+        // Check if we're overwriting an existing job
+        if (currentEditingJobIndex !== null) {
+            if (confirm(`Overwrite existing job #${jobData.jobNum}?`)) {
+                history[currentEditingJobIndex] = jobData;
+                currentEditingJobIndex = null; // Reset for next job
+                notify('✓ Job Updated');
+            } else {
+                return; // Don't save if user cancels
+            }
+        } else {
+            // Add new job to history - CHECK FOR DUPLICATES FIRST
+            const existingIdx = history.findIndex(j => j.jobNum === jobData.jobNum && j.dateReceived === jobData.dateReceived && j.client === jobData.client);
+            
+            if (existingIdx !== -1) {
+                // Job with same number, date, and client already exists - update it instead
+                if (confirm(`Job #${jobData.jobNum} already exists. Replace it?`)) {
+                    history[existingIdx] = jobData;
+                    notify('✓ Job Updated (duplicate prevented)');
+                } else {
+                    return;
+                }
+            } else {
+                // New unique job
+                history.unshift(jobData);
+                notify('✓ Job Saved');
+            }
+        }
         
         // Keep only last 50 jobs
         history = history.slice(0, 50);
         
         localStorage.setItem('jobHistory', JSON.stringify(history));
+        console.log('✓ JOB SAVED TO HISTORY - Total jobs now:', history.length);
+        
         renderHistory();
+        renderJobTasks(); // Update workload summary
+        renderScheduleCalendar(); // Update schedule to show new job
+        updateDebugPanel(); // Update debug panel
     }
 
     let historyFilter = 'all';
@@ -627,11 +775,16 @@
         renderHistory();
     }
 
+    // Track the current job being edited (if loaded from history)
+    let currentEditingJobIndex = null;
+
     function loadJobFromHistory(index) {
         const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
         const job = history[index];
         
         if (!job) return;
+        
+        currentEditingJobIndex = index; // Track this job for overwrite
         
         items = job.items || [];
         document.getElementById('cli').value = job.client || '';
@@ -645,7 +798,7 @@
         
         render();
         tab('measure');
-        notify('Job Loaded from History');
+        notify('✓ Job Loaded - Editing (will overwrite on save)');
         saveData();
     }
 
@@ -947,6 +1100,11 @@
         document.querySelectorAll('.sub-btn').forEach(x => x.classList.remove('active'));
         document.getElementById('sub-' + t).style.display = 'block';
         document.getElementById('sub-btn-' + t).classList.add('active');
+        
+        // Special handling for paint tab
+        if (t === 'paint') {
+            renderPaintFormulaList();
+        }
     }
 
     // DATABASE OPS
@@ -960,7 +1118,11 @@
         const pL = document.getElementById('list-profiles'); 
         pL.innerHTML = '';
         profiles.sort().forEach((p, i) => { 
-            pL.innerHTML += `<div class="db-item"><span>${p}</span><span class="db-del" onclick="delProf('${p}')">×</span></div>`; 
+            pL.innerHTML += `<div class="db-item" style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="flex:1;">${p}</span>
+                <button onclick="editProfile('${p}')" style="padding:2px 8px; background:#2196f3; color:#fff; border:none; border-radius:3px; font-size:9px; font-weight:900; cursor:pointer; margin-right:4px;">EDIT</button>
+                <span class="db-del" onclick="delProf('${p}')">×</span>
+            </div>`; 
         });
     }
 
@@ -1002,6 +1164,23 @@
             refreshLists();
             notify('Profile Deleted');
         } 
+    }
+    
+    function editProfile(oldName) {
+        const newName = prompt(`Rename profile:\n\n${oldName}`, oldName);
+        if (newName && newName.trim() !== '') {
+            const trimmed = newName.trim();
+            if (trimmed === oldName) {
+                return; // No change
+            }
+            if (profiles.includes(trimmed)) {
+                alert('Profile name already exists');
+                return;
+            }
+            profiles = profiles.map(p => p === oldName ? trimmed : p);
+            refreshLists();
+            notify('Profile Renamed');
+        }
     }
 
     function setFM(v) {
@@ -1049,7 +1228,7 @@
         if(mode === 'DS') area *= 2;
         if(mode === 'SE') area += ((eL * h) + (eS * w)) * 100;
         area += ((eL * h * thk) + (eS * w * thk));
-        document.getElementById('liveSq').innerText = (area / 1000000).toFixed(3);
+        if (document.getElementById('liveSq')) document.getElementById('liveSq').innerText = (area / 1000000).toFixed(3);
     }
 
     function addPart() {
@@ -1075,10 +1254,13 @@
             existing.qty += (parseInt(document.getElementById('qty').value) || 1);
             notify("Qty Updated");
         } else {
+            const liveSqElement = document.getElementById('liveSq');
+            const sqmValue = liveSqElement ? liveSqElement.innerText : '0.000';
+            
             items.push({
                 h, w, qty: (parseInt(document.getElementById('qty').value) || 1),
                 desc: desc.toUpperCase(), prof: prof, fm: fmState,
-                mode: mode, e: edges, sqm: document.getElementById('liveSq').innerText,
+                mode: mode, e: edges, sqm: sqmValue,
                 brand: document.getElementById('p-brand').value,
                 color: document.getElementById('p-color').value,
                 code: document.getElementById('p-code').value,
@@ -1096,7 +1278,9 @@
     }
 
     function render() {
-        const l = document.getElementById('list'); 
+        const l = document.getElementById('list');
+        if (!l) return; // Exit if list doesn't exist (not on measure tab)
+        
         l.innerHTML = '';
         let tA = 0, tQ = 0;
         
@@ -1129,8 +1313,8 @@
             </div>`;
         });
         
-        document.getElementById('tA').innerText = tA.toFixed(3);
-        document.getElementById('tQ').innerText = tQ;
+        if (document.getElementById('tA')) document.getElementById('tA').innerText = tA.toFixed(3);
+        if (document.getElementById('tQ')) document.getElementById('tQ').innerText = tQ;
     }
 
     function changeQty(index, delta) { 
@@ -1148,7 +1332,8 @@
     }
 
     function notify(m) { 
-        const t = document.getElementById('toast'); 
+        const t = document.getElementById('toast');
+        if (!t) return; // Exit if toast doesn't exist
         t.innerText = m; 
         t.style.display = 'block'; 
         setTimeout(()=>t.style.display='none', 1500); 
@@ -1229,9 +1414,11 @@
 
     function saveJob() { 
         saveData();
-        saveJobToHistory();
-        renderHistory();
-        notify("Job Saved to History"); 
+        saveJobToHistory(); // This will show its own notification
+        setTimeout(() => {
+            tab('history'); // Navigate to history tab
+            renderHistory();
+        }, 500);
     }
 
     function snap() { 
@@ -1241,6 +1428,7 @@
     function clearAllData() {
         if (confirm('Are you absolutely sure? This will delete all data and cannot be undone.')) {
             items = [];
+            currentEditingJobIndex = null; // Reset editing index
             localStorage.removeItem('currentJob');
             document.getElementById('h').value = '';
             document.getElementById('w').value = '';
@@ -1251,6 +1439,11 @@
             render();
             notify('All Data Cleared');
         }
+    }
+    
+    function startNewJob() {
+        currentEditingJobIndex = null; // Reset editing index when starting new job
+        clearAllData(); // This will also clear the form
     }
 
     // CALENDAR FUNCTIONALITY
@@ -1282,7 +1475,7 @@
         
         // Set month/year header
         const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-        document.getElementById('monthYear').innerText = `${monthNames[month]} ${year}`;
+        if (document.getElementById('monthYear')) document.getElementById('monthYear').innerText = `${monthNames[month]} ${year}`;
         
         // Get first day of month and number of days
         const firstDay = new Date(year, month, 1).getDay();
@@ -1333,46 +1526,211 @@
     let scheduleCalendarDate = new Date();
 
     function renderScheduleCalendar() {
+        updateDebugPanel(); // Show what jobs are in storage
+        
+        // FORCE SCHEDULE CONTAINER TO BE VISIBLE
+        const scheduleContainer = document.getElementById('schedule');
+        if (scheduleContainer) {
+            scheduleContainer.style.display = 'block';
+            scheduleContainer.style.visibility = 'visible';
+            scheduleContainer.style.minHeight = 'auto';
+        }
+        
         const year = scheduleCalendarDate.getFullYear();
         const month = scheduleCalendarDate.getMonth();
         
         // Set month/year header
         const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-        document.getElementById('scheduleMonthYear').innerText = `${monthNames[month]} ${year}`;
+        if (document.getElementById('scheduleMonthYear')) document.getElementById('scheduleMonthYear').innerText = `${monthNames[month]} ${year}`;
         
         renderGanttChart(year, month);
         renderGlobalNotifications();
+        renderJobTasks(); // Update workload summary
+        checkForDuplicates(); // Show warning if duplicates exist
     }
 
-    function renderGanttChart(year, month) {
-        const ganttChart = document.getElementById('ganttChart');
-        const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
+    // Helper function to get the calendar date that corresponds to N working days from a start date
+    // Helper function to check if a day is a weekday (Monday-Friday)
+    const isWeekday = (date) => {
+        const dayOfWeek = date.getDay();
+        return dayOfWeek !== 0 && dayOfWeek !== 6; // 0=Sunday, 6=Saturday
+    };
+    
+    // Helper to count working days from start date to a calendar date
+    function getWorkingDayNumber(startDate, targetDate) {
+        let count = 0;
+        let currentDate = new Date(startDate);
         
-        // Generate all dates for the month
+        while (currentDate <= targetDate) {
+            if (isWeekday(currentDate)) {
+                count++;
+            }
+            if (currentDate.toDateString() === targetDate.toDateString()) {
+                return count;
+            }
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
+        return -1; // Target date is before start date
+    }
+    
+    function updateDebugPanel() {
+        try {
+            const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
+            const debugCount = document.getElementById('debugJobCount');
+            const debugList = document.getElementById('debugJobList');
+            
+            if (!debugCount || !debugList) return;
+            
+            debugCount.innerHTML = `<strong>${history.length} jobs total</strong> | Active: ${history.filter(j => !j.completed).length} | Check Console for HTML size`;
+            
+            if (history.length === 0) {
+                debugList.innerHTML = '<em>No jobs saved yet</em>';
+                return;
+            }
+            
+            let html = '<table style="width:100%; border-collapse:collapse;">';
+            history.forEach((job, idx) => {
+                const status = job.completed ? '✓ DONE' : '⏳ ACTIVE';
+                html += `<tr style="border-bottom:1px solid #ccc;">
+                    <td style="padding:4px; width:30px;">${idx + 1}.</td>
+                    <td style="padding:4px;"><strong>#${job.jobNum}</strong></td>
+                    <td style="padding:4px;">${job.client}</td>
+                    <td style="padding:4px; font-size:10px;">${job.dateReceived || 'N/A'}</td>
+                    <td style="padding:4px; text-align:center; color:${job.completed ? '#34c759' : '#ff9500'};">${status}</td>
+                </tr>`;
+            });
+            html += '</table>';
+            debugList.innerHTML = html;
+        } catch (error) {
+            console.error('Debug panel error:', error);
+        }
+    }
+    
+    function renderGanttChart(year, month) {
+        // FORCE WRAPPER TO BE VISIBLE
+        const ganttWrapper = document.getElementById('ganttWrapper');
+        if (ganttWrapper) {
+            ganttWrapper.style.display = 'block';
+            ganttWrapper.style.visibility = 'visible';
+            ganttWrapper.style.opacity = '1';
+            console.log('✓ Gantt wrapper visibility forced');
+        }
+        
+        const ganttChart = document.getElementById('ganttChart');
+        if (!ganttChart) {
+            console.error('❌ ganttChart element not found!');
+            return;
+        }
+        
+        // FORCE VISIBILITY BEFORE RENDERING
+        ganttChart.style.display = 'flex';
+        ganttChart.style.visibility = 'visible';
+        ganttChart.style.minHeight = 'auto';
+        ganttChart.style.opacity = '1';
+        
+        // Check if element is visible
+        const style = window.getComputedStyle(ganttChart);
+        console.log('ganttChart element:', {
+            display: style.display,
+            visibility: style.visibility,
+            width: style.width,
+            height: style.height,
+            offsetHeight: ganttChart.offsetHeight
+        });
+        
+        try {
+            let fullHistory = JSON.parse(localStorage.getItem('jobHistory')) || [];
+            
+            console.log('🔍 Full history count:', fullHistory.length);
+            console.log('Full history:', JSON.stringify(fullHistory, null, 2));
+            console.log('Active jobs:', fullHistory.filter(j => !j.completed).length);
+        
+        // Sort by received date - newest first
+        let history = fullHistory.filter(job => !job.completed).sort((a, b) => {
+            let dateA = new Date();
+            let dateB = new Date();
+            
+            // Parse dateReceived in DD/MM/YY format
+            if (a.dateReceived) {
+                if (a.dateReceived.includes('/')) {
+                    const [day, month, year] = a.dateReceived.split('/');
+                    dateA = new Date(parseInt('20' + year), parseInt(month) - 1, parseInt(day));
+                } else if (a.dateReceived.includes('-')) {
+                    dateA = new Date(a.dateReceived);
+                }
+            }
+            
+            if (b.dateReceived) {
+                if (b.dateReceived.includes('/')) {
+                    const [day, month, year] = b.dateReceived.split('/');
+                    dateB = new Date(parseInt('20' + year), parseInt(month) - 1, parseInt(day));
+                } else if (b.dateReceived.includes('-')) {
+                    dateB = new Date(b.dateReceived);
+                }
+            }
+            
+            return dateB - dateA;
+        });
+        
+        // Generate all dates for the month - SHOW ALL DAYS
         const firstDay = new Date(year, month, 1);
         const lastDay = new Date(year, month + 1, 0);
         const daysInMonth = lastDay.getDate();
         
-        // Create header with dates
-        let ganttHTML = '<div style="display:flex; gap:1px; margin-bottom:8px;">';
-        
-        // Job names column
-        ganttHTML += '<div style="width:120px; min-width:120px; font-weight:900; font-size:10px; padding:6px; border-right:2px solid #ddd; color:#000;">DATE</div>';
-        
-        // Date columns
+        // Get all days for this month with weekday info
+        const allDays = [];
         for (let day = 1; day <= daysInMonth; day++) {
             const date = new Date(year, month, day);
-            const dayName = ['S', 'M', 'T', 'W', 'T', 'F', 'S'][date.getDay()];
-            ganttHTML += `<div style="width:28px; min-width:28px; text-align:center; font-weight:900; font-size:9px; padding:3px; background:#f0f0f0; border:1px solid #eee; color:#666;">${dayName}<br>${day}</div>`;
+            allDays.push({ day, date, isWeekday: isWeekday(date) });
         }
-        ganttHTML += '</div>';
+        
+        // Create header with dates (ALL DAYS - weekends grayed out)
+        const timelineWidth = allDays.length * 28;
+        let ganttHTML = '<div style="display:flex; gap:0; margin-bottom:0; position:sticky; top:0; background:#fff; z-index:10; border-bottom:2px solid #ddd; min-height:28px; align-items:stretch;">';
+        
+        // Job names column - MUST MATCH job info width (170px) - EXACT same styling
+        ganttHTML += '<div style="width:170px; min-width:170px; max-width:170px; font-weight:900; font-size:9px; padding:5px 6px; border-right:2px solid #ddd; color:#000; line-height:1.2; background:#f9f9f9; box-sizing:border-box; display:flex; align-items:center;">DATE</div>';
+        
+        // Wrap date columns in container with exact calculated width
+        ganttHTML += `<div style="width:${timelineWidth}px; min-width:${timelineWidth}px; max-width:${timelineWidth}px; display:flex; gap:0; min-height:28px;">`;
+        
+        // Date columns - ALL DAYS (weekends lighter) - EXACT 28px box
+        allDays.forEach(({ day, date, isWeekday: isWD }) => {
+            const dayName = ['S', 'M', 'T', 'W', 'T', 'F', 'S'][date.getDay()];
+            const bgColor = isWD ? '#f0f0f0' : '#f9f9f9';
+            const textColor = isWD ? '#666' : '#ccc';
+            ganttHTML += `<div style="width:28px; min-width:28px; max-width:28px; height:28px; text-align:center; font-weight:900; font-size:9px; padding:2px 0; background:${bgColor}; border:1px solid #eee; color:${textColor}; box-sizing:border-box; display:flex; flex-direction:column; align-items:center; justify-content:center; line-height:1.1;">${dayName}<br>${day}</div>`;
+        });
+        ganttHTML += '</div>';  // Close date columns container
+        ganttHTML += '</div>';  // Close header row
         
         // Jobs timeline
-        ganttHTML += '<div>';
-        history.forEach((job, jobIdx) => {
-            if (!job.completed && job.dateReceived) {
-                const [day, jobMonth, jobYear] = job.dateReceived.split('/');
-                const jobDate = new Date(parseInt('20' + jobYear), parseInt(jobMonth) - 1, parseInt(day));
+        ganttHTML += '<div style="width:100%; display:flex; flex-direction:column; gap:0;">';
+        console.log('📋 Rendering Gantt - Total jobs to render:', history.length);
+        let jobCount = 0;
+        history.forEach((job, filteredIdx) => {
+            // Find original index in full history
+            const originalIdx = fullHistory.findIndex(j => j === job);
+            
+            if (job && !job.completed) {
+                jobCount++;
+                console.log(`  Job ${jobCount}: #${job.jobNum} - ${job.client}`);
+                // Handle date in DD/MM/YY or YYYY-MM-DD format
+                let jobDate = new Date();
+                if (job.dateReceived) {
+                    try {
+                        if (job.dateReceived.includes('/')) {
+                            // DD/MM/YY format
+                            const [day, jobMonth, jobYear] = job.dateReceived.split('/');
+                            jobDate = new Date(parseInt('20' + jobYear), parseInt(jobMonth) - 1, parseInt(day));
+                        } else if (job.dateReceived.includes('-')) {
+                            // YYYY-MM-DD format
+                            jobDate = new Date(job.dateReceived);
+                        }
+                    } catch (e) {
+                        jobDate = new Date(); // Default to today if parsing fails
+                    }
+                }
                 
                 // Initialize job phases tracking if not exists
                 if (!job.phases) job.phases = {};
@@ -1380,100 +1738,136 @@
                 // Get custom timeline for this job or use defaults
                 const jobTimeline = job.timeline || getDefaultTimeline();
                 const measuringEnd = jobTimeline.measuring;
-                const sandingEnd = jobTimeline.sanding;
+                const sanding1End = jobTimeline.sanding1;
+                const undercoatEnd = jobTimeline.undercoat;
+                const sanding2End = jobTimeline.sanding2;
                 const topCoatEnd = jobTimeline.topcoat;
                 const inspectEnd = jobTimeline.inspect;
                 const completionDay = jobTimeline.complete;
-                
-                // Job header with info and timeline
-                ganttHTML += `<div style="margin-bottom:6px;">
-                    <!-- Job Info Row -->
-                    <div style="display:flex; gap:1px; margin-bottom:2px; align-items:flex-start;">
-                        <div style="width:120px; min-width:120px; font-weight:900; font-size:10px; padding:4px 6px; border-right:2px solid #ddd; color:#000; line-height:1.2;">
-                            <div style="color:#d4af37;">#${job.jobNum}</div>
-                            <div style="font-size:9px; color:#666;">${job.client.substring(0, 15)}</div>
-                            <button onclick="editJobTimeline(${jobIdx})" style="font-size:8px; padding:2px 4px; border:none; background:#2196f3; color:#fff; border-radius:3px; cursor:pointer; margin-top:2px;">✏️ Edit</button>
-                        </div>
-                        <div style="flex:1; display:flex; gap:1px; height:32px;">`;
-                
-                // Timeline bars
-                for (let day = 1; day <= daysInMonth; day++) {
-                    const cellDate = new Date(year, month, day);
-                    const dayOffset = Math.floor((cellDate - jobDate) / (24 * 60 * 60 * 1000));
+                // Job header with info and timeline - Alternate background every 2nd job
+                const jobBgColor = jobCount % 2 === 0 ? '#ffffff' : '#f5f5f5';
+                const timelineWidth = allDays.length * 28;
+                ganttHTML += `<div style="margin-bottom:0; padding-bottom:0; display:flex; gap:0; background:${jobBgColor}; border:1px solid #ddd; border-bottom:2px solid #bbb;">
+                    <!-- Left Column: Job Info -->
+                    <div style="width:170px; min-width:170px; max-width:170px; font-weight:900; font-size:9px; padding:5px 6px; border-right:2px solid #ddd; color:#000; line-height:1.2; background:#f9f9f9; box-sizing:border-box;">
+                        <div style="color:#d4af37; font-size:10px;">#${job.jobNum}</div>
+                        <div style="font-size:8px; color:#666; margin-top:1px;">${job.client}</div>
+                        <div style="font-size:7px; color:#2196f3; font-weight:900; margin-top:1px;">📐 ${parseFloat(job.totalSqm || 0).toFixed(2)} m²</div>
+                        <button onclick="editJobTimeline(${originalIdx})" style="font-size:7px; padding:1px 3px; border:none; background:#2196f3; color:#fff; border-radius:2px; cursor:pointer; margin-top:1px; width:100%;">✏️ Edit</button>
+                    </div>
                     
+                    <!-- Right Column: Timeline bars + Phase checkboxes stacked -->
+                    <div style="display:flex; flex-direction:column; gap:0; width:${timelineWidth}px; min-width:${timelineWidth}px; max-width:${timelineWidth}px;">
+                        <!-- Timeline bars row -->
+                        <div style="display:flex; gap:0;">`;
+                
+                // Timeline bars - ALL DAYS but NEVER work on weekends
+                allDays.forEach(({ day, date: cellDate, isWeekday: isWD }) => {
                     let barHTML = '';
-                    let phaseKey = '';
-                    let phaseColor = '';
-                    let phaseLabel = '';
-                    let isStrikeThrough = false;
                     
-                    // Check which phase this day is in
-                    if (dayOffset >= 0 && dayOffset < measuringEnd) {
-                        phaseKey = 'measuring';
-                        phaseColor = '#2196f3';
-                        phaseLabel = 'M';
-                        isStrikeThrough = job.phases && job.phases.measuring;
-                    } else if (dayOffset >= measuringEnd && dayOffset < sandingEnd) {
-                        phaseKey = 'sanding';
-                        phaseColor = '#ff9500';
-                        phaseLabel = 'S';
-                        isStrikeThrough = job.phases && job.phases.sanding;
-                    } else if (dayOffset >= sandingEnd && dayOffset < topCoatEnd) {
-                        phaseKey = 'topcoat';
-                        phaseColor = '#9c27b0';
-                        phaseLabel = 'T';
-                        isStrikeThrough = job.phases && job.phases.topcoat;
-                    } else if (dayOffset >= topCoatEnd && dayOffset < inspectEnd) {
-                        phaseKey = 'inspect';
-                        phaseColor = '#673ab7';
-                        phaseLabel = 'I';
-                        isStrikeThrough = job.phases && job.phases.inspect;
-                    } else if (dayOffset >= inspectEnd && dayOffset <= completionDay) {
-                        phaseKey = 'complete';
-                        phaseColor = '#34c759';
-                        phaseLabel = 'C';
-                        isStrikeThrough = job.phases && job.phases.complete;
+                    // WEEKEND = ALWAYS EMPTY, NO WORK
+                    if (!isWD) {
+                        barHTML = `<div style="width:28px; min-width:28px; max-width:28px; height:28px; background:#fafafa; border:1px solid #f0f0f0; box-sizing:border-box;"></div>`;
                     }
-                    
-                    if (phaseKey) {
-                        barHTML = `<div style="width:28px; height:28px; background:${phaseColor}; border:1px solid ${phaseColor}; display:flex; align-items:center; justify-content:center; font-size:8px; color:#fff; font-weight:900; position:relative; cursor:pointer;" onclick="toggleGanttCell(${jobIdx}, '${phaseKey}')" title="Click to mark complete">
-                            <span style="${isStrikeThrough ? 'text-decoration:line-through; opacity:0.4;' : ''}">${phaseLabel}</span>
-                            ${isStrikeThrough ? '<svg style="position:absolute; width:24px; height:24px;" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><line x1="3" y1="3" x2="21" y2="21"/></svg>' : ''}
-                        </div>`;
-                    } else {
-                        barHTML = `<div style="width:28px; height:28px; background:#f9f9f9; border:1px solid #eee;"></div>`;
+                    // WEEKDAY ONLY = check phase
+                    else if (isWD) {
+                        // Weekday - count which working day this is from job start
+                        const workingDayNum = getWorkingDayNumber(jobDate, cellDate);
+                        
+                        if (workingDayNum < 1) {
+                            // Before job start
+                            barHTML = `<div style="width:28px; min-width:28px; max-width:28px; height:28px; background:#f9f9f9; border:1px solid #eee; box-sizing:border-box;"></div>`;
+                        } else {
+                            // Job has started - assign to phase
+                            let phaseKey = '';
+                            let phaseColor = '';
+                            let phaseLabel = '';
+                            let isStrikeThrough = false;
+                            
+                            // Assign working day to phase (simple whole day allocation)
+                            if (workingDayNum <= measuringEnd) {
+                                phaseKey = 'measuring';
+                                phaseColor = '#2196f3';
+                                phaseLabel = 'M';
+                                isStrikeThrough = job.phases && job.phases.measuring;
+                            } else if (workingDayNum <= sanding1End) {
+                                phaseKey = 'sanding1';
+                                phaseColor = '#ff9500';
+                                phaseLabel = 'S1';
+                                isStrikeThrough = job.phases && job.phases.sanding1;
+                            } else if (workingDayNum <= undercoatEnd) {
+                                phaseKey = 'undercoat';
+                                phaseColor = '#8b4513';
+                                phaseLabel = 'U';
+                                isStrikeThrough = job.phases && job.phases.undercoat;
+                            } else if (workingDayNum <= sanding2End) {
+                                phaseKey = 'sanding2';
+                                phaseColor = '#ff9500';
+                                phaseLabel = 'S2';
+                                isStrikeThrough = job.phases && job.phases.sanding2;
+                            } else if (workingDayNum <= topCoatEnd) {
+                                phaseKey = 'topcoat';
+                                phaseColor = '#9c27b0';
+                                phaseLabel = 'T';
+                                isStrikeThrough = job.phases && job.phases.topcoat;
+                            } else if (workingDayNum <= inspectEnd) {
+                                phaseKey = 'inspect';
+                                phaseColor = '#673ab7';
+                                phaseLabel = 'I';
+                                isStrikeThrough = job.phases && job.phases.inspect;
+                            } else if (workingDayNum <= completionDay) {
+                                phaseKey = 'complete';
+                                phaseColor = '#34c759';
+                                phaseLabel = 'C';
+                                isStrikeThrough = job.phases && job.phases.complete;
+                            }
+                            
+                            if (phaseKey) {
+                                barHTML = `<div style="width:28px; min-width:28px; max-width:28px; height:28px; background:${phaseColor}; border:1px solid ${phaseColor}; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:900; color:#fff; position:relative; cursor:pointer; box-sizing:border-box;" onclick="toggleGanttCell(${originalIdx}, '${phaseKey}')" title="Click to mark complete">
+                                    <span style="${isStrikeThrough ? 'text-decoration:line-through; opacity:0.4;' : ''}">${phaseLabel}</span>
+                                    ${isStrikeThrough ? '<svg style="position:absolute; width:24px; height:24px;" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><line x1="3" y1="3" x2="21" y2="21"/></svg>' : ''}
+                                </div>`;
+                            } else {
+                                barHTML = `<div style="width:28px; min-width:28px; max-width:28px; height:28px; background:#f9f9f9; border:1px solid #eee; box-sizing:border-box;"></div>`;
+                            }
+                        }
                     }
                     
                     ganttHTML += barHTML;
-                }
+                });
                 
-                ganttHTML += '</div></div>';
-                
-                // Checkboxes and button row
-                ganttHTML += `<div style="display:flex; gap:1px; align-items:center;">
-                    <div style="width:120px; min-width:120px; font-weight:900; font-size:9px; padding:4px 6px; border-right:2px solid #ddd;"></div>
-                    <div style="flex:1; display:flex; gap:8px; padding:4px 6px; background:#f9f9f9; border-radius:6px; flex-wrap:wrap; align-items:center;">
+                ganttHTML += '</div>';  // Close timeline bars row
+                ganttHTML += `<div style="display:flex; gap:8px; padding:4px 6px; background:transparent; flex-wrap:wrap; align-items:center;">
                         <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
-                            <input type="checkbox" ${job.phases && job.phases.measuring ? 'checked' : ''} onchange="toggleJobPhase(${jobIdx}, 'measuring')" style="width:13px; height:13px; cursor:pointer;">
+                            <input type="checkbox" ${job.phases && job.phases.measuring ? 'checked' : ''} onchange="toggleJobPhase(${originalIdx}, 'measuring')" style="width:13px; height:13px; cursor:pointer;">
                             <span>M</span>
                         </label>
                         <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
-                            <input type="checkbox" ${job.phases && job.phases.sanding ? 'checked' : ''} onchange="toggleJobPhase(${jobIdx}, 'sanding')" style="width:13px; height:13px; cursor:pointer;">
-                            <span>S</span>
+                            <input type="checkbox" ${job.phases && job.phases.sanding1 ? 'checked' : ''} onchange="toggleJobPhase(${originalIdx}, 'sanding1')" style="width:13px; height:13px; cursor:pointer;">
+                            <span>S1</span>
                         </label>
                         <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
-                            <input type="checkbox" ${job.phases && job.phases.topcoat ? 'checked' : ''} onchange="toggleJobPhase(${jobIdx}, 'topcoat')" style="width:13px; height:13px; cursor:pointer;">
+                            <input type="checkbox" ${job.phases && job.phases.undercoat ? 'checked' : ''} onchange="toggleJobPhase(${originalIdx}, 'undercoat')" style="width:13px; height:13px; cursor:pointer;">
+                            <span>U</span>
+                        </label>
+                        <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
+                            <input type="checkbox" ${job.phases && job.phases.sanding2 ? 'checked' : ''} onchange="toggleJobPhase(${originalIdx}, 'sanding2')" style="width:13px; height:13px; cursor:pointer;">
+                            <span>S2</span>
+                        </label>
+                        <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
+                            <input type="checkbox" ${job.phases && job.phases.topcoat ? 'checked' : ''} onchange="toggleJobPhase(${originalIdx}, 'topcoat')" style="width:13px; height:13px; cursor:pointer;">
                             <span>T</span>
                         </label>
                         <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
-                            <input type="checkbox" ${job.phases && job.phases.inspect ? 'checked' : ''} onchange="toggleJobPhase(${jobIdx}, 'inspect')" style="width:13px; height:13px; cursor:pointer;">
+                            <input type="checkbox" ${job.phases && job.phases.inspect ? 'checked' : ''} onchange="toggleJobPhase(${originalIdx}, 'inspect')" style="width:13px; height:13px; cursor:pointer;">
                             <span>I</span>
                         </label>
                         <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
-                            <input type="checkbox" ${job.phases && job.phases.complete ? 'checked' : ''} onchange="toggleJobPhase(${jobIdx}, 'complete')" style="width:13px; height:13px; cursor:pointer;">
+                            <input type="checkbox" ${job.phases && job.phases.complete ? 'checked' : ''} onchange="toggleJobPhase(${originalIdx}, 'complete')" style="width:13px; height:13px; cursor:pointer;">
                             <span>C</span>
                         </label>
-                        <button onclick="markJobComplete(${jobIdx})" style="border:none; background:#34c759; color:#fff; padding:4px 10px; border-radius:4px; font-weight:900; font-size:9px; cursor:pointer;">✓ DONE</button>
+                        <button onclick="markJobComplete(${originalIdx})" style="border:none; background:#34c759; color:#fff; padding:4px 10px; border-radius:4px; font-weight:900; font-size:9px; cursor:pointer;">✓ DONE</button>
+                        </div>
                     </div>
                 </div>`;
             }
@@ -1481,14 +1875,23 @@
         ganttHTML += '</div>';
         
         // Legend
-        ganttHTML += `<div style="margin-top:15px; display:grid; grid-template-columns:repeat(5, 1fr); gap:12px; font-size:9px; font-weight:900;">
+        ganttHTML += `<div style="margin-top:15px;">
+            <div style="background:#f0f0f0; padding:10px; border-radius:6px; margin-bottom:10px;">
+                <p style="margin:0 0 8px 0; font-weight:900; font-size:11px; color:#333;">📅 Timeline Counts WORKING DAYS ONLY</p>
+                <p style="margin:0; font-size:9px; color:#666;"><strong>Example:</strong> If Measuring = 2 days, it shows M/T (Mon-Tue). If Sanding = 8 days starting Wed, it shows W/T/F (3) + skip weekend + M/T/W/T (4) = 8 working days total across 2 weeks</p>
+            </div>
+            <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; font-size:8px; font-weight:900;">
             <div style="display:flex; align-items:center; gap:4px;">
                 <div style="width:14px; height:14px; background:#2196f3; border:1px solid #1976d2; border-radius:2px;"></div>
                 <span>M = Measuring</span>
             </div>
             <div style="display:flex; align-items:center; gap:4px;">
                 <div style="width:14px; height:14px; background:#ff9500; border:1px solid #f57c00; border-radius:2px;"></div>
-                <span>S = Sanding</span>
+                <span>S1/S2 = Sanding</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:4px;">
+                <div style="width:14px; height:14px; background:#8b4513; border:1px solid #5c2e0a; border-radius:2px;"></div>
+                <span>U = Undercoat</span>
             </div>
             <div style="display:flex; align-items:center; gap:4px;">
                 <div style="width:14px; height:14px; background:#9c27b0; border:1px solid #7b1fa2; border-radius:2px;"></div>
@@ -1502,9 +1905,31 @@
                 <div style="width:14px; height:14px; background:#34c759; border:1px solid #28a745; border-radius:2px;"></div>
                 <span>C = Complete</span>
             </div>
+            <div style="display:flex; align-items:center; gap:4px;">
+                <div style="width:14px; height:14px; background:#fafafa; border:1px solid #f0f0f0; border-radius:2px;"></div>
+                <span>Weekend (no work)</span>
+            </div>
         </div>`;
         
+        console.log(`✓ Gantt rendered ${jobCount} jobs successfully`);
+        console.log('📄 GANTT HTML LENGTH:', ganttHTML.length, 'characters');
+        console.log('📄 GANTT HTML PREVIEW (first 500 chars):', ganttHTML.substring(0, 500));
         ganttChart.innerHTML = ganttHTML;
+        console.log('✓ HTML INSERTED INTO DOM');
+        console.log('📊 ganttChart.innerHTML.length after insert:', ganttChart.innerHTML.length);
+        console.log('📊 ganttChart.offsetHeight:', ganttChart.offsetHeight);
+        console.log('📊 ganttChart.scrollHeight:', ganttChart.scrollHeight);
+        
+        // COUNT ACTUAL JOB DIVS IN DOM
+        const jobDivs = ganttChart.querySelectorAll('div[style*="margin-bottom:12px"]');
+        console.log('🔢 ACTUAL JOB DIVS FOUND IN DOM:', jobDivs.length);
+        jobDivs.forEach((div, idx) => {
+            console.log(`  Job div ${idx + 1}: offsetHeight=${div.offsetHeight}, offsetWidth=${div.offsetWidth}`);
+        });
+        } catch (error) {
+            console.error('❌ Error rendering Gantt chart:', error);
+            ganttChart.innerHTML = `<div style="padding:20px; color:#ff3b30; background:#ffebee; border-radius:6px;"><strong>Error loading schedule:</strong> ${error.message}</div>`;
+        }
     }
 
     function toggleGanttCell(jobIdx, phaseKey) {
@@ -1585,6 +2010,408 @@
         }, 500);
     }
 
+    function switchAdminTab(tab) {
+        // Hide all admin tabs
+        document.getElementById('admin-tab-general-content').style.display = 'none';
+        document.getElementById('admin-tab-colors-content').style.display = 'none';
+        document.getElementById('admin-tab-pricing-content').style.display = 'none';
+        
+        // Remove active class from all buttons
+        document.getElementById('admin-tab-general').classList.remove('active');
+        document.getElementById('admin-tab-colors').classList.remove('active');
+        document.getElementById('admin-tab-pricing').classList.remove('active');
+        
+        // Show selected tab and mark button as active
+        if (tab === 'general') {
+            document.getElementById('admin-tab-general-content').style.display = 'block';
+            document.getElementById('admin-tab-general').classList.add('active');
+        } else if (tab === 'colors') {
+            document.getElementById('admin-tab-colors-content').style.display = 'block';
+            document.getElementById('admin-tab-colors').classList.add('active');
+            renderColorCustomizer();
+        } else if (tab === 'pricing') {
+            document.getElementById('admin-tab-pricing-content').style.display = 'block';
+            document.getElementById('admin-tab-pricing').classList.add('active');
+            renderPricingMatrix(); // Load pricing matrix when tab opens
+        }
+    }
+
+    // PAINT FORMULA MANAGER
+    function renderPaintFormulaList() {
+        const target = document.getElementById('paintFormulaList');
+        if (!target) return;
+        
+        const formulas = getPaintFormulas();
+        
+        let html = '';
+        
+        if (formulas.length === 0) {
+            html += `<div style="padding:20px; text-align:center; color:#999; font-size:11px;">No formulas yet. Add one above!</div>`;
+        } else {
+            formulas.forEach((f, idx) => {
+                html += `<div style="padding:12px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:start;">
+                    <div style="flex:1;">
+                        <div style="font-weight:900; font-size:12px; color:#000;">${f.brand} - ${f.color}</div>
+                        <div style="font-size:10px; color:#666; margin-top:3px;">${f.formula}</div>
+                    </div>
+                    <button onclick="deletePaintFormulaDB(${idx})" style="padding:4px 10px; background:#ff3b3015; color:#ff3b30; border:none; border-radius:4px; font-weight:900; font-size:10px; cursor:pointer;">DELETE</button>
+                </div>`;
+            });
+        }
+        
+        target.innerHTML = html;
+    }
+    
+    function addNewPaintFormula() {
+        const brand = document.getElementById('newPaintBrand')?.value.trim();
+        const color = document.getElementById('newPaintColor')?.value.trim();
+        const formula = document.getElementById('newPaintFormula')?.value.trim();
+        
+        if (!brand || !color || !formula) {
+            alert('Please fill in all fields');
+            return;
+        }
+        
+        const formulas = getPaintFormulas();
+        formulas.push({ brand, color, formula });
+        savePaintFormulas(formulas);
+        
+        document.getElementById('newPaintBrand').value = '';
+        document.getElementById('newPaintColor').value = '';
+        document.getElementById('newPaintFormula').value = '';
+        
+        renderPaintFormulaList();
+        notify('✓ Formula Added');
+    }
+    
+    function deletePaintFormulaDB(idx) {
+        if (confirm('Delete this formula?')) {
+            const formulas = getPaintFormulas();
+            formulas.splice(idx, 1);
+            savePaintFormulas(formulas);
+            renderPaintFormulaList();
+            notify('✓ Formula Deleted');
+        }
+    }
+
+    function renderPaintFormulaManager() {
+        // Deprecated - now using Database tab instead
+        renderPaintFormulaList();
+    }
+
+    // COLOR CUSTOMIZER
+    const defaultColors = {
+        'Primary Blue': '#2196f3',
+        'Gold/Highlight': '#d4af37',
+        'Success Green': '#34c759',
+        'Sanding Phase 1 (S1)': '#ff9500',
+        'Sanding Phase 2 (S2)': '#ff9500',
+        'Error Red': '#ff3b30',
+        'Measuring Blue (M)': '#2196f3',
+        'Undercoat Brown (U)': '#8b4513',
+        'TopCoat Purple (T)': '#9c27b0',
+        'Inspect Purple (I)': '#673ab7',
+        'Complete Green (C)': '#34c759',
+        'Background Light': '#f9f9f9',
+        'Border Gray': '#ddd',
+        'Text Dark': '#000',
+        'Text Gray': '#666',
+        'PANEL Button': '#34c759',
+        'DOOR Button': '#ff9500',
+        'DRAWER Button': '#2196f3',
+        'CUSTOM Button': '#af52de',
+        'FLAT Mode Active': '#fff',
+        'FLAT Mode Inactive': '#f5f5f5',
+        'MOULDED Mode Active': '#fff',
+        'MOULDED Mode Inactive': '#f5f5f5',
+        'SS Mode Background': '#333',
+        'SS Mode Text': '#d4af37',
+        'DS Mode Background': '#333',
+        'DS Mode Text': '#d4af37',
+        'SE Mode Background': '#333',
+        'SE Mode Text': '#d4af37',
+        '1LR Edge Active': '#34c759',
+        '2SR Edge Active': '#34c759'
+    };
+    
+    const colorDescriptions = {
+        'Primary Blue': '💾 SAVE button, Edit pencil icons, SQM display (#) in schedule row',
+        'Gold/Highlight': '🏷️ Job numbers (#001, #002, #003) displayed in schedule',
+        'Success Green': '✓ SAVE & ✓ DONE buttons, complete checkmarks, success messages',
+        'Sanding Phase 1 (S1)': '🟠 Sanding Phase 1 bar (S1) in Gantt timeline',
+        'Sanding Phase 2 (S2)': '🟠 Sanding Phase 2 bar (S2) in Gantt timeline',
+        'Error Red': '❌ Delete (×) buttons throughout app',
+        'Measuring Blue (M)': '🔵 Measuring Phase bar (M) in Gantt timeline',
+        'Undercoat Brown (U)': '🟤 Undercoat Phase bar (U) in Gantt timeline',
+        'TopCoat Purple (T)': '🟣 Top Coat Phase bar (T) in Gantt timeline',
+        'Inspect Purple (I)': '🟣 Inspect & Wrap Phase bar (I) in Gantt timeline',
+        'Complete Green (C)': '✓ Complete Phase bar (C) in Gantt timeline',
+        'Background Light': '⬜ Checkboxes container, light card backgrounds',
+        'Border Gray': '━━ All borders, divider lines, frame edges',
+        'Text Dark': 'Primary text color - job titles, headings',
+        'Text Gray': 'Secondary text - labels, metadata, timestamps',
+        'PANEL Button': '🟩 PANEL button in Measure tab (part type selector)',
+        'DOOR Button': '🟠 DOOR button in Measure tab (part type selector)',
+        'DRAWER Button': '🟦 DRAWER button in Measure tab (part type selector)',
+        'CUSTOM Button': '🟪 CUSTOM button in Measure tab (part type selector)',
+        'FLAT Mode Active': '🔲 FLAT button when SELECTED (active state)',
+        'FLAT Mode Inactive': '⬜ FLAT button when NOT selected (inactive state)',
+        'MOULDED Mode Active': '🔲 MOULDED button when SELECTED (active state)',
+        'MOULDED Mode Inactive': '⬜ MOULDED button when NOT selected (inactive state)',
+        'SS Mode Background': '⬛ SS (Single Sided) edge mode background when SELECTED',
+        'SS Mode Text': '🟨 SS (Single Sided) edge mode text color when SELECTED',
+        'DS Mode Background': '⬛ DS (Double Sided) edge mode background when SELECTED',
+        'DS Mode Text': '🟨 DS (Double Sided) edge mode text color when SELECTED',
+        'SE Mode Background': '⬛ SE (Single Edge) mode background when SELECTED',
+        'SE Mode Text': '🟨 SE (Single Edge) mode text color when SELECTED',
+        '1LR Edge Active': '🟢 1LR (One Left/Right) edge checkbox active color when CHECKED',
+        '2SR Edge Active': '🟢 2SR (Two Side Right) edge checkbox active color when CHECKED'
+    };
+    
+    let appColors = JSON.parse(localStorage.getItem('appColors')) || defaultColors;
+    
+    function renderColorCustomizer() {
+        const target = document.getElementById('colorCustomizerContent');
+        if (!target) return;
+        
+        let html = '';
+        
+        Object.keys(appColors).forEach(colorName => {
+            const colorValue = appColors[colorName];
+            const description = colorDescriptions[colorName] || '';
+            html += `
+                <div style="padding:12px; border:1px solid #ddd; border-radius:6px; background:#fff;">
+                    <label style="display:block; font-weight:900; font-size:12px; margin-bottom:2px; color:#000;">${colorName}</label>
+                    <div style="font-size:10px; color:#666; margin-bottom:10px; line-height:1.4;">${description}</div>
+                    <div style="display:flex; gap:10px; align-items:center; margin-bottom:8px;">
+                        <input type="color" value="${colorValue}" id="color_${colorName.replace(/[^a-zA-Z0-9]/g, '_')}" onchange="updateAppColor('${colorName}', this.value)" style="width:50px; height:40px; border:1px solid #ddd; border-radius:4px; cursor:pointer;">
+                        <input type="text" value="${colorValue}" id="colorText_${colorName.replace(/[^a-zA-Z0-9]/g, '_')}" onchange="updateAppColor('${colorName}', this.value)" style="flex:1; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:11px; font-family:monospace;">
+                    </div>
+                    <div style="padding:12px; border-radius:4px; background:${colorValue}; color:${parseInt(colorValue.replace('#', ''), 16) > 0x888888 ? '#000' : '#fff'}; font-weight:900; text-align:center; font-size:12px;">Preview</div>
+                </div>
+            `;
+        });
+        
+        html += `<div style="grid-column:1/-1; margin-top:10px; padding:10px; background:#f0f0f0; border-radius:6px; text-align:center;">
+            <button onclick="resetAppColors()" style="padding:10px 20px; background:#999; color:#fff; border:none; border-radius:6px; font-weight:900; cursor:pointer;">RESET TO DEFAULT</button>
+        </div>`;
+        
+        target.innerHTML = html;
+    }
+    
+    function updateAppColor(colorName, colorValue) {
+        appColors[colorName] = colorValue;
+        localStorage.setItem('appColors', JSON.stringify(appColors));
+        
+        const safeId = colorName.replace(/[^a-zA-Z0-9]/g, '_');
+        
+        // Update color input and text field
+        const colorInput = document.getElementById('color_' + safeId);
+        const colorText = document.getElementById('colorText_' + safeId);
+        
+        if (colorInput) colorInput.value = colorValue;
+        if (colorText) colorText.value = colorValue;
+        
+        applyAppColors();
+        notify('✓ Color Updated');
+    }
+    
+    function resetAppColors() {
+        if (confirm('Reset all colors to default?')) {
+            appColors = JSON.parse(JSON.stringify(defaultColors));
+            localStorage.setItem('appColors', JSON.stringify(appColors));
+            renderColorCustomizer();
+            applyAppColors();
+            notify('✓ Colors Reset');
+        }
+    }
+    
+    function applyAppColors() {
+        const root = document.documentElement;
+        root.style.setProperty('--primary-blue', appColors['Primary Blue']);
+        root.style.setProperty('--gold', appColors['Gold/Highlight']);
+        root.style.setProperty('--success', appColors['Success Green']);
+        root.style.setProperty('--warning', appColors['Warning Orange']);
+        root.style.setProperty('--error', appColors['Error Red']);
+    }
+    
+    // Apply colors on page load
+    applyAppColors();
+    const defaultMasterMatrix = {
+        "Tier 1": { 101: ["Plain", 125, 125, 152, 152], 102: ["J-Mould", 148, 148, 171, 171], 103: ["Sharknose", 148, 148, 171, 171], 104: ["Bevelled Edge", 148, 148, 171, 171] },
+        "Tier 2": { 201: ["Ashlee", 148, 148, 171, 171], 202: ["Hamilton", 148, 148, 171, 171], 203: ["Vertical Grooves", 148, 148, 171, 171] },
+        "Tier 3": { 301: ["Tarrone", 156, 156, 182, 182], 302: ["Bobby", 156, 156, 182, 182], 303: ["Orford", 156, 156, 182, 182] },
+        "Tier 4": { 401: ["Shaker", 171, 171, 194, 194], 402: ["Shaker 45", 171, 171, 194, 194], 403: ["Shaker w/Lines", 180, 180, 203, 203], 404: ["Jack", 180, 180, 203, 203] },
+        "Tier 5": { 501: ["Georgia", 183, 183, 211, 211], 502: ["Branxholme", 183, 183, 211, 211], 503: ["Rosebrook", 183, 183, 211, 211] },
+        "Other": { 600: ["Benchtop", 160, 160, 160, 160], 700: ["Molding", 110, 110, 110, 110] }
+    };
+    
+    // Load from localStorage or use defaults
+    let storedMatrix = null;
+    try {
+        storedMatrix = JSON.parse(localStorage.getItem('masterMatrix'));
+    } catch (e) {
+        // If parsing fails, use defaults
+    }
+    
+    let masterMatrix = (storedMatrix && Object.keys(storedMatrix).length > 0) ? storedMatrix : defaultMasterMatrix;
+    
+    // Always ensure defaults are saved
+    localStorage.setItem('masterMatrix', JSON.stringify(masterMatrix));
+    
+    function renderPricingMatrix() {
+        const target = document.getElementById('admin-pricing-matrix');
+        if (!target) return;
+        
+        console.log('renderPricingMatrix called');
+        console.log('masterMatrix:', masterMatrix);
+        console.log('masterMatrix keys:', Object.keys(masterMatrix));
+        
+        let html = `
+            <table style="width:100%; border-collapse:collapse; font-size:10px; background:#fff;">
+                <tr style="background:#000; color:var(--gs); font-weight:900;">
+                    <th style="padding:8px; text-align:left; width:150px;">Profile</th>
+                    <th style="padding:8px; text-align:center;">Matt</th>
+                    <th style="padding:8px; text-align:center;">Satin</th>
+                    <th style="padding:8px; text-align:center;">Semi-Gloss</th>
+                    <th style="padding:8px; text-align:center;">Gloss</th>
+                </tr>
+        `;
+        
+        Object.keys(masterMatrix).forEach(tierName => {
+            html += `<tr style="background:#eee;"><td colspan="5" style="padding:8px; font-weight:900; color:#000;">${tierName}</td></tr>`;
+            
+            const tier = masterMatrix[tierName];
+            Object.keys(tier).forEach(code => {
+                const data = tier[code];
+                const profileName = data[0];
+                const prices = data.slice(1);
+                
+                html += `<tr>
+                    <td style="padding:8px;">
+                        <div style="font-weight:900;">${profileName}</div>
+                        <div style="font-size:9px; color:#999;">(${code})</div>
+                    </td>
+                    <td style="padding:8px; text-align:center;">
+                        <input type="number" value="${prices[0]}" onchange="updatePricingMatrix('${tierName}', ${code}, 0, this.value)" style="width:60px; padding:6px; border:1px solid #ddd; border-radius:4px; text-align:center;"> $
+                    </td>
+                    <td style="padding:8px; text-align:center;">
+                        <input type="number" value="${prices[1]}" onchange="updatePricingMatrix('${tierName}', ${code}, 1, this.value)" style="width:60px; padding:6px; border:1px solid #ddd; border-radius:4px; text-align:center;"> $
+                    </td>
+                    <td style="padding:8px; text-align:center;">
+                        <input type="number" value="${prices[2]}" onchange="updatePricingMatrix('${tierName}', ${code}, 2, this.value)" style="width:60px; padding:6px; border:1px solid #ddd; border-radius:4px; text-align:center;"> $
+                    </td>
+                    <td style="padding:8px; text-align:center;">
+                        <input type="number" value="${prices[3]}" onchange="updatePricingMatrix('${tierName}', ${code}, 3, this.value)" style="width:60px; padding:6px; border:1px solid #ddd; border-radius:4px; text-align:center;"> $
+                    </td>
+                </tr>`;
+            });
+        });
+        
+        // Unallocated Doors Section
+        html += `<tr style="background:#fff3cd; border-top:3px solid #ffb300;"><td colspan="5" style="padding:12px; font-weight:900; color:#000; font-size:12px;">⚠️ UNALLOCATED DOORS (Add to a Tier Below)</td></tr>`;
+        
+        const unallocatedDoors = getUnallocatedDoors();
+        if (unallocatedDoors.length > 0) {
+            unallocatedDoors.forEach(door => {
+                html += `<tr style="background:#fffaf0;">
+                    <td style="padding:8px;">
+                        <div style="font-weight:900;">${door.name}</div>
+                        <div style="font-size:9px; color:#999;">Unassigned</div>
+                    </td>
+                    <td colspan="4" style="padding:8px; text-align:center;">
+                        <div style="display:flex; gap:5px; margin-bottom:5px; flex-wrap:wrap; justify-content:center;">
+                            <input type="number" id="unalloc_matt_${door.code}" value="125" placeholder="Matt" style="width:50px; padding:4px; border:1px solid #ddd; border-radius:4px; text-align:center; font-size:10px;">
+                            <input type="number" id="unalloc_satin_${door.code}" value="125" placeholder="Satin" style="width:50px; padding:4px; border:1px solid #ddd; border-radius:4px; text-align:center; font-size:10px;">
+                            <input type="number" id="unalloc_semigloss_${door.code}" value="152" placeholder="Semi" style="width:50px; padding:4px; border:1px solid #ddd; border-radius:4px; text-align:center; font-size:10px;">
+                            <input type="number" id="unalloc_gloss_${door.code}" value="152" placeholder="Gloss" style="width:50px; padding:4px; border:1px solid #ddd; border-radius:4px; text-align:center; font-size:10px;">
+                        </div>
+                        <select id="unalloc_tier_${door.code}" style="width:100%; padding:4px; border:1px solid #ddd; border-radius:4px; font-size:10px;">
+                            <option value="">Select Tier...</option>
+                            <option value="Tier 1">Tier 1</option>
+                            <option value="Tier 2">Tier 2</option>
+                            <option value="Tier 3">Tier 3</option>
+                            <option value="Tier 4">Tier 4</option>
+                            <option value="Tier 5">Tier 5</option>
+                            <option value="Other">Other</option>
+                        </select>
+                        <div style="display:flex; gap:5px; margin-top:5px;">
+                            <button onclick="assignDoorToTier('${door.code}', '${door.name}')" style="flex:1; padding:4px; background:#34c759; color:#fff; border:none; border-radius:4px; font-weight:900; font-size:10px; cursor:pointer;">✓ ASSIGN</button>
+                            <button onclick="deleteUnallocatedDoor('${door.code}', '${door.name}')" style="flex:1; padding:4px; background:#ff3b30; color:#fff; border:none; border-radius:4px; font-weight:900; font-size:10px; cursor:pointer;">🗑️ DELETE</button>
+                        </div>
+                    </td>
+                </tr>`;
+            });
+        } else {
+            html += `<tr style="background:#fffaf0;"><td colspan="5" style="padding:12px; text-align:center; color:#999; font-size:11px;">No unallocated doors</td></tr>`;
+        }
+        
+        html += `</table>`;
+        target.innerHTML = html;
+    }
+    
+    function getUnallocatedDoors() {
+        // Get doors that are in database but not in price matrix tiers
+        const doorsInMatrix = new Set();
+        Object.values(masterMatrix).forEach(tier => {
+            Object.keys(tier).forEach(code => {
+                doorsInMatrix.add(tier[code][0]); // Store door name
+            });
+        });
+        
+        const unallocated = [];
+        profiles.forEach((profileName, idx) => {
+            if (!doorsInMatrix.has(profileName)) {
+                unallocated.push({ name: profileName, code: 9000 + idx });
+            }
+        });
+        return unallocated;
+    }
+    
+    function assignDoorToTier(code, doorName) {
+        const tier = document.getElementById(`unalloc_tier_${code}`).value;
+        if (!tier) {
+            alert('Please select a tier');
+            return;
+        }
+        
+        const matt = parseFloat(document.getElementById(`unalloc_matt_${code}`).value) || 125;
+        const satin = parseFloat(document.getElementById(`unalloc_satin_${code}`).value) || 125;
+        const semiGloss = parseFloat(document.getElementById(`unalloc_semigloss_${code}`).value) || 152;
+        const gloss = parseFloat(document.getElementById(`unalloc_gloss_${code}`).value) || 152;
+        
+        // Add to tier
+        const newCode = parseInt(Object.keys(masterMatrix[tier]).sort().reverse()[0]) + 1;
+        masterMatrix[tier][newCode] = [doorName, matt, satin, semiGloss, gloss];
+        
+        localStorage.setItem('masterMatrix', JSON.stringify(masterMatrix));
+        renderPricingMatrix();
+        notify(`✓ ${doorName} assigned to ${tier}`);
+    }
+    
+    function deleteUnallocatedDoor(code, doorName) {
+        if (!confirm(`Delete ${doorName}?`)) {
+            return;
+        }
+        
+        // Remove from unallocated (stored profiles)
+        const allProfiles = JSON.parse(localStorage.getItem('doorProfiles')) || [];
+        const profileIdx = allProfiles.findIndex(p => p.name === doorName);
+        if (profileIdx !== -1) {
+            allProfiles.splice(profileIdx, 1);
+            localStorage.setItem('doorProfiles', JSON.stringify(allProfiles));
+        }
+        
+        renderPricingMatrix();
+        notify(`🗑️ ${doorName} deleted`);
+    }
+    
+    function updatePricingMatrix(tier, code, priceIndex, val) {
+        masterMatrix[tier][code][priceIndex + 1] = parseFloat(val);
+        localStorage.setItem('masterMatrix', JSON.stringify(masterMatrix));
+        notify('✓ Price Updated');
+    }
+
     // TIMELINE EDITOR
     let timelineEditMode = null; // 'default' or jobIdx
     let timelineEditData = {};
@@ -1592,10 +2419,12 @@
     function getDefaultTimeline() {
         const defaults = JSON.parse(localStorage.getItem('defaultTimeline')) || {
             measuring: 2,
-            sanding: 16,
-            topcoat: 18,
-            inspect: 20,
-            complete: 21
+            sanding1: 16,
+            undercoat: 18,
+            sanding2: 20,
+            topcoat: 22,
+            inspect: 24,
+            complete: 25
         };
         return defaults;
     }
@@ -1619,6 +2448,7 @@
 
     function renderTimelineEditor() {
         const content = document.getElementById('timelineEditorContent');
+        if (!content) return; // Safety check
         const isDefault = timelineEditMode === 'default';
         
         content.innerHTML = `
@@ -1629,33 +2459,45 @@
                 </div>
                 
                 <div style="margin-bottom:15px;">
-                    <label style="display:block; font-weight:900; margin-bottom:5px; font-size:11px;">Sanding Phase End Day</label>
-                    <input type="number" id="edit_sanding" value="${timelineEditData.sanding || 16}" min="1" max="30" oninput="updateTimelinePreview()" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; box-sizing:border-box;">
+                    <label style="display:block; font-weight:900; margin-bottom:5px; font-size:11px;">Sanding 1 Phase End Day</label>
+                    <input type="number" id="edit_sanding1" value="${timelineEditData.sanding1 || 16}" min="1" max="30" oninput="updateTimelinePreview()" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; box-sizing:border-box;">
+                </div>
+                
+                <div style="margin-bottom:15px;">
+                    <label style="display:block; font-weight:900; margin-bottom:5px; font-size:11px;">Undercoat Phase End Day</label>
+                    <input type="number" id="edit_undercoat" value="${timelineEditData.undercoat || 18}" min="1" max="30" oninput="updateTimelinePreview()" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; box-sizing:border-box;">
+                </div>
+                
+                <div style="margin-bottom:15px;">
+                    <label style="display:block; font-weight:900; margin-bottom:5px; font-size:11px;">Sanding 2 Phase End Day</label>
+                    <input type="number" id="edit_sanding2" value="${timelineEditData.sanding2 || 20}" min="1" max="30" oninput="updateTimelinePreview()" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; box-sizing:border-box;">
                 </div>
                 
                 <div style="margin-bottom:15px;">
                     <label style="display:block; font-weight:900; margin-bottom:5px; font-size:11px;">Top Coat Phase End Day</label>
-                    <input type="number" id="edit_topcoat" value="${timelineEditData.topcoat || 18}" min="1" max="30" oninput="updateTimelinePreview()" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; box-sizing:border-box;">
+                    <input type="number" id="edit_topcoat" value="${timelineEditData.topcoat || 22}" min="1" max="30" oninput="updateTimelinePreview()" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; box-sizing:border-box;">
                 </div>
                 
                 <div style="margin-bottom:15px;">
                     <label style="display:block; font-weight:900; margin-bottom:5px; font-size:11px;">Inspect & Wrap Phase End Day</label>
-                    <input type="number" id="edit_inspect" value="${timelineEditData.inspect || 20}" min="1" max="30" oninput="updateTimelinePreview()" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; box-sizing:border-box;">
+                    <input type="number" id="edit_inspect" value="${timelineEditData.inspect || 24}" min="1" max="30" oninput="updateTimelinePreview()" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; box-sizing:border-box;">
                 </div>
                 
                 <div style="margin-bottom:15px;">
                     <label style="display:block; font-weight:900; margin-bottom:5px; font-size:11px;">Complete Day (Job Finished)</label>
-                    <input type="number" id="edit_complete" value="${timelineEditData.complete || 21}" min="1" max="30" oninput="updateTimelinePreview()" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; box-sizing:border-box;">
+                    <input type="number" id="edit_complete" value="${timelineEditData.complete || 25}" min="1" max="30" oninput="updateTimelinePreview()" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; box-sizing:border-box;">
                 </div>
                 
                 <div id="timelinePreview" style="background:#e8f5e9; padding:12px; border-radius:6px; border-left:4px solid #34c759; margin-top:15px;">
                     <div style="font-size:10px; color:#333; font-weight:700; line-height:1.6;">
                         <strong style="font-size:11px;">📅 Timeline Preview:</strong><br>
                         Days 0-2: Measuring<br>
-                        Days 2-16: Sanding<br>
-                        Days 16-18: Top Coat<br>
-                        Days 18-20: Inspect & Wrap<br>
-                        Days 20-21: Complete
+                        Days 2-16: Sanding 1<br>
+                        Days 16-18: Undercoat<br>
+                        Days 18-20: Sanding 2<br>
+                        Days 20-22: Top Coat<br>
+                        Days 22-24: Inspect & Wrap<br>
+                        Days 24-25: Complete
                     </div>
                 </div>
             </div>
@@ -1667,10 +2509,12 @@
 
     function updateTimelinePreview() {
         const measuring = parseInt(document.getElementById('edit_measuring')?.value) || 2;
-        const sanding = parseInt(document.getElementById('edit_sanding')?.value) || 16;
-        const topcoat = parseInt(document.getElementById('edit_topcoat')?.value) || 18;
-        const inspect = parseInt(document.getElementById('edit_inspect')?.value) || 20;
-        const complete = parseInt(document.getElementById('edit_complete')?.value) || 21;
+        const sanding1 = parseInt(document.getElementById('edit_sanding1')?.value) || 16;
+        const undercoat = parseInt(document.getElementById('edit_undercoat')?.value) || 18;
+        const sanding2 = parseInt(document.getElementById('edit_sanding2')?.value) || 20;
+        const topcoat = parseInt(document.getElementById('edit_topcoat')?.value) || 22;
+        const inspect = parseInt(document.getElementById('edit_inspect')?.value) || 24;
+        const complete = parseInt(document.getElementById('edit_complete')?.value) || 25;
         
         const preview = document.getElementById('timelinePreview');
         if (preview) {
@@ -1678,8 +2522,10 @@
                 <div style="font-size:10px; color:#333; font-weight:700; line-height:1.6;">
                     <strong style="font-size:11px;">📅 Timeline Preview:</strong><br>
                     Days 0-${measuring}: <span style="color:#2196f3; font-weight:900;">Measuring</span><br>
-                    Days ${measuring}-${sanding}: <span style="color:#ff9500; font-weight:900;">Sanding</span><br>
-                    Days ${sanding}-${topcoat}: <span style="color:#9c27b0; font-weight:900;">Top Coat</span><br>
+                    Days ${measuring}-${sanding1}: <span style="color:#ff9500; font-weight:900;">Sanding 1</span><br>
+                    Days ${sanding1}-${undercoat}: <span style="color:#8b4513; font-weight:900;">Undercoat</span><br>
+                    Days ${undercoat}-${sanding2}: <span style="color:#ff9500; font-weight:900;">Sanding 2</span><br>
+                    Days ${sanding2}-${topcoat}: <span style="color:#9c27b0; font-weight:900;">Top Coat</span><br>
                     Days ${topcoat}-${inspect}: <span style="color:#673ab7; font-weight:900;">Inspect & Wrap</span><br>
                     Days ${inspect}-${complete}: <span style="color:#34c759; font-weight:900;">Complete</span>
                 </div>
@@ -1689,18 +2535,20 @@
 
     function saveTimelineEdit() {
         const measuring = parseInt(document.getElementById('edit_measuring').value);
-        const sanding = parseInt(document.getElementById('edit_sanding').value);
+        const sanding1 = parseInt(document.getElementById('edit_sanding1').value);
+        const undercoat = parseInt(document.getElementById('edit_undercoat').value);
+        const sanding2 = parseInt(document.getElementById('edit_sanding2').value);
         const topcoat = parseInt(document.getElementById('edit_topcoat').value);
         const inspect = parseInt(document.getElementById('edit_inspect').value);
         const complete = parseInt(document.getElementById('edit_complete').value);
         
         // Validate order
-        if (measuring >= sanding || sanding >= topcoat || topcoat >= inspect || inspect >= complete) {
+        if (measuring >= sanding1 || sanding1 >= undercoat || undercoat >= sanding2 || sanding2 >= topcoat || topcoat >= inspect || inspect >= complete) {
             alert('Timeline days must be in ascending order!');
             return;
         }
         
-        const timeline = { measuring, sanding, topcoat, inspect, complete };
+        const timeline = { measuring, sanding1, undercoat, sanding2, topcoat, inspect, complete };
         
         if (timelineEditMode === 'default') {
             // Save default timeline
@@ -1729,6 +2577,8 @@
 
     function renderGlobalNotifications() {
         const notificationsDiv = document.getElementById('globalNotifications');
+        if (!notificationsDiv) return; // Exit if not on Schedule tab
+        
         const adminAlerts = JSON.parse(localStorage.getItem('adminAlerts')) || [];
         
         if (adminAlerts.length === 0) {
@@ -1794,9 +2644,9 @@
         const totalTasks = allTasks.length;
         const totalSqm = history.filter(j => !j.completed).reduce((sum, j) => sum + parseFloat(j.totalSqm || 0), 0);
         
-        document.getElementById('totalActiveJobs').innerText = activeJobs;
-        document.getElementById('totalTasks').innerText = `${completedTasks}/${totalTasks}`;
-        document.getElementById('totalWorkload').innerText = totalSqm.toFixed(1);
+        if (document.getElementById('totalActiveJobs')) document.getElementById('totalActiveJobs').innerText = activeJobs;
+        if (document.getElementById('totalTasks')) document.getElementById('totalTasks').innerText = `${completedTasks}/${totalTasks}`;
+        if (document.getElementById('totalWorkload')) document.getElementById('totalWorkload').innerText = totalSqm.toFixed(1);
     }
 
     // PAINT FORMULA MANAGEMENT
@@ -1974,6 +2824,27 @@
             notify(`✓ Formula: ${match.formula}`);
         } else {
             notify('Formula not found in database');
+        }
+    }
+
+    function autoSearchFormulaOnType() {
+        const brand = document.getElementById('p-brand').value.trim();
+        const color = document.getElementById('p-color').value.trim();
+        const code = document.getElementById('p-code').value.trim();
+        
+        // If code field already has text, don't override (user is typing manually)
+        if (code && code.length > 0) return;
+        
+        if (!brand || !color) return;
+        
+        const formulas = getPaintFormulas();
+        const match = formulas.find(f => 
+            f.brand.toLowerCase() === brand.toLowerCase() && 
+            f.color.toLowerCase() === color.toLowerCase()
+        );
+        
+        if (match) {
+            document.getElementById('p-code').value = match.formula;
         }
     }
 </script>
