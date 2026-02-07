@@ -151,13 +151,10 @@
         window.currentUser = null;
         window.firebaseReady = true;
         
-        console.log('✅ Firebase initialized via modular SDK');
-        console.log('[Firebase] createUserWithEmailAndPassword available?', typeof window.createUserWithEmailAndPassword);
         
         // Set up auth listener
         onAuthStateChanged(auth, user => {
             window.currentUser = user;
-            console.log('[Firebase] Auth state:', user ? user.email : 'logged out');
             if (user) {
                 document.getElementById('loginScreen').style.display = 'none';
                 document.getElementById('appContainer').style.display = 'block';
@@ -505,13 +502,7 @@
                 <p style="font-size:12px; color:#666; margin:0 0 10px 0;">Your job history contains duplicate entries. This is why you only see 1 job displayed but the Workload Summary shows 7.</p>
                 <button onclick="tab('admin'); setTimeout(() => switchAdminTab('general'), 200)" style="background:#ff9500; color:#fff; border:none; padding:8px 15px; border-radius:6px; font-weight:900; cursor:pointer;">Go to Admin → Remove Duplicates</button>
             </div>
-            <!-- DEBUG PANEL -->
-            <div style="background:#e3f2fd; border:2px solid #2196f3; border-radius:8px; padding:15px; margin-bottom:15px;">
-                <div style="font-weight:900; color:#1976d2; margin-bottom:8px;">🔍 DEBUG: Jobs in Storage</div>
-                <div id="debugJobCount" style="font-size:12px; color:#333; margin-bottom:8px;">Loading...</div>
-                <div id="debugJobList" style="font-size:11px; color:#666; max-height:200px; overflow-y:auto; background:#fff; padding:8px; border-radius:4px; border:1px solid #90caf9;"></div>
-                <button onclick="location.reload()" style="margin-top:10px; padding:6px 12px; background:#2196f3; color:#fff; border:none; border-radius:4px; font-weight:900; font-size:10px; cursor:pointer;">🔄 RELOAD PAGE</button>
-            </div>
+            <!-- Gantt Chart Container -->
             <div id="ganttChart" style="min-width:1200px; padding:0; display:flex; flex-direction:column;">
                 <!-- Gantt chart will render here -->
             </div>
@@ -671,14 +662,12 @@
 
     function logout() {
       window.signOut().then(() => {
-        console.log('✅ Logged out');
       });
     }
 
     // Save data to Firestore
     async function saveDataToFirestore() {
       if (!window.currentUser) {
-        console.log('⚠️ Not logged in, data not saved to cloud');
         return;
       }
       
@@ -699,9 +688,7 @@
           lastUpdated: new Date().toISOString()
         });
         
-        console.log('✅ Data synced to cloud');
       } catch (error) {
-        console.error('❌ Error saving to cloud:', error);
       }
     }
 
@@ -731,9 +718,7 @@
         refreshLists();
         renderHistory();
         renderScheduleCalendar();
-        console.log('✅ Data loaded from cloud');
       } catch (error) {
-        console.error('❌ Error loading from cloud:', error);
       }
     }
 
@@ -814,7 +799,6 @@
         history.forEach(job => {
             // Skip jobs with missing critical fields
             if (!job.jobNum || !job.dateReceived || !job.client) {
-                console.log(`⚠️ Skipped invalid job (missing fields):`, job);
                 duplicates++;
                 return;
             }
@@ -824,13 +808,11 @@
                 seen.set(key, true);
                 cleaned.push(job);
             } else {
-                console.log(`⚠️ Removed duplicate: Job #${job.jobNum} - ${job.client} (${job.dateReceived})`);
                 duplicates++;
             }
         });
         
         if (duplicates > 0) {
-            console.log(`🧹 Cleanup complete. Before: ${history.length}, After: ${cleaned.length}, Removed: ${duplicates}`);
             localStorage.setItem('jobHistory', JSON.stringify(cleaned));
             renderHistory();
             renderJobTasks();
@@ -859,11 +841,9 @@
             completed: false  // Always false when saving new
         };
         
-        console.log('💾 SAVING JOB:', jobData);
         
         // Get existing history
         let history = JSON.parse(localStorage.getItem('jobHistory')) || [];
-        console.log('📋 History before save:', history.length, 'jobs');
         
         // Check if we're overwriting an existing job
         if (currentEditingJobIndex !== null) {
@@ -897,12 +877,10 @@
         history = history.slice(0, 50);
         
         localStorage.setItem('jobHistory', JSON.stringify(history));
-        console.log('✓ JOB SAVED TO HISTORY - Total jobs now:', history.length);
         
         renderHistory();
         renderJobTasks(); // Update workload summary
         renderScheduleCalendar(); // Update schedule to show new job
-        updateDebugPanel(); // Update debug panel
     }
 
     let historyFilter = 'all';
@@ -1043,8 +1021,6 @@
             history[index] = job;
             localStorage.setItem('jobHistory', JSON.stringify(history));
             
-            console.log('✓ Job marked complete:', job.jobNum, job.completed);
-            console.log('History saved:', history[index]);
             
             // Generate batch PDFs
             generateBatchPDFs(job);
@@ -1053,7 +1029,6 @@
             alertAdmins(job);
             
             renderHistory();
-            console.log('History re-rendered');
             notify('✓ Job Completed - PDFs Generated');
         }
     }
@@ -1203,9 +1178,7 @@
         try {
             const pdfData = doc.output('datauristring');
             // Could store in localStorage if needed, but for now just acknowledge it's ready
-            console.log('PDF Generated:', filename);
         } catch(e) {
-            console.log('PDF generation complete:', filename);
         }
     }
 
@@ -1229,7 +1202,6 @@
         localStorage.setItem('adminAlerts', JSON.stringify(adminAlerts));
         
         // In a real app, this would send to a server/notification service
-        console.log('📢 ADMIN ALERT:', adminAlert.message);
         
         // Show toast-style notification
         showAdminAlert(adminAlert.message);
@@ -1744,7 +1716,6 @@
     let scheduleCalendarDate = new Date();
 
     function renderScheduleCalendar() {
-        updateDebugPanel(); // Show what jobs are in storage
         
         // FORCE SCHEDULE CONTAINER TO BE VISIBLE
         const scheduleContainer = document.getElementById('schedule');
@@ -1791,38 +1762,6 @@
         return -1; // Target date is before start date
     }
     
-    function updateDebugPanel() {
-        try {
-            const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
-            const debugCount = document.getElementById('debugJobCount');
-            const debugList = document.getElementById('debugJobList');
-            
-            if (!debugCount || !debugList) return;
-            
-            debugCount.innerHTML = `<strong>${history.length} jobs total</strong> | Active: ${history.filter(j => !j.completed).length} | Check Console for HTML size`;
-            
-            if (history.length === 0) {
-                debugList.innerHTML = '<em>No jobs saved yet</em>';
-                return;
-            }
-            
-            let html = '<table style="width:100%; border-collapse:collapse;">';
-            history.forEach((job, idx) => {
-                const status = job.completed ? '✓ DONE' : '⏳ ACTIVE';
-                html += `<tr style="border-bottom:1px solid #ccc;">
-                    <td style="padding:4px; width:30px;">${idx + 1}.</td>
-                    <td style="padding:4px;"><strong>#${job.jobNum}</strong></td>
-                    <td style="padding:4px;">${job.client}</td>
-                    <td style="padding:4px; font-size:10px;">${job.dateReceived || 'N/A'}</td>
-                    <td style="padding:4px; text-align:center; color:${job.completed ? '#34c759' : '#ff9500'};">${status}</td>
-                </tr>`;
-            });
-            html += '</table>';
-            debugList.innerHTML = html;
-        } catch (error) {
-            console.error('Debug panel error:', error);
-        }
-    }
     
     function renderGanttChart(year, month) {
         // FORCE WRAPPER TO BE VISIBLE
@@ -1831,12 +1770,10 @@
             ganttWrapper.style.display = 'block';
             ganttWrapper.style.visibility = 'visible';
             ganttWrapper.style.opacity = '1';
-            console.log('✓ Gantt wrapper visibility forced');
         }
         
         const ganttChart = document.getElementById('ganttChart');
         if (!ganttChart) {
-            console.error('❌ ganttChart element not found!');
             return;
         }
         
@@ -1848,7 +1785,6 @@
         
         // Check if element is visible
         const style = window.getComputedStyle(ganttChart);
-        console.log('ganttChart element:', {
             display: style.display,
             visibility: style.visibility,
             width: style.width,
@@ -1859,9 +1795,6 @@
         try {
             let fullHistory = JSON.parse(localStorage.getItem('jobHistory')) || [];
             
-            console.log('🔍 Full history count:', fullHistory.length);
-            console.log('Full history:', JSON.stringify(fullHistory, null, 2));
-            console.log('Active jobs:', fullHistory.filter(j => !j.completed).length);
         
         // Sort by received date - newest first
         let history = fullHistory.filter(job => !job.completed).sort((a, b) => {
@@ -1924,7 +1857,6 @@
         
         // Jobs timeline
         ganttHTML += '<div style="width:100%; display:flex; flex-direction:column; gap:0;">';
-        console.log('📋 Rendering Gantt - Total jobs to render:', history.length);
         let jobCount = 0;
         history.forEach((job, filteredIdx) => {
             // Find original index in full history
@@ -1932,7 +1864,6 @@
             
             if (job && !job.completed) {
                 jobCount++;
-                console.log(`  Job ${jobCount}: #${job.jobNum} - ${job.client}`);
                 // Handle date in DD/MM/YY or YYYY-MM-DD format
                 let jobDate = new Date();
                 if (job.dateReceived) {
@@ -2129,23 +2060,13 @@
             </div>
         </div>`;
         
-        console.log(`✓ Gantt rendered ${jobCount} jobs successfully`);
-        console.log('📄 GANTT HTML LENGTH:', ganttHTML.length, 'characters');
-        console.log('📄 GANTT HTML PREVIEW (first 500 chars):', ganttHTML.substring(0, 500));
         ganttChart.innerHTML = ganttHTML;
-        console.log('✓ HTML INSERTED INTO DOM');
-        console.log('📊 ganttChart.innerHTML.length after insert:', ganttChart.innerHTML.length);
-        console.log('📊 ganttChart.offsetHeight:', ganttChart.offsetHeight);
-        console.log('📊 ganttChart.scrollHeight:', ganttChart.scrollHeight);
         
         // COUNT ACTUAL JOB DIVS IN DOM
         const jobDivs = ganttChart.querySelectorAll('div[style*="margin-bottom:12px"]');
-        console.log('🔢 ACTUAL JOB DIVS FOUND IN DOM:', jobDivs.length);
         jobDivs.forEach((div, idx) => {
-            console.log(`  Job div ${idx + 1}: offsetHeight=${div.offsetHeight}, offsetWidth=${div.offsetWidth}`);
         });
         } catch (error) {
-            console.error('❌ Error rendering Gantt chart:', error);
             ganttChart.innerHTML = `<div style="padding:20px; color:#ff3b30; background:#ffebee; border-radius:6px;"><strong>Error loading schedule:</strong> ${error.message}</div>`;
         }
     }
@@ -2171,13 +2092,10 @@
     }
 
     function markJobComplete(jobIdx) {
-        console.log('markJobComplete called with jobIdx:', jobIdx);
         const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
         const job = history[jobIdx];
         
-        console.log('Job found:', job);
         if (!job) {
-            console.error('No job found at index', jobIdx);
             alert('Error: Job not found');
             return;
         }
@@ -2189,7 +2107,6 @@
             }
         }
         
-        console.log('Marking job as complete...');
         
         // Mark job as complete
         job.completed = true;
@@ -2198,28 +2115,21 @@
         history[jobIdx] = job;
         localStorage.setItem('jobHistory', JSON.stringify(history));
         
-        console.log('Job saved to localStorage:', job);
         
         // Generate PDFs and alert admins
         try {
             generateBatchPDFs(job);
         } catch(e) {
-            console.error('Error generating PDFs:', e);
         }
         
         try {
             alertAdmins(job);
         } catch(e) {
-            console.error('Error alerting admins:', e);
         }
         
-        console.log('About to render history...');
         renderHistory();
-        console.log('History rendered, about to render schedule...');
         renderScheduleCalendar();
-        console.log('Schedule rendered');
         notify('✓ Job Marked Complete');
-        console.log('Job completion process finished');
         
         // Switch to History tab to show completed job
         setTimeout(() => {
@@ -2481,9 +2391,6 @@
         const target = document.getElementById('admin-pricing-matrix');
         if (!target) return;
         
-        console.log('renderPricingMatrix called');
-        console.log('masterMatrix:', masterMatrix);
-        console.log('masterMatrix keys:', Object.keys(masterMatrix));
         
         let html = `
             <table style="width:100%; border-collapse:collapse; font-size:10px; background:#fff;">
@@ -3099,15 +3006,11 @@
 
     // Signup wrapper function  
     function trySignup() {
-        console.log('🔐 Signup button clicked - checking Firebase status...');
-        console.log('Firebase ready?', window.firebaseReady);
         
         if (!window.firebaseReady) {
-            console.warn('⚠️ Firebase not ready yet, waiting...');
             // Wait a moment and try again
             setTimeout(() => {
                 if (window.firebaseReady) {
-                    console.log('✅ Firebase now ready!');
                     handleSignup();
                 } else {
                     alert('Firebase is still loading. Please wait a moment and try again.');
@@ -3116,18 +3019,13 @@
             return;
         }
         
-        console.log('✅ Firebase ready, calling handleSignup()');
         handleSignup();
     }
 
     // Signup function
     function handleSignup() {
-        console.log('📝 handleSignup() called');
-        console.log('firebaseReady:', window.firebaseReady);
-        console.log('auth exists:', !!window.auth);
         
         if (!window.firebaseReady || !window.auth) {
-            console.error('❌ Firebase not ready');
             alert('Firebase not ready yet, please wait a moment and try again');
             return;
         }
@@ -3136,34 +3034,27 @@
         const password = document.getElementById('loginPassword').value;
         const errorDiv = document.getElementById('loginError');
         
-        console.log('Email:', email);
-        console.log('Password length:', password.length);
         
         if (!email || !password) {
-            console.warn('⚠️ Missing email or password');
             errorDiv.textContent = 'Please fill in all fields';
             errorDiv.style.display = 'block';
             return;
         }
         
         if (password.length < 6) {
-            console.warn('⚠️ Password too short');
             errorDiv.textContent = 'Password must be at least 6 characters';
             errorDiv.style.display = 'block';
             return;
         }
         
-        console.log('🔐 Calling Firebase createUserWithEmailAndPassword...');
         window.createUserWithEmailAndPassword(email, password)
             .then(() => {
-                console.log('✅ Account created successfully!');
                 errorDiv.style.display = 'none';
                 document.getElementById('loginEmail').value = '';
                 document.getElementById('loginPassword').value = '';
                 notify('Account created! You are now logged in.');
             })
             .catch(error => {
-                console.error('❌ Firebase Error:', error.code, error.message);
                 errorDiv.textContent = error.message;
                 errorDiv.style.display = 'block';
             });
@@ -3186,7 +3077,6 @@
             lastModified: new Date().toISOString(),
             userId: window.currentUser.uid
         }, { merge: true })
-        .catch(err => console.error('Error saving job:', err));
     }
 
     // Load all jobs from Firebase
@@ -3210,9 +3100,7 @@
             if (typeof renderGanttChart === 'function') {
                 renderGanttChart(scheduleCalendarDate.getFullYear(), scheduleCalendarDate.getMonth());
             }
-            updateDebugPanel();
         } catch (err) {
-            console.error('Error loading jobs:', err);
         }
     }
 
@@ -3237,7 +3125,6 @@
                 if (typeof renderGanttChart === 'function') {
                     renderGanttChart(scheduleCalendarDate.getFullYear(), scheduleCalendarDate.getMonth());
                 }
-                updateDebugPanel();
             });
     }
 
@@ -3254,7 +3141,6 @@
                 lastModified: new Date().toISOString(),
                 userId: window.currentUser.uid
             }, { merge: true })
-            .catch(err => console.error('Error syncing job:', err));
         });
     }
 
