@@ -10,7 +10,7 @@
             --gold: linear-gradient(145deg, #d4af37, #f9f1b0, #aa841e);
             --rainbow: linear-gradient(90deg, #ff3b30, #ff9500, #ffcc00, #4cd964, #5ac8fa, #007aff, #5856d6);
             --gs: #d4af37;
-            --panel-clr: #34c759; --door-clr: #ff9500; --drawer-clr: #2196f3; --custom-clr: #af52de; 
+            --panel-clr: #34c759; --door-clr: #ff9500; --drawer-clr: #2196f3; --custom-clr: #af52de;
             --bg: #f2f2f7;
         }
         body { margin:0; font-family:-apple-system, system-ui, sans-serif; background:var(--bg); padding-bottom:140px; -webkit-tap-highlight-color:transparent; }
@@ -123,7 +123,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
         import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js";
-        import { getFirestore, collection, doc, setDoc, addDoc } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
+        import { getFirestore, collection, doc, setDoc, addDoc, getDoc, onSnapshot, getDocs } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
         
         const firebaseConfig = {
             apiKey: "AIzaSyCddhnoWoJczM2yXemz2evZc-W2x7OnP00",
@@ -147,6 +147,9 @@
         window.setDoc = setDoc;
         window.collection = collection;
         window.addDoc = addDoc;
+        window.getDoc = getDoc;
+        window.onSnapshot = onSnapshot;
+        window.getDocs = getDocs;
         
         // Auth functions
         window.createUserWithEmailAndPassword = (email, password) => createUserWithEmailAndPassword(auth, email, password);
@@ -692,8 +695,11 @@
           lastSaved: new Date().toISOString()
         };
         
-        await window.db.collection('users').doc(window.currentUser.uid).collection('data').doc('measureData').set(data);
-        await window.db.collection('users').doc(window.currentUser.uid).collection('history').doc('jobs').set({
+        const measureDocRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'data', 'measureData');
+        await window.setDoc(measureDocRef, data);
+        
+        const historyDocRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'history', 'jobs');
+        await window.setDoc(historyDocRef, {
           history: history,
           lastUpdated: new Date().toISOString()
         });
@@ -708,8 +714,9 @@
       
       try {
         // Load measure data
-        const measureDoc = await window.db.collection('users').doc(window.currentUser.uid).collection('data').doc('measureData').get();
-        if (measureDoc.exists) {
+        const measureDocRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'data', 'measureData');
+        const measureDoc = await window.getDoc(measureDocRef);
+        if (measureDoc.exists()) {
           const data = measureDoc.data();
           items = data.items || [];
           doorProfiles = data.doorProfiles || [];
@@ -720,8 +727,9 @@
         }
         
         // Load job history
-        const historyDoc = await window.db.collection('users').doc(window.currentUser.uid).collection('history').doc('jobs').get();
-        if (historyDoc.exists) {
+        const historyDocRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'history', 'jobs');
+        const historyDoc = await window.getDoc(historyDocRef);
+        if (historyDoc.exists()) {
           history = historyDoc.data().history || [];
         }
         
@@ -3084,11 +3092,12 @@
         if (!window.currentUser) return;
         
         const jobId = jobData.id || Date.now().toString();
-        window.db.collection('users').doc(window.currentUser.uid).collection('jobs').doc(jobId).set({
+        const jobRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'jobs', jobId);
+        window.setDoc(jobRef, {
             ...jobData,
             lastModified: new Date().toISOString(),
             userId: window.currentUser.uid
-        }, { merge: true })
+        }, { merge: true });
     }
 
     // Load all jobs from Firebase
@@ -3096,7 +3105,8 @@
         if (!window.currentUser) return;
         
         try {
-            const snapshot = await window.db.collection('users').doc(window.currentUser.uid).collection('jobs').get();
+            const jobsCollectionRef = window.collection(window.firebaseDb, 'users', window.currentUser.uid, 'jobs');
+            const snapshot = await window.getDocs(jobsCollectionRef);
             const jobs = [];
             snapshot.forEach(doc => {
                 jobs.push({ ...doc.data(), id: doc.id });
@@ -3113,6 +3123,7 @@
                 renderGanttChart(scheduleCalendarDate.getFullYear(), scheduleCalendarDate.getMonth());
             }
         } catch (err) {
+            console.error('Error loading jobs from Firebase:', err);
         }
     }
 
@@ -3120,23 +3131,23 @@
     function setupRealtimeSync() {
         if (!window.currentUser) return;
         
-        window.db.collection('users').doc(window.currentUser.uid).collection('jobs')
-            .onSnapshot(snapshot => {
-                const jobs = [];
-                snapshot.forEach(doc => {
-                    jobs.push({ ...doc.data(), id: doc.id });
-                });
-                
-                // Update localStorage
-                localStorage.setItem('jobHistory', JSON.stringify(jobs));
-                fullHistory = jobs;
-                history = jobs.filter(j => !j.completed);
-                
-                // Update UI
-                renderJobDatabase();
-                if (typeof renderGanttChart === 'function') {
-                    renderGanttChart(scheduleCalendarDate.getFullYear(), scheduleCalendarDate.getMonth());
-                }
+        const jobsCollectionRef = window.collection(window.firebaseDb, 'users', window.currentUser.uid, 'jobs');
+        window.onSnapshot(jobsCollectionRef, snapshot => {
+            const jobs = [];
+            snapshot.forEach(doc => {
+                jobs.push({ ...doc.data(), id: doc.id });
+            });
+            
+            // Update localStorage
+            localStorage.setItem('jobHistory', JSON.stringify(jobs));
+            fullHistory = jobs;
+            history = jobs.filter(j => !j.completed);
+            
+            // Update UI
+            renderJobDatabase();
+            if (typeof renderGanttChart === 'function') {
+                renderGanttChart(scheduleCalendarDate.getFullYear(), scheduleCalendarDate.getMonth());
+            }
             });
     }
 
