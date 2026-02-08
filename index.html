@@ -157,6 +157,8 @@
         window.signOut = () => signOut(auth);
         
         window.currentUser = null;
+        window.realtimeSyncActive = false; // Guard against multiple listeners
+        window.realtimeSyncUnsubscribe = null; // Store unsubscribe function
         
         // Set up auth listener
         onAuthStateChanged(auth, user => {
@@ -170,9 +172,21 @@
                 // Load jobs from Firebase after a short delay to ensure DOM is ready
                 setTimeout(() => {
                     if (window.loadAllDataFromFirebase) window.loadAllDataFromFirebase();
-                    if (window.setupRealtimeSync) window.setupRealtimeSync();
+                    
+                    // Only set up real-time sync ONCE per session
+                    if (!window.realtimeSyncActive) {
+                        window.realtimeSyncActive = true;
+                        if (window.setupRealtimeSync) window.setupRealtimeSync();
+                    }
                 }, 100);
             } else {
+                // Clean up listener when logging out
+                if (window.realtimeSyncUnsubscribe) {
+                    window.realtimeSyncUnsubscribe();
+                    window.realtimeSyncUnsubscribe = null;
+                }
+                window.realtimeSyncActive = false;
+                
                 const loginScreen = document.getElementById('loginScreen');
                 const appContainer = document.getElementById('appContainer');
                 if (loginScreen) loginScreen.style.display = 'block';
@@ -3125,8 +3139,9 @@
             fullHistory = jobs;
             history = jobs.filter(j => !j.completed);
             
-            // Update UI
-            renderJobDatabase();
+            // Update UI - use correct function names
+            if (window.renderHistory) window.renderHistory();
+            if (window.renderJobTasks) window.renderJobTasks();
             if (typeof renderGanttChart === 'function') {
                 renderGanttChart(scheduleCalendarDate.getFullYear(), scheduleCalendarDate.getMonth());
             }
@@ -3141,7 +3156,9 @@
         
         const userDocRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid);
         const jobsCollectionRef = window.collection(userDocRef, 'jobs');
-        window.onSnapshot(jobsCollectionRef, snapshot => {
+        
+        // Store the unsubscribe function so we can clean up later
+        window.realtimeSyncUnsubscribe = window.onSnapshot(jobsCollectionRef, snapshot => {
             const jobs = [];
             snapshot.forEach(doc => {
                 jobs.push({ ...doc.data(), id: doc.id });
@@ -3152,11 +3169,15 @@
             fullHistory = jobs;
             history = jobs.filter(j => !j.completed);
             
-            // Update UI
-            renderJobDatabase();
+            // Update UI - use correct function names
+            if (window.renderHistory) window.renderHistory();
+            if (window.renderJobTasks) window.renderJobTasks();
             if (typeof renderGanttChart === 'function') {
                 renderGanttChart(scheduleCalendarDate.getFullYear(), scheduleCalendarDate.getMonth());
             }
+        }, error => {
+            console.error('Realtime sync error:', error);
+        });
             });
     }
 
