@@ -644,12 +644,12 @@
 </div>
 
 <div class="sticky-footer">
-    <div class="footer-item"><div class="footer-label">TOTAL SQM</div><div class="footer-val" id="tA">0.000</div></div>
-    <div class="icon-btn" onclick="genPDF()" style="color:#fff">📄</div>
-    <div class="footer-item"><div class="footer-label">PARTS</div><div class="footer-val" id="tQ">0</div></div>
-    <div style="margin-left:auto;">
-        <div class="icon-btn" onclick="handleLogout()" title="Logout" style="color:#ff3b30; font-size:24px; cursor:pointer;">🚪</div>
+    <div class="footer-item" style="margin-left:15px;"><div class="footer-label">TOTAL SQM</div><div class="footer-val" id="tA">0.000</div></div>
+    <div style="flex:1; display:flex; justify-content:center;">
+        <div class="icon-btn" onclick="genPDF()" style="color:#fff">📄</div>
     </div>
+    <div class="footer-item"><div class="footer-label">PARTS</div><div class="footer-val" id="tQ">0</div></div>
+    <div class="icon-btn" onclick="handleLogout()" title="Logout" style="color:#ff3b30; font-size:24px; cursor:pointer; margin-right:15px;">🚪</div>
 </div>
 
 <script>
@@ -1120,7 +1120,7 @@
             localStorage.setItem('jobHistory', JSON.stringify(history));
             
             renderHistory();
-            notify('Job reopened - ready for rework');
+            notify('🔄 Job reopened - now active again');
         }
     }
 
@@ -2864,25 +2864,30 @@
     function renderJobTasks() {
         const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
         
-        let allTasks = [];
         let completedTasks = 0;
+        let totalTasks = 0;
         
-        // Count tasks (include BOTH active AND completed jobs)
+        // Count phases across all jobs
         history.forEach((job, jobIdx) => {
             if (job.dateReceived) {
-                // 3 tasks per job
-                if (job.tasks) {
-                    if (job.tasks.mixing) completedTasks++;
-                    if (job.tasks.painting) completedTasks++;
-                    if (job.tasks.completion) completedTasks++;
+                // 7 phases per job: measuring, sanding1, undercoat, sanding2, topcoat, inspect, complete
+                totalTasks += 7;
+                
+                // Count which phases are completed
+                if (job.phases) {
+                    if (job.phases.measuring) completedTasks++;
+                    if (job.phases.sanding1) completedTasks++;
+                    if (job.phases.undercoat) completedTasks++;
+                    if (job.phases.sanding2) completedTasks++;
+                    if (job.phases.topcoat) completedTasks++;
+                    if (job.phases.inspect) completedTasks++;
+                    if (job.phases.complete) completedTasks++;
                 }
-                allTasks.push({}, {}, {}); // 3 tasks per job
             }
         });
         
         // Update summary
         const activeJobs = history.filter(j => !j.completed).length;
-        const totalTasks = allTasks.length;
         const totalSqm = history.filter(j => !j.completed).reduce((sum, j) => sum + parseFloat(j.totalSqm || 0), 0);
         
         if (document.getElementById('totalActiveJobs')) document.getElementById('totalActiveJobs').innerText = activeJobs;
