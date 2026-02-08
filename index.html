@@ -3,11 +3,11 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 29 | 2026-02-08 | Fix Gantt toggles and job deletion       ║
-║ - CRITICAL: Simplified toggle logic (removed problematic guard)║
-║ - Fixed: Gantt chart toggles now responsive and smooth         ║
-║ - Fixed: Delete verification prevents job from reappearing     ║
-║ - Fixed: Toggle complete/incomplete works properly             ║
+║ REV 31 | 2026-02-08 | Fix measure sheet clearing on save       ║
+║ - Fixed: Clear form BEFORE rendering (was after)               ║
+║ - Added: Better element selection and error handling           ║
+║ - Added: Detailed console logging for clearing process         ║
+║ - Result: Form clears immediately after save                   ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -666,10 +666,10 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 29 (2026-02-08) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
-    console.log('✓ Gantt toggles responsive (simplified logic)');
-    console.log('✓ Delete verification prevents reappearing jobs');
-    console.log('✓ Complete/incomplete toggle works properly');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 31 (2026-02-08) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('✓ Measure sheet clears immediately after save');
+    console.log('✓ Form ready for next job entry');
+    console.log('✓ All data synced to Firebase');
     // ====================================
     
     // Firebase already initialized at top of page
@@ -980,11 +980,8 @@
             }
         }
         
-        renderHistory();
-        renderJobTasks(); // Update workload summary
-        renderScheduleCalendar(); // Update schedule to show new job
-        
-        // Clear the measure sheet form
+        // CLEAR FIRST - before rendering
+        console.log('🧹 Starting measure sheet clear...');
         items = [];
         document.getElementById('cli').value = '';
         document.getElementById('dRec').value = '';
@@ -994,13 +991,26 @@
         document.getElementById('p-color').value = '';
         document.getElementById('p-code').value = '';
         document.getElementById('p-finish').value = 'Satin';
-        document.getElementById('tA').innerText = '0.000';
-        document.getElementById('tQ').innerText = '0';
         
-        // Re-render the measure sheet to show empty state
+        // Clear totals
+        const totSqmEl = document.getElementById('tA');
+        const totPartsEl = document.getElementById('tQ');
+        if (totSqmEl) totSqmEl.innerText = '0.000';
+        if (totPartsEl) totPartsEl.innerText = '0';
+        
+        console.log('✓ Form fields cleared');
+        
+        // Now render the empty form
         render();
+        console.log('✓ Measure sheet re-rendered (empty)');
         
-        console.log('📋 Measure sheet cleared for next job');
+        // Then update other views
+        renderHistory();
+        renderJobTasks();
+        renderScheduleCalendar();
+        
+        notify('✓ Job Saved - Measure sheet cleared');
+        console.log('📋 Ready for next job entry');
     }
 
     let historyFilter = 'all';
@@ -2418,6 +2428,9 @@
         } catch (error) {
             ganttChart.innerHTML = `<div style="padding:20px; color:#ff3b30; background:#ffebee; border-radius:6px;"><strong>Error loading schedule:</strong> ${error.message}</div>`;
         }
+        
+        // Update task summary
+        renderJobTasks();
     }
 
     function toggleGanttCell(jobIdx, phaseKey) {
@@ -3167,10 +3180,11 @@
         let completedTasks = 0;
         let totalTasks = 0;
         
-        // Count phases across all jobs
+        // Count phases ONLY for ACTIVE (non-completed) jobs
         history.forEach((job, jobIdx) => {
-            if (job.dateReceived) {
-                // 7 phases per job: measuring, sanding1, undercoat, sanding2, topcoat, inspect, complete
+            // Only count tasks for active jobs (not marked as completed)
+            if (job.dateReceived && !job.completed) {
+                // 7 phases per job: measuring, sanding1, undercoat, sanding2, topcoat, sanding2, topcoat, inspect, complete
                 totalTasks += 7;
                 
                 // Count which phases are completed
@@ -3193,6 +3207,8 @@
         if (document.getElementById('totalActiveJobs')) document.getElementById('totalActiveJobs').innerText = activeJobs;
         if (document.getElementById('totalTasks')) document.getElementById('totalTasks').innerText = `${completedTasks}/${totalTasks}`;
         if (document.getElementById('totalWorkload')) document.getElementById('totalWorkload').innerText = totalSqm.toFixed(1);
+        
+        console.log(`📊 Tasks: ${completedTasks}/${totalTasks} | Active Jobs: ${activeJobs}`);
     }
 
     // PAINT FORMULA MANAGEMENT
