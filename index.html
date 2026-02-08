@@ -2106,31 +2106,31 @@
                 ganttHTML += '</div>';  // Close timeline bars row
                 ganttHTML += `<div style="display:flex; gap:8px; padding:4px 6px; background:transparent; flex-wrap:wrap; align-items:center;">
                         <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
-                            <input type="checkbox" ${job.phases && job.phases.measuring ? 'checked' : ''} onchange="toggleJobPhase(${originalIdx}, 'measuring')" style="width:13px; height:13px; cursor:pointer;">
+                            <input type="checkbox" ${job.phases && job.phases.measuring ? 'checked' : ''} onchange="toggleJobPhaseById('${job.jobNum}', '${job.dateReceived}', '${job.client}', 'measuring')" style="width:13px; height:13px; cursor:pointer;">
                             <span>M</span>
                         </label>
                         <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
-                            <input type="checkbox" ${job.phases && job.phases.sanding1 ? 'checked' : ''} onchange="toggleJobPhase(${originalIdx}, 'sanding1')" style="width:13px; height:13px; cursor:pointer;">
+                            <input type="checkbox" ${job.phases && job.phases.sanding1 ? 'checked' : ''} onchange="toggleJobPhaseById('${job.jobNum}', '${job.dateReceived}', '${job.client}', 'sanding1')" style="width:13px; height:13px; cursor:pointer;">
                             <span>S1</span>
                         </label>
                         <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
-                            <input type="checkbox" ${job.phases && job.phases.undercoat ? 'checked' : ''} onchange="toggleJobPhase(${originalIdx}, 'undercoat')" style="width:13px; height:13px; cursor:pointer;">
+                            <input type="checkbox" ${job.phases && job.phases.undercoat ? 'checked' : ''} onchange="toggleJobPhaseById('${job.jobNum}', '${job.dateReceived}', '${job.client}', 'undercoat')" style="width:13px; height:13px; cursor:pointer;">
                             <span>U</span>
                         </label>
                         <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
-                            <input type="checkbox" ${job.phases && job.phases.sanding2 ? 'checked' : ''} onchange="toggleJobPhase(${originalIdx}, 'sanding2')" style="width:13px; height:13px; cursor:pointer;">
+                            <input type="checkbox" ${job.phases && job.phases.sanding2 ? 'checked' : ''} onchange="toggleJobPhaseById('${job.jobNum}', '${job.dateReceived}', '${job.client}', 'sanding2')" style="width:13px; height:13px; cursor:pointer;">
                             <span>S2</span>
                         </label>
                         <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
-                            <input type="checkbox" ${job.phases && job.phases.topcoat ? 'checked' : ''} onchange="toggleJobPhase(${originalIdx}, 'topcoat')" style="width:13px; height:13px; cursor:pointer;">
+                            <input type="checkbox" ${job.phases && job.phases.topcoat ? 'checked' : ''} onchange="toggleJobPhaseById('${job.jobNum}', '${job.dateReceived}', '${job.client}', 'topcoat')" style="width:13px; height:13px; cursor:pointer;">
                             <span>T</span>
                         </label>
                         <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
-                            <input type="checkbox" ${job.phases && job.phases.inspect ? 'checked' : ''} onchange="toggleJobPhase(${originalIdx}, 'inspect')" style="width:13px; height:13px; cursor:pointer;">
+                            <input type="checkbox" ${job.phases && job.phases.inspect ? 'checked' : ''} onchange="toggleJobPhaseById('${job.jobNum}', '${job.dateReceived}', '${job.client}', 'inspect')" style="width:13px; height:13px; cursor:pointer;">
                             <span>I</span>
                         </label>
                         <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
-                            <input type="checkbox" ${job.phases && job.phases.complete ? 'checked' : ''} onchange="toggleJobPhase(${originalIdx}, 'complete')" style="width:13px; height:13px; cursor:pointer;">
+                            <input type="checkbox" ${job.phases && job.phases.complete ? 'checked' : ''} onchange="toggleJobPhaseById('${job.jobNum}', '${job.dateReceived}', '${job.client}', 'complete')" style="width:13px; height:13px; cursor:pointer;">
                             <span>C</span>
                         </label>
                         <button onclick="markJobComplete(${originalIdx})" style="border:none; background:#34c759; color:#fff; padding:4px 10px; border-radius:4px; font-weight:900; font-size:9px; cursor:pointer;">✓ DONE</button>
@@ -2214,6 +2214,40 @@
         
         // DO NOT call renderScheduleCalendar() here - it breaks checkbox state
         // User will see updates when they navigate away and back to Schedule tab
+    }
+
+    // Toggle job phase by unique job identifiers (jobNum, dateReceived, client)
+    function toggleJobPhaseById(jobNum, dateReceived, client, phaseKey) {
+        const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
+        
+        // Find job by unique identifiers (not by array index)
+        const jobIdx = history.findIndex(j => j.jobNum === jobNum && j.dateReceived === dateReceived && j.client === client);
+        
+        if (jobIdx < 0) {
+            console.error('Job not found:', jobNum, dateReceived, client);
+            return;
+        }
+        
+        const job = history[jobIdx];
+        if (!job.phases) job.phases = {};
+        
+        // Toggle the phase
+        job.phases[phaseKey] = !job.phases[phaseKey];
+        
+        // Update in history
+        history[jobIdx] = job;
+        localStorage.setItem('jobHistory', JSON.stringify(history));
+        
+        // Sync to Firebase in background
+        if (window.syncJobsToFirebase) {
+            setTimeout(() => window.syncJobsToFirebase(), 100);
+        }
+        
+        // Update workload summary
+        renderJobTasks();
+        
+        // Show notification
+        notify(job.phases[phaseKey] ? `✓ ${phaseKey} marked complete` : `○ ${phaseKey} marked pending`);
     }
 
     function toggleJobPhase(jobIdx, phaseKey) {
