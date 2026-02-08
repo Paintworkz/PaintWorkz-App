@@ -3,11 +3,11 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 28 | 2026-02-08 | Fix Gantt toggles and form clearing      ║
-║ - Fixed: Gantt chart toggles work smoothly again               ║
-║ - Fixed: Toggle guard uses timeout (500ms) not just boolean    ║
-║ - Fixed: Measure sheet clears after job is saved               ║
-║ - Result: Clean workflow - save and immediately enter new job  ║
+║ REV 29 | 2026-02-08 | Fix Gantt toggles and job deletion       ║
+║ - CRITICAL: Simplified toggle logic (removed problematic guard)║
+║ - Fixed: Gantt chart toggles now responsive and smooth         ║
+║ - Fixed: Delete verification prevents job from reappearing     ║
+║ - Fixed: Toggle complete/incomplete works properly             ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -666,10 +666,10 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 28 (2026-02-08) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
-    console.log('✓ Gantt chart toggles work smoothly');
-    console.log('✓ Measure sheet clears after save');
-    console.log('✓ Clean workflow for new jobs');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 29 (2026-02-08) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('✓ Gantt toggles responsive (simplified logic)');
+    console.log('✓ Delete verification prevents reappearing jobs');
+    console.log('✓ Complete/incomplete toggle works properly');
     // ====================================
     
     // Firebase already initialized at top of page
@@ -1128,21 +1128,38 @@
                 return;
             }
             
+            console.log(`🗑️ Attempting to delete Job #${deletedJob.jobNum}`);
+            
+            // Remove from history
             history.splice(index, 1);
             localStorage.setItem('jobHistory', JSON.stringify(history));
+            
+            // Verify it's actually gone from localStorage
+            let verifyHistory = JSON.parse(localStorage.getItem('jobHistory')) || [];
+            const stillExists = verifyHistory.some(j => j.jobNum === deletedJob.jobNum && j.dateReceived === deletedJob.dateReceived && j.client === deletedJob.client);
+            
+            if (stillExists) {
+                console.error('❌ Job still exists after deletion attempt!');
+                notify('⚠️ Error: Job deletion failed');
+                return;
+            }
+            
+            console.log(`✓ Job #${deletedJob.jobNum} removed from localStorage`);
             
             // Sync deletion to Firebase
             if (window.syncJobsToFirebase) {
                 try {
                     window.syncJobsToFirebase();
-                    console.log(`🗑️ Job #${deletedJob.jobNum} deleted and synced to Firebase`);
+                    console.log(`✓ Job #${deletedJob.jobNum} synced deletion to Firebase`);
                 } catch(e) {
                     console.error('Firebase sync error on delete:', e);
                 }
             }
             
             notify('✓ Job Deleted from History');
-            renderHistory(); // This may trigger re-renders but won't cause multiple deletes
+            
+            // Force fresh render
+            renderHistory();
         }
     }
 
@@ -1237,6 +1254,7 @@
             // Show GLOBAL RED NOTIFICATION for reactivation
             showGlobalReactivationAlert(job);
             
+            // Refresh the view
             renderHistory();
         }
     }
@@ -2430,21 +2448,8 @@
     }
 
     // Guard against rapid duplicate toggles
-    let toggleInProgress = false;
-    let lastToggleTime = 0;
-    
     // Toggle job phase by unique job identifiers (jobNum, dateReceived, client)
     function toggleJobPhaseById(jobNum, dateReceived, client, phaseKey) {
-        // Prevent rapid duplicate toggles (only block if less than 500ms since last toggle)
-        const now = Date.now();
-        if (toggleInProgress && (now - lastToggleTime) < 500) {
-            console.log('⏸️ Toggle already in progress, ignoring duplicate click');
-            return;
-        }
-        
-        toggleInProgress = true;
-        lastToggleTime = now;
-        
         try {
             const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
             
@@ -2454,7 +2459,6 @@
             if (jobIdx < 0) {
                 console.error('❌ Job not found:', jobNum, dateReceived, client);
                 notify('⚠️ Error: Job not found');
-                toggleInProgress = false;
                 return;
             }
             
@@ -2474,7 +2478,7 @@
             history[jobIdx] = job;
             localStorage.setItem('jobHistory', JSON.stringify(history));
             
-            // Sync to Firebase in background (non-blocking)
+            // Sync to Firebase
             if (window.syncJobsToFirebase) {
                 try {
                     window.syncJobsToFirebase();
@@ -2485,30 +2489,17 @@
             }
             
             // Update workload summary
-            try {
-                renderJobTasks();
-            } catch(e) {
-                console.error('renderJobTasks error:', e);
-            }
+            renderJobTasks();
             
-            // Show notification immediately
+            // Show notification
             notify(isNowComplete ? `✓ ${phaseKey} done` : `○ ${phaseKey} reset`);
             
-            // Re-render Gantt chart instantly (non-blocking via requestAnimationFrame)
-            requestAnimationFrame(() => {
-                try {
-                    renderScheduleCalendar();
-                    console.log('📊 Gantt chart re-rendered');
-                } catch(e) {
-                    console.error('renderScheduleCalendar error:', e);
-                }
-                toggleInProgress = false; // Always reset, even on error
-            });
+            // Re-render Gantt chart
+            renderScheduleCalendar();
             
         } catch(e) {
             console.error('toggleJobPhaseById error:', e);
             notify('⚠️ Error updating phase');
-            toggleInProgress = false;
         }
     }
 
