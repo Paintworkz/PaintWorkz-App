@@ -3,11 +3,12 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 20 | 2026-02-08 | Fix job deletion - sync to Firebase      ║
-║ - CRITICAL: Delete now syncs to Firebase (was only local)      ║
-║ - Fixed: Deleted jobs no longer reappear on refresh            ║
-║ - Added: Console logging for deletion tracking                 ║
-║ - Result: Job deletion is permanent across all devices         ║
+║ REV 21 | 2026-02-08 | Fix Chrome/Edge crashes + speed up UI   ║
+║ - CRITICAL: Reverted authDomain to Firebase (fixes 404 crash) ║
+║ - CRITICAL: Added Firebase sync to saveJobToHistory()          ║
+║ - Fixed: Checkbox marking now instant (no 100ms delay)         ║
+║ - Fixed: Use requestAnimationFrame instead of setTimeout       ║
+║ - Fixed: Firebase sync no longer delayed                       ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -139,7 +140,7 @@
         
         const firebaseConfig = {
             apiKey: "AIzaSyCddhnoWoJczM2yXemz2evZc-W2x7OnP00",
-            authDomain: "paintworkz.github.io",
+            authDomain: "paintworkz-42bc0.firebaseapp.com",
             projectId: "paintworkz-42bc0",
             storageBucket: "paintworkz-42bc0.firebasestorage.app",
             messagingSenderId: "298786193879",
@@ -666,10 +667,10 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 20 (2026-02-08) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
-    console.log('🔒 CRITICAL: Job deletion now syncs to Firebase');
-    console.log('✓ Deleted jobs stay deleted on refresh');
-    console.log('✓ Deletion permanent across all devices');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 21 (2026-02-08) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('🔒 CRITICAL: Fixed Chrome/Edge 404 crash (authDomain reverted)');
+    console.log('🔒 CRITICAL: Job saves now sync to Firebase');
+    console.log('⚡ UI now instant - no delays on checkbox marking');
     // ====================================
     
     // Firebase already initialized at top of page
@@ -969,6 +970,16 @@
         history = history.slice(0, 50);
         
         localStorage.setItem('jobHistory', JSON.stringify(history));
+        
+        // Sync to Firebase immediately
+        if (window.syncJobsToFirebase) {
+            try {
+                window.syncJobsToFirebase();
+                console.log('🔄 Job saved and synced to Firebase');
+            } catch(e) {
+                console.error('Firebase sync error on save:', e);
+            }
+        }
         
         renderHistory();
         renderJobTasks(); // Update workload summary
@@ -2339,14 +2350,12 @@
             
             // Sync to Firebase in background (non-blocking)
             if (window.syncJobsToFirebase) {
-                setTimeout(() => {
-                    try {
-                        window.syncJobsToFirebase();
-                        console.log('🔄 Synced to Firebase');
-                    } catch(e) {
-                        console.error('Firebase sync error:', e);
-                    }
-                }, 50);
+                try {
+                    window.syncJobsToFirebase();
+                    console.log('🔄 Synced to Firebase');
+                } catch(e) {
+                    console.error('Firebase sync error:', e);
+                }
             }
             
             // Update workload summary
@@ -2359,15 +2368,15 @@
             // Show notification immediately
             notify(isNowComplete ? `✓ ${phaseKey} done` : `○ ${phaseKey} reset`);
             
-            // Re-render Gantt chart to show updated visuals
-            setTimeout(() => {
+            // Re-render Gantt chart instantly (non-blocking via requestAnimationFrame)
+            requestAnimationFrame(() => {
                 try {
                     renderScheduleCalendar();
                     console.log('📊 Gantt chart re-rendered');
                 } catch(e) {
                     console.error('renderScheduleCalendar error:', e);
                 }
-            }, 100);
+            });
             
         } catch(e) {
             console.error('toggleJobPhaseById error:', e);
