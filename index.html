@@ -3,11 +3,11 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 32 | 2026-02-08 | Hide Gantt from measure tab, fix complete║
-║ - Fixed: Gantt chart hidden by default (display:none)          ║
-║ - CRITICAL: Removed duplicate completeJobById function         ║
-║ - Fixed: Job completion now updates UI immediately             ║
-║ - Result: Jobs show as completed when marked                   ║
+║ REV 33 | 2026-02-08 | Fix client dropdown and form clearing    ║
+║ - Added: populateClientDropdown() to load clients from history ║
+║ - Added: initializeApp() called on login                       ║
+║ - Fixed: Measure sheet clears on app load                      ║
+║ - Fixed: Client dropdown populated with unique clients         ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -180,6 +180,17 @@
                 const appContainer = document.getElementById('appContainer');
                 if (loginScreen) loginScreen.style.display = 'none';
                 if (appContainer) appContainer.style.display = 'block';
+                
+                // Initialize app (clear form, populate clients)
+                setTimeout(() => {
+                    if (typeof initializeApp === 'function') {
+                        try {
+                            initializeApp();
+                        } catch(e) {
+                            console.error('initializeApp error:', e);
+                        }
+                    }
+                }, 100);
                 
                 // Load jobs from Firebase ONLY after document is fully loaded
                 if (document.readyState === 'loading') {
@@ -666,10 +677,10 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 32 (2026-02-08) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
-    console.log('✓ Gantt chart hidden from measure tab');
-    console.log('✓ Removed duplicate completeJobById function');
-    console.log('✓ Jobs now show as completed immediately');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 33 (2026-02-08) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('✓ Client dropdown populated on app load');
+    console.log('✓ Measure sheet clears on login');
+    console.log('✓ Form ready for immediate job entry');
     // ====================================
     
     // Firebase already initialized at top of page
@@ -845,6 +856,57 @@
         localStorage.setItem('currentJob', JSON.stringify(jobData));
     }
 
+    // Populate client dropdown with unique clients from history
+    function populateClientDropdown() {
+        const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
+        const clientSelect = document.getElementById('cli');
+        if (!clientSelect) return;
+        
+        // Get unique clients
+        const clients = [...new Set(history.map(job => job.client).filter(Boolean))];
+        clients.sort();
+        
+        // Clear and rebuild dropdown
+        clientSelect.innerHTML = '<option value="">-- Select or type client --</option>';
+        clients.forEach(client => {
+            const option = document.createElement('option');
+            option.value = client;
+            option.textContent = client;
+            clientSelect.appendChild(option);
+        });
+        
+        console.log(`✓ Populated ${clients.length} unique clients in dropdown`);
+    }
+    
+    // Initialize app on page load
+    function initializeApp() {
+        console.log('🚀 Initializing PaintWorkz...');
+        
+        // Clear measure sheet on fresh load
+        items = [];
+        document.getElementById('cli').value = '';
+        document.getElementById('dRec').value = '';
+        document.getElementById('jNm').value = '';
+        document.getElementById('jN').value = '';
+        document.getElementById('p-brand').value = 'Wattyl';
+        document.getElementById('p-color').value = '';
+        document.getElementById('p-code').value = '';
+        document.getElementById('p-finish').value = 'Satin';
+        
+        const totSqmEl = document.getElementById('tA');
+        const totPartsEl = document.getElementById('tQ');
+        if (totSqmEl) totSqmEl.innerText = '0.000';
+        if (totPartsEl) totPartsEl.innerText = '0';
+        
+        // Populate client dropdown
+        populateClientDropdown();
+        
+        // Re-render measure sheet
+        render();
+        
+        console.log('✓ App initialized - measure sheet cleared, clients loaded');
+    }
+    
     function loadData() {
         const saved = localStorage.getItem('currentJob');
         if (saved) {
@@ -1083,6 +1145,9 @@
                 </div>
             </div>`;
         });
+        
+        // Update client dropdown with latest clients from history
+        populateClientDropdown();
     }
 
     function filterHistory(filter) {
