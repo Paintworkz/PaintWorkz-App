@@ -3,11 +3,11 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 31 | 2026-02-08 | Fix measure sheet clearing on save       ║
-║ - Fixed: Clear form BEFORE rendering (was after)               ║
-║ - Added: Better element selection and error handling           ║
-║ - Added: Detailed console logging for clearing process         ║
-║ - Result: Form clears immediately after save                   ║
+║ REV 32 | 2026-02-08 | Hide Gantt from measure tab, fix complete║
+║ - Fixed: Gantt chart hidden by default (display:none)          ║
+║ - CRITICAL: Removed duplicate completeJobById function         ║
+║ - Fixed: Job completion now updates UI immediately             ║
+║ - Result: Jobs show as completed when marked                   ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -573,7 +573,7 @@
         </div>
 
         <!-- Gantt Chart Timeline - Full Width -->
-        <div id="ganttWrapper" style="width:100vw; margin-left:calc(-50vw + 50%); background:#fff; padding:15px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow-x:auto; min-height:600px; display:block; visibility:visible;">
+        <div id="ganttWrapper" style="width:100vw; margin-left:calc(-50vw + 50%); background:#fff; padding:15px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow-x:auto; min-height:600px; display:none; visibility:visible;">
             <div style="background:#fff3cd; border:2px solid #ff9500; border-radius:8px; padding:15px; margin-bottom:15px; display:none;" id="duplicateWarning">
                 <div style="font-weight:900; color:#ff6600; margin-bottom:8px;">⚠️ Duplicate Jobs Detected!</div>
                 <p style="font-size:12px; color:#666; margin:0 0 10px 0;">Your job history contains duplicate entries. This is why you only see 1 job displayed but the Workload Summary shows 7.</p>
@@ -666,10 +666,10 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 31 (2026-02-08) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
-    console.log('✓ Measure sheet clears immediately after save');
-    console.log('✓ Form ready for next job entry');
-    console.log('✓ All data synced to Firebase');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 32 (2026-02-08) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('✓ Gantt chart hidden from measure tab');
+    console.log('✓ Removed duplicate completeJobById function');
+    console.log('✓ Jobs now show as completed immediately');
     // ====================================
     
     // Firebase already initialized at top of page
@@ -1269,51 +1269,6 @@
         }
     }
 
-    // Complete job by job identifiers (used by buttons in history)
-    function completeJobById(jobNum, dateReceived, client) {
-        const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
-        
-        // Find job by unique identifiers
-        const jobIdx = history.findIndex(j => j.jobNum === jobNum && j.dateReceived === dateReceived && j.client === client);
-        
-        if (jobIdx < 0) {
-            console.error('❌ Job not found:', jobNum, dateReceived, client);
-            notify('⚠️ Error: Job not found');
-            return;
-        }
-        
-        const job = history[jobIdx];
-        
-        if (confirm(`Complete Job #${job.jobNum}?\n\nThis will:\n✓ Mark job as complete\n✓ Generate all PDFs\n✓ Alert admins`)) {
-            // Mark job as complete
-            job.completed = true;
-            job.completedDate = new Date().toISOString();
-            history[jobIdx] = job;
-            localStorage.setItem('jobHistory', JSON.stringify(history));
-            
-            console.log(`✓ Job #${job.jobNum} marked as complete`);
-            
-            // Sync to Firebase
-            if (window.syncJobsToFirebase) {
-                try {
-                    window.syncJobsToFirebase();
-                    console.log('🔄 Synced to Firebase');
-                } catch(e) {
-                    console.error('Firebase sync error:', e);
-                }
-            }
-            
-            // Generate batch PDFs
-            generateBatchPDFs(job);
-            
-            // Alert admins
-            alertAdmins(job);
-            
-            notify('✓ Job Completed - PDFs Generated');
-            renderHistory();
-        }
-    }
-    
     // Show global red notification when job is reactivated
     function showGlobalReactivationAlert(job) {
         const alertArea = document.getElementById('globalNotifications');
