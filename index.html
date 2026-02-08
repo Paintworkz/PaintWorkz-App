@@ -345,7 +345,6 @@
     <div class="logo-box"><span class="logo-text">PaintWorkz</span></div>
     <div style="display:flex; gap:10px; align-items:center;">
         <div class="icon-btn" onclick="saveJob()">💾</div>
-        <div class="icon-btn" onclick="handleLogout()" title="Logout">🚪</div>
     </div>
 </header>
 
@@ -648,6 +647,9 @@
     <div class="footer-item"><div class="footer-label">TOTAL SQM</div><div class="footer-val" id="tA">0.000</div></div>
     <div class="icon-btn" onclick="genPDF()" style="color:#fff">📄</div>
     <div class="footer-item"><div class="footer-label">PARTS</div><div class="footer-val" id="tQ">0</div></div>
+    <div style="margin-left:auto;">
+        <div class="icon-btn" onclick="handleLogout()" title="Logout" style="color:#ff3b30; font-size:24px; cursor:pointer;">🚪</div>
+    </div>
 </div>
 
 <script>
@@ -1019,7 +1021,7 @@
                 </div>
                 <div style="display:flex; gap:8px; flex-wrap:wrap; position:relative; z-index:1;">
                     <button onclick="loadJobFromHistory(${originalIdx})" style="flex:1; min-width:100px; border:none; background:#f0f0f0; padding:10px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">LOAD</button>
-                    ${!isComplete ? `<button onclick="completeJobBatch(${originalIdx})" style="flex:1; min-width:100px; border:none; background:var(--gold); color:#000; padding:10px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">COMPLETE JOB</button>` : `<div style="flex:1; min-width:100px; background:#34c75930; padding:10px; border-radius:6px; font-weight:900; font-size:11px; text-align:center; color:#34c759; border:2px solid #34c759;">✓ COMPLETED</div>`}
+                    ${!isComplete ? `<button onclick="completeJobBatch(${originalIdx})" style="flex:1; min-width:100px; border:none; background:var(--gold); color:#000; padding:10px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">COMPLETE JOB</button>` : `<button onclick="toggleJobComplete(${originalIdx})" style="flex:1; min-width:100px; border:none; background:#34c759; color:#fff; padding:10px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">✓ COMPLETED</button>`}
                     <button onclick="deleteJobFromHistory(${originalIdx})" style="flex:1; min-width:80px; border:none; background:#ff3b3015; color:#ff3b30; padding:10px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">DELETE</button>
                 </div>
             </div>`;
@@ -1101,6 +1103,24 @@
             
             renderHistory();
             notify('✓ Job Completed - PDFs Generated');
+        }
+    }
+
+    // Toggle job completion status (unmark as complete)
+    function toggleJobComplete(index) {
+        const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
+        const job = history[index];
+        
+        if (!job) return;
+        
+        if (confirm(`Unmark Job #${job.jobNum} as complete?\n\nThis will reopen the job for re-work.`)) {
+            job.completed = false;
+            job.completedDate = null;
+            history[index] = job;
+            localStorage.setItem('jobHistory', JSON.stringify(history));
+            
+            renderHistory();
+            notify('Job reopened - ready for rework');
         }
     }
 
@@ -1683,7 +1703,31 @@
     function saveJob() { 
         saveData();
         saveJobToHistory(); // This will show its own notification
+        
+        // Auto-increment job number
+        const currentJobNum = document.getElementById('jN').value;
+        if (currentJobNum) {
+            // Extract number from job number (handle formats like "001", "1", "JOB001", etc)
+            const match = currentJobNum.match(/\d+/);
+            if (match) {
+                const nextNum = String(parseInt(match[0]) + 1).padStart(match[0].length, '0');
+                const prefix = currentJobNum.substring(0, currentJobNum.indexOf(match[0]));
+                const suffix = currentJobNum.substring(currentJobNum.indexOf(match[0]) + match[0].length);
+                document.getElementById('jN').value = prefix + nextNum + suffix;
+            }
+        }
+        
+        // Clear measure sheet and panel list
         setTimeout(() => {
+            items = [];
+            document.getElementById('h').value = '';
+            document.getElementById('w').value = '';
+            document.getElementById('desc').value = '';
+            document.getElementById('jNm').value = '';
+            // Clear panel list
+            const panelList = document.getElementById('cli'); // Assuming this shows panel count
+            render(); // Re-render to clear UI
+            
             tab('history'); // Navigate to history tab
             renderHistory();
         }, 500);
@@ -2823,9 +2867,9 @@
         let allTasks = [];
         let completedTasks = 0;
         
-        // Count tasks
+        // Count tasks (include BOTH active AND completed jobs)
         history.forEach((job, jobIdx) => {
-            if (!job.completed && job.dateReceived) {
+            if (job.dateReceived) {
                 // 3 tasks per job
                 if (job.tasks) {
                     if (job.tasks.mixing) completedTasks++;
