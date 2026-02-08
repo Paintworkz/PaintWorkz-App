@@ -3,11 +3,11 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 18 | 2026-02-08 | Rebuild toggle logic with error handling ║
-║ - Fixed: Better error handling in toggleJobPhaseById            ║
-║ - Added: Console logging for debugging toggle actions          ║
-║ - Fixed: Non-blocking Firebase sync (doesn't block UI)         ║
-║ - Fixed: Delayed re-render to avoid race conditions            ║
+║ REV 19 | 2026-02-08 | Move reactivation alerts to Schedule tab ║
+║ - Fixed: Removed floating notification area at bottom          ║
+║ - Fixed: Job reactivation alerts now in Schedule tab box       ║
+║ - Added: Placeholder text when no notifications                ║
+║ - Result: Clean, organized notification display                ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -330,9 +330,6 @@
         </div>
     </div>
 </div>
-
-<!-- GLOBAL REACTIVATION NOTIFICATIONS AREA -->
-<div id="globalNotifications" style="position:fixed; bottom:160px; left:10px; right:10px; z-index:100; max-height:200px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; pointer-events:auto;"></div>
 
 <!-- LOGIN SCREEN -->
 <div id="loginScreen" style="position:fixed; top:0; left:0; right:0; bottom:0; background:linear-gradient(135deg, #d4af37, #f9f1b0); z-index:10000; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px;">
@@ -669,10 +666,10 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 18 (2026-02-08) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
-    console.log('✓ Rebuilt toggle logic with robust error handling');
-    console.log('✓ Console logging for debugging toggle actions');
-    console.log('✓ Non-blocking Firebase sync');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 19 (2026-02-08) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('✓ Job reactivation alerts in Schedule tab');
+    console.log('✓ Removed floating notification overlay');
+    console.log('✓ Clean organized notifications display');
     // ====================================
     
     // Firebase already initialized at top of page
@@ -1157,11 +1154,19 @@
     // Show global red notification when job is reactivated
     function showGlobalReactivationAlert(job) {
         const alertArea = document.getElementById('globalNotifications');
-        if (!alertArea) return;
+        if (!alertArea) {
+            console.log('Global notifications area not found (user not on Schedule tab)');
+            return;
+        }
         
         const alertId = `reactivation-${job.jobNum}-${Date.now()}`;
+        
+        // Remove "no notifications yet" placeholder if it exists
+        const placeholder = alertArea.querySelector('p');
+        if (placeholder) placeholder.remove();
+        
         const alertHTML = `
-            <div id="${alertId}" style="background:#ff3b30; color:#fff; padding:14px 18px; border-radius:10px; font-weight:900; font-size:12px; box-shadow:0 6px 20px rgba(255,59,48,0.5); pointer-events:auto; cursor:pointer; text-decoration:none; transition:all 0.3s ease; margin:0; line-height:1.4; word-break:break-word;">
+            <div id="${alertId}" style="background:#ff3b30; color:#fff; padding:12px; border-radius:8px; font-weight:900; font-size:12px; margin-bottom:8px; transition:all 0.3s ease;">
                 🚨 JOB #${job.jobNum} REACTIVATED
             </div>
         `;
@@ -1184,7 +1189,13 @@
             if (alert) {
                 alert.style.transition = 'opacity 0.5s ease';
                 alert.style.opacity = '0';
-                setTimeout(() => alert.remove(), 500);
+                setTimeout(() => {
+                    alert.remove();
+                    // If no more alerts, show placeholder
+                    if (alertArea.children.length === 0) {
+                        alertArea.innerHTML = '<p style="color:#999; text-align:center; font-size:12px;">No notifications yet</p>';
+                    }
+                }, 500);
             }
         }, 20000);
     }
