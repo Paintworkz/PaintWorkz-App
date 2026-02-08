@@ -169,20 +169,53 @@
                 if (loginScreen) loginScreen.style.display = 'none';
                 if (appContainer) appContainer.style.display = 'block';
                 
-                // Load jobs from Firebase after a short delay to ensure DOM is ready
-                setTimeout(() => {
-                    if (window.loadAllDataFromFirebase) window.loadAllDataFromFirebase();
-                    
-                    // Only set up real-time sync ONCE per session
-                    if (!window.realtimeSyncActive) {
-                        window.realtimeSyncActive = true;
-                        if (window.setupRealtimeSync) window.setupRealtimeSync();
-                    }
-                }, 100);
+                // Load jobs from Firebase ONLY after document is fully loaded
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', () => {
+                        setTimeout(() => {
+                            if (window.loadAllDataFromFirebase) {
+                                try {
+                                    window.loadAllDataFromFirebase();
+                                } catch (e) {
+                                    console.error('loadAllDataFromFirebase error:', e);
+                                }
+                            }
+                        }, 500);
+                    });
+                } else {
+                    // DOM already loaded
+                    setTimeout(() => {
+                        if (window.loadAllDataFromFirebase) {
+                            try {
+                                window.loadAllDataFromFirebase();
+                            } catch (e) {
+                                console.error('loadAllDataFromFirebase error:', e);
+                            }
+                        }
+                    }, 500);
+                }
+                
+                // Only set up real-time sync ONCE per session
+                if (!window.realtimeSyncActive) {
+                    window.realtimeSyncActive = true;
+                    setTimeout(() => {
+                        if (window.setupRealtimeSync) {
+                            try {
+                                window.setupRealtimeSync();
+                            } catch (e) {
+                                console.error('setupRealtimeSync error:', e);
+                            }
+                        }
+                    }, 1000);
+                }
             } else {
                 // Clean up listener when logging out
                 if (window.realtimeSyncUnsubscribe) {
-                    window.realtimeSyncUnsubscribe();
+                    try {
+                        window.realtimeSyncUnsubscribe();
+                    } catch (e) {
+                        console.warn('Error unsubscribing:', e);
+                    }
                     window.realtimeSyncUnsubscribe = null;
                 }
                 window.realtimeSyncActive = false;
@@ -3139,11 +3172,11 @@
             fullHistory = jobs;
             history = jobs.filter(j => !j.completed);
             
-            // Update UI - use correct function names
-            if (window.renderHistory) window.renderHistory();
-            if (window.renderJobTasks) window.renderJobTasks();
-            if (typeof renderGanttChart === 'function') {
-                renderGanttChart(scheduleCalendarDate.getFullYear(), scheduleCalendarDate.getMonth());
+            // Update UI - wrapped in try/catch
+            try {
+                if (typeof renderHistory === 'function') renderHistory();
+            } catch (e) {
+                console.warn('renderHistory error:', e);
             }
         } catch (err) {
             console.error('Error loading jobs from Firebase:', err);
@@ -3154,31 +3187,31 @@
     function setupRealtimeSync() {
         if (!window.currentUser) return;
         
-        const userDocRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid);
-        const jobsCollectionRef = window.collection(userDocRef, 'jobs');
-        
-        // Store the unsubscribe function so we can clean up later
-        window.realtimeSyncUnsubscribe = window.onSnapshot(jobsCollectionRef, snapshot => {
-            const jobs = [];
-            snapshot.forEach(doc => {
-                jobs.push({ ...doc.data(), id: doc.id });
-            });
+        try {
+            const userDocRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid);
+            const jobsCollectionRef = window.collection(userDocRef, 'jobs');
             
-            // Update localStorage
-            localStorage.setItem('jobHistory', JSON.stringify(jobs));
-            fullHistory = jobs;
-            history = jobs.filter(j => !j.completed);
-            
-            // Update UI - use correct function names
-            if (window.renderHistory) window.renderHistory();
-            if (window.renderJobTasks) window.renderJobTasks();
-            if (typeof renderGanttChart === 'function') {
-                renderGanttChart(scheduleCalendarDate.getFullYear(), scheduleCalendarDate.getMonth());
-            }
-        }, error => {
-            console.error('Realtime sync error:', error);
-        });
+            // Store the unsubscribe function so we can clean up later
+            window.realtimeSyncUnsubscribe = window.onSnapshot(jobsCollectionRef, snapshot => {
+                try {
+                    const jobs = [];
+                    snapshot.forEach(doc => {
+                        jobs.push({ ...doc.data(), id: doc.id });
+                    });
+                    
+                    // Update localStorage
+                    localStorage.setItem('jobHistory', JSON.stringify(jobs));
+                    fullHistory = jobs;
+                    history = jobs.filter(j => !j.completed);
+                } catch (e) {
+                    console.error('Error processing snapshot:', e);
+                }
+            }, error => {
+                console.error('Realtime sync error:', error);
             });
+        } catch (e) {
+            console.error('setupRealtimeSync error:', e);
+        }
     }
 
     // Helper function to sync all jobs to Firebase
