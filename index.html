@@ -1094,6 +1094,8 @@
             history[index] = job;
             localStorage.setItem('jobHistory', JSON.stringify(history));
             
+            // Sync to Firebase
+            if (window.syncJobsToFirebase) window.syncJobsToFirebase();
             
             // Generate batch PDFs
             generateBatchPDFs(job);
@@ -2194,12 +2196,23 @@
         if (!job) return;
         if (!job.phases) job.phases = {};
         
+        // Ensure jobIdx is valid
+        if (jobIdx < 0 || jobIdx >= history.length) {
+            console.error('Invalid job index:', jobIdx);
+            return;
+        }
+        
         job.phases[phaseKey] = !job.phases[phaseKey];
         
         history[jobIdx] = job;
         localStorage.setItem('jobHistory', JSON.stringify(history));
         
+        // Sync to Firebase
+        if (window.syncJobsToFirebase) window.syncJobsToFirebase();
+        
+        // Update all UI elements that depend on this
         renderScheduleCalendar();
+        renderJobTasks(); // Update workload summary
         notify(job.phases[phaseKey] ? `✓ ${phaseKey} marked complete` : `○ ${phaseKey} marked pending`);
     }
 
