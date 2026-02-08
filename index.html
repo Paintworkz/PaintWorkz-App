@@ -3,11 +3,11 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 16 | 2026-02-08 | Better visual feedback on phase toggle   ║
-║ - Fixed: Strikethrough now shows as faded + dashed border      ║
-║ - Added: X symbol on completed phases (more visible)           ║
-║ - Fixed: Toggle works both on/off for bars and checkboxes      ║
-║ - Result: Click bar or checkbox to toggle phase on/off         ║
+║ REV 18 | 2026-02-08 | Rebuild toggle logic with error handling ║
+║ - Fixed: Better error handling in toggleJobPhaseById            ║
+║ - Added: Console logging for debugging toggle actions          ║
+║ - Fixed: Non-blocking Firebase sync (doesn't block UI)         ║
+║ - Fixed: Delayed re-render to avoid race conditions            ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -139,7 +139,7 @@
         
         const firebaseConfig = {
             apiKey: "AIzaSyCddhnoWoJczM2yXemz2evZc-W2x7OnP00",
-            authDomain: "paintworkz-42bc0.firebaseapp.com",
+            authDomain: "paintworkz.github.io",
             projectId: "paintworkz-42bc0",
             storageBucket: "paintworkz-42bc0.firebasestorage.app",
             messagingSenderId: "298786193879",
@@ -669,10 +669,10 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 16 (2026-02-08) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
-    console.log('✓ Clear visual feedback: faded + dashed border + X');
-    console.log('✓ Toggle on/off by clicking bar or checkbox');
-    console.log('✓ Strikethrough shows immediately on click');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 18 (2026-02-08) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('✓ Rebuilt toggle logic with robust error handling');
+    console.log('✓ Console logging for debugging toggle actions');
+    console.log('✓ Non-blocking Firebase sync');
     // ====================================
     
     // Firebase already initialized at top of page
@@ -2285,39 +2285,70 @@
 
     // Toggle job phase by unique job identifiers (jobNum, dateReceived, client)
     function toggleJobPhaseById(jobNum, dateReceived, client, phaseKey) {
-        const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
-        
-        // Find job by unique identifiers (not by array index)
-        const jobIdx = history.findIndex(j => j.jobNum === jobNum && j.dateReceived === dateReceived && j.client === client);
-        
-        if (jobIdx < 0) {
-            console.error('Job not found:', jobNum, dateReceived, client);
-            return;
+        try {
+            const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
+            
+            // Find job by unique identifiers (not by array index)
+            const jobIdx = history.findIndex(j => j.jobNum === jobNum && j.dateReceived === dateReceived && j.client === client);
+            
+            if (jobIdx < 0) {
+                console.error('❌ Job not found:', jobNum, dateReceived, client);
+                notify('⚠️ Error: Job not found');
+                return;
+            }
+            
+            const job = history[jobIdx];
+            if (!job.phases) job.phases = {};
+            
+            // Get current state BEFORE toggle
+            const wasComplete = job.phases[phaseKey] || false;
+            
+            // Toggle the phase
+            job.phases[phaseKey] = !wasComplete;
+            const isNowComplete = job.phases[phaseKey];
+            
+            console.log(`📋 Job #${jobNum} - Phase "${phaseKey}": ${wasComplete ? '✓' : '○'} → ${isNowComplete ? '✓' : '○'}`);
+            
+            // Update in history
+            history[jobIdx] = job;
+            localStorage.setItem('jobHistory', JSON.stringify(history));
+            
+            // Sync to Firebase in background (non-blocking)
+            if (window.syncJobsToFirebase) {
+                setTimeout(() => {
+                    try {
+                        window.syncJobsToFirebase();
+                        console.log('🔄 Synced to Firebase');
+                    } catch(e) {
+                        console.error('Firebase sync error:', e);
+                    }
+                }, 50);
+            }
+            
+            // Update workload summary
+            try {
+                renderJobTasks();
+            } catch(e) {
+                console.error('renderJobTasks error:', e);
+            }
+            
+            // Show notification immediately
+            notify(isNowComplete ? `✓ ${phaseKey} done` : `○ ${phaseKey} reset`);
+            
+            // Re-render Gantt chart to show updated visuals
+            setTimeout(() => {
+                try {
+                    renderScheduleCalendar();
+                    console.log('📊 Gantt chart re-rendered');
+                } catch(e) {
+                    console.error('renderScheduleCalendar error:', e);
+                }
+            }, 100);
+            
+        } catch(e) {
+            console.error('toggleJobPhaseById error:', e);
+            notify('⚠️ Error updating phase');
         }
-        
-        const job = history[jobIdx];
-        if (!job.phases) job.phases = {};
-        
-        // Toggle the phase
-        job.phases[phaseKey] = !job.phases[phaseKey];
-        
-        // Update in history
-        history[jobIdx] = job;
-        localStorage.setItem('jobHistory', JSON.stringify(history));
-        
-        // Sync to Firebase in background
-        if (window.syncJobsToFirebase) {
-            setTimeout(() => window.syncJobsToFirebase(), 100);
-        }
-        
-        // Update workload summary
-        renderJobTasks();
-        
-        // Re-render Gantt chart to show strikethrough on colored bars
-        renderScheduleCalendar();
-        
-        // Show notification
-        notify(job.phases[phaseKey] ? `✓ ${phaseKey} marked complete` : `○ ${phaseKey} marked pending`);
     }
 
     function toggleJobPhase(jobIdx, phaseKey) {
