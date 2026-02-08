@@ -3,11 +3,11 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 23 | 2026-02-08 | Fix job completion toggle (stays stuck) ║
-║ - CRITICAL: Use job identifiers instead of array index         ║
-║ - Fixed: toggleJobComplete now finds right job always          ║
-║ - Fixed: completeJobBatch also uses identifiers                ║
-║ - Result: Toggle on/off now works properly after loading jobs  ║
+║ REV 24 | 2026-02-08 | Add missing toggleJobCompleteById func   ║
+║ - CRITICAL: Button was calling non-existent function!          ║
+║ - Added: toggleJobCompleteById() for history buttons           ║
+║ - Added: completeJobById() for completion buttons              ║
+║ - Result: Toggle now works! Buttons call right functions       ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -666,10 +666,10 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 23 (2026-02-08) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
-    console.log('🔒 CRITICAL: Fixed job completion toggle stuck bug');
-    console.log('✓ Uses job identifiers, not array indices');
-    console.log('✓ Toggle works properly after loading jobs');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 24 (2026-02-08) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('🔒 CRITICAL: Added missing toggleJobCompleteById function');
+    console.log('✓ Buttons now call correct functions');
+    console.log('✓ Toggle completed/active now works!');
     // ====================================
     
     // Firebase already initialized at top of page
@@ -1050,7 +1050,7 @@
                 </div>
                 <div style="display:flex; gap:8px; flex-wrap:wrap; position:relative; z-index:1;">
                     <button onclick="loadJobFromHistory(${originalIdx})" style="flex:1; min-width:100px; border:none; background:#f0f0f0; padding:10px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">LOAD</button>
-                    ${!isComplete ? `<button onclick="completeJobBatch(${originalIdx})" style="flex:1; min-width:100px; border:none; background:var(--gold); color:#000; padding:10px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">COMPLETE JOB</button>` : `<button onclick="toggleJobComplete(${originalIdx})" style="flex:1; min-width:100px; border:none; background:#34c759; color:#fff; padding:10px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">✓ COMPLETED</button>`}
+                    ${!isComplete ? `<button onclick="completeJobById('${job.jobNum}', '${job.dateReceived}', '${job.client}')" style="flex:1; min-width:100px; border:none; background:var(--gold); color:#000; padding:10px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">COMPLETE JOB</button>` : `<button onclick="toggleJobCompleteById('${job.jobNum}', '${job.dateReceived}', '${job.client}')" style="flex:1; min-width:100px; border:none; background:#34c759; color:#fff; padding:10px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">✓ COMPLETED</button>`}
                     <button onclick="deleteJobFromHistory(${originalIdx})" style="flex:1; min-width:80px; border:none; background:#ff3b3015; color:#ff3b30; padding:10px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">DELETE</button>
                 </div>
             </div>`;
@@ -1128,21 +1128,15 @@
         }
     }
 
-    function completeJobBatch(index) {
+    function completeJobById(jobNum, dateReceived, client) {
         const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
         
-        // Get the job at this index to extract its unique identifiers
-        const jobAtIndex = history[index];
-        if (!jobAtIndex) {
-            console.error('❌ Job not found at index:', index);
-            return;
-        }
-        
-        // Find the job by unique identifiers (not array index)
-        const jobIdx = history.findIndex(j => j.jobNum === jobAtIndex.jobNum && j.dateReceived === jobAtIndex.dateReceived && j.client === jobAtIndex.client);
+        // Find job by unique identifiers
+        const jobIdx = history.findIndex(j => j.jobNum === jobNum && j.dateReceived === dateReceived && j.client === client);
         
         if (jobIdx < 0) {
-            console.error('❌ Job not found by identifiers:', jobAtIndex.jobNum, jobAtIndex.dateReceived, jobAtIndex.client);
+            console.error('❌ Job not found:', jobNum, dateReceived, client);
+            notify('⚠️ Error: Job not found');
             return;
         }
         
@@ -1177,9 +1171,102 @@
             renderHistory();
         }
     }
+    
+    // Kept for backwards compatibility but calls new function
+    function completeJobBatch(index) {
+        const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
+        const jobAtIndex = history[index];
+        if (jobAtIndex) {
+            completeJobById(jobAtIndex.jobNum, jobAtIndex.dateReceived, jobAtIndex.client);
+        }
+    }
 
-    // Toggle job completion status (unmark as complete)
-    function toggleJobComplete(index) {
+    // Toggle job completion by job identifiers (used by buttons in history)
+    function toggleJobCompleteById(jobNum, dateReceived, client) {
+        const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
+        
+        // Find job by unique identifiers
+        const jobIdx = history.findIndex(j => j.jobNum === jobNum && j.dateReceived === dateReceived && j.client === client);
+        
+        if (jobIdx < 0) {
+            console.error('❌ Job not found:', jobNum, dateReceived, client);
+            notify('⚠️ Error: Job not found');
+            return;
+        }
+        
+        const job = history[jobIdx];
+        
+        if (confirm(`Unmark Job #${job.jobNum} as complete?\n\nThis will reopen the job for re-work.`)) {
+            job.completed = false;
+            job.completedDate = null;
+            history[jobIdx] = job;
+            localStorage.setItem('jobHistory', JSON.stringify(history));
+            
+            console.log(`📋 Job #${job.jobNum} unmarked as complete`);
+            
+            // Sync to Firebase
+            if (window.syncJobsToFirebase) {
+                try {
+                    window.syncJobsToFirebase();
+                    console.log('🔄 Synced to Firebase');
+                } catch(e) {
+                    console.error('Firebase sync error:', e);
+                }
+            }
+            
+            notify('🔄 Job reopened - now active again');
+            
+            // Show GLOBAL RED NOTIFICATION for reactivation
+            showGlobalReactivationAlert(job);
+            
+            renderHistory();
+        }
+    }
+
+    // Complete job by job identifiers (used by buttons in history)
+    function completeJobById(jobNum, dateReceived, client) {
+        const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
+        
+        // Find job by unique identifiers
+        const jobIdx = history.findIndex(j => j.jobNum === jobNum && j.dateReceived === dateReceived && j.client === client);
+        
+        if (jobIdx < 0) {
+            console.error('❌ Job not found:', jobNum, dateReceived, client);
+            notify('⚠️ Error: Job not found');
+            return;
+        }
+        
+        const job = history[jobIdx];
+        
+        if (confirm(`Complete Job #${job.jobNum}?\n\nThis will:\n✓ Mark job as complete\n✓ Generate all PDFs\n✓ Alert admins`)) {
+            // Mark job as complete
+            job.completed = true;
+            job.completedDate = new Date().toISOString();
+            history[jobIdx] = job;
+            localStorage.setItem('jobHistory', JSON.stringify(history));
+            
+            console.log(`✓ Job #${job.jobNum} marked as complete`);
+            
+            // Sync to Firebase
+            if (window.syncJobsToFirebase) {
+                try {
+                    window.syncJobsToFirebase();
+                    console.log('🔄 Synced to Firebase');
+                } catch(e) {
+                    console.error('Firebase sync error:', e);
+                }
+            }
+            
+            // Generate batch PDFs
+            generateBatchPDFs(job);
+            
+            // Alert admins
+            alertAdmins(job);
+            
+            notify('✓ Job Completed - PDFs Generated');
+            renderHistory();
+        }
+    }
         const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
         
         // Get the job at this index to extract its unique identifiers
