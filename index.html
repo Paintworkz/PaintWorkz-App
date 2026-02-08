@@ -1,3 +1,15 @@
+<!--
+╔════════════════════════════════════════════════════════════════╗
+║                       PAINTWORKZ PRO 4.8                        ║
+║                    REVISION TRACKING                            ║
+╠════════════════════════════════════════════════════════════════╣
+║ REV 12 | 2026-02-08 | Strikethrough + global reactivation     ║
+║ - Added: Strikethrough on completed phases                     ║
+║ - Added: Global RED notification when job reactivated          ║
+║ - Added: Strikethrough old notification after 10s              ║
+║ - Fixed: Phase completion visual feedback                      ║
+╚════════════════════════════════════════════════════════════════╝
+-->
 <!DOCTYPE html>
 <html lang="en-AU">
 <head>
@@ -318,6 +330,9 @@
         </div>
     </div>
 </div>
+
+<!-- GLOBAL REACTIVATION NOTIFICATIONS AREA -->
+<div id="globalNotifications" style="position:fixed; top:100px; left:10px; right:10px; z-index:9500; max-height:300px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; pointer-events:none;"></div>
 
 <!-- LOGIN SCREEN -->
 <div id="loginScreen" style="position:fixed; top:0; left:0; right:0; bottom:0; background:linear-gradient(135deg, #d4af37, #f9f1b0); z-index:10000; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px;">
@@ -653,6 +668,13 @@
 </div>
 
 <script>
+    // ===== PAINTWORKZ REVISION INFO =====
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 12 (2026-02-08) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('✓ Strikethrough on completed phases');
+    console.log('✓ Global RED notification on job reactivation');
+    console.log('✓ Checkbox state fully fixed with identifiers');
+    // ====================================
+    
     // Firebase already initialized at top of page
     let isSignup = false;
 
@@ -1121,9 +1143,49 @@
             history[index] = job;
             localStorage.setItem('jobHistory', JSON.stringify(history));
             
+            // Sync to Firebase
+            if (window.syncJobsToFirebase) window.syncJobsToFirebase();
+            
             renderHistory();
             notify('🔄 Job reopened - now active again');
+            
+            // Show GLOBAL RED NOTIFICATION for reactivation
+            showGlobalReactivationAlert(job);
         }
+    }
+    
+    // Show global red notification when job is reactivated
+    function showGlobalReactivationAlert(job) {
+        const alertArea = document.getElementById('globalNotifications');
+        if (!alertArea) return;
+        
+        const alertId = `reactivation-${job.jobNum}-${Date.now()}`;
+        const alertHTML = `
+            <div id="${alertId}" style="background:#ff3b30; color:#fff; padding:12px 16px; border-radius:8px; font-weight:900; font-size:13px; box-shadow:0 4px 12px rgba(255,59,48,0.4); pointer-events:auto; cursor:pointer; text-decoration:none; transition:all 0.3s;">
+                🚨 JOB #${job.jobNum} REACTIVATED - Was marked complete, now back in progress
+            </div>
+        `;
+        
+        alertArea.insertAdjacentHTML('beforeend', alertHTML);
+        
+        // Strike through after 10 seconds
+        setTimeout(() => {
+            const alert = document.getElementById(alertId);
+            if (alert) {
+                alert.style.textDecoration = 'line-through';
+                alert.style.opacity = '0.5';
+            }
+        }, 10000);
+        
+        // Remove after 20 seconds
+        setTimeout(() => {
+            const alert = document.getElementById(alertId);
+            if (alert) {
+                alert.style.transition = 'opacity 0.5s';
+                alert.style.opacity = '0';
+                setTimeout(() => alert.remove(), 500);
+            }
+        }, 20000);
     }
 
     function generateBatchPDFs(job) {
@@ -2105,31 +2167,31 @@
                 
                 ganttHTML += '</div>';  // Close timeline bars row
                 ganttHTML += `<div style="display:flex; gap:8px; padding:4px 6px; background:transparent; flex-wrap:wrap; align-items:center;">
-                        <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
+                        <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer; ${job.phases && job.phases.measuring ? 'text-decoration:line-through; opacity:0.65; color:#999;' : ''}">
                             <input type="checkbox" ${job.phases && job.phases.measuring ? 'checked' : ''} onchange="toggleJobPhaseById('${job.jobNum}', '${job.dateReceived}', '${job.client}', 'measuring')" style="width:13px; height:13px; cursor:pointer;">
                             <span>M</span>
                         </label>
-                        <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
+                        <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer; ${job.phases && job.phases.sanding1 ? 'text-decoration:line-through; opacity:0.65; color:#999;' : ''}">
                             <input type="checkbox" ${job.phases && job.phases.sanding1 ? 'checked' : ''} onchange="toggleJobPhaseById('${job.jobNum}', '${job.dateReceived}', '${job.client}', 'sanding1')" style="width:13px; height:13px; cursor:pointer;">
                             <span>S1</span>
                         </label>
-                        <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
+                        <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer; ${job.phases && job.phases.undercoat ? 'text-decoration:line-through; opacity:0.65; color:#999;' : ''}">
                             <input type="checkbox" ${job.phases && job.phases.undercoat ? 'checked' : ''} onchange="toggleJobPhaseById('${job.jobNum}', '${job.dateReceived}', '${job.client}', 'undercoat')" style="width:13px; height:13px; cursor:pointer;">
                             <span>U</span>
                         </label>
-                        <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
+                        <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer; ${job.phases && job.phases.sanding2 ? 'text-decoration:line-through; opacity:0.65; color:#999;' : ''}">
                             <input type="checkbox" ${job.phases && job.phases.sanding2 ? 'checked' : ''} onchange="toggleJobPhaseById('${job.jobNum}', '${job.dateReceived}', '${job.client}', 'sanding2')" style="width:13px; height:13px; cursor:pointer;">
                             <span>S2</span>
                         </label>
-                        <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
+                        <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer; ${job.phases && job.phases.topcoat ? 'text-decoration:line-through; opacity:0.65; color:#999;' : ''}">
                             <input type="checkbox" ${job.phases && job.phases.topcoat ? 'checked' : ''} onchange="toggleJobPhaseById('${job.jobNum}', '${job.dateReceived}', '${job.client}', 'topcoat')" style="width:13px; height:13px; cursor:pointer;">
                             <span>T</span>
                         </label>
-                        <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
+                        <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer; ${job.phases && job.phases.inspect ? 'text-decoration:line-through; opacity:0.65; color:#999;' : ''}">
                             <input type="checkbox" ${job.phases && job.phases.inspect ? 'checked' : ''} onchange="toggleJobPhaseById('${job.jobNum}', '${job.dateReceived}', '${job.client}', 'inspect')" style="width:13px; height:13px; cursor:pointer;">
                             <span>I</span>
                         </label>
-                        <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
+                        <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer; ${job.phases && job.phases.complete ? 'text-decoration:line-through; opacity:0.65; color:#999;' : ''}">
                             <input type="checkbox" ${job.phases && job.phases.complete ? 'checked' : ''} onchange="toggleJobPhaseById('${job.jobNum}', '${job.dateReceived}', '${job.client}', 'complete')" style="width:13px; height:13px; cursor:pointer;">
                             <span>C</span>
                         </label>
@@ -2242,6 +2304,42 @@
         if (window.syncJobsToFirebase) {
             setTimeout(() => window.syncJobsToFirebase(), 100);
         }
+        
+        // Apply visual strikethrough to the specific checkbox label
+        // Find all checkboxes and look for the one matching this job and phase
+        const allCheckboxes = document.querySelectorAll('input[type="checkbox"]');
+        allCheckboxes.forEach(checkbox => {
+            const label = checkbox.closest('label');
+            if (!label) return;
+            
+            const span = label.querySelector('span');
+            if (!span) return;
+            
+            // Simple phase name mapping
+            const phaseShort = {
+                'measuring': 'M',
+                'sanding1': 'S1',
+                'sanding2': 'S2',
+                'undercoat': 'U',
+                'topcoat': 'T',
+                'inspect': 'I',
+                'complete': 'C'
+            };
+            
+            // Check if this label matches our phase
+            if (span.textContent.trim() === phaseShort[phaseKey] && checkbox.checked === job.phases[phaseKey]) {
+                // Apply strikethrough if checked
+                if (job.phases[phaseKey]) {
+                    label.style.textDecoration = 'line-through';
+                    label.style.color = '#999';
+                    label.style.opacity = '0.65';
+                } else {
+                    label.style.textDecoration = 'none';
+                    label.style.color = 'inherit';
+                    label.style.opacity = '1';
+                }
+            }
+        });
         
         // Update workload summary
         renderJobTasks();
