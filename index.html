@@ -2196,24 +2196,24 @@
         if (!job) return;
         if (!job.phases) job.phases = {};
         
-        // Ensure jobIdx is valid
-        if (jobIdx < 0 || jobIdx >= history.length) {
-            console.error('Invalid job index:', jobIdx);
-            return;
-        }
-        
         job.phases[phaseKey] = !job.phases[phaseKey];
         
         history[jobIdx] = job;
         localStorage.setItem('jobHistory', JSON.stringify(history));
         
-        // Sync to Firebase
-        if (window.syncJobsToFirebase) window.syncJobsToFirebase();
+        // Sync to Firebase in background (async)
+        if (window.syncJobsToFirebase) {
+            setTimeout(() => window.syncJobsToFirebase(), 100);
+        }
         
-        // Update all UI elements that depend on this
-        renderScheduleCalendar();
-        renderJobTasks(); // Update workload summary
+        // Update workload summary ONLY (don't re-render entire schedule)
+        renderJobTasks();
+        
+        // Show notification
         notify(job.phases[phaseKey] ? `✓ ${phaseKey} marked complete` : `○ ${phaseKey} marked pending`);
+        
+        // DO NOT call renderScheduleCalendar() here - it breaks checkbox state
+        // User will see updates when they navigate away and back to Schedule tab
     }
 
     function toggleJobPhase(jobIdx, phaseKey) {
