@@ -3,11 +3,11 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 27 | 2026-02-08 | Fix syntax error (illegal return)        ║
-║ - CRITICAL: Removed orphaned code outside function             ║
-║ - Fixed: "Illegal return statement" error resolved             ║
-║ - Fixed: Tabs now clickable, all data visible                  ║
-║ - Result: App fully functional again                           ║
+║ REV 28 | 2026-02-08 | Fix Gantt toggles and form clearing      ║
+║ - Fixed: Gantt chart toggles work smoothly again               ║
+║ - Fixed: Toggle guard uses timeout (500ms) not just boolean    ║
+║ - Fixed: Measure sheet clears after job is saved               ║
+║ - Result: Clean workflow - save and immediately enter new job  ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -666,10 +666,10 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 27 (2026-02-08) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
-    console.log('🔒 CRITICAL: Fixed syntax error (orphaned code)');
-    console.log('✓ All tabs clickable');
-    console.log('✓ All data visible and accessible');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 28 (2026-02-08) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('✓ Gantt chart toggles work smoothly');
+    console.log('✓ Measure sheet clears after save');
+    console.log('✓ Clean workflow for new jobs');
     // ====================================
     
     // Firebase already initialized at top of page
@@ -983,6 +983,24 @@
         renderHistory();
         renderJobTasks(); // Update workload summary
         renderScheduleCalendar(); // Update schedule to show new job
+        
+        // Clear the measure sheet form
+        items = [];
+        document.getElementById('cli').value = '';
+        document.getElementById('dRec').value = '';
+        document.getElementById('jNm').value = '';
+        document.getElementById('jN').value = '';
+        document.getElementById('p-brand').value = 'Wattyl';
+        document.getElementById('p-color').value = '';
+        document.getElementById('p-code').value = '';
+        document.getElementById('p-finish').value = 'Satin';
+        document.getElementById('tA').innerText = '0.000';
+        document.getElementById('tQ').innerText = '0';
+        
+        // Re-render the measure sheet to show empty state
+        render();
+        
+        console.log('📋 Measure sheet cleared for next job');
     }
 
     let historyFilter = 'all';
@@ -2413,16 +2431,19 @@
 
     // Guard against rapid duplicate toggles
     let toggleInProgress = false;
+    let lastToggleTime = 0;
     
     // Toggle job phase by unique job identifiers (jobNum, dateReceived, client)
     function toggleJobPhaseById(jobNum, dateReceived, client, phaseKey) {
-        // Prevent rapid duplicate toggles
-        if (toggleInProgress) {
+        // Prevent rapid duplicate toggles (only block if less than 500ms since last toggle)
+        const now = Date.now();
+        if (toggleInProgress && (now - lastToggleTime) < 500) {
             console.log('⏸️ Toggle already in progress, ignoring duplicate click');
             return;
         }
         
         toggleInProgress = true;
+        lastToggleTime = now;
         
         try {
             const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
@@ -2478,11 +2499,10 @@
                 try {
                     renderScheduleCalendar();
                     console.log('📊 Gantt chart re-rendered');
-                    toggleInProgress = false; // Allow next toggle
                 } catch(e) {
                     console.error('renderScheduleCalendar error:', e);
-                    toggleInProgress = false; // Reset on error
                 }
+                toggleInProgress = false; // Always reset, even on error
             });
             
         } catch(e) {
