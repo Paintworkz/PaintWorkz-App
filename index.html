@@ -3,11 +3,11 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 19 | 2026-02-08 | Move reactivation alerts to Schedule tab ║
-║ - Fixed: Removed floating notification area at bottom          ║
-║ - Fixed: Job reactivation alerts now in Schedule tab box       ║
-║ - Added: Placeholder text when no notifications                ║
-║ - Result: Clean, organized notification display                ║
+║ REV 20 | 2026-02-08 | Fix job deletion - sync to Firebase      ║
+║ - CRITICAL: Delete now syncs to Firebase (was only local)      ║
+║ - Fixed: Deleted jobs no longer reappear on refresh            ║
+║ - Added: Console logging for deletion tracking                 ║
+║ - Result: Job deletion is permanent across all devices         ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -666,10 +666,10 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 19 (2026-02-08) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
-    console.log('✓ Job reactivation alerts in Schedule tab');
-    console.log('✓ Removed floating notification overlay');
-    console.log('✓ Clean organized notifications display');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 20 (2026-02-08) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('🔒 CRITICAL: Job deletion now syncs to Firebase');
+    console.log('✓ Deleted jobs stay deleted on refresh');
+    console.log('✓ Deletion permanent across all devices');
     // ====================================
     
     // Firebase already initialized at top of page
@@ -1093,10 +1093,23 @@
     function deleteJobFromHistory(index) {
         if (confirm('Delete this job from history?')) {
             let history = JSON.parse(localStorage.getItem('jobHistory')) || [];
+            const deletedJob = history[index];
+            
             history.splice(index, 1);
             localStorage.setItem('jobHistory', JSON.stringify(history));
+            
+            // Sync deletion to Firebase
+            if (window.syncJobsToFirebase) {
+                try {
+                    window.syncJobsToFirebase();
+                    console.log(`🗑️ Job #${deletedJob?.jobNum} deleted and synced to Firebase`);
+                } catch(e) {
+                    console.error('Firebase sync error on delete:', e);
+                }
+            }
+            
             renderHistory();
-            notify('Job Deleted from History');
+            notify('✓ Job Deleted from History');
         }
     }
 
