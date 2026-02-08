@@ -3,12 +3,11 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 21 | 2026-02-08 | Fix Chrome/Edge crashes + speed up UI   ║
-║ - CRITICAL: Reverted authDomain to Firebase (fixes 404 crash) ║
-║ - CRITICAL: Added Firebase sync to saveJobToHistory()          ║
-║ - Fixed: Checkbox marking now instant (no 100ms delay)         ║
-║ - Fixed: Use requestAnimationFrame instead of setTimeout       ║
-║ - Fixed: Firebase sync no longer delayed                       ║
+║ REV 23 | 2026-02-08 | Fix job completion toggle (stays stuck) ║
+║ - CRITICAL: Use job identifiers instead of array index         ║
+║ - Fixed: toggleJobComplete now finds right job always          ║
+║ - Fixed: completeJobBatch also uses identifiers                ║
+║ - Result: Toggle on/off now works properly after loading jobs  ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -667,10 +666,10 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 21 (2026-02-08) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
-    console.log('🔒 CRITICAL: Fixed Chrome/Edge 404 crash (authDomain reverted)');
-    console.log('🔒 CRITICAL: Job saves now sync to Firebase');
-    console.log('⚡ UI now instant - no delays on checkbox marking');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 23 (2026-02-08) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('🔒 CRITICAL: Fixed job completion toggle stuck bug');
+    console.log('✓ Uses job identifiers, not array indices');
+    console.log('✓ Toggle works properly after loading jobs');
     // ====================================
     
     // Firebase already initialized at top of page
@@ -1106,6 +1105,11 @@
             let history = JSON.parse(localStorage.getItem('jobHistory')) || [];
             const deletedJob = history[index];
             
+            if (!deletedJob) {
+                console.error('❌ Job not found at index:', index);
+                return;
+            }
+            
             history.splice(index, 1);
             localStorage.setItem('jobHistory', JSON.stringify(history));
             
@@ -1113,32 +1117,55 @@
             if (window.syncJobsToFirebase) {
                 try {
                     window.syncJobsToFirebase();
-                    console.log(`🗑️ Job #${deletedJob?.jobNum} deleted and synced to Firebase`);
+                    console.log(`🗑️ Job #${deletedJob.jobNum} deleted and synced to Firebase`);
                 } catch(e) {
                     console.error('Firebase sync error on delete:', e);
                 }
             }
             
-            renderHistory();
             notify('✓ Job Deleted from History');
+            renderHistory(); // This may trigger re-renders but won't cause multiple deletes
         }
     }
 
     function completeJobBatch(index) {
         const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
-        const job = history[index];
         
-        if (!job) return;
+        // Get the job at this index to extract its unique identifiers
+        const jobAtIndex = history[index];
+        if (!jobAtIndex) {
+            console.error('❌ Job not found at index:', index);
+            return;
+        }
+        
+        // Find the job by unique identifiers (not array index)
+        const jobIdx = history.findIndex(j => j.jobNum === jobAtIndex.jobNum && j.dateReceived === jobAtIndex.dateReceived && j.client === jobAtIndex.client);
+        
+        if (jobIdx < 0) {
+            console.error('❌ Job not found by identifiers:', jobAtIndex.jobNum, jobAtIndex.dateReceived, jobAtIndex.client);
+            return;
+        }
+        
+        const job = history[jobIdx];
         
         if (confirm(`Complete Job #${job.jobNum}?\n\nThis will:\n✓ Mark job as complete\n✓ Generate all PDFs\n✓ Alert admins`)) {
             // Mark job as complete
             job.completed = true;
             job.completedDate = new Date().toISOString();
-            history[index] = job;
+            history[jobIdx] = job;
             localStorage.setItem('jobHistory', JSON.stringify(history));
             
+            console.log(`✓ Job #${job.jobNum} marked as complete`);
+            
             // Sync to Firebase
-            if (window.syncJobsToFirebase) window.syncJobsToFirebase();
+            if (window.syncJobsToFirebase) {
+                try {
+                    window.syncJobsToFirebase();
+                    console.log('🔄 Synced to Firebase');
+                } catch(e) {
+                    console.error('Firebase sync error:', e);
+                }
+            }
             
             // Generate batch PDFs
             generateBatchPDFs(job);
@@ -1146,32 +1173,56 @@
             // Alert admins
             alertAdmins(job);
             
-            renderHistory();
             notify('✓ Job Completed - PDFs Generated');
+            renderHistory();
         }
     }
 
     // Toggle job completion status (unmark as complete)
     function toggleJobComplete(index) {
         const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
-        const job = history[index];
         
-        if (!job) return;
+        // Get the job at this index to extract its unique identifiers
+        const jobAtIndex = history[index];
+        if (!jobAtIndex) {
+            console.error('❌ Job not found at index:', index);
+            return;
+        }
+        
+        // Find the job by unique identifiers (not array index)
+        const jobIdx = history.findIndex(j => j.jobNum === jobAtIndex.jobNum && j.dateReceived === jobAtIndex.dateReceived && j.client === jobAtIndex.client);
+        
+        if (jobIdx < 0) {
+            console.error('❌ Job not found by identifiers:', jobAtIndex.jobNum, jobAtIndex.dateReceived, jobAtIndex.client);
+            return;
+        }
+        
+        const job = history[jobIdx];
         
         if (confirm(`Unmark Job #${job.jobNum} as complete?\n\nThis will reopen the job for re-work.`)) {
             job.completed = false;
             job.completedDate = null;
-            history[index] = job;
+            history[jobIdx] = job;
             localStorage.setItem('jobHistory', JSON.stringify(history));
             
-            // Sync to Firebase
-            if (window.syncJobsToFirebase) window.syncJobsToFirebase();
+            console.log(`📋 Job #${job.jobNum} unmarked as complete`);
             
-            renderHistory();
+            // Sync to Firebase
+            if (window.syncJobsToFirebase) {
+                try {
+                    window.syncJobsToFirebase();
+                    console.log('🔄 Synced to Firebase');
+                } catch(e) {
+                    console.error('Firebase sync error:', e);
+                }
+            }
+            
             notify('🔄 Job reopened - now active again');
             
             // Show GLOBAL RED NOTIFICATION for reactivation
             showGlobalReactivationAlert(job);
+            
+            renderHistory();
         }
     }
     
@@ -2318,8 +2369,19 @@
         // User will see updates when they navigate away and back to Schedule tab
     }
 
+    // Guard against rapid duplicate toggles
+    let toggleInProgress = false;
+    
     // Toggle job phase by unique job identifiers (jobNum, dateReceived, client)
     function toggleJobPhaseById(jobNum, dateReceived, client, phaseKey) {
+        // Prevent rapid duplicate toggles
+        if (toggleInProgress) {
+            console.log('⏸️ Toggle already in progress, ignoring duplicate click');
+            return;
+        }
+        
+        toggleInProgress = true;
+        
         try {
             const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
             
@@ -2329,6 +2391,7 @@
             if (jobIdx < 0) {
                 console.error('❌ Job not found:', jobNum, dateReceived, client);
                 notify('⚠️ Error: Job not found');
+                toggleInProgress = false;
                 return;
             }
             
@@ -2373,14 +2436,17 @@
                 try {
                     renderScheduleCalendar();
                     console.log('📊 Gantt chart re-rendered');
+                    toggleInProgress = false; // Allow next toggle
                 } catch(e) {
                     console.error('renderScheduleCalendar error:', e);
+                    toggleInProgress = false; // Reset on error
                 }
             });
             
         } catch(e) {
             console.error('toggleJobPhaseById error:', e);
             notify('⚠️ Error updating phase');
+            toggleInProgress = false;
         }
     }
 
