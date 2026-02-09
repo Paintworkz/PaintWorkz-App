@@ -3,13 +3,13 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 63 | 2026-02-09 | Improved Unallocated Doors UI            ║
-║ - IMPROVED: Clearer instructions for allocating unallocated    ║
-║ - ADDED: Delete 🗑️ button next to each unallocated door       ║
-║ - ADDED: Count of unallocated doors in header                  ║
-║ - ADDED: Success message when all doors are allocated          ║
-║ - FIXED: All 20 doors now load and stay persistent             ║
-║ - WORKFLOW: Add door → See in unallocated → Assign to tier     ║
+║ REV 64 | 2026-02-09 | Tier Sorting + Tier Editing             ║
+║ - ADDED: Tiers now sort by number (Tier 1, 2, 3, 4, 5, Other) ║
+║ - ADDED: editDoorTier() allows moving to new/existing tiers    ║
+║ - ADDED: Can create custom tier names (e.g., "Tier 6")         ║
+║ - IMPROVED: Unallocated dropdown shows sorted tiers            ║
+║ - ADDED: getSortedTierNames() for consistent ordering          ║
+║ - ADDED: Auto-delete empty tiers when doors are moved          ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -698,7 +698,7 @@
     <div class="footer-item" style="margin-left:15px;"><div class="footer-label">TOTAL SQM</div><div class="footer-val" id="tA">0.000</div></div>
     <div style="flex:1; display:flex; justify-content:center; gap:20px; align-items:center;">
         <div class="icon-btn" onclick="genPDF()" style="color:#fff">📄</div>
-        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro 4.8 | REV 63</div>
+        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro 4.8 | REV 64</div>
     </div>
     <div class="footer-item"><div class="footer-label">PARTS</div><div class="footer-val" id="tQ">0</div></div>
     <div class="icon-btn" onclick="handleLogout()" title="Logout" style="color:#ff3b30; font-size:24px; cursor:pointer; margin-right:15px;">🚪</div>
@@ -706,7 +706,7 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 63 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 64 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     console.log('✅ CRITICAL FIXES:');
     console.log('✓ Disabled Firebase real-time sync (memory crashes fixed)');
     console.log('✓ Improved error handling to prevent crashes');
@@ -3493,6 +3493,30 @@
     // Always ensure defaults are saved
     localStorage.setItem('masterMatrix', JSON.stringify(masterMatrix));
     
+    function getSortedTierNames() {
+        // Sort tier names: Tier 1, 2, 3, 4, 5, then Other
+        const tierNames = Object.keys(masterMatrix);
+        return tierNames.sort((a, b) => {
+            // Extract numbers from "Tier X"
+            const aMatch = a.match(/Tier (\d+)/);
+            const bMatch = b.match(/Tier (\d+)/);
+            
+            if (aMatch && bMatch) {
+                // Both are "Tier X" - sort by number
+                return parseInt(aMatch[1]) - parseInt(bMatch[1]);
+            } else if (aMatch) {
+                // a is "Tier X", b is something else - a comes first
+                return -1;
+            } else if (bMatch) {
+                // b is "Tier X", a is something else - b comes first
+                return 1;
+            } else {
+                // Neither are "Tier X" - alphabetical
+                return a.localeCompare(b);
+            }
+        });
+    }
+    
     function renderPricingMatrix() {
         const target = document.getElementById('admin-pricing-matrix');
         if (!target) return;
@@ -3522,7 +3546,8 @@
                 </tr>
         `;
         
-        Object.keys(masterMatrix).forEach(tierName => {
+        const sortedTiers = getSortedTierNames();
+        sortedTiers.forEach(tierName => {
             html += `<tr style="background:#eee;"><td colspan="5" style="padding:8px; font-weight:900; color:#000;">${tierName}</td></tr>`;
             
             const tier = masterMatrix[tierName];
@@ -3587,12 +3612,7 @@
                         </div>
                         <select id="unalloc_tier_${door.code}" style="width:100%; padding:4px; border:1px solid #ddd; border-radius:4px; font-size:10px; margin-bottom:5px;">
                             <option value="">Select Tier...</option>
-                            <option value="Tier 1">Tier 1</option>
-                            <option value="Tier 2">Tier 2</option>
-                            <option value="Tier 3">Tier 3</option>
-                            <option value="Tier 4">Tier 4</option>
-                            <option value="Tier 5">Tier 5</option>
-                            <option value="Other">Other</option>
+                            ${getSortedTierNames().map(t => `<option value="${t}">${t}</option>`).join('')}
                         </select>
                         <div style="display:flex; gap:5px;">
                             <button onclick="assignDoorToTier('${door.code}', '${door.name}')" style="flex:1; padding:8px; background:#34c759; color:#fff; border:none; border-radius:4px; font-weight:900; font-size:11px; cursor:pointer; box-shadow:0 2px 4px rgba(0,0,0,0.1);">✓ ASSIGN</button>
@@ -3716,26 +3736,45 @@
     
     // Change door tier in price matrix
     function editDoorTier(tier, code, doorName) {
-        const tierNames = Object.keys(masterMatrix);
-        let selection = '';
-        tierNames.forEach(t => selection += t + '\n');
+        const tierNames = getSortedTierNames();
+        let selection = 'EXISTING TIERS:\n';
+        tierNames.forEach(t => selection += '  • ' + t + '\n');
         
-        const newTier = prompt(`Move "${doorName}" to which tier?\n\n${selection}`, tier);
-        if (newTier && tierNames.includes(newTier) && newTier !== tier) {
-            // Get the door data
-            const doorData = masterMatrix[tier][code];
-            
-            // Find new code in target tier (next available)
-            const newCode = parseInt(Object.keys(masterMatrix[newTier]).sort().reverse()[0] || 0) + 1;
-            
-            // Move to new tier
-            masterMatrix[newTier][newCode] = doorData;
-            delete masterMatrix[tier][code];
-            localStorage.setItem('masterMatrix', JSON.stringify(masterMatrix));
-            
-            renderPricingMatrix();
-            notify(`✓ Moved to ${newTier}`);
+        const newTier = prompt(`Move "${doorName}" to which tier?\n\n${selection}\n(Type "Tier X" to move to existing or create new)`, tier);
+        
+        if (!newTier || newTier === tier) {
+            return; // No change or cancelled
         }
+        
+        const trimmedTier = newTier.trim();
+        
+        // Get the door data
+        const doorData = masterMatrix[tier][code];
+        
+        // Check if tier exists
+        if (!masterMatrix[trimmedTier]) {
+            // Create new tier
+            masterMatrix[trimmedTier] = {};
+            console.log(`✓ Created new tier: "${trimmedTier}"`);
+        }
+        
+        // Find new code in target tier (next available)
+        const newCode = parseInt(Object.keys(masterMatrix[trimmedTier]).sort().reverse()[0] || 0) + 1;
+        
+        // Move to new tier
+        masterMatrix[trimmedTier][newCode] = doorData;
+        delete masterMatrix[tier][code];
+        
+        // If old tier is now empty, delete it
+        if (Object.keys(masterMatrix[tier]).length === 0) {
+            delete masterMatrix[tier];
+            console.log(`✓ Deleted empty tier: "${tier}"`);
+        }
+        
+        localStorage.setItem('masterMatrix', JSON.stringify(masterMatrix));
+        
+        renderPricingMatrix();
+        notify(`✓ Moved to ${trimmedTier}`);
     }
     
     // Delete door from price matrix (returns it to unallocated)
