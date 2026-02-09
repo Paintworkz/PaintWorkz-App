@@ -3,7 +3,7 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 55 | 2026-02-09 | FOUND THE BUG! Clear Firebase Fixed       ║
+║ REV 56 | 2026-02-09 | FOUND THE BUG! Clear Firebase Fixed       ║
 ║ - 🎯 ROOT CAUSE: clearFirebaseProfilesData() was resetting ALL  ║
 ║ - FIXED: Now keeps your current assignments, doesn't reset      ║
 ║ - RENAMED: "Clear Firebase" → "Sync to Firebase (Keep Assign.)"║
@@ -695,7 +695,7 @@
     <div class="footer-item" style="margin-left:15px;"><div class="footer-label">TOTAL SQM</div><div class="footer-val" id="tA">0.000</div></div>
     <div style="flex:1; display:flex; justify-content:center; gap:20px; align-items:center;">
         <div class="icon-btn" onclick="genPDF()" style="color:#fff">📄</div>
-        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro 4.8 | REV 55</div>
+        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro 4.8 | REV 56</div>
     </div>
     <div class="footer-item"><div class="footer-label">PARTS</div><div class="footer-val" id="tQ">0</div></div>
     <div class="icon-btn" onclick="handleLogout()" title="Logout" style="color:#ff3b30; font-size:24px; cursor:pointer; margin-right:15px;">🚪</div>
@@ -703,7 +703,7 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 55 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 56 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     console.log('✅ CRITICAL FIXES:');
     console.log('✓ Disabled Firebase real-time sync (memory crashes fixed)');
     console.log('✓ Improved error handling to prevent crashes');
@@ -873,8 +873,8 @@
         if (saved) {
             try {
                 const loaded = JSON.parse(saved);
-                // Validate it's a real array
-                if (Array.isArray(loaded) && loaded.length >= 10) {
+                // Validate it's a real array with at least 1 item
+                if (Array.isArray(loaded) && loaded.length > 0) {
                     // Filter out any null/undefined/empty/duplicate entries
                     const cleaned = [];
                     const seen = new Set();
@@ -885,15 +885,22 @@
                         }
                     });
                     
-                    if (cleaned.length !== loaded.length) {
-                        console.warn(`⚠️ Removed ${loaded.length - cleaned.length} corrupt/duplicate profile entries`);
+                    if (cleaned.length === 0) {
+                        console.warn('⚠️ All profiles were corrupt/empty, restoring defaults');
+                        localStorage.removeItem('doorProfiles');
+                    } else if (cleaned.length !== loaded.length) {
+                        console.warn(`⚠️ Removed ${loaded.length - cleaned.length} corrupt/duplicate entries, kept ${cleaned.length}`);
                         localStorage.setItem('doorProfiles', JSON.stringify(cleaned));
                         return cleaned;
+                    } else {
+                        console.log(`✓ Loaded ${loaded.length} door profiles from localStorage`);
+                        return loaded;
                     }
-                    console.log(`✓ Loaded ${loaded.length} door profiles from localStorage`);
-                    return loaded;
+                } else if (Array.isArray(loaded) && loaded.length === 0) {
+                    console.warn('⚠️ doorProfiles array is empty, using defaults');
+                    localStorage.removeItem('doorProfiles');
                 } else {
-                    console.warn('⚠️ Corrupted door profiles (too few items), restoring defaults');
+                    console.warn('⚠️ doorProfiles is not a valid array, restoring defaults');
                     localStorage.removeItem('doorProfiles');
                 }
             } catch(e) {
@@ -901,6 +908,8 @@
                 console.warn('⚠️ Restoring default door profiles');
                 localStorage.removeItem('doorProfiles');
             }
+        } else {
+            console.log('ℹ️ No saved door profiles in localStorage, using defaults');
         }
         // Use defaults
         console.log(`✓ Using default ${DEFAULT_PROFILES.length} door profiles`);
@@ -989,15 +998,50 @@
     
     // Diagnostic: Show what's actually in localStorage
     function diagnoseStorage() {
-        console.log('=== STORAGE DIAGNOSTIC ===');
-        console.log('doorProfiles in localStorage:', localStorage.getItem('doorProfiles')?.substring(0, 100) + '...');
-        console.log('masterMatrix in localStorage:', localStorage.getItem('masterMatrix')?.substring(0, 100) + '...');
-        console.log('Current profiles array:', profiles);
-        console.log('Current masterMatrix:', masterMatrix);
-        console.log('Unallocated doors:', getUnallocatedDoors());
+        console.log('=== PAINTWORKZ STORAGE DIAGNOSTIC ===');
+        console.log('');
         
-        // Show in alert too
-        alert('Check console (F12) for diagnostic info.\n\nprofiles count: ' + profiles.length + '\nmasterMatrix tiers: ' + Object.keys(masterMatrix).length + '\nunallocated doors: ' + getUnallocatedDoors().length);
+        // Check doorProfiles
+        const doorProfilesStr = localStorage.getItem('doorProfiles');
+        console.log('📁 doorProfiles in localStorage:');
+        if (doorProfilesStr) {
+            try {
+                const parsed = JSON.parse(doorProfilesStr);
+                console.log('✓ Valid JSON, ' + parsed.length + ' items:');
+                parsed.forEach((p, i) => console.log(`  [${i}] ${p}`));
+            } catch(e) {
+                console.error('✗ CORRUPTED JSON:', e);
+                console.log('Raw value:', doorProfilesStr);
+            }
+        } else {
+            console.log('✗ Empty (null)');
+        }
+        
+        console.log('');
+        console.log('🔧 Current profiles array in memory: ' + profiles.length + ' items');
+        profiles.forEach((p, i) => console.log(`  [${i}] ${p}`));
+        
+        console.log('');
+        console.log('📊 masterMatrix tiers:');
+        Object.keys(masterMatrix).forEach(tierName => {
+            const count = Object.keys(masterMatrix[tierName]).length;
+            console.log(`  ${tierName}: ${count} doors`);
+        });
+        
+        console.log('');
+        const unallocated = getUnallocatedDoors();
+        console.log('⚠️ Unallocated doors: ' + unallocated.length);
+        unallocated.forEach(d => console.log(`  - ${d.name}`));
+        
+        console.log('');
+        console.log('✅ DIAGNOSTIC COMPLETE - Check console above for details');
+        
+        alert(`DIAGNOSTIC INFO (Check F12 Console):\n\n` +
+              `doorProfiles in storage: ${doorProfilesStr ? 'YES (' + JSON.parse(doorProfilesStr).length + ' items)' : 'NO (null)'}\n` +
+              `Current profiles in memory: ${profiles.length} items\n` +
+              `Master matrix tiers: ${Object.keys(masterMatrix).length}\n` +
+              `Unallocated doors: ${unallocated.length}\n\n` +
+              `All details in console (F12)`);
     }
     
     // Check for new unallocated doors and show notification
