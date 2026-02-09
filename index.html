@@ -3,13 +3,13 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 57 | 2026-02-09 | Door Management + Global Notifications   ║
-║ - ADDED: New doors now show in unallocated section instantly   ║
-║ - ADDED: Red global notification when new door added           ║
-║ - ADDED: Edit door names (click name in price matrix)          ║
-║ - ADDED: Move doors between tiers (🔄 button)                  ║
-║ - ADDED: Delete doors from matrix (✕ button)                  ║
-║ - IMPROVED: Full door lifecycle management in price matrix     ║
+║ REV 58 | 2026-02-09 | Fixed Door Assignment + Better Logging   ║
+║ - FIXED: Doors no longer deleted from profiles when assigned   ║
+║ - FIXED: Doors remain in measure tab dropdown after assigning  ║
+║ - REMOVED: "Nuke All" button (too dangerous)                   ║
+║ - ADDED: Detailed console logging for profile operations       ║
+║ - IMPROVED: Better tracking of what's in profiles array        ║
+║ - NEXT: Run 🔍 DIAGNOSE to see what's in storage               ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -695,7 +695,7 @@
     <div class="footer-item" style="margin-left:15px;"><div class="footer-label">TOTAL SQM</div><div class="footer-val" id="tA">0.000</div></div>
     <div style="flex:1; display:flex; justify-content:center; gap:20px; align-items:center;">
         <div class="icon-btn" onclick="genPDF()" style="color:#fff">📄</div>
-        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro 4.8 | REV 57</div>
+        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro 4.8 | REV 58</div>
     </div>
     <div class="footer-item"><div class="footer-label">PARTS</div><div class="footer-val" id="tQ">0</div></div>
     <div class="icon-btn" onclick="handleLogout()" title="Logout" style="color:#ff3b30; font-size:24px; cursor:pointer; margin-right:15px;">🚪</div>
@@ -703,7 +703,7 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 57 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 58 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     console.log('✅ CRITICAL FIXES:');
     console.log('✓ Disabled Firebase real-time sync (memory crashes fixed)');
     console.log('✓ Improved error handling to prevent crashes');
@@ -870,9 +870,11 @@
     let profiles = (function() {
         // Load from localStorage if available
         const saved = localStorage.getItem('doorProfiles');
+        console.log('📂 Loading profiles from localStorage...');
         if (saved) {
             try {
                 const loaded = JSON.parse(saved);
+                console.log(`  Found ${loaded.length} profiles in localStorage:`, loaded);
                 // Validate it's a real array with at least 1 item
                 if (Array.isArray(loaded) && loaded.length > 0) {
                     // Filter out any null/undefined/empty/duplicate entries
@@ -891,6 +893,7 @@
                     } else if (cleaned.length !== loaded.length) {
                         console.warn(`⚠️ Removed ${loaded.length - cleaned.length} corrupt/duplicate entries, kept ${cleaned.length}`);
                         localStorage.setItem('doorProfiles', JSON.stringify(cleaned));
+                        console.log('  Cleaned profiles:', cleaned);
                         return cleaned;
                     } else {
                         console.log(`✓ Loaded ${loaded.length} door profiles from localStorage`);
@@ -2078,19 +2081,30 @@
     
     function addProfile() { 
         let v = document.getElementById('new-profile').value.trim(); 
+        console.log(`🚪 Adding new profile: "${v}"`);
         if(v && !profiles.includes(v)){ 
             profiles.push(v); 
+            console.log(`  ✓ Added to profiles array. Total: ${profiles.length}`);
+            console.log(`  Current profiles:`, profiles);
+            
             saveProfilesToStorage(); // SAVE TO LOCALSTORAGE
+            console.log(`  ✓ Saved to localStorage`);
+            
             document.getElementById('new-profile').value=''; 
             refreshLists();
+            console.log(`  ✓ Refreshed lists (dropdown should update)`);
             
             // Show global notification in red
-            showGlobalNotification(`⚠️ NEW DOOR ADDED: "${v}"\n\nGo to Price Matrix to allocate to a tier!`, '#ff3b30');
+            showGlobalNotification(`⚠️ NEW DOOR ADDED: "${v}"\n\nGo to Price Matrix to allocate to a tier!`, '#ffebee', '#ff3b30');
             
             // Update unallocated doors in price matrix if visible
             renderPricingMatrix();
+            console.log(`  ✓ Rendered price matrix`);
         } else if (profiles.includes(v)) {
+            console.log(`  ✗ Door already exists in profiles`);
             notify('Profile Already Exists');
+        } else {
+            console.log(`  ✗ Empty input`);
         }
     }
     
@@ -3424,16 +3438,12 @@
                 <button onclick="clearFirebaseProfilesData()" style="background:#2196f3; color:#fff; border:none; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">
                     🔄 SYNC TO FIREBASE (Keep Assignments)
                 </button>
-                <button onclick="clearAllLocalStorage()" style="background:#000; color:#fff; border:none; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">
-                    ☢️ NUKE ALL - Start From Scratch
-                </button>
                 <button onclick="diagnoseStorage()" style="background:#9c27b0; color:#fff; border:none; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;" title="Debug: Check console (F12) to see what's in storage">
                     🔍 DIAGNOSE STORAGE
                 </button>
             </div>
             <p style="font-size:10px; color:#666; margin-bottom:15px; background:#fffaf0; padding:10px; border-radius:4px; border-left:3px solid #ff9500;">
                 <strong style="color:#2196f3;">✓ Sync to Firebase:</strong> Clears stale Firebase, keeps YOUR current assignments<br>
-                <strong style="color:#000;">☢️ Nuke All:</strong> Last resort - deletes everything, forces hard refresh<br>
                 <strong style="color:#9c27b0;">🔍 Diagnose:</strong> Shows exactly what's in browser storage (check console F12)<br>
                 <strong style="color:#ff9500;">❌ DO NOT CLICK:</strong> "Reset to 20 Defaults" button (below) - it resets all doors!
             </p>
@@ -3566,12 +3576,10 @@
         
         localStorage.setItem('masterMatrix', JSON.stringify(masterMatrix));
         
-        // Remove from unallocated profiles array
-        profiles = profiles.filter(p => p !== doorName);
-        saveProfilesToStorage(); // SAVE TO STORAGE - CRITICAL!
-        console.log(`✓ Removed ${doorName} from unallocated. Remaining: ${profiles.length}`);
+        // NOTE: DO NOT remove from profiles array!
+        // Door should remain in profiles (ALL doors) and just be marked as allocated in masterMatrix
         
-        // Sync to Firebase AND delete old profile data
+        // Sync to Firebase
         syncProfilesToFirebase();
         
         renderPricingMatrix();
