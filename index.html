@@ -3,11 +3,11 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 38 | 2026-02-08 | Fix corrupted door profiles list          ║
-║ - Fixed: Better validation when loading from localStorage       ║
-║ - Added: restoreDefaultProfiles() function                      ║
-║ - Added: Restore button in Admin Pricing Matrix panel           ║
-║ - Result: Can recover from corrupted or deleted profiles        ║
+║ REV 39 | 2026-02-08 | Prevent deleted jobs reappearing         ║
+║ - CRITICAL: Track deleted jobs in session memory                ║
+║ - Fixed: Deleted jobs stay gone even after tab switch           ║
+║ - Fixed: Firebase real-time listener won't resurrect them       ║
+║ - Result: Job deletion is permanent during session              ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -653,10 +653,10 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 38 (2026-02-08) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
-    console.log('✓ Door profile list validation improved');
-    console.log('✓ Corrupt profiles detected and cleared');
-    console.log('✓ Restore button added to Admin panel');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 39 (2026-02-08) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('🚫 CRITICAL: Prevent deleted jobs reappearing');
+    console.log('✓ Deleted jobs tracked in session memory');
+    console.log('✓ Won\'t reappear even after tab switch');
     // ====================================
     
     // Firebase already initialized at top of page
@@ -1198,6 +1198,9 @@
     }
 
     let historyFilter = 'all';
+    
+    // Track deleted jobs in this session to prevent Firebase from pulling them back
+    let deletedJobsThisSession = new Set();
 
     function renderHistory() {
         const historyList = document.getElementById('history-list');
@@ -1210,12 +1213,21 @@
             return;
         }
         
-        // Filter history based on selected filter
-        let filteredHistory = history;
+        // Filter history based on selected filter AND exclude deleted jobs from this session
+        let filteredHistory = history.filter(j => {
+            const jobKey = `${j.jobNum}|${j.dateReceived}|${j.client}`;
+            if (deletedJobsThisSession.has(jobKey)) {
+                console.log(`🚫 Filtering out deleted job from session: ${jobKey}`);
+                return false; // Exclude this job
+            }
+            return true; // Include this job
+        });
+        
+        // Apply filter (active/completed)
         if (historyFilter === 'active') {
-            filteredHistory = history.filter(j => !j.completed);
+            filteredHistory = filteredHistory.filter(j => !j.completed);
         } else if (historyFilter === 'completed') {
-            filteredHistory = history.filter(j => j.completed);
+            filteredHistory = filteredHistory.filter(j => j.completed);
         }
         
         historyList.innerHTML = '';
@@ -1326,6 +1338,11 @@
             }
             
             console.log(`🗑️ Attempting to delete Job #${deletedJob.jobNum}`);
+            
+            // Track this deletion in session to prevent Firebase from resurrecting it
+            const jobKey = `${deletedJob.jobNum}|${deletedJob.dateReceived}|${deletedJob.client}`;
+            deletedJobsThisSession.add(jobKey);
+            console.log(`📌 Marked for deletion in session: ${jobKey}`);
             
             // Remove from history
             history.splice(index, 1);
