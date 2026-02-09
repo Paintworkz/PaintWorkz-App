@@ -3,12 +3,11 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 40 | 2026-02-08 | Fix deleted/completed job persistence    ║
-║ - Added: Gantt chart back to Schedule tab                       ║
-║ - Added: Revision number to Admin App Version display           ║
-║ - CRITICAL: Remove problematic session cache filtering          ║
-║ - CRITICAL: Better verification for deletions & completions    ║
-║ - Result: Jobs stay deleted and show as completed in tab        ║
+║ REV 41 | 2026-02-08 | CRITICAL: Fix deleted jobs reappearing   ║
+║ - Added: Robust session cache for deleted jobs                 ║
+║ - Added: Helper functions for job key management               ║
+║ - CRITICAL: Filter deleted jobs on EVERY renderHistory call    ║
+║ - Result: Jobs stay deleted across ALL tab switches            ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -629,7 +628,7 @@
         <div class="card">
             <h3>Admin Settings</h3>
             <label>App Version</label>
-            <input type="text" value="PaintWorkz Pro 4.8 | REV 40" disabled style="background:#f5f5f5; cursor:not-allowed;">
+            <input type="text" value="PaintWorkz Pro 4.8 | REV 41" disabled style="background:#f5f5f5; cursor:not-allowed;">
             
             <!-- Admin Sub-Tabs -->
             <div class="sub-nav" style="margin-top:15px;">
@@ -678,10 +677,10 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 40 (2026-02-08) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
-    console.log('✓ Gantt chart restored to Schedule tab');
-    console.log('✓ Revision number in Admin panel');
-    console.log('✓ Fixed job deletion and completion persistence');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 41 (2026-02-08) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('🚫 CRITICAL FIX: Deleted jobs stay gone across tab switches');
+    console.log('✓ Session-based deletion tracking');
+    console.log('✓ Filters applied on EVERY tab change');
     // ====================================
     
     // Firebase already initialized at top of page
@@ -1226,6 +1225,24 @@
     
     // Track deleted jobs in this session to prevent Firebase from pulling them back
     let deletedJobsThisSession = new Set();
+    
+    // Function to create unique job key
+    function getJobKey(jobNum, dateReceived, client) {
+        return `${jobNum}|${dateReceived}|${client}`;
+    }
+    
+    // Function to check if a job has been deleted in this session
+    function isJobDeleted(jobNum, dateReceived, client) {
+        const key = getJobKey(jobNum, dateReceived, client);
+        return deletedJobsThisSession.has(key);
+    }
+    
+    // Function to mark a job as deleted in this session
+    function markJobAsDeleted(jobNum, dateReceived, client) {
+        const key = getJobKey(jobNum, dateReceived, client);
+        deletedJobsThisSession.add(key);
+        console.log(`📌 Marked job as deleted in session: ${key} (Total deleted: ${deletedJobsThisSession.size})`);
+    }
 
     function renderHistory() {
         const historyList = document.getElementById('history-list');
@@ -1238,12 +1255,20 @@
             return;
         }
         
-        // Filter history based on selected filter (completed/active)
-        let filteredHistory = history;
+        // FIRST: Filter out deleted jobs from this session (prevents Firebase resurrection)
+        let filteredHistory = history.filter(j => {
+            const isDeleted = isJobDeleted(j.jobNum, j.dateReceived, j.client);
+            if (isDeleted) {
+                console.log(`🚫 Filtering out deleted job #${j.jobNum} from display`);
+            }
+            return !isDeleted;
+        });
+        
+        // SECOND: Apply active/completed filter
         if (historyFilter === 'active') {
-            filteredHistory = history.filter(j => !j.completed);
+            filteredHistory = filteredHistory.filter(j => !j.completed);
         } else if (historyFilter === 'completed') {
-            filteredHistory = history.filter(j => j.completed === true);
+            filteredHistory = filteredHistory.filter(j => j.completed === true);
         }
         
         historyList.innerHTML = '';
@@ -1355,6 +1380,9 @@
             
             console.log(`🗑️ Permanently deleting Job #${deletedJob.jobNum}`);
             
+            // Mark this deletion in session IMMEDIATELY (before any other operations)
+            markJobAsDeleted(deletedJob.jobNum, deletedJob.dateReceived, deletedJob.client);
+            
             // Remove from history array
             history.splice(index, 1);
             localStorage.setItem('jobHistory', JSON.stringify(history));
@@ -1384,7 +1412,7 @@
             
             notify('✓ Job permanently deleted');
             
-            // Re-render history
+            // Re-render history (will filter out deleted job even if Firebase brings it back)
             renderHistory();
             renderJobTasks();
             renderScheduleCalendar();
