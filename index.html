@@ -3,11 +3,11 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 37 | 2026-02-08 | Fix unallocated doors notifications      ║
-║ - CRITICAL: Save door profiles to localStorage (persist)       ║
-║ - Added: Red global notification for unallocated doors         ║
-║ - Added: Check for unallocated doors on Schedule/Admin load    ║
-║ - Result: Deleted doors stay deleted, new doors notify         ║
+║ REV 38 | 2026-02-08 | Fix corrupted door profiles list          ║
+║ - Fixed: Better validation when loading from localStorage       ║
+║ - Added: restoreDefaultProfiles() function                      ║
+║ - Added: Restore button in Admin Pricing Matrix panel           ║
+║ - Result: Can recover from corrupted or deleted profiles        ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -653,10 +653,10 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 37 (2026-02-08) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
-    console.log('✓ Unallocated doors persist (saved to localStorage)');
-    console.log('✓ Red notification shows unallocated doors');
-    console.log('✓ New doors appear in matrix automatically');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 38 (2026-02-08) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('✓ Door profile list validation improved');
+    console.log('✓ Corrupt profiles detected and cleared');
+    console.log('✓ Restore button added to Admin panel');
     // ====================================
     
     // Firebase already initialized at top of page
@@ -806,24 +806,48 @@
     
     // RESTORED MASTER LISTS
     let clients = ["12345ABM", "Absolute Kitchens", "Advanced Cabinetry", "AKC Kitchens", "Braw Creative", "Brian Moloney", "Cabinets & Stone", "Cabinets by Michael", "Chooka", "CKK", "Clover Doors", "Complete Style Joinery", "Concept 2 Reality", "Coronet Kitchens", "Create a Kitchen", "Creative Cabinetry", "Cutting Edge Joinery", "Driscolls Joinery", "Evolution Kitchens and Joinery", "Geoff Frost Builders", "GM Cabinets", "Grampians Joinery", "Grovedale Kitchens", "Gunning Concepts", "Hamilton Sheetmetal", "Harris Cabinets", "Howe Kitchens & Joinery", "Hy-Craft", "Jardines Cabinets", "Joinery by Jarrod", "Jonassons", "Kingston Kabinets", "Kitchens U Build", "Kyle Hendy", "Leighton Park", "Matthews Joinery", "Ocean Grove Joinery", "Onshore", "R J Walter", "Richardson Joinery", "Schier Cabinet Makers", "Snaauws Kitchens", "SRT Cabinetry", "Stawell Joinery", "Stephensons Kitchens", "T&J Kitchens", "Tony Lambert Kitchens", "Total Kitchen Solutions", "Trendset Kitchens", "Troy Turner", "Ultrabuild", "VG Cabinets", "VJS Geelong", "VJS Shepparton", "Walk in Client", "Westend Cabinetry"];
+    // Default door profiles
+    const DEFAULT_PROFILES = ["Plain (101)", "J-Mould (102)", "Sharknose (103)", "Bevelled Edge (104)", "Ashlee (201)", "Hamilton (202)", "Vertical Grooves (203)", "Tarrone (301)", "Bobby (302)", "Orford (303)", "Shaker (401)", "Shaker 45 (402)", "Shaker w/Lines (403)", "Jack (404)", "Georgia (501)", "Branxholme (502)", "Rosebrook (503)", "Benchtop", "Molding", "Custom"];
+    
     let profiles = (function() {
-        // Load from localStorage if available, otherwise use defaults
+        // Load from localStorage if available
         const saved = localStorage.getItem('doorProfiles');
         if (saved) {
             try {
-                return JSON.parse(saved);
+                const loaded = JSON.parse(saved);
+                // Validate it's a real array
+                if (Array.isArray(loaded) && loaded.length >= 10) {
+                    console.log(`✓ Loaded ${loaded.length} door profiles from localStorage`);
+                    return loaded;
+                } else {
+                    console.warn('⚠️ Corrupted door profiles (too few items), restoring defaults');
+                    localStorage.removeItem('doorProfiles');
+                }
             } catch(e) {
                 console.error('Error loading door profiles from localStorage:', e);
+                console.warn('⚠️ Restoring default door profiles');
+                localStorage.removeItem('doorProfiles');
             }
         }
-        // Defaults
-        return ["Plain (101)", "J-Mould (102)", "Sharknose (103)", "Bevelled Edge (104)", "Ashlee (201)", "Hamilton (202)", "Vertical Grooves (203)", "Tarrone (301)", "Bobby (302)", "Orford (303)", "Shaker (401)", "Shaker 45 (402)", "Shaker w/Lines (403)", "Jack (404)", "Georgia (501)", "Branxholme (502)", "Rosebrook (503)", "Benchtop", "Molding", "Custom"];
+        // Use defaults
+        console.log(`✓ Using default ${DEFAULT_PROFILES.length} door profiles`);
+        return [...DEFAULT_PROFILES];
     })();
     
     // Helper function to save profiles to localStorage
     function saveProfilesToStorage() {
         localStorage.setItem('doorProfiles', JSON.stringify(profiles));
         console.log(`✓ Saved ${profiles.length} door profiles to localStorage`);
+    }
+    
+    // Restore all default profiles
+    function restoreDefaultProfiles() {
+        profiles = [...DEFAULT_PROFILES];
+        localStorage.removeItem('doorProfiles');
+        console.log(`✓ Restored ${profiles.length} default door profiles`);
+        renderPricingMatrix();
+        checkForNewUnallocatedDoors();
+        notify('✓ Door profiles restored to defaults');
     }
     
     // Check for new unallocated doors and show notification
@@ -2944,6 +2968,15 @@
         
         
         let html = `
+            <div style="margin-bottom:15px;">
+                <button onclick="restoreDefaultProfiles()" style="background:#ff9500; color:#fff; border:none; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">
+                    🔄 RESTORE DEFAULT DOOR PROFILES
+                </button>
+                <p style="font-size:10px; color:#666; margin-top:8px;">
+                    Click to restore all 20 default door profiles (Plain, J-Mould, Shaker, etc.)
+                </p>
+            </div>
+            
             <table style="width:100%; border-collapse:collapse; font-size:10px; background:#fff;">
                 <tr style="background:#000; color:var(--gs); font-weight:900;">
                     <th style="padding:8px; text-align:left; width:150px;">Profile</th>
