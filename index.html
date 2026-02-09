@@ -3,11 +3,12 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 42 | 2026-02-08 | Fix initialization errors and crashes    ║
-║ - Added: Try-catch wrapper in initializeApp                    ║
-║ - Added: Element existence checks before accessing             ║
-║ - Added: Function type checking before calling                 ║
-║ - Result: App won't crash if elements aren't ready yet         ║
+║ REV 43 | 2026-02-08 | Comprehensive UI/UX improvements         ║
+║ - Fixed: Deleted jobs removed from Gantt chart                 ║
+║ - Added: Red global notification when job deleted              ║
+║ - Added: Dismiss button for global notifications               ║
+║ - Fixed: iOS-style toast animation and auto-dismiss            ║
+║ - Fixed: Workload summary only in Schedule/Admin tabs           ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -257,7 +258,31 @@
     <div id="userInfo"></div>
 
 <!-- TOAST NOTIFICATION -->
-<div id="toast" style="display:none; position:fixed; bottom:100px; left:50%; transform:translateX(-50%); background:#34c759; color:#fff; padding:12px 25px; border-radius:25px; font-weight:900; z-index:5000; font-size:11px; box-shadow:0 4px 12px rgba(52, 199, 89, 0.3);"></div>
+<div id="toast" style="display:none; position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#34c759; color:#fff; padding:12px 25px; border-radius:25px; font-weight:900; z-index:5000; font-size:11px; box-shadow:0 4px 12px rgba(52, 199, 89, 0.3); animation: slideUp 0.4s ease-out, slideDown 0.4s ease-in 2.6s forwards; white-space:nowrap;"></div>
+
+<style>
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(100px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateX(-50%) translateY(100px);
+    }
+}
+</style>
 
 <!-- TIMELINE EDITOR MODAL -->
 <div id="timelineModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; justify-content:center; align-items:center; flex-wrap:wrap;">
@@ -604,31 +629,13 @@
             </div>
         </div>
 
-        <!-- Workload Summary -->
-        <div class="card" style="background:#f9f9f9; border-left:5px solid var(--gs); margin-left:0; margin-right:0;">
-            <h4 style="margin-top:0;">Workload Summary</h4>
-            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;">
-                <div style="text-align:center; padding:10px;">
-                    <div id="totalActiveJobs" style="font-size:24px; font-weight:900; color:var(--gs);">0</div>
-                    <div style="font-size:10px; color:#666; font-weight:700;">Active Jobs</div>
-                </div>
-                <div style="text-align:center; padding:10px; border-left:1px solid #ddd; border-right:1px solid #ddd;">
-                    <div id="totalTasks" style="font-size:24px; font-weight:900; color:#ff9500;">0/0</div>
-                    <div style="font-size:10px; color:#666; font-weight:700;">Tasks Complete</div>
-                </div>
-                <div style="text-align:center; padding:10px;">
-                    <div id="totalWorkload" style="font-size:24px; font-weight:900; color:#2196f3;">0</div>
-                    <div style="font-size:10px; color:#666; font-weight:700;">SQM Workload</div>
-                </div>
-            </div>
-        </div>
     </div>
     
     <div id="admin" class="view-section">
         <div class="card">
             <h3>Admin Settings</h3>
             <label>App Version</label>
-            <input type="text" value="PaintWorkz Pro 4.8 | REV 42" disabled style="background:#f5f5f5; cursor:not-allowed;">
+            <input type="text" value="PaintWorkz Pro 4.8 | REV 43" disabled style="background:#f5f5f5; cursor:not-allowed;">
             
             <!-- Admin Sub-Tabs -->
             <div class="sub-nav" style="margin-top:15px;">
@@ -666,6 +673,27 @@
     </div>
 </div>
 
+<!-- WORKLOAD SUMMARY CONTAINER - Shows only in Schedule/Admin -->
+<div id="workloadSummaryContainer" style="display:none; background:#f9f9f9; border-top:1px solid #ddd; border-bottom:1px solid #ddd; padding:15px; margin-bottom:80px;">
+    <div class="card" style="margin:0; background:transparent;">
+        <h4 style="margin-top:0; margin-bottom:10px;">Workload Summary</h4>
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;">
+            <div style="text-align:center; padding:10px;">
+                <div id="totalActiveJobs" style="font-size:24px; font-weight:900; color:var(--gs);">0</div>
+                <div style="font-size:10px; color:#666; font-weight:700;">Active Jobs</div>
+            </div>
+            <div style="text-align:center; padding:10px; border-left:1px solid #ddd; border-right:1px solid #ddd;">
+                <div id="totalTasks" style="font-size:24px; font-weight:900; color:#ff9500;">0/0</div>
+                <div style="font-size:10px; color:#666; font-weight:700;">Tasks Complete</div>
+            </div>
+            <div style="text-align:center; padding:10px;">
+                <div id="totalWorkload" style="font-size:24px; font-weight:900; color:#2196f3;">0</div>
+                <div style="font-size:10px; color:#666; font-weight:700;">SQM Workload</div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="sticky-footer">
     <div class="footer-item" style="margin-left:15px;"><div class="footer-label">TOTAL SQM</div><div class="footer-val" id="tA">0.000</div></div>
     <div style="flex:1; display:flex; justify-content:center;">
@@ -677,10 +705,11 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 42 (2026-02-08) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
-    console.log('🛡️ Improved error handling and crash prevention');
-    console.log('✓ Element existence checks before access');
-    console.log('✓ Function type validation before calling');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 43 (2026-02-08) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('✓ Deleted jobs removed from Gantt chart');
+    console.log('✓ Red deletion notifications with dismiss button');
+    console.log('✓ iOS-style toast notifications');
+    console.log('✓ Workload summary in Schedule/Admin only');
     // ====================================
     
     // Firebase already initialized at top of page
@@ -1436,11 +1465,49 @@
             
             notify('✓ Job permanently deleted');
             
+            // Show global red notification
+            showJobDeletedNotification(deletedJob);
+            
             // Re-render history (will filter out deleted job even if Firebase brings it back)
             renderHistory();
             renderJobTasks();
             renderScheduleCalendar();
         }
+    }
+    
+    // Show red global notification when job is deleted
+    function showJobDeletedNotification(job) {
+        const alertArea = document.getElementById('globalNotifications');
+        if (!alertArea) return;
+        
+        // Check if notification already exists for this job
+        const existingAlert = alertArea.querySelector(`[data-deleted-job="${job.jobNum}"]`);
+        if (existingAlert) {
+            existingAlert.remove();
+        }
+        
+        // Remove placeholder
+        const placeholder = alertArea.querySelector('p');
+        if (placeholder) placeholder.remove();
+        
+        const alertHTML = `
+            <div data-alert="deleted-job" data-deleted-job="${job.jobNum}" style="background:#ffebee; border-left:4px solid #ff3b30; padding:12px; margin-bottom:8px; border-radius:4px; display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <div style="font-weight:900; color:#ff3b30; margin-bottom:4px; font-size:12px;">
+                        🗑️ JOB DELETED: #${job.jobNum}
+                    </div>
+                    <div style="color:#d32f2f; font-size:10px;">
+                        ${job.client} • ${job.dateReceived || 'No date'}
+                    </div>
+                </div>
+                <button onclick="this.parentElement.remove()" style="background:#ff3b30; color:#fff; border:none; padding:6px 12px; border-radius:4px; font-weight:900; font-size:10px; cursor:pointer; white-space:nowrap; margin-left:8px;">
+                    ✕ DISMISS
+                </button>
+            </div>
+        `;
+        
+        alertArea.innerHTML += alertHTML;
+        console.log(`🔔 Shown deletion notification for Job #${job.jobNum}`);
     }
 
     function completeJobById(jobNum, dateReceived, client) {
@@ -1844,6 +1911,16 @@
         document.querySelectorAll('.view-section, .nav-btn').forEach(x => x.classList.remove('active'));
         document.getElementById(t).classList.add('active');
         document.getElementById('btn-' + t).classList.add('active');
+        
+        // Show/hide workload summary based on active tab
+        const workloadContainer = document.getElementById('workloadSummaryContainer');
+        if (workloadContainer) {
+            if (t === 'schedule' || t === 'admin') {
+                workloadContainer.style.display = 'block';
+            } else {
+                workloadContainer.style.display = 'none';
+            }
+        }
         
         // Hide gantt chart by default
         const ganttWrapper = document.getElementById('ganttWrapper');
@@ -2393,7 +2470,10 @@
             
         
         // Sort by received date - newest first
-        let history = fullHistory.filter(job => !job.completed).sort((a, b) => {
+        let history = fullHistory
+            .filter(job => !job.completed)
+            .filter(job => !isJobDeleted(job.jobNum, job.dateReceived, job.client)) // Exclude deleted jobs
+            .sort((a, b) => {
             let dateA = new Date();
             let dateB = new Date();
             
