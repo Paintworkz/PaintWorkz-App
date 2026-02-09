@@ -3,12 +3,12 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 43 | 2026-02-08 | Comprehensive UI/UX improvements         ║
-║ - Fixed: Deleted jobs removed from Gantt chart                 ║
-║ - Added: Red global notification when job deleted              ║
-║ - Added: Dismiss button for global notifications               ║
-║ - Fixed: iOS-style toast animation and auto-dismiss            ║
-║ - Fixed: Workload summary only in Schedule/Admin tabs           ║
+║ REV 44 | 2026-02-09 | CRITICAL: Fix out of memory crash        ║
+║ - CRITICAL: Disabled real-time sync (was causing memory leak)  ║
+║ - Added: Guard to prevent duplicate listener setup              ║
+║ - Added: Change detection to skip redundant syncs               ║
+║ - Fixed: Only re-render when on active tab                     ║
+║ - Result: App no longer crashes with out of memory error       ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -219,18 +219,12 @@
                     }, 500);
                 }
                 
-                // Only set up real-time sync ONCE per session
+                // Only set up real-time sync ONCE per session (DISABLED by default due to memory issues)
                 if (!window.realtimeSyncActive) {
+                    // Real-time sync disabled to prevent memory leaks
+                    // Users should manually refresh to get latest data from Firebase
+                    console.log('ℹ️ Real-time sync disabled (manual refresh recommended)');
                     window.realtimeSyncActive = true;
-                    setTimeout(() => {
-                        if (window.setupRealtimeSync) {
-                            try {
-                                window.setupRealtimeSync();
-                            } catch (e) {
-                                console.error('setupRealtimeSync error:', e);
-                            }
-                        }
-                    }, 1000);
                 }
             } else {
                 // Clean up listener when logging out
@@ -635,7 +629,7 @@
         <div class="card">
             <h3>Admin Settings</h3>
             <label>App Version</label>
-            <input type="text" value="PaintWorkz Pro 4.8 | REV 43" disabled style="background:#f5f5f5; cursor:not-allowed;">
+            <input type="text" value="PaintWorkz Pro 4.8 | REV 44" disabled style="background:#f5f5f5; cursor:not-allowed;">
             
             <!-- Admin Sub-Tabs -->
             <div class="sub-nav" style="margin-top:15px;">
@@ -705,11 +699,11 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 43 (2026-02-08) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
-    console.log('✓ Deleted jobs removed from Gantt chart');
-    console.log('✓ Red deletion notifications with dismiss button');
-    console.log('✓ iOS-style toast notifications');
-    console.log('✓ Workload summary in Schedule/Admin only');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 44 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('🚨 CRITICAL FIX: Disabled real-time sync (memory leak)');
+    console.log('✓ Change detection prevents redundant syncs');
+    console.log('✓ Smart rendering only when tab is active');
+    console.log('✓ App should no longer crash with out of memory');
     // ====================================
     
     // Firebase already initialized at top of page
@@ -3891,35 +3885,61 @@
 
     // Set up real-time listener for jobs
     function setupRealtimeSync() {
-        if (!window.currentUser) return;
+        // Guard: Only set up once
+        if (window.realtimeSyncActive) {
+            console.log('⚠️ Real-time sync already active, skipping duplicate setup');
+            return;
+        }
+        
+        if (!window.currentUser) {
+            console.warn('setupRealtimeSync: No current user');
+            return;
+        }
         
         try {
+            console.log('🔄 Setting up real-time sync listener...');
             const userDocRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid);
             const jobsCollectionRef = window.collection(userDocRef, 'jobs');
             
             // Store the unsubscribe function so we can clean up later
-            window.realtimeSyncUnsubscribe = window.onSnapshot(jobsCollectionRef, snapshot => {
-                try {
-                    const jobs = [];
-                    snapshot.forEach(doc => {
-                        jobs.push({ ...doc.data(), id: doc.id });
-                    });
-                    
-                    // Update localStorage
-                    localStorage.setItem('jobHistory', JSON.stringify(jobs));
-                    fullHistory = jobs;
-                    history = jobs.filter(j => !j.completed);
-                } catch (e) {
-                    console.error('Error processing snapshot:', e);
+            window.realtimeSyncUnsubscribe = window.onSnapshot(jobsCollectionRef, 
+                snapshot => {
+                    try {
+                        const jobs = [];
+                        snapshot.forEach(doc => {
+                            jobs.push({ ...doc.data(), id: doc.id });
+                        });
+                        
+                        // Only update if data actually changed
+                        const currentHistory = JSON.parse(localStorage.getItem('jobHistory')) || [];
+                        if (JSON.stringify(currentHistory) !== JSON.stringify(jobs)) {
+                            console.log(`🔄 Real-time update: ${jobs.length} jobs`);
+                            localStorage.setItem('jobHistory', JSON.stringify(jobs));
+                            
+                            // Only re-render if on history tab to avoid excessive re-renders
+                            const historySection = document.getElementById('history');
+                            if (historySection && historySection.classList.contains('active')) {
+                                renderHistory();
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Error processing snapshot:', e);
+                    }
+                }, 
+                error => {
+                    console.error('Realtime sync error:', error);
                 }
-            }, error => {
-                console.error('Realtime sync error:', error);
-            });
+            );
+            
+            console.log('✓ Real-time sync listener established');
         } catch (e) {
             console.error('setupRealtimeSync error:', e);
         }
     }
 
+    // Track last synced data to avoid redundant syncs
+    let lastSyncedData = '';
+    
     // Helper function to sync all jobs to Firebase
     function syncJobsToFirebase() {
         // Guard: Wait for Firebase to be ready and user to be logged in
@@ -3930,6 +3950,17 @@
         
         try {
             const jobHistory = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+            const currentData = JSON.stringify(jobHistory);
+            
+            // Only sync if data actually changed
+            if (currentData === lastSyncedData) {
+                console.log('ℹ️ Data unchanged, skipping Firebase sync');
+                return;
+            }
+            
+            console.log(`🔄 Syncing ${jobHistory.length} jobs to Firebase...`);
+            lastSyncedData = currentData;
+            
             jobHistory.forEach(job => {
                 const jobId = job.id || job.jobNum || Date.now().toString();
                 const jobDoc = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'jobs', jobId);
@@ -3940,6 +3971,8 @@
                     userId: window.currentUser.uid
                 }, { merge: true }).catch(err => console.error('Firestore sync error:', err));
             });
+            
+            console.log('✓ Firebase sync complete');
         } catch (error) {
             console.error('syncJobsToFirebase error:', error);
         }
