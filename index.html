@@ -3,11 +3,12 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 39 | 2026-02-08 | Prevent deleted jobs reappearing         ║
-║ - CRITICAL: Track deleted jobs in session memory                ║
-║ - Fixed: Deleted jobs stay gone even after tab switch           ║
-║ - Fixed: Firebase real-time listener won't resurrect them       ║
-║ - Result: Job deletion is permanent during session              ║
+║ REV 40 | 2026-02-08 | Fix deleted/completed job persistence    ║
+║ - Added: Gantt chart back to Schedule tab                       ║
+║ - Added: Revision number to Admin App Version display           ║
+║ - CRITICAL: Remove problematic session cache filtering          ║
+║ - CRITICAL: Better verification for deletions & completions    ║
+║ - Result: Jobs stay deleted and show as completed in tab        ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -572,6 +573,30 @@
     </div>
     
     <div id="schedule" class="view-section" style="width:100vw; margin-left:calc(-50vw + 50%); position:relative;">
+        <div class="card" style="margin-left:0; margin-right:0;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <h3 style="margin:0;">Job Timeline Gantt Chart</h3>
+                <div style="display:flex; gap:8px;">
+                    <button onclick="prevScheduleMonth()" style="border:none; background:#f0f0f0; width:35px; height:35px; border-radius:6px; font-weight:900; cursor:pointer;">←</button>
+                    <button onclick="nextScheduleMonth()" style="border:none; background:#f0f0f0; width:35px; height:35px; border-radius:6px; font-weight:900; cursor:pointer;">→</button>
+                </div>
+            </div>
+            <div id="scheduleMonthYear" style="text-align:center; font-weight:900; font-size:16px; margin-bottom:15px; color:#000;"></div>
+        </div>
+
+        <!-- Gantt Chart Timeline - Full Width -->
+        <div id="ganttWrapper" style="width:100vw; margin-left:calc(-50vw + 50%); background:#fff; padding:15px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow-x:auto; min-height:600px; display:block; visibility:visible;">
+            <div style="background:#fff3cd; border:2px solid #ff9500; border-radius:8px; padding:15px; margin-bottom:15px; display:none;" id="duplicateWarning">
+                <div style="font-weight:900; color:#ff6600; margin-bottom:8px;">⚠️ Duplicate Jobs Detected!</div>
+                <p style="font-size:12px; color:#666; margin:0 0 10px 0;">Your job history contains duplicate entries. This is why you only see 1 job displayed but the Workload Summary shows 7.</p>
+                <button onclick="tab('admin'); setTimeout(() => switchAdminTab('general'), 200)" style="background:#ff9500; color:#fff; border:none; padding:8px 15px; border-radius:6px; font-weight:900; cursor:pointer;">Go to Admin → Remove Duplicates</button>
+            </div>
+            <!-- Gantt Chart Container -->
+            <div id="ganttChart" style="min-width:1200px; padding:0; display:flex; flex-direction:column;">
+                <!-- Gantt chart will render here -->
+            </div>
+        </div>
+
         <!-- Global Notifications -->
         <div class="card" style="background:#f0fdf4; border-left:5px solid #34c759; margin-left:0; margin-right:0;">
             <h3 style="margin-top:0; color:#34c759;">🔔 Global Notifications</h3>
@@ -604,7 +629,7 @@
         <div class="card">
             <h3>Admin Settings</h3>
             <label>App Version</label>
-            <input type="text" value="PaintWorkz Pro 4.8" disabled style="background:#f5f5f5; cursor:not-allowed;">
+            <input type="text" value="PaintWorkz Pro 4.8 | REV 40" disabled style="background:#f5f5f5; cursor:not-allowed;">
             
             <!-- Admin Sub-Tabs -->
             <div class="sub-nav" style="margin-top:15px;">
@@ -653,10 +678,10 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 39 (2026-02-08) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
-    console.log('🚫 CRITICAL: Prevent deleted jobs reappearing');
-    console.log('✓ Deleted jobs tracked in session memory');
-    console.log('✓ Won\'t reappear even after tab switch');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 40 (2026-02-08) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('✓ Gantt chart restored to Schedule tab');
+    console.log('✓ Revision number in Admin panel');
+    console.log('✓ Fixed job deletion and completion persistence');
     // ====================================
     
     // Firebase already initialized at top of page
@@ -1213,21 +1238,12 @@
             return;
         }
         
-        // Filter history based on selected filter AND exclude deleted jobs from this session
-        let filteredHistory = history.filter(j => {
-            const jobKey = `${j.jobNum}|${j.dateReceived}|${j.client}`;
-            if (deletedJobsThisSession.has(jobKey)) {
-                console.log(`🚫 Filtering out deleted job from session: ${jobKey}`);
-                return false; // Exclude this job
-            }
-            return true; // Include this job
-        });
-        
-        // Apply filter (active/completed)
+        // Filter history based on selected filter (completed/active)
+        let filteredHistory = history;
         if (historyFilter === 'active') {
-            filteredHistory = filteredHistory.filter(j => !j.completed);
+            filteredHistory = history.filter(j => !j.completed);
         } else if (historyFilter === 'completed') {
-            filteredHistory = filteredHistory.filter(j => j.completed);
+            filteredHistory = history.filter(j => j.completed === true);
         }
         
         historyList.innerHTML = '';
@@ -1328,7 +1344,7 @@
     }
 
     function deleteJobFromHistory(index) {
-        if (confirm('Delete this job from history?')) {
+        if (confirm('Delete this job from history permanently?')) {
             let history = JSON.parse(localStorage.getItem('jobHistory')) || [];
             const deletedJob = history[index];
             
@@ -1337,43 +1353,41 @@
                 return;
             }
             
-            console.log(`🗑️ Attempting to delete Job #${deletedJob.jobNum}`);
+            console.log(`🗑️ Permanently deleting Job #${deletedJob.jobNum}`);
             
-            // Track this deletion in session to prevent Firebase from resurrecting it
-            const jobKey = `${deletedJob.jobNum}|${deletedJob.dateReceived}|${deletedJob.client}`;
-            deletedJobsThisSession.add(jobKey);
-            console.log(`📌 Marked for deletion in session: ${jobKey}`);
-            
-            // Remove from history
+            // Remove from history array
             history.splice(index, 1);
             localStorage.setItem('jobHistory', JSON.stringify(history));
+            console.log(`✓ Removed from localStorage`);
             
-            // Verify it's actually gone from localStorage
+            // Verify deletion
             let verifyHistory = JSON.parse(localStorage.getItem('jobHistory')) || [];
             const stillExists = verifyHistory.some(j => j.jobNum === deletedJob.jobNum && j.dateReceived === deletedJob.dateReceived && j.client === deletedJob.client);
             
             if (stillExists) {
-                console.error('❌ Job still exists after deletion attempt!');
+                console.error('❌ CRITICAL: Job still exists after deletion attempt!');
                 notify('⚠️ Error: Job deletion failed');
                 return;
             }
             
-            console.log(`✓ Job #${deletedJob.jobNum} removed from localStorage`);
+            console.log(`✓ Deletion verified - Job #${deletedJob.jobNum} is gone`);
             
-            // Sync deletion to Firebase
+            // Sync to Firebase (removes from both localStorage array AND Firebase)
             if (window.syncJobsToFirebase) {
                 try {
                     window.syncJobsToFirebase();
-                    console.log(`✓ Job #${deletedJob.jobNum} synced deletion to Firebase`);
+                    console.log(`✓ Synced deletion to Firebase`);
                 } catch(e) {
                     console.error('Firebase sync error on delete:', e);
                 }
             }
             
-            notify('✓ Job Deleted from History');
+            notify('✓ Job permanently deleted');
             
-            // Force fresh render
+            // Re-render history
             renderHistory();
+            renderJobTasks();
+            renderScheduleCalendar();
         }
     }
 
@@ -1398,13 +1412,25 @@
             history[jobIdx] = job;
             localStorage.setItem('jobHistory', JSON.stringify(history));
             
-            console.log(`✓ Job #${job.jobNum} marked as complete`);
+            console.log(`✅ Job #${job.jobNum} marked as complete`);
+            console.log(`📅 Completion date: ${job.completedDate}`);
             
-            // Sync to Firebase
+            // Verify it was saved
+            const verify = JSON.parse(localStorage.getItem('jobHistory')) || [];
+            const verifiedJob = verify.find(j => j.jobNum === jobNum && j.dateReceived === dateReceived && j.client === client);
+            if (verifiedJob && verifiedJob.completed) {
+                console.log(`✓ Verified: Job is now marked as completed in localStorage`);
+            } else {
+                console.error(`❌ FAILED: Job completion not saved properly!`);
+                notify('⚠️ Error: Failed to save completion status');
+                return;
+            }
+            
+            // Sync to Firebase IMMEDIATELY
             if (window.syncJobsToFirebase) {
                 try {
                     window.syncJobsToFirebase();
-                    console.log('🔄 Synced to Firebase');
+                    console.log('🔄 Synced completion to Firebase');
                 } catch(e) {
                     console.error('Firebase sync error:', e);
                 }
@@ -1417,7 +1443,11 @@
             alertAdmins(job);
             
             notify('✓ Job Completed - PDFs Generated');
+            
+            // Re-render ALL views to show completion
             renderHistory();
+            renderJobTasks();
+            renderScheduleCalendar();
         }
     }
     
