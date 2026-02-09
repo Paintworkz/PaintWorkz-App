@@ -3,14 +3,13 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 50 | 2026-02-09 | Door/Pricing & Mobile Improvements       ║
-║ - Removed: Admin Gantt Chart tab (surgical strike)              ║
-║ - Renamed: "Gantt Chart" → "Jobs Chart"                         ║
-║ - Fixed: "Colors" → "Colours" (British spelling)                ║
-║ - Added: Number pad (inputmode=numeric) for price boxes (mobile)║
-║ - Added: Firebase sync for door profiles/master matrix          ║
-║ - Fixed: Unallocated doors reappearing (Firebase sync issue)    ║
-║ - Next: Edit/delete functionality for price matrix              ║
+║ REV 51 | 2026-02-09 | Jobs Chart Toggle + Nuclear Profile Fix  ║
+║ - Added: Minimize/Maximize toggle button for Jobs Chart         ║
+║ - Fixed: NUCLEAR option to clear corrupt profiles (localStorage)║
+║ - Added: Profile corruption detection and auto-cleanup          ║
+║ - Added: Duplicate profile filtering                            ║
+║ - Improved: Firebase sync now uses merge: false (overwrites)    ║
+║ - Previous: Removed admin Gantt, fixed spelling, added numpad   ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -614,6 +613,7 @@
                 <div style="display:flex; gap:8px;">
                     <button onclick="prevScheduleMonth()" style="border:none; background:#f0f0f0; width:35px; height:35px; border-radius:6px; font-weight:900; cursor:pointer;">←</button>
                     <button onclick="nextScheduleMonth()" style="border:none; background:#f0f0f0; width:35px; height:35px; border-radius:6px; font-weight:900; cursor:pointer;">→</button>
+                    <button id="jobsChartToggleBtn" onclick="toggleJobsChart()" title="Minimize/Maximize" style="border:none; background:#2196f3; color:#fff; width:35px; height:35px; border-radius:6px; font-weight:900; cursor:pointer; font-size:18px;">−</button>
                 </div>
             </div>
             <div id="scheduleMonthYear" style="text-align:center; font-weight:900; font-size:16px; margin-bottom:15px; color:#000;"></div>
@@ -633,7 +633,7 @@
         <div class="card">
             <h3>Admin Settings</h3>
             <label>App Version</label>
-            <input type="text" value="PaintWorkz Pro 4.8 | REV 50" disabled style="background:#f5f5f5; cursor:not-allowed;">
+            <input type="text" value="PaintWorkz Pro 4.8 | REV 51" disabled style="background:#f5f5f5; cursor:not-allowed;">
             
             <!-- Admin Sub-Tabs -->
             <div class="sub-nav" style="margin-top:15px;">
@@ -703,7 +703,7 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 50 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 51 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     console.log('✅ CRITICAL FIXES:');
     console.log('✓ Disabled Firebase real-time sync (memory crashes fixed)');
     console.log('✓ Improved error handling to prevent crashes');
@@ -875,6 +875,21 @@
                 const loaded = JSON.parse(saved);
                 // Validate it's a real array
                 if (Array.isArray(loaded) && loaded.length >= 10) {
+                    // Filter out any null/undefined/empty/duplicate entries
+                    const cleaned = [];
+                    const seen = new Set();
+                    loaded.forEach(p => {
+                        if (p && typeof p === 'string' && p.trim().length > 0 && !seen.has(p)) {
+                            cleaned.push(p);
+                            seen.add(p);
+                        }
+                    });
+                    
+                    if (cleaned.length !== loaded.length) {
+                        console.warn(`⚠️ Removed ${loaded.length - cleaned.length} corrupt/duplicate profile entries`);
+                        localStorage.setItem('doorProfiles', JSON.stringify(cleaned));
+                        return cleaned;
+                    }
                     console.log(`✓ Loaded ${loaded.length} door profiles from localStorage`);
                     return loaded;
                 } else {
@@ -911,7 +926,7 @@
     
     // Clear stale Firebase profile data and force fresh sync
     function clearFirebaseProfilesData() {
-        if (!confirm('🚨 This will clear old Firebase profile data and force a fresh sync.\n\nAre you sure? (Your local door settings will NOT be affected)')) {
+        if (!confirm('🚨 This will clear old Firebase profile data and reset to defaults.\n\nAre you sure? (Your price matrix will be restored to defaults)')) {
             return;
         }
         
@@ -921,9 +936,17 @@
         }
         
         try {
-            console.log('🗑️ Clearing stale Firebase profile data...');
+            console.log('🗑️ NUCLEAR: Clearing ALL stale profile data (localStorage + Firebase)...');
             
-            // Delete the old Firebase document to remove stale data
+            // 1. Clear localStorage doorProfiles completely
+            localStorage.removeItem('doorProfiles');
+            console.log('✓ Cleared localStorage doorProfiles');
+            
+            // 2. Reset profiles array to defaults
+            profiles = [...DEFAULT_PROFILES];
+            console.log(`✓ Reset profiles to ${profiles.length} defaults`);
+            
+            // 3. Delete the old Firebase document to remove stale data
             const configDoc = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'config', 'doorProfiles');
             window.deleteDoc(configDoc).then(() => {
                 console.log('✓ Deleted old Firebase profile document');
@@ -931,14 +954,16 @@
                 console.error('Error deleting Firebase document:', err);
             });
             
-            // Force immediate re-sync of current profiles
+            // 4. Force immediate re-sync of fresh defaults
             setTimeout(() => {
+                saveProfilesToStorage();
                 syncProfilesToFirebase();
-                notify('✓ Firebase cleared and fresh sync initiated');
+                renderPricingMatrix();
+                notify('✅ NUCLEAR RESET COMPLETE - All profiles cleared and reset to defaults');
             }, 500);
         } catch (error) {
-            console.error('Error clearing Firebase profiles:', error);
-            alert('Error clearing Firebase. Check console.');
+            console.error('Error clearing profiles:', error);
+            alert('Error during reset. Check console.');
         }
     }
     
@@ -3592,6 +3617,55 @@
         scheduleCalendarDate.setMonth(scheduleCalendarDate.getMonth() + 1);
         renderScheduleCalendar();
     }
+    
+    function toggleJobsChart() {
+        const wrapper = document.getElementById('ganttWrapper');
+        const monthYear = document.getElementById('scheduleMonthYear');
+        const btn = document.getElementById('jobsChartToggleBtn');
+        
+        if (!wrapper) return;
+        
+        const isMinimized = localStorage.getItem('jobsChartMinimized') === 'true';
+        
+        if (isMinimized) {
+            // Restore (maximize)
+            wrapper.style.display = 'block';
+            monthYear.style.display = 'block';
+            btn.textContent = '−';
+            btn.style.background = '#2196f3';
+            btn.title = 'Minimize';
+            localStorage.setItem('jobsChartMinimized', 'false');
+            console.log('📊 Jobs Chart maximized');
+        } else {
+            // Minimize
+            wrapper.style.display = 'none';
+            monthYear.style.display = 'none';
+            btn.textContent = '+';
+            btn.style.background = '#666';
+            btn.title = 'Maximize';
+            localStorage.setItem('jobsChartMinimized', 'true');
+            console.log('📊 Jobs Chart minimized');
+        }
+    }
+    
+    // Restore Jobs Chart state on page load
+    function restoreJobsChartState() {
+        const isMinimized = localStorage.getItem('jobsChartMinimized') === 'true';
+        if (isMinimized) {
+            const wrapper = document.getElementById('ganttWrapper');
+            const monthYear = document.getElementById('scheduleMonthYear');
+            const btn = document.getElementById('jobsChartToggleBtn');
+            if (wrapper && monthYear && btn) {
+                wrapper.style.display = 'none';
+                monthYear.style.display = 'none';
+                btn.textContent = '+';
+                btn.style.background = '#666';
+            }
+        }
+    }
+    
+    // Restore on page load
+    setTimeout(restoreJobsChartState, 500);
     
     function prevAdminScheduleMonth() {
         scheduleCalendarDate.setMonth(scheduleCalendarDate.getMonth() - 1);
