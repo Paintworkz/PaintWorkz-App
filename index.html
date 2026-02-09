@@ -3,13 +3,13 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 53 | 2026-02-09 | Moved Version to Footer + Layout Fix     ║
-║ - MOVED: App version from admin panel to footer (admin tab only)║
-║ - FIXED: Price matrix layout by removing complex validation    ║
-║ - FIXED: Version appears next to PDF button in footer          ║
-║ - IMPROVED: Workload summary updates when switching tabs        ║
-║ - NOTE: Investigating persistent unallocated door issue         ║
-║ - Previous: Jobs Chart toggle, nuclear reset, corruption fix    ║
+║ REV 54 | 2026-02-09 | Jobs Chart Scrolling + Root Cause Found  ║
+║ - ADDED: Horizontal scroll for Jobs Chart (smooth, grab cursor) ║
+║ - ADDED: ☢️ NUKE ALL LOCALSTORAGE button (extreme reset)       ║
+║ - FIXED: Clarified button purposes - "Reset Defaults" warning  ║
+║ - ROOT CAUSE FOUND: Restore Defaults button was resetting doors║
+║ - IMPROVED: Clearer button descriptions to prevent accidents    ║
+║ - Version now in footer (admin tab only)                        ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -620,12 +620,13 @@
         </div>
 
         <!-- Jobs Chart Timeline - Full Width -->
-        <div id="ganttWrapper" style="width:100vw; margin-left:calc(-50vw + 50%); background:#fff; padding:15px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow-x:auto; min-height:600px; display:block; visibility:visible;">
+        <div id="ganttWrapper" style="width:100vw; margin-left:calc(-50vw + 50%); background:#fff; padding:15px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow-x:auto; overflow-y:hidden; min-height:600px; display:block; visibility:visible; scroll-behavior:smooth; cursor:grab;">
             <!-- Jobs Chart Container -->
-            <div id="ganttChart" style="min-width:1200px; padding:0; display:flex; flex-direction:column;">
+            <div id="ganttChart" style="min-width:1200px; padding:0; display:flex; flex-direction:column; user-select:none;">
                 <!-- Jobs chart will render here -->
             </div>
         </div>
+        <div style="text-align:center; font-size:11px; color:#999; margin-top:8px;">← Scroll horizontally to view different months →</div>
 
     </div>
     
@@ -694,7 +695,7 @@
     <div class="footer-item" style="margin-left:15px;"><div class="footer-label">TOTAL SQM</div><div class="footer-val" id="tA">0.000</div></div>
     <div style="flex:1; display:flex; justify-content:center; gap:20px; align-items:center;">
         <div class="icon-btn" onclick="genPDF()" style="color:#fff">📄</div>
-        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro 4.8 | REV 53</div>
+        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro 4.8 | REV 54</div>
     </div>
     <div class="footer-item"><div class="footer-label">PARTS</div><div class="footer-val" id="tQ">0</div></div>
     <div class="icon-btn" onclick="handleLogout()" title="Logout" style="color:#ff3b30; font-size:24px; cursor:pointer; margin-right:15px;">🚪</div>
@@ -702,7 +703,7 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 53 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 54 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     console.log('✅ CRITICAL FIXES:');
     console.log('✓ Disabled Firebase real-time sync (memory crashes fixed)');
     console.log('✓ Improved error handling to prevent crashes');
@@ -974,6 +975,33 @@
         } catch (error) {
             console.error('Error during nuclear reset:', error);
             alert('Error during reset. Check console.\n\nManually:\n1. Clear browser cache\n2. Clear localStorage\n3. Refresh page');
+        }
+    }
+    
+    // EXTREME: Clear ALL browser localStorage and reload
+    function clearAllLocalStorage() {
+        if (!confirm('☢️ EXTREME ACTION:\n\nThis will DELETE ALL browser storage:\n- All jobs\n- All profiles\n- All settings\n- Everything\n\nYou will need to hard refresh after.\n\nAre you 100% sure?')) {
+            return;
+        }
+        
+        try {
+            console.log('☢️ CLEARING ALL LOCALSTORAGE...');
+            localStorage.clear();
+            console.log('✓ All localStorage cleared');
+            
+            // Also try to clear sessionStorage
+            sessionStorage.clear();
+            console.log('✓ sessionStorage cleared');
+            
+            notify('☢️ All storage cleared - Hard refreshing page...');
+            
+            // Force hard refresh
+            setTimeout(() => {
+                window.location.reload(true);
+            }, 500);
+        } catch (error) {
+            console.error('Error clearing storage:', error);
+            alert('Error during clear. Try manually clearing browser cache and refreshing.');
         }
     }
     
@@ -3299,15 +3327,20 @@
         
         let html = `
             <div style="margin-bottom:15px; display:flex; gap:10px; flex-wrap:wrap;">
-                <button onclick="restoreDefaultProfiles()" style="background:#ff9500; color:#fff; border:none; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">
-                    🔄 RESTORE DEFAULT DOOR PROFILES
-                </button>
                 <button onclick="clearFirebaseProfilesData()" style="background:#d32f2f; color:#fff; border:none; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">
-                    🗑️ CLEAR FIREBASE (Fix Stale Data)
+                    🗑️ CLEAR FIREBASE (Fix Doors Reappearing)
+                </button>
+                <button onclick="clearAllLocalStorage()" style="background:#000; color:#fff; border:none; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">
+                    ☢️ NUKE ALL LOCALSTORAGE
+                </button>
+                <button onclick="restoreDefaultProfiles()" style="background:#ff9500; color:#fff; border:none; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;" title="CAUTION: Resets ALL doors to original 20 defaults - loses all your custom assignments!">
+                    ⚠️ RESET TO 20 DEFAULTS (Loses Assignments!)
                 </button>
             </div>
             <p style="font-size:10px; color:#666; margin-bottom:15px;">
-                Click "Restore Defaults" to reset to 20 standard profiles. Click "Clear Firebase" if unallocated doors keep reappearing (clears old Firebase data and forces fresh sync).
+                <strong style="color:#d32f2f;">Clear Firebase:</strong> Use this first if doors keep reappearing<br>
+                <strong style="color:#000;">Nuke All:</strong> Last resort - clears everything, hard refreshes<br>
+                <strong style="color:#ff9500;">Reset Defaults:</strong> ⚠️ CAUTION - Brings back all 20 original doors, loses your tier assignments!
             </p>
             
             <table style="width:100%; border-collapse:collapse; font-size:10px; background:#fff;">
