@@ -3,12 +3,11 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 44 | 2026-02-09 | CRITICAL: Fix out of memory crash        ║
-║ - CRITICAL: Disabled real-time sync (was causing memory leak)  ║
-║ - Added: Guard to prevent duplicate listener setup              ║
-║ - Added: Change detection to skip redundant syncs               ║
-║ - Fixed: Only re-render when on active tab                     ║
-║ - Result: App no longer crashes with out of memory error       ║
+║ REV 45 | 2026-02-09 | Major cleanup - remove Gantt & notifications  ║
+║ - Removed: Global notifications section from database           ║
+║ - Removed: Gantt chart completely from database                ║
+║ - Removed: All related rendering and toggle functions          ║
+║ - Result: Cleaner codebase, faster load times                  ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -591,45 +590,13 @@
     </div>
     
     <div id="schedule" class="view-section" style="width:100vw; margin-left:calc(-50vw + 50%); position:relative;">
-        <div class="card" style="margin-left:0; margin-right:0;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                <h3 style="margin:0;">Job Timeline Gantt Chart</h3>
-                <div style="display:flex; gap:8px;">
-                    <button onclick="prevScheduleMonth()" style="border:none; background:#f0f0f0; width:35px; height:35px; border-radius:6px; font-weight:900; cursor:pointer;">←</button>
-                    <button onclick="nextScheduleMonth()" style="border:none; background:#f0f0f0; width:35px; height:35px; border-radius:6px; font-weight:900; cursor:pointer;">→</button>
-                </div>
-            </div>
-            <div id="scheduleMonthYear" style="text-align:center; font-weight:900; font-size:16px; margin-bottom:15px; color:#000;"></div>
-        </div>
-
-        <!-- Gantt Chart Timeline - Full Width -->
-        <div id="ganttWrapper" style="width:100vw; margin-left:calc(-50vw + 50%); background:#fff; padding:15px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow-x:auto; min-height:600px; display:block; visibility:visible;">
-            <div style="background:#fff3cd; border:2px solid #ff9500; border-radius:8px; padding:15px; margin-bottom:15px; display:none;" id="duplicateWarning">
-                <div style="font-weight:900; color:#ff6600; margin-bottom:8px;">⚠️ Duplicate Jobs Detected!</div>
-                <p style="font-size:12px; color:#666; margin:0 0 10px 0;">Your job history contains duplicate entries. This is why you only see 1 job displayed but the Workload Summary shows 7.</p>
-                <button onclick="tab('admin'); setTimeout(() => switchAdminTab('general'), 200)" style="background:#ff9500; color:#fff; border:none; padding:8px 15px; border-radius:6px; font-weight:900; cursor:pointer;">Go to Admin → Remove Duplicates</button>
-            </div>
-            <!-- Gantt Chart Container -->
-            <div id="ganttChart" style="min-width:1200px; padding:0; display:flex; flex-direction:column;">
-                <!-- Gantt chart will render here -->
-            </div>
-        </div>
-
-        <!-- Global Notifications -->
-        <div class="card" style="background:#f0fdf4; border-left:5px solid #34c759; margin-left:0; margin-right:0;">
-            <h3 style="margin-top:0; color:#34c759;">🔔 Global Notifications</h3>
-            <div id="globalNotifications" style="max-height:200px; overflow-y:auto;">
-                <p style="color:#999; text-align:center; font-size:12px;">No notifications yet</p>
-            </div>
-        </div>
-
     </div>
     
     <div id="admin" class="view-section">
         <div class="card">
             <h3>Admin Settings</h3>
             <label>App Version</label>
-            <input type="text" value="PaintWorkz Pro 4.8 | REV 44" disabled style="background:#f5f5f5; cursor:not-allowed;">
+            <input type="text" value="PaintWorkz Pro 4.8 | REV 45" disabled style="background:#f5f5f5; cursor:not-allowed;">
             
             <!-- Admin Sub-Tabs -->
             <div class="sub-nav" style="margin-top:15px;">
@@ -699,11 +666,10 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 44 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
-    console.log('🚨 CRITICAL FIX: Disabled real-time sync (memory leak)');
-    console.log('✓ Change detection prevents redundant syncs');
-    console.log('✓ Smart rendering only when tab is active');
-    console.log('✓ App should no longer crash with out of memory');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 45 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('✓ Global notifications section removed');
+    console.log('✓ Gantt chart removed completely');
+    console.log('✓ Cleaner, faster codebase');
     // ====================================
     
     // Firebase already initialized at top of page
@@ -899,49 +865,7 @@
     
     // Check for new unallocated doors and show notification
     function checkForNewUnallocatedDoors() {
-        const unallocated = getUnallocatedDoors();
-        if (unallocated.length > 0) {
-            console.log(`⚠️ Found ${unallocated.length} unallocated door(s):`);
-            unallocated.forEach(door => console.log(`  - ${door.name}`));
-            showUnallocatedDoorsNotification(unallocated);
-        }
-    }
-    
-    // Show red notification for unallocated doors
-    function showUnallocatedDoorsNotification(unallocated) {
-        const alertArea = document.getElementById('globalNotifications');
-        if (!alertArea) return;
-        
-        // Check if notification already exists
-        const existingAlert = alertArea.querySelector('[data-alert="unallocated-doors"]');
-        if (existingAlert) {
-            existingAlert.remove();
-        }
-        
-        const alertId = `unalloc-doors-${Date.now()}`;
-        
-        // Remove placeholder
-        const placeholder = alertArea.querySelector('p');
-        if (placeholder) placeholder.remove();
-        
-        const alertHTML = `
-            <div data-alert="unallocated-doors" style="background:#ffebee; border-left:4px solid #ff3b30; padding:12px; margin-bottom:8px; border-radius:4px;">
-                <div style="font-weight:900; color:#ff3b30; margin-bottom:6px; font-size:12px;">
-                    ⚠️ ${unallocated.length} DOOR(S) NEED ALLOCATING
-                </div>
-                <div style="color:#d32f2f; font-size:11px;">
-                    ${unallocated.map(d => `• ${d.name}`).join('<br>')}
-                </div>
-                <div style="margin-top:8px; text-align:right;">
-                    <button onclick="tab('admin'); setTimeout(() => switchAdminTab('pricing'), 200)" style="background:#ff3b30; color:#fff; border:none; padding:6px 12px; border-radius:4px; font-weight:900; font-size:10px; cursor:pointer;">
-                        GO TO MATRIX →
-                    </button>
-                </div>
-            </div>
-        `;
-        
-        alertArea.innerHTML += alertHTML;
-        console.log(`🔔 Shown notification for ${unallocated.length} unallocated door(s)`);
+        // Removed - globalNotifications section no longer exists
     }
 
     window.onload = () => { 
@@ -1459,49 +1383,11 @@
             
             notify('✓ Job permanently deleted');
             
-            // Show global red notification
-            showJobDeletedNotification(deletedJob);
-            
             // Re-render history (will filter out deleted job even if Firebase brings it back)
             renderHistory();
             renderJobTasks();
             renderScheduleCalendar();
         }
-    }
-    
-    // Show red global notification when job is deleted
-    function showJobDeletedNotification(job) {
-        const alertArea = document.getElementById('globalNotifications');
-        if (!alertArea) return;
-        
-        // Check if notification already exists for this job
-        const existingAlert = alertArea.querySelector(`[data-deleted-job="${job.jobNum}"]`);
-        if (existingAlert) {
-            existingAlert.remove();
-        }
-        
-        // Remove placeholder
-        const placeholder = alertArea.querySelector('p');
-        if (placeholder) placeholder.remove();
-        
-        const alertHTML = `
-            <div data-alert="deleted-job" data-deleted-job="${job.jobNum}" style="background:#ffebee; border-left:4px solid #ff3b30; padding:12px; margin-bottom:8px; border-radius:4px; display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                    <div style="font-weight:900; color:#ff3b30; margin-bottom:4px; font-size:12px;">
-                        🗑️ JOB DELETED: #${job.jobNum}
-                    </div>
-                    <div style="color:#d32f2f; font-size:10px;">
-                        ${job.client} • ${job.dateReceived || 'No date'}
-                    </div>
-                </div>
-                <button onclick="this.parentElement.remove()" style="background:#ff3b30; color:#fff; border:none; padding:6px 12px; border-radius:4px; font-weight:900; font-size:10px; cursor:pointer; white-space:nowrap; margin-left:8px;">
-                    ✕ DISMISS
-                </button>
-            </div>
-        `;
-        
-        alertArea.innerHTML += alertHTML;
-        console.log(`🔔 Shown deletion notification for Job #${job.jobNum}`);
     }
 
     function completeJobById(jobNum, dateReceived, client) {
@@ -1916,12 +1802,6 @@
             }
         }
         
-        // Hide gantt chart by default
-        const ganttWrapper = document.getElementById('ganttWrapper');
-        if (ganttWrapper) {
-            ganttWrapper.style.display = 'none';
-        }
-        
         // Render admin alerts when viewing admin tab
         if (t === 'admin') {
             renderAdminAlerts();
@@ -1929,7 +1809,6 @@
         
         // Render schedule calendar when viewing schedule tab
         if (t === 'schedule') {
-            if (ganttWrapper) ganttWrapper.style.display = 'block';
             renderScheduleCalendar();
         }
     }
@@ -2398,15 +2277,6 @@
             scheduleContainer.style.minHeight = 'auto';
         }
         
-        const year = scheduleCalendarDate.getFullYear();
-        const month = scheduleCalendarDate.getMonth();
-        
-        // Set month/year header
-        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-        if (document.getElementById('scheduleMonthYear')) document.getElementById('scheduleMonthYear').innerText = `${monthNames[month]} ${year}`;
-        
-        renderGanttChart(year, month);
-        renderGlobalNotifications();
         renderJobTasks(); // Update workload summary
         checkForDuplicates(); // Show warning if duplicates exist
     }
@@ -2437,349 +2307,9 @@
     
     
     function renderGanttChart(year, month) {
-        // FORCE WRAPPER TO BE VISIBLE
-        const ganttWrapper = document.getElementById('ganttWrapper');
-        if (ganttWrapper) {
-            ganttWrapper.style.display = 'block';
-            ganttWrapper.style.visibility = 'visible';
-            ganttWrapper.style.opacity = '1';
-        }
-        
-        const ganttChart = document.getElementById('ganttChart');
-        if (!ganttChart) {
-            return;
-        }
-        
-        // FORCE VISIBILITY BEFORE RENDERING
-        ganttChart.style.display = 'flex';
-        ganttChart.style.visibility = 'visible';
-        ganttChart.style.minHeight = 'auto';
-        ganttChart.style.opacity = '1';
-        
-        // Check if element is visible
-        const style = window.getComputedStyle(ganttChart);
-        
-        try {
-            let fullHistory = JSON.parse(localStorage.getItem('jobHistory')) || [];
-            
-        
-        // Sort by received date - newest first
-        let history = fullHistory
-            .filter(job => !job.completed)
-            .filter(job => !isJobDeleted(job.jobNum, job.dateReceived, job.client)) // Exclude deleted jobs
-            .sort((a, b) => {
-            let dateA = new Date();
-            let dateB = new Date();
-            
-            // Parse dateReceived in DD/MM/YY format
-            if (a.dateReceived) {
-                if (a.dateReceived.includes('/')) {
-                    const [day, month, year] = a.dateReceived.split('/');
-                    dateA = new Date(parseInt('20' + year), parseInt(month) - 1, parseInt(day));
-                } else if (a.dateReceived.includes('-')) {
-                    dateA = new Date(a.dateReceived);
-                }
-            }
-            
-            if (b.dateReceived) {
-                if (b.dateReceived.includes('/')) {
-                    const [day, month, year] = b.dateReceived.split('/');
-                    dateB = new Date(parseInt('20' + year), parseInt(month) - 1, parseInt(day));
-                } else if (b.dateReceived.includes('-')) {
-                    dateB = new Date(b.dateReceived);
-                }
-            }
-            
-            return dateB - dateA;
-        });
-        
-        // Generate all dates for the month - SHOW ALL DAYS
-        const firstDay = new Date(year, month, 1);
-        const lastDay = new Date(year, month + 1, 0);
-        const daysInMonth = lastDay.getDate();
-        
-        // Get all days for this month with weekday info
-        const allDays = [];
-        for (let day = 1; day <= daysInMonth; day++) {
-            const date = new Date(year, month, day);
-            allDays.push({ day, date, isWeekday: isWeekday(date) });
-        }
-        
-        // Create header with dates (ALL DAYS - weekends grayed out)
-        const timelineWidth = allDays.length * 28;
-        let ganttHTML = '<div style="display:flex; gap:0; margin-bottom:0; position:sticky; top:0; background:#fff; z-index:10; border-bottom:2px solid #ddd; min-height:28px; align-items:stretch;">';
-        
-        // Job names column - MUST MATCH job info width (170px) - EXACT same styling
-        ganttHTML += '<div style="width:170px; min-width:170px; max-width:170px; font-weight:900; font-size:9px; padding:5px 6px; border-right:2px solid #ddd; color:#000; line-height:1.2; background:#f9f9f9; box-sizing:border-box; display:flex; align-items:center;">DATE</div>';
-        
-        // Wrap date columns in container with exact calculated width
-        ganttHTML += `<div style="width:${timelineWidth}px; min-width:${timelineWidth}px; max-width:${timelineWidth}px; display:flex; gap:0; min-height:28px;">`;
-        
-        // Date columns - ALL DAYS (weekends lighter) - EXACT 28px box
-        allDays.forEach(({ day, date, isWeekday: isWD }) => {
-            const dayName = ['S', 'M', 'T', 'W', 'T', 'F', 'S'][date.getDay()];
-            const bgColor = isWD ? '#f0f0f0' : '#f9f9f9';
-            const textColor = isWD ? '#666' : '#ccc';
-            ganttHTML += `<div style="width:28px; min-width:28px; max-width:28px; height:28px; text-align:center; font-weight:900; font-size:9px; padding:2px 0; background:${bgColor}; border:1px solid #eee; color:${textColor}; box-sizing:border-box; display:flex; flex-direction:column; align-items:center; justify-content:center; line-height:1.1;">${dayName}<br>${day}</div>`;
-        });
-        ganttHTML += '</div>';  // Close date columns container
-        ganttHTML += '</div>';  // Close header row
-        
-        // Jobs timeline
-        ganttHTML += '<div style="width:100%; display:flex; flex-direction:column; gap:0;">';
-        let jobCount = 0;
-        history.forEach((job, filteredIdx) => {
-            // Find original index in full history
-            const originalIdx = fullHistory.findIndex(j => j === job);
-            
-            if (job && !job.completed) {
-                jobCount++;
-                // Handle date in DD/MM/YY or YYYY-MM-DD format
-                let jobDate = new Date();
-                if (job.dateReceived) {
-                    try {
-                        if (job.dateReceived.includes('/')) {
-                            // DD/MM/YY format
-                            const [day, jobMonth, jobYear] = job.dateReceived.split('/');
-                            jobDate = new Date(parseInt('20' + jobYear), parseInt(jobMonth) - 1, parseInt(day));
-                        } else if (job.dateReceived.includes('-')) {
-                            // YYYY-MM-DD format
-                            jobDate = new Date(job.dateReceived);
-                        }
-                    } catch (e) {
-                        jobDate = new Date(); // Default to today if parsing fails
-                    }
-                }
-                
-                // Initialize job phases tracking if not exists
-                if (!job.phases) job.phases = {};
-                
-                // Get custom timeline for this job or use defaults
-                const jobTimeline = job.timeline || getDefaultTimeline();
-                const measuringEnd = jobTimeline.measuring;
-                const sanding1End = jobTimeline.sanding1;
-                const undercoatEnd = jobTimeline.undercoat;
-                const sanding2End = jobTimeline.sanding2;
-                const topCoatEnd = jobTimeline.topcoat;
-                const inspectEnd = jobTimeline.inspect;
-                const completionDay = jobTimeline.complete;
-                // Job header with info and timeline - Alternate background every 2nd job
-                const jobBgColor = jobCount % 2 === 0 ? '#ffffff' : '#f5f5f5';
-                const timelineWidth = allDays.length * 28;
-                ganttHTML += `<div style="margin-bottom:0; padding-bottom:0; display:flex; gap:0; background:${jobBgColor}; border:1px solid #ddd; border-bottom:2px solid #bbb;">
-                    <!-- Left Column: Job Info -->
-                    <div style="width:170px; min-width:170px; max-width:170px; font-weight:900; font-size:9px; padding:5px 6px; border-right:2px solid #ddd; color:#000; line-height:1.2; background:#f9f9f9; box-sizing:border-box;">
-                        <div style="color:#d4af37; font-size:10px;">#${job.jobNum}</div>
-                        <div style="font-size:8px; color:#666; margin-top:1px;">${job.client}</div>
-                        <div style="font-size:7px; color:#2196f3; font-weight:900; margin-top:1px;">📐 ${parseFloat(job.totalSqm || 0).toFixed(2)} m²</div>
-                        <button onclick="editJobTimeline(${originalIdx})" style="font-size:7px; padding:1px 3px; border:none; background:#2196f3; color:#fff; border-radius:2px; cursor:pointer; margin-top:1px; width:100%;">✏️ Edit</button>
-                    </div>
-                    
-                    <!-- Right Column: Timeline bars + Phase checkboxes stacked -->
-                    <div style="display:flex; flex-direction:column; gap:0; width:${timelineWidth}px; min-width:${timelineWidth}px; max-width:${timelineWidth}px;">
-                        <!-- Timeline bars row -->
-                        <div style="display:flex; gap:0;">`;
-                
-                // Timeline bars - ALL DAYS but NEVER work on weekends
-                allDays.forEach(({ day, date: cellDate, isWeekday: isWD }) => {
-                    let barHTML = '';
-                    
-                    // WEEKEND = ALWAYS EMPTY, NO WORK
-                    if (!isWD) {
-                        barHTML = `<div style="width:28px; min-width:28px; max-width:28px; height:28px; background:#fafafa; border:1px solid #f0f0f0; box-sizing:border-box;"></div>`;
-                    }
-                    // WEEKDAY ONLY = check phase
-                    else if (isWD) {
-                        // Weekday - count which working day this is from job start
-                        const workingDayNum = getWorkingDayNumber(jobDate, cellDate);
-                        
-                        if (workingDayNum < 1) {
-                            // Before job start
-                            barHTML = `<div style="width:28px; min-width:28px; max-width:28px; height:28px; background:#f9f9f9; border:1px solid #eee; box-sizing:border-box;"></div>`;
-                        } else {
-                            // Job has started - assign to phase
-                            let phaseKey = '';
-                            let phaseColor = '';
-                            let phaseLabel = '';
-                            let isStrikeThrough = false;
-                            
-                            // Assign working day to phase (simple whole day allocation)
-                            if (workingDayNum <= measuringEnd) {
-                                phaseKey = 'measuring';
-                                phaseColor = '#2196f3';
-                                phaseLabel = 'M';
-                                isStrikeThrough = job.phases && job.phases.measuring;
-                            } else if (workingDayNum <= sanding1End) {
-                                phaseKey = 'sanding1';
-                                phaseColor = '#ff9500';
-                                phaseLabel = 'S1';
-                                isStrikeThrough = job.phases && job.phases.sanding1;
-                            } else if (workingDayNum <= undercoatEnd) {
-                                phaseKey = 'undercoat';
-                                phaseColor = '#8b4513';
-                                phaseLabel = 'U';
-                                isStrikeThrough = job.phases && job.phases.undercoat;
-                            } else if (workingDayNum <= sanding2End) {
-                                phaseKey = 'sanding2';
-                                phaseColor = '#ff9500';
-                                phaseLabel = 'S2';
-                                isStrikeThrough = job.phases && job.phases.sanding2;
-                            } else if (workingDayNum <= topCoatEnd) {
-                                phaseKey = 'topcoat';
-                                phaseColor = '#9c27b0';
-                                phaseLabel = 'T';
-                                isStrikeThrough = job.phases && job.phases.topcoat;
-                            } else if (workingDayNum <= inspectEnd) {
-                                phaseKey = 'inspect';
-                                phaseColor = '#673ab7';
-                                phaseLabel = 'I';
-                                isStrikeThrough = job.phases && job.phases.inspect;
-                            } else if (workingDayNum <= completionDay) {
-                                phaseKey = 'complete';
-                                phaseColor = '#34c759';
-                                phaseLabel = 'C';
-                                isStrikeThrough = job.phases && job.phases.complete;
-                            }
-                            
-                            if (phaseKey) {
-                                const barStyle = isStrikeThrough 
-                                    ? `opacity:0.4; background:${phaseColor}80 !important; border:2px dashed #ccc !important;` 
-                                    : `background:${phaseColor}; border:1px solid ${phaseColor};`;
-                                
-                                barHTML = `<div style="width:28px; min-width:28px; max-width:28px; height:28px; ${barStyle} display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:900; color:#fff; position:relative; cursor:pointer; box-sizing:border-box; transition:all 0.3s;" onclick="toggleJobPhaseById('${job.jobNum}', '${job.dateReceived}', '${job.client}', '${phaseKey}')" title="Click to toggle">
-                                    <span>${phaseLabel}</span>
-                                    ${isStrikeThrough ? '<svg style="position:absolute; width:20px; height:20px;" viewBox="0 0 24 24" fill="none" stroke="#999" stroke-width="3"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg>' : ''}
-                                </div>`;
-                            } else {
-                                barHTML = `<div style="width:28px; min-width:28px; max-width:28px; height:28px; background:#f9f9f9; border:1px solid #eee; box-sizing:border-box;"></div>`;
-                            }
-                        }
-                    }
-                    
-                    ganttHTML += barHTML;
-                });
-                
-                ganttHTML += '</div>';  // Close timeline bars row
-                ganttHTML += `<div style="display:flex; gap:8px; padding:4px 6px; background:transparent; flex-wrap:wrap; align-items:center;">
-                        <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
-                            <input type="checkbox" ${job.phases && job.phases.measuring ? 'checked' : ''} onchange="toggleJobPhaseById('${job.jobNum}', '${job.dateReceived}', '${job.client}', 'measuring')" style="width:13px; height:13px; cursor:pointer;">
-                            <span>M</span>
-                        </label>
-                        <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
-                            <input type="checkbox" ${job.phases && job.phases.sanding1 ? 'checked' : ''} onchange="toggleJobPhaseById('${job.jobNum}', '${job.dateReceived}', '${job.client}', 'sanding1')" style="width:13px; height:13px; cursor:pointer;">
-                            <span>S1</span>
-                        </label>
-                        <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
-                            <input type="checkbox" ${job.phases && job.phases.undercoat ? 'checked' : ''} onchange="toggleJobPhaseById('${job.jobNum}', '${job.dateReceived}', '${job.client}', 'undercoat')" style="width:13px; height:13px; cursor:pointer;">
-                            <span>U</span>
-                        </label>
-                        <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
-                            <input type="checkbox" ${job.phases && job.phases.sanding2 ? 'checked' : ''} onchange="toggleJobPhaseById('${job.jobNum}', '${job.dateReceived}', '${job.client}', 'sanding2')" style="width:13px; height:13px; cursor:pointer;">
-                            <span>S2</span>
-                        </label>
-                        <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
-                            <input type="checkbox" ${job.phases && job.phases.topcoat ? 'checked' : ''} onchange="toggleJobPhaseById('${job.jobNum}', '${job.dateReceived}', '${job.client}', 'topcoat')" style="width:13px; height:13px; cursor:pointer;">
-                            <span>T</span>
-                        </label>
-                        <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
-                            <input type="checkbox" ${job.phases && job.phases.inspect ? 'checked' : ''} onchange="toggleJobPhaseById('${job.jobNum}', '${job.dateReceived}', '${job.client}', 'inspect')" style="width:13px; height:13px; cursor:pointer;">
-                            <span>I</span>
-                        </label>
-                        <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
-                            <input type="checkbox" ${job.phases && job.phases.complete ? 'checked' : ''} onchange="toggleJobPhaseById('${job.jobNum}', '${job.dateReceived}', '${job.client}', 'complete')" style="width:13px; height:13px; cursor:pointer;">
-                            <span>C</span>
-                        </label>
-                        <button onclick="markJobComplete(${originalIdx})" style="border:none; background:#34c759; color:#fff; padding:4px 10px; border-radius:4px; font-weight:900; font-size:9px; cursor:pointer;">✓ DONE</button>
-                        </div>
-                    </div>
-                </div>`;
-            }
-        });
-        ganttHTML += '</div>';
-        
-        // Legend
-        ganttHTML += `<div style="margin-top:15px;">
-            <div style="background:#f0f0f0; padding:10px; border-radius:6px; margin-bottom:10px;">
-                <p style="margin:0 0 8px 0; font-weight:900; font-size:11px; color:#333;">📅 Timeline Counts WORKING DAYS ONLY</p>
-                <p style="margin:0; font-size:9px; color:#666;"><strong>Example:</strong> If Measuring = 2 days, it shows M/T (Mon-Tue). If Sanding = 8 days starting Wed, it shows W/T/F (3) + skip weekend + M/T/W/T (4) = 8 working days total across 2 weeks</p>
-            </div>
-            <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; font-size:8px; font-weight:900;">
-            <div style="display:flex; align-items:center; gap:4px;">
-                <div style="width:14px; height:14px; background:#2196f3; border:1px solid #1976d2; border-radius:2px;"></div>
-                <span>M = Measuring</span>
-            </div>
-            <div style="display:flex; align-items:center; gap:4px;">
-                <div style="width:14px; height:14px; background:#ff9500; border:1px solid #f57c00; border-radius:2px;"></div>
-                <span>S1/S2 = Sanding</span>
-            </div>
-            <div style="display:flex; align-items:center; gap:4px;">
-                <div style="width:14px; height:14px; background:#8b4513; border:1px solid #5c2e0a; border-radius:2px;"></div>
-                <span>U = Undercoat</span>
-            </div>
-            <div style="display:flex; align-items:center; gap:4px;">
-                <div style="width:14px; height:14px; background:#9c27b0; border:1px solid #7b1fa2; border-radius:2px;"></div>
-                <span>T = Top Coat</span>
-            </div>
-            <div style="display:flex; align-items:center; gap:4px;">
-                <div style="width:14px; height:14px; background:#673ab7; border:1px solid #512da8; border-radius:2px;"></div>
-                <span>I = Inspect</span>
-            </div>
-            <div style="display:flex; align-items:center; gap:4px;">
-                <div style="width:14px; height:14px; background:#34c759; border:1px solid #28a745; border-radius:2px;"></div>
-                <span>C = Complete</span>
-            </div>
-            <div style="display:flex; align-items:center; gap:4px;">
-                <div style="width:14px; height:14px; background:#fafafa; border:1px solid #f0f0f0; border-radius:2px;"></div>
-                <span>Weekend (no work)</span>
-            </div>
-        </div>`;
-        
-        ganttChart.innerHTML = ganttHTML;
-        
-        // COUNT ACTUAL JOB DIVS IN DOM
-        const jobDivs = ganttChart.querySelectorAll('div[style*="margin-bottom:12px"]');
-        jobDivs.forEach((div, idx) => {
-        });
-        } catch (error) {
-            ganttChart.innerHTML = `<div style="padding:20px; color:#ff3b30; background:#ffebee; border-radius:6px;"><strong>Error loading schedule:</strong> ${error.message}</div>`;
-        }
-        
-        // Update task summary
-        renderJobTasks();
-        
-        // Check for unallocated doors
-        checkForNewUnallocatedDoors();
+        // Gantt chart removed from database
     }
 
-    function toggleGanttCell(jobIdx, phaseKey) {
-        const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
-        const job = history[jobIdx];
-        
-        if (!job) return;
-        if (!job.phases) job.phases = {};
-        
-        job.phases[phaseKey] = !job.phases[phaseKey];
-        
-        history[jobIdx] = job;
-        localStorage.setItem('jobHistory', JSON.stringify(history));
-        
-        // Sync to Firebase in background (async)
-        if (window.syncJobsToFirebase) {
-            setTimeout(() => window.syncJobsToFirebase(), 100);
-        }
-        
-        // Update workload summary ONLY (don't re-render entire schedule)
-        renderJobTasks();
-        
-        // Show notification
-        notify(job.phases[phaseKey] ? `✓ ${phaseKey} marked complete` : `○ ${phaseKey} marked pending`);
-        
-        // DO NOT call renderScheduleCalendar() here - it breaks checkbox state
-        // User will see updates when they navigate away and back to Schedule tab
-    }
-
-    // Guard against rapid duplicate toggles
-    // Toggle job phase by unique job identifiers (jobNum, dateReceived, client)
     function toggleJobPhaseById(jobNum, dateReceived, client, phaseKey) {
         try {
             const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
@@ -3462,41 +2992,6 @@
     function closeTimelineModal() {
         document.getElementById('timelineModal').style.display = 'none';
         timelineEditMode = null;
-    }
-
-    function renderGlobalNotifications() {
-        const notificationsDiv = document.getElementById('globalNotifications');
-        if (!notificationsDiv) return; // Exit if not on Schedule tab
-        
-        const adminAlerts = JSON.parse(localStorage.getItem('adminAlerts')) || [];
-        
-        if (adminAlerts.length === 0) {
-            notificationsDiv.innerHTML = '<p style="color:#999; text-align:center; font-size:12px;">No notifications yet</p>';
-            return;
-        }
-        
-        let notificationsHTML = '';
-        adminAlerts.slice(0, 5).forEach((alert, i) => {
-            const alertDate = new Date(alert.timestamp);
-            notificationsHTML += `<div style="padding:10px; border-bottom:1px solid #ddd; background:#fff;">
-                <div style="display:flex; justify-content:space-between; align-items:start;">
-                    <div style="flex:1;">
-                        <div style="font-weight:900; color:#34c759; font-size:11px;">✓ Job Completed</div>
-                        <div style="font-size:10px; color:#000; font-weight:700; margin:2px 0;">Job #${alert.jobNum}: ${alert.jobName}</div>
-                        <div style="font-size:9px; color:#666;">${alert.client} • ${alert.totalParts} parts • ${alert.totalSqm} SQM</div>
-                    </div>
-                    <div style="font-size:9px; color:#999; text-align:right; white-space:nowrap;">
-                        ${alertDate.toLocaleDateString('en-AU')}<br>${alertDate.toLocaleTimeString('en-AU', {hour: '2-digit', minute: '2-digit'})}
-                    </div>
-                </div>
-            </div>`;
-        });
-        
-        if (adminAlerts.length > 5) {
-            notificationsHTML += `<div style="padding:10px; text-align:center; color:#999; font-size:10px;">+${adminAlerts.length - 5} more notifications</div>`;
-        }
-        
-        notificationsDiv.innerHTML = notificationsHTML;
     }
 
     function prevScheduleMonth() {
