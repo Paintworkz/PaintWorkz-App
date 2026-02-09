@@ -3,11 +3,11 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 36 | 2026-02-08 | Improve form clearing on job save         ║
-║ - Fixed: All fields cleared with existence checks               ║
-║ - Added: Better error handling and detailed logging             ║
-║ - Added: Clear currentJob from localStorage                     ║
-║ - Result: Form definitely reset for next job entry              ║
+║ REV 37 | 2026-02-08 | Fix unallocated doors notifications      ║
+║ - CRITICAL: Save door profiles to localStorage (persist)       ║
+║ - Added: Red global notification for unallocated doors         ║
+║ - Added: Check for unallocated doors on Schedule/Admin load    ║
+║ - Result: Deleted doors stay deleted, new doors notify         ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -653,10 +653,10 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 36 (2026-02-08) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
-    console.log('✓ Form clears completely on job save');
-    console.log('✓ All fields reset to defaults');
-    console.log('✓ Panel list, client, colours, codes all cleared');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 37 (2026-02-08) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('✓ Unallocated doors persist (saved to localStorage)');
+    console.log('✓ Red notification shows unallocated doors');
+    console.log('✓ New doors appear in matrix automatically');
     // ====================================
     
     // Firebase already initialized at top of page
@@ -806,7 +806,72 @@
     
     // RESTORED MASTER LISTS
     let clients = ["12345ABM", "Absolute Kitchens", "Advanced Cabinetry", "AKC Kitchens", "Braw Creative", "Brian Moloney", "Cabinets & Stone", "Cabinets by Michael", "Chooka", "CKK", "Clover Doors", "Complete Style Joinery", "Concept 2 Reality", "Coronet Kitchens", "Create a Kitchen", "Creative Cabinetry", "Cutting Edge Joinery", "Driscolls Joinery", "Evolution Kitchens and Joinery", "Geoff Frost Builders", "GM Cabinets", "Grampians Joinery", "Grovedale Kitchens", "Gunning Concepts", "Hamilton Sheetmetal", "Harris Cabinets", "Howe Kitchens & Joinery", "Hy-Craft", "Jardines Cabinets", "Joinery by Jarrod", "Jonassons", "Kingston Kabinets", "Kitchens U Build", "Kyle Hendy", "Leighton Park", "Matthews Joinery", "Ocean Grove Joinery", "Onshore", "R J Walter", "Richardson Joinery", "Schier Cabinet Makers", "Snaauws Kitchens", "SRT Cabinetry", "Stawell Joinery", "Stephensons Kitchens", "T&J Kitchens", "Tony Lambert Kitchens", "Total Kitchen Solutions", "Trendset Kitchens", "Troy Turner", "Ultrabuild", "VG Cabinets", "VJS Geelong", "VJS Shepparton", "Walk in Client", "Westend Cabinetry"];
-    let profiles = ["Plain (101)", "J-Mould (102)", "Sharknose (103)", "Bevelled Edge (104)", "Ashlee (201)", "Hamilton (202)", "Vertical Grooves (203)", "Tarrone (301)", "Bobby (302)", "Orford (303)", "Shaker (401)", "Shaker 45 (402)", "Shaker w/Lines (403)", "Jack (404)", "Georgia (501)", "Branxholme (502)", "Rosebrook (503)", "Benchtop", "Molding", "Custom"];
+    let profiles = (function() {
+        // Load from localStorage if available, otherwise use defaults
+        const saved = localStorage.getItem('doorProfiles');
+        if (saved) {
+            try {
+                return JSON.parse(saved);
+            } catch(e) {
+                console.error('Error loading door profiles from localStorage:', e);
+            }
+        }
+        // Defaults
+        return ["Plain (101)", "J-Mould (102)", "Sharknose (103)", "Bevelled Edge (104)", "Ashlee (201)", "Hamilton (202)", "Vertical Grooves (203)", "Tarrone (301)", "Bobby (302)", "Orford (303)", "Shaker (401)", "Shaker 45 (402)", "Shaker w/Lines (403)", "Jack (404)", "Georgia (501)", "Branxholme (502)", "Rosebrook (503)", "Benchtop", "Molding", "Custom"];
+    })();
+    
+    // Helper function to save profiles to localStorage
+    function saveProfilesToStorage() {
+        localStorage.setItem('doorProfiles', JSON.stringify(profiles));
+        console.log(`✓ Saved ${profiles.length} door profiles to localStorage`);
+    }
+    
+    // Check for new unallocated doors and show notification
+    function checkForNewUnallocatedDoors() {
+        const unallocated = getUnallocatedDoors();
+        if (unallocated.length > 0) {
+            console.log(`⚠️ Found ${unallocated.length} unallocated door(s):`);
+            unallocated.forEach(door => console.log(`  - ${door.name}`));
+            showUnallocatedDoorsNotification(unallocated);
+        }
+    }
+    
+    // Show red notification for unallocated doors
+    function showUnallocatedDoorsNotification(unallocated) {
+        const alertArea = document.getElementById('globalNotifications');
+        if (!alertArea) return;
+        
+        // Check if notification already exists
+        const existingAlert = alertArea.querySelector('[data-alert="unallocated-doors"]');
+        if (existingAlert) {
+            existingAlert.remove();
+        }
+        
+        const alertId = `unalloc-doors-${Date.now()}`;
+        
+        // Remove placeholder
+        const placeholder = alertArea.querySelector('p');
+        if (placeholder) placeholder.remove();
+        
+        const alertHTML = `
+            <div data-alert="unallocated-doors" style="background:#ffebee; border-left:4px solid #ff3b30; padding:12px; margin-bottom:8px; border-radius:4px;">
+                <div style="font-weight:900; color:#ff3b30; margin-bottom:6px; font-size:12px;">
+                    ⚠️ ${unallocated.length} DOOR(S) NEED ALLOCATING
+                </div>
+                <div style="color:#d32f2f; font-size:11px;">
+                    ${unallocated.map(d => `• ${d.name}`).join('<br>')}
+                </div>
+                <div style="margin-top:8px; text-align:right;">
+                    <button onclick="tab('admin'); setTimeout(() => switchAdminTab('pricing'), 200)" style="background:#ff3b30; color:#fff; border:none; padding:6px 12px; border-radius:4px; font-weight:900; font-size:10px; cursor:pointer;">
+                        GO TO MATRIX →
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        alertArea.innerHTML += alertHTML;
+        console.log(`🔔 Shown notification for ${unallocated.length} unallocated door(s)`);
+    }
 
     window.onload = () => { 
         refreshLists();
@@ -2484,6 +2549,9 @@
         
         // Update task summary
         renderJobTasks();
+        
+        // Check for unallocated doors
+        checkForNewUnallocatedDoors();
     }
 
     function toggleGanttCell(jobIdx, phaseKey) {
@@ -2643,6 +2711,7 @@
             document.getElementById('admin-tab-pricing-content').style.display = 'block';
             document.getElementById('admin-tab-pricing').classList.add('active');
             renderPricingMatrix(); // Load pricing matrix when tab opens
+            checkForNewUnallocatedDoors(); // Check and notify about unallocated doors
         }
     }
 
@@ -2997,6 +3066,7 @@
         
         // Remove from unallocated profiles array
         profiles = profiles.filter(p => p !== doorName);
+        saveProfilesToStorage(); // SAVE TO STORAGE
         console.log(`✓ Removed ${doorName} from unallocated. Remaining: ${profiles.length}`);
         
         renderPricingMatrix();
@@ -3012,6 +3082,7 @@
         
         // Remove from profiles array
         profiles = profiles.filter(p => p !== doorName);
+        saveProfilesToStorage(); // SAVE TO STORAGE
         console.log(`✓ Removed from profiles array. Remaining: ${profiles.length}`);
         
         renderPricingMatrix();
