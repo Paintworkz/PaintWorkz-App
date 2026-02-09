@@ -3,13 +3,13 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 58 | 2026-02-09 | Fixed Door Assignment + Better Logging   ║
-║ - FIXED: Doors no longer deleted from profiles when assigned   ║
-║ - FIXED: Doors remain in measure tab dropdown after assigning  ║
-║ - REMOVED: "Nuke All" button (too dangerous)                   ║
-║ - ADDED: Detailed console logging for profile operations       ║
-║ - IMPROVED: Better tracking of what's in profiles array        ║
-║ - NEXT: Run 🔍 DIAGNOSE to see what's in storage               ║
+║ REV 60 | 2026-02-09 | Fixed Missing Defaults Issue              ║
+║ - FIXED: Default 20 doors now saved to localStorage on load    ║
+║ - FIXED: refreshLists() now checks if profiles empty vs dropdown║
+║ - ADDED: Safeguard to detect if prof-select not populating     ║
+║ - ROOT CAUSE: Defaults weren't saved to localStorage initially  ║
+║ - EFFECT: When assigning doors, full list should stay visible  ║
+║ - NEXT: Download + test, add doors, assign them                ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -695,7 +695,7 @@
     <div class="footer-item" style="margin-left:15px;"><div class="footer-label">TOTAL SQM</div><div class="footer-val" id="tA">0.000</div></div>
     <div style="flex:1; display:flex; justify-content:center; gap:20px; align-items:center;">
         <div class="icon-btn" onclick="genPDF()" style="color:#fff">📄</div>
-        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro 4.8 | REV 58</div>
+        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro 4.8 | REV 60</div>
     </div>
     <div class="footer-item"><div class="footer-label">PARTS</div><div class="footer-val" id="tQ">0</div></div>
     <div class="icon-btn" onclick="handleLogout()" title="Logout" style="color:#ff3b30; font-size:24px; cursor:pointer; margin-right:15px;">🚪</div>
@@ -703,7 +703,7 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 58 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 60 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     console.log('✅ CRITICAL FIXES:');
     console.log('✓ Disabled Firebase real-time sync (memory crashes fixed)');
     console.log('✓ Improved error handling to prevent crashes');
@@ -915,8 +915,12 @@
             console.log('ℹ️ No saved door profiles in localStorage, using defaults');
         }
         // Use defaults
+        const defaults = [...DEFAULT_PROFILES];
         console.log(`✓ Using default ${DEFAULT_PROFILES.length} door profiles`);
-        return [...DEFAULT_PROFILES];
+        console.log('  Saving defaults to localStorage immediately...');
+        localStorage.setItem('doorProfiles', JSON.stringify(defaults)); // SAVE DEFAULTS
+        console.log('  ✓ Defaults saved to localStorage');
+        return defaults;
     })();
     
     // Helper function to save profiles to localStorage
@@ -1970,24 +1974,50 @@
     }
 
     function refreshLists() {
+        console.log(`🔄 REFRESHING LISTS (refreshLists called)`);
+        console.log(`  Current profiles array:`, profiles);
+        console.log(`  profiles.length = ${profiles.length}`);
+        
         const cliSel = document.getElementById('cli'); 
+        console.log(`  ✓ Found cli dropdown element`);
         cliSel.innerHTML = '';
         clients.sort().forEach(c => { 
             let o = document.createElement('option'); 
             o.innerText=c; 
             cliSel.appendChild(o); 
         });
+        console.log(`  ✓ Populated cli with ${clients.length} clients`);
         
         const profSel = document.getElementById('prof-select'); 
+        if (!profSel) {
+            console.error('  ✗ CRITICAL: prof-select element NOT FOUND!');
+            return;
+        }
+        console.log(`  ✓ Found prof-select dropdown element`);
+        
         profSel.innerHTML = '';
-        profiles.forEach(p => { 
+        console.log(`  Clearing prof-select... adding ${profiles.length} profiles:`);
+        
+        if (profiles.length === 0) {
+            console.warn('  ⚠️ WARNING: profiles array is EMPTY!');
+        }
+        
+        profiles.forEach((p, idx) => { 
+            console.log(`    [${idx}] Adding option: "${p}"`);
             let o = document.createElement('option'); 
             o.value=p; 
             o.innerText=p; 
             profSel.appendChild(o); 
         });
         
+        console.log(`  ✓ Final prof-select count: ${profSel.options.length} options`);
+        
+        if (profSel.options.length === 0 && profiles.length > 0) {
+            console.error('  ✗ CRITICAL ERROR: profiles.length=${profiles.length} but prof-select has 0 options!');
+        }
+        
         renderDB();
+        console.log(`  ✓ renderDB() called`);
     }
 
     function tab(t) {
@@ -2109,11 +2139,17 @@
     }
     
     function delProf(name) { 
-        if(confirm("Delete " + name + "?")){ 
+        console.log(`🗑️ DATABASE TAB DELETE BUTTON CLICKED for: ${name}`);
+        if(confirm(`🚨 PERMANENTLY DELETE: "${name}"?\n\nThis will remove it from your database!`)){ 
+            console.log(`  ✓ User confirmed deletion from database`);
             profiles = profiles.filter(x => x !== name); 
+            saveProfilesToStorage();
+            console.log(`  ✓ Removed from profiles. Now ${profiles.length} items`);
             refreshLists();
-            notify('Profile Deleted');
-        } 
+            notify(`🗑️ ${name} deleted from database`);
+        } else {
+            console.log(`  ✗ Deletion cancelled`);
+        }
     }
     
     function editProfile(oldName) {
@@ -3524,8 +3560,8 @@
                             <option value="Other">Other</option>
                         </select>
                         <div style="display:flex; gap:5px; margin-top:5px;">
-                            <button onclick="assignDoorToTier('${door.code}', '${door.name}')" style="flex:1; padding:4px; background:#34c759; color:#fff; border:none; border-radius:4px; font-weight:900; font-size:10px; cursor:pointer;">✓ ASSIGN</button>
-                            <button onclick="deleteUnallocatedDoor('${door.code}', '${door.name}')" style="flex:1; padding:4px; background:#ff3b30; color:#fff; border:none; border-radius:4px; font-weight:900; font-size:10px; cursor:pointer;">🗑️ DELETE</button>
+                            <button onclick="assignDoorToTier('${door.code}', '${door.name}')" style="flex:1; padding:8px; background:#34c759; color:#fff; border:none; border-radius:4px; font-weight:900; font-size:11px; cursor:pointer; box-shadow:0 2px 4px rgba(0,0,0,0.1);">✓ ASSIGN TO TIER</button>
+                            <button onclick="deleteUnallocatedDoor('${door.code}', '${door.name}')" style="flex:1; padding:8px; background:#ff3b30; color:#fff; border:none; border-radius:4px; font-weight:900; font-size:9px; cursor:pointer; opacity:0.7;">DELETE</button>
                         </div>
                     </td>
                 </tr>`;
@@ -3568,41 +3604,52 @@
         const semiGloss = parseFloat(document.getElementById(`unalloc_semigloss_${code}`).value) || 152;
         const gloss = parseFloat(document.getElementById(`unalloc_gloss_${code}`).value) || 152;
         
-        console.log(`✓ Assigning ${doorName} to ${tier}`);
+        console.log(`✅ ASSIGNING: "${doorName}" → ${tier}`);
+        console.log(`  Before: ${profiles.length} profiles in array`);
+        console.log(`  Prices: Matt=${matt}, Satin=${satin}, Semi=${semiGloss}, Gloss=${gloss}`);
         
         // Add to tier
         const newCode = parseInt(Object.keys(masterMatrix[tier]).sort().reverse()[0]) + 1;
         masterMatrix[tier][newCode] = [doorName, matt, satin, semiGloss, gloss];
+        console.log(`  ✓ Added to masterMatrix[${tier}][${newCode}]`);
         
         localStorage.setItem('masterMatrix', JSON.stringify(masterMatrix));
         
         // NOTE: DO NOT remove from profiles array!
         // Door should remain in profiles (ALL doors) and just be marked as allocated in masterMatrix
+        console.log(`  ℹ️ Door REMAINS in profiles array (${profiles.length} profiles)`);
+        console.log(`  ℹ️ Door will no longer appear in unallocated section (because it's now in ${tier})`);
         
         // Sync to Firebase
         syncProfilesToFirebase();
         
         renderPricingMatrix();
+        refreshLists(); // Update measure tab dropdown
         notify(`✓ ${doorName} assigned to ${tier}`);
     }
     
     function deleteUnallocatedDoor(code, doorName) {
-        if (!confirm(`Delete ${doorName}?`)) {
+        console.log(`🗑️ DELETE BUTTON CLICKED for: ${doorName}`);
+        if (!confirm(`🚨 DELETE PERMANENTLY: "${doorName}"?\n\nThis will remove it from your profile database!`)) {
+            console.log(`  ✗ Deletion cancelled`);
             return;
         }
         
-        console.log(`🗑️ Deleting unallocated door: ${doorName}`);
+        console.log(`  ✓ User confirmed deletion`);
+        console.log(`  Removing "${doorName}" from profiles array (was ${profiles.length} items)`);
         
         // Remove from profiles array
         profiles = profiles.filter(p => p !== doorName);
         saveProfilesToStorage(); // SAVE TO STORAGE
-        console.log(`✓ Removed from profiles array. Remaining: ${profiles.length}`);
+        console.log(`  ✓ Removed from profiles array. Now ${profiles.length} items`);
+        console.log(`  Current profiles:`, profiles);
         
         // Sync to Firebase
         syncProfilesToFirebase();
         
         renderPricingMatrix();
-        notify(`🗑️ ${doorName} deleted`);
+        refreshLists(); // Update database tab
+        notify(`🗑️ ${doorName} permanently deleted`);
     }
     
     function updatePricingMatrix(tier, code, priceIndex, val) {
