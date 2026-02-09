@@ -3,13 +3,13 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 61 | 2026-02-09 | Prevented Accidental Door Deletion        ║
-║ - REMOVED: Delete button from unallocated doors in Price Matrix║
-║ - REMOVED: Warning message about "Reset to 20 Defaults"        ║
-║ - ADDED: Note directing users to Database tab for deletion      ║
-║ - EFFECT: Users can only delete doors from Database tab now    ║
-║ - SAFETY: Prevents accidental deletion when assigning tiers    ║
-║ - NOTE: If doors were deleted, they're gone (check backup)     ║
+║ REV 62 | 2026-02-09 | Debug Door Profile Rendering              ║
+║ - ADDED: Extensive logging to renderDB() function               ║
+║ - ADDED: Log showing profiles array after initialization        ║
+║ - ADDED: Element existence checks and error messages            ║
+║ - PURPOSE: Diagnose why doors don't show in Database tab       ║
+║ - NEXT: Download, open F12 Console, check logs                 ║
+║ - If doors don't populate: Check console for error messages     ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -698,7 +698,7 @@
     <div class="footer-item" style="margin-left:15px;"><div class="footer-label">TOTAL SQM</div><div class="footer-val" id="tA">0.000</div></div>
     <div style="flex:1; display:flex; justify-content:center; gap:20px; align-items:center;">
         <div class="icon-btn" onclick="genPDF()" style="color:#fff">📄</div>
-        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro 4.8 | REV 61</div>
+        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro 4.8 | REV 62</div>
     </div>
     <div class="footer-item"><div class="footer-label">PARTS</div><div class="footer-val" id="tQ">0</div></div>
     <div class="icon-btn" onclick="handleLogout()" title="Logout" style="color:#ff3b30; font-size:24px; cursor:pointer; margin-right:15px;">🚪</div>
@@ -706,7 +706,7 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 61 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 62 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     console.log('✅ CRITICAL FIXES:');
     console.log('✓ Disabled Firebase real-time sync (memory crashes fixed)');
     console.log('✓ Improved error handling to prevent crashes');
@@ -925,6 +925,10 @@
         console.log('  ✓ Defaults saved to localStorage');
         return defaults;
     })();
+    
+    // Log profiles initialization
+    console.log(`✅ PROFILES INITIALIZED: ${profiles.length} doors loaded`);
+    console.log('   Initial profiles array:', profiles);
     
     // Helper function to save profiles to localStorage
     function saveProfilesToStorage() {
@@ -2075,21 +2079,43 @@
 
     // DATABASE OPS
     function renderDB() {
+        console.log(`📋 renderDB() called`);
+        console.log(`  profiles array:`, profiles);
+        console.log(`  profiles.length = ${profiles.length}`);
+        
         const cL = document.getElementById('list-clients'); 
+        if (!cL) {
+            console.error('  ✗ CRITICAL: list-clients element NOT FOUND!');
+            return;
+        }
         cL.innerHTML = '';
         clients.sort().forEach((c, i) => { 
             cL.innerHTML += `<div class="db-item"><span>${c}</span><span class="db-del" onclick="delCli('${c}')">×</span></div>`; 
         });
+        console.log(`  ✓ Rendered ${clients.length} clients`);
         
         const pL = document.getElementById('list-profiles'); 
+        if (!pL) {
+            console.error('  ✗ CRITICAL: list-profiles element NOT FOUND!');
+            return;
+        }
         pL.innerHTML = '';
-        profiles.sort().forEach((p, i) => { 
-            pL.innerHTML += `<div class="db-item" style="display:flex; justify-content:space-between; align-items:center;">
-                <span style="flex:1;">${p}</span>
-                <button onclick="editProfile('${p}')" style="padding:2px 8px; background:#2196f3; color:#fff; border:none; border-radius:3px; font-size:9px; font-weight:900; cursor:pointer; margin-right:4px;">EDIT</button>
-                <span class="db-del" onclick="delProf('${p}')">×</span>
-            </div>`; 
-        });
+        console.log(`  Rendering ${profiles.length} profiles...`);
+        
+        if (profiles.length === 0) {
+            console.warn('  ⚠️ profiles array is EMPTY! Will show empty list');
+            pL.innerHTML = '<p style="color:#999; text-align:center; font-size:11px;">No profiles yet. Add one above.</p>';
+        } else {
+            profiles.sort().forEach((p, i) => { 
+                console.log(`    [${i}] Rendering: "${p}"`);
+                pL.innerHTML += `<div class="db-item" style="display:flex; justify-content:space-between; align-items:center;">
+                    <span style="flex:1;">${p}</span>
+                    <button onclick="editProfile('${p}')" style="padding:2px 8px; background:#2196f3; color:#fff; border:none; border-radius:3px; font-size:9px; font-weight:900; cursor:pointer; margin-right:4px;">EDIT</button>
+                    <span class="db-del" onclick="delProf('${p}')">×</span>
+                </div>`; 
+            });
+            console.log(`  ✓ Rendered all ${profiles.length} profiles to DOM`);
+        }
     }
 
     function addClient() { 
