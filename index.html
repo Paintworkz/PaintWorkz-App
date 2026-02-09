@@ -3,13 +3,13 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 52 | 2026-02-09 | Workload Update + Unallocated Door Fix   ║
-║ - FIXED: Workload summary now updates when switching tabs       ║
-║ - FIXED: Unallocated doors reappearing (masterMatrix validation)║
-║ - Added: validateAndCleanMasterMatrix() on startup & operations ║
-║ - Improved: Nuclear reset also clears localStorage masterMatrix ║
-║ - Added: Orphaned door detection and removal                    ║
-║ - Previous: Jobs Chart minimize toggle, profile corruption fix  ║
+║ REV 53 | 2026-02-09 | Moved Version to Footer + Layout Fix     ║
+║ - MOVED: App version from admin panel to footer (admin tab only)║
+║ - FIXED: Price matrix layout by removing complex validation    ║
+║ - FIXED: Version appears next to PDF button in footer          ║
+║ - IMPROVED: Workload summary updates when switching tabs        ║
+║ - NOTE: Investigating persistent unallocated door issue         ║
+║ - Previous: Jobs Chart toggle, nuclear reset, corruption fix    ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -632,8 +632,6 @@
     <div id="admin" class="view-section">
         <div class="card">
             <h3>Admin Settings</h3>
-            <label>App Version</label>
-            <input type="text" value="PaintWorkz Pro 4.8 | REV 52" disabled style="background:#f5f5f5; cursor:not-allowed;">
             
             <!-- Admin Sub-Tabs -->
             <div class="sub-nav" style="margin-top:15px;">
@@ -694,8 +692,9 @@
 
 <div class="sticky-footer">
     <div class="footer-item" style="margin-left:15px;"><div class="footer-label">TOTAL SQM</div><div class="footer-val" id="tA">0.000</div></div>
-    <div style="flex:1; display:flex; justify-content:center;">
+    <div style="flex:1; display:flex; justify-content:center; gap:20px; align-items:center;">
         <div class="icon-btn" onclick="genPDF()" style="color:#fff">📄</div>
+        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro 4.8 | REV 53</div>
     </div>
     <div class="footer-item"><div class="footer-label">PARTS</div><div class="footer-val" id="tQ">0</div></div>
     <div class="icon-btn" onclick="handleLogout()" title="Logout" style="color:#ff3b30; font-size:24px; cursor:pointer; margin-right:15px;">🚪</div>
@@ -703,7 +702,7 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 52 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 53 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     console.log('✅ CRITICAL FIXES:');
     console.log('✓ Disabled Firebase real-time sync (memory crashes fixed)');
     console.log('✓ Improved error handling to prevent crashes');
@@ -1925,6 +1924,12 @@
         document.querySelectorAll('.view-section, .nav-btn').forEach(x => x.classList.remove('active'));
         document.getElementById(t).classList.add('active');
         document.getElementById('btn-' + t).classList.add('active');
+        
+        // Show/hide version display - only in admin tab
+        const versionDisplay = document.getElementById('footerVersionDisplay');
+        if (versionDisplay) {
+            versionDisplay.style.display = (t === 'admin') ? 'block' : 'none';
+        }
         
         // Show/hide workload summary based on active tab
         const workloadContainer = document.getElementById('workloadSummaryContainer');
@@ -3284,33 +3289,6 @@
     
     let masterMatrix = (storedMatrix && Object.keys(storedMatrix).length > 0) ? storedMatrix : defaultMasterMatrix;
     
-    // VALIDATION: Clean up masterMatrix to remove doors no longer in profiles
-    // This prevents orphaned door references from showing as "unallocated"
-    function validateAndCleanMasterMatrix() {
-        const doorsInProfiles = new Set(profiles);
-        let cleaned = false;
-        
-        Object.keys(masterMatrix).forEach(tierName => {
-            const tier = masterMatrix[tierName];
-            Object.keys(tier).forEach(code => {
-                const doorName = tier[code][0];
-                if (!doorsInProfiles.has(doorName)) {
-                    console.warn(`⚠️ Removing orphaned door "${doorName}" from ${tierName} (not in current profiles)`);
-                    delete tier[code];
-                    cleaned = true;
-                }
-            });
-        });
-        
-        if (cleaned) {
-            localStorage.setItem('masterMatrix', JSON.stringify(masterMatrix));
-            console.log('✓ Cleaned masterMatrix of orphaned doors');
-        }
-    }
-    
-    // Run validation on startup
-    validateAndCleanMasterMatrix();
-    
     // Always ensure defaults are saved
     localStorage.setItem('masterMatrix', JSON.stringify(masterMatrix));
     
@@ -3457,9 +3435,6 @@
         saveProfilesToStorage(); // SAVE TO STORAGE - CRITICAL!
         console.log(`✓ Removed ${doorName} from unallocated. Remaining: ${profiles.length}`);
         
-        // Clean masterMatrix of any orphaned doors
-        validateAndCleanMasterMatrix();
-        
         // Sync to Firebase AND delete old profile data
         syncProfilesToFirebase();
         
@@ -3478,9 +3453,6 @@
         profiles = profiles.filter(p => p !== doorName);
         saveProfilesToStorage(); // SAVE TO STORAGE
         console.log(`✓ Removed from profiles array. Remaining: ${profiles.length}`);
-        
-        // Clean masterMatrix of any orphaned doors
-        validateAndCleanMasterMatrix();
         
         // Sync to Firebase
         syncProfilesToFirebase();
