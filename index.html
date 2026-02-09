@@ -848,6 +848,10 @@
           history = historyDoc.data().history || [];
         }
         
+        // NOTE: Door profiles are NOT loaded from Firebase
+        // They are ONLY loaded from localStorage to prevent stale data
+        // Firebase is used for backup/sync only, not for restoration
+        
         refreshLists();
         renderHistory();
         renderScheduleCalendar();
@@ -897,11 +901,45 @@
     // Restore all default profiles
     function restoreDefaultProfiles() {
         profiles = [...DEFAULT_PROFILES];
-        localStorage.removeItem('doorProfiles');
+        saveProfilesToStorage(); // Save to localStorage
         console.log(`✓ Restored ${profiles.length} default door profiles`);
+        syncProfilesToFirebase(); // Sync to Firebase
         renderPricingMatrix();
         checkForNewUnallocatedDoors();
         notify('✓ Door profiles restored to defaults');
+    }
+    
+    // Clear stale Firebase profile data and force fresh sync
+    function clearFirebaseProfilesData() {
+        if (!confirm('🚨 This will clear old Firebase profile data and force a fresh sync.\n\nAre you sure? (Your local door settings will NOT be affected)')) {
+            return;
+        }
+        
+        if (!window.firebaseReady || !window.currentUser) {
+            alert('Firebase not ready. Please try again.');
+            return;
+        }
+        
+        try {
+            console.log('🗑️ Clearing stale Firebase profile data...');
+            
+            // Delete the old Firebase document to remove stale data
+            const configDoc = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'config', 'doorProfiles');
+            window.deleteDoc(configDoc).then(() => {
+                console.log('✓ Deleted old Firebase profile document');
+            }).catch(err => {
+                console.error('Error deleting Firebase document:', err);
+            });
+            
+            // Force immediate re-sync of current profiles
+            setTimeout(() => {
+                syncProfilesToFirebase();
+                notify('✓ Firebase cleared and fresh sync initiated');
+            }, 500);
+        } catch (error) {
+            console.error('Error clearing Firebase profiles:', error);
+            alert('Error clearing Firebase. Check console.');
+        }
     }
     
     // Check for new unallocated doors and show notification
@@ -3213,14 +3251,17 @@
         
         
         let html = `
-            <div style="margin-bottom:15px;">
+            <div style="margin-bottom:15px; display:flex; gap:10px; flex-wrap:wrap;">
                 <button onclick="restoreDefaultProfiles()" style="background:#ff9500; color:#fff; border:none; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">
                     🔄 RESTORE DEFAULT DOOR PROFILES
                 </button>
-                <p style="font-size:10px; color:#666; margin-top:8px;">
-                    Click to restore all 20 default door profiles (Plain, J-Mould, Shaker, etc.)
-                </p>
+                <button onclick="clearFirebaseProfilesData()" style="background:#d32f2f; color:#fff; border:none; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">
+                    🗑️ CLEAR FIREBASE (Fix Stale Data)
+                </button>
             </div>
+            <p style="font-size:10px; color:#666; margin-bottom:15px;">
+                Click "Restore Defaults" to reset to 20 standard profiles. Click "Clear Firebase" if unallocated doors keep reappearing (clears old Firebase data and forces fresh sync).
+            </p>
             
             <table style="width:100%; border-collapse:collapse; font-size:10px; background:#fff;">
                 <tr style="background:#000; color:var(--gs); font-weight:900;">
@@ -3344,10 +3385,10 @@
         
         // Remove from unallocated profiles array
         profiles = profiles.filter(p => p !== doorName);
-        saveProfilesToStorage(); // SAVE TO STORAGE
+        saveProfilesToStorage(); // SAVE TO STORAGE - CRITICAL!
         console.log(`✓ Removed ${doorName} from unallocated. Remaining: ${profiles.length}`);
         
-        // Sync to Firebase
+        // Sync to Firebase AND delete old profile data
         syncProfilesToFirebase();
         
         renderPricingMatrix();
@@ -4130,6 +4171,7 @@
     }
 
     // Sync door profiles and price matrix to Firebase
+    // This OVERWRITES the Firebase data with current local state
     function syncProfilesToFirebase() {
         if (!window.firebaseReady || !window.currentUser || !window.firebaseDb || !window.doc || !window.setDoc) {
             console.warn('Firebase not ready or user not logged in. Profile sync delayed.');
@@ -4142,11 +4184,12 @@
                 doorProfiles: profiles,
                 masterMatrix: masterMatrix,
                 lastModified: new Date().toISOString(),
-                userId: window.currentUser.uid
-            }, { merge: true }).then(() => {
-                console.log('✓ Door profiles synced to Firebase');
+                userId: window.currentUser.uid,
+                syncVersion: Date.now() // Force overwrite of old data
+            }, { merge: false }).then(() => {
+                console.log(`✅ Profiles synced to Firebase (${profiles.length} profiles, ${Object.keys(masterMatrix).length} tiers)`);
             }).catch(err => {
-                console.error('Error syncing door profiles to Firebase:', err);
+                console.error('❌ Error syncing door profiles to Firebase:', err);
             });
         } catch (error) {
             console.error('syncProfilesToFirebase error:', error);
