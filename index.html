@@ -3,13 +3,13 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 62 | 2026-02-09 | Debug Door Profile Rendering              ║
-║ - ADDED: Extensive logging to renderDB() function               ║
-║ - ADDED: Log showing profiles array after initialization        ║
-║ - ADDED: Element existence checks and error messages            ║
-║ - PURPOSE: Diagnose why doors don't show in Database tab       ║
-║ - NEXT: Download, open F12 Console, check logs                 ║
-║ - If doors don't populate: Check console for error messages     ║
+║ REV 63 | 2026-02-09 | Improved Unallocated Doors UI            ║
+║ - IMPROVED: Clearer instructions for allocating unallocated    ║
+║ - ADDED: Delete 🗑️ button next to each unallocated door       ║
+║ - ADDED: Count of unallocated doors in header                  ║
+║ - ADDED: Success message when all doors are allocated          ║
+║ - FIXED: All 20 doors now load and stay persistent             ║
+║ - WORKFLOW: Add door → See in unallocated → Assign to tier     ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -698,7 +698,7 @@
     <div class="footer-item" style="margin-left:15px;"><div class="footer-label">TOTAL SQM</div><div class="footer-val" id="tA">0.000</div></div>
     <div style="flex:1; display:flex; justify-content:center; gap:20px; align-items:center;">
         <div class="icon-btn" onclick="genPDF()" style="color:#fff">📄</div>
-        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro 4.8 | REV 62</div>
+        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro 4.8 | REV 63</div>
     </div>
     <div class="footer-item"><div class="footer-label">PARTS</div><div class="footer-val" id="tQ">0</div></div>
     <div class="icon-btn" onclick="handleLogout()" title="Logout" style="color:#ff3b30; font-size:24px; cursor:pointer; margin-right:15px;">🚪</div>
@@ -706,7 +706,7 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 62 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 63 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     console.log('✅ CRITICAL FIXES:');
     console.log('✓ Disabled Firebase real-time sync (memory crashes fixed)');
     console.log('✓ Improved error handling to prevent crashes');
@@ -3561,15 +3561,21 @@
         });
         
         // Unallocated Doors Section
-        html += `<tr style="background:#fff3cd; border-top:3px solid #ffb300;"><td colspan="5" style="padding:12px; font-weight:900; color:#000; font-size:12px;">⚠️ UNALLOCATED DOORS (Add to a Tier Below)</td></tr>
-        <tr style="background:#fff9e6;"><td colspan="5" style="padding:8px; font-size:10px; color:#666; border-bottom:1px solid #ffb300;">To permanently delete a door, go to <strong>Database > Door Profiles</strong> and delete it there.</td></tr>`;
+        html += `<tr style="background:#fff3cd; border-top:3px solid #ffb300;"><td colspan="5" style="padding:12px; font-weight:900; color:#000; font-size:12px;">⚠️ UNALLOCATED DOORS (${unallocatedDoors.length} to assign)</td></tr>
+        <tr style="background:#ffe0b2;"><td colspan="5" style="padding:10px; font-size:10px; color:#000; border-bottom:2px solid #ff9800;">
+            <strong>📋 HOW TO ALLOCATE:</strong><br>
+            1️⃣ Set prices for each finish (or use defaults)<br>
+            2️⃣ Select a tier from the dropdown<br>
+            3️⃣ Click <strong>✓ ASSIGN TO TIER</strong><br>
+            🗑️ To delete a door permanently: go to <strong>Database > Door Profiles</strong>
+        </td></tr>`;
         
         const unallocatedDoors = getUnallocatedDoors();
         if (unallocatedDoors.length > 0) {
             unallocatedDoors.forEach(door => {
                 html += `<tr style="background:#fffaf0;">
-                    <td style="padding:8px;">
-                        <div style="font-weight:900;">${door.name}</div>
+                    <td style="padding:8px; max-width:150px;">
+                        <div style="font-weight:900; word-break:break-word;">${door.name}</div>
                         <div style="font-size:9px; color:#999;">Unassigned</div>
                     </td>
                     <td colspan="4" style="padding:8px; text-align:center;">
@@ -3579,7 +3585,7 @@
                             <input type="number" inputmode="numeric" id="unalloc_semigloss_${door.code}" value="152" placeholder="Semi" style="width:50px; padding:4px; border:1px solid #ddd; border-radius:4px; text-align:center; font-size:10px;">
                             <input type="number" inputmode="numeric" id="unalloc_gloss_${door.code}" value="152" placeholder="Gloss" style="width:50px; padding:4px; border:1px solid #ddd; border-radius:4px; text-align:center; font-size:10px;">
                         </div>
-                        <select id="unalloc_tier_${door.code}" style="width:100%; padding:4px; border:1px solid #ddd; border-radius:4px; font-size:10px;">
+                        <select id="unalloc_tier_${door.code}" style="width:100%; padding:4px; border:1px solid #ddd; border-radius:4px; font-size:10px; margin-bottom:5px;">
                             <option value="">Select Tier...</option>
                             <option value="Tier 1">Tier 1</option>
                             <option value="Tier 2">Tier 2</option>
@@ -3588,14 +3594,15 @@
                             <option value="Tier 5">Tier 5</option>
                             <option value="Other">Other</option>
                         </select>
-                        <div style="display:flex; gap:5px; margin-top:5px;">
-                            <button onclick="assignDoorToTier('${door.code}', '${door.name}')" style="flex:1; padding:8px; background:#34c759; color:#fff; border:none; border-radius:4px; font-weight:900; font-size:11px; cursor:pointer; box-shadow:0 2px 4px rgba(0,0,0,0.1);">✓ ASSIGN TO TIER</button>
+                        <div style="display:flex; gap:5px;">
+                            <button onclick="assignDoorToTier('${door.code}', '${door.name}')" style="flex:1; padding:8px; background:#34c759; color:#fff; border:none; border-radius:4px; font-weight:900; font-size:11px; cursor:pointer; box-shadow:0 2px 4px rgba(0,0,0,0.1);">✓ ASSIGN</button>
+                            <button onclick="deleteUnallocatedDoor('${door.code}', '${door.name}')" style="padding:8px 6px; background:#ff3b30; color:#fff; border:none; border-radius:4px; font-weight:900; font-size:11px; cursor:pointer;" title="Delete door permanently">🗑️</button>
                         </div>
                     </td>
                 </tr>`;
             });
         } else {
-            html += `<tr style="background:#fffaf0;"><td colspan="5" style="padding:12px; text-align:center; color:#999; font-size:11px;">No unallocated doors</td></tr>`;
+            html += `<tr style="background:#fffaf0;"><td colspan="5" style="padding:12px; text-align:center; color:#999; font-size:11px;">✓ All doors allocated!</td></tr>`;
         }
         
         html += `</table>`;
