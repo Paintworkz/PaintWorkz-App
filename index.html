@@ -3,11 +3,11 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 46 | 2026-02-09 | CRITICAL: Fix deleted jobs reappearing   ║
-║ - CRITICAL: Implement proper Firebase deletion (deleteDoc)     ║
-║ - Restored: Gantt chart in Schedule & Admin tabs               ║
-║ - Restored: Global notifications section                       ║
-║ - Fixed: Jobs now deleted from Firebase, not just localStorage ║
+║ REV 47 | 2026-02-09 | Fix Gantt data & notification deletion   ║
+║ - Fixed: Removed duplicate renderGanttChart() function          ║
+║ - Fixed: Gantt chart now displays job data correctly            ║
+║ - Added: Delete/dismiss buttons for ALL global notifications    ║
+║ - Added: deleteAdminAlert() function to remove notifications    ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -624,7 +624,7 @@
         <div class="card">
             <h3>Admin Settings</h3>
             <label>App Version</label>
-            <input type="text" value="PaintWorkz Pro 4.8 | REV 46" disabled style="background:#f5f5f5; cursor:not-allowed;">
+            <input type="text" value="PaintWorkz Pro 4.8 | REV 47" disabled style="background:#f5f5f5; cursor:not-allowed;">
             
             <!-- Admin Sub-Tabs -->
             <div class="sub-nav" style="margin-top:15px;">
@@ -714,11 +714,10 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 46 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
-    console.log('🚨 CRITICAL: Proper Firebase deletion with deleteDoc()');
-    console.log('✓ Gantt chart restored to Schedule & Admin tabs');
-    console.log('✓ Global notifications restored');
-    console.log('✓ Jobs permanently deleted, won\'t reappear after refresh');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 47 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('✓ Gantt chart data now visible (duplicate removed)');
+    console.log('✓ All global notifications have dismiss buttons');
+    console.log('✓ Clean up notifications as needed');
     // ====================================
     
     // Firebase already initialized at top of page
@@ -2477,15 +2476,16 @@
         let notificationsHTML = '';
         adminAlerts.slice(0, 5).forEach((alert, i) => {
             const alertDate = new Date(alert.timestamp);
-            notificationsHTML += `<div style="padding:10px; border-bottom:1px solid #ddd; background:#fff;">
-                <div style="display:flex; justify-content:space-between; align-items:start;">
-                    <div style="flex:1;">
+            notificationsHTML += `<div style="padding:10px; border-bottom:1px solid #ddd; background:#fff; display:flex; justify-content:space-between; align-items:start;">
+                <div style="flex:1;">
+                    <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:4px;">
                         <div style="font-weight:900; color:#34c759; font-size:11px;">✓ Job Completed</div>
-                        <div style="font-size:10px; color:#000; font-weight:700; margin:2px 0;">Job #${alert.jobNum}: ${alert.jobName}</div>
-                        <div style="font-size:9px; color:#666;">${alert.client} • ${alert.totalParts} parts • ${alert.totalSqm} SQM</div>
+                        <button onclick="deleteAdminAlert(${i})" style="background:#ff3b30; color:#fff; border:none; padding:4px 8px; border-radius:4px; font-weight:900; font-size:9px; cursor:pointer; white-space:nowrap; margin-left:8px;">✕ DISMISS</button>
                     </div>
-                    <div style="font-size:9px; color:#999; text-align:right; white-space:nowrap;">
-                        ${alertDate.toLocaleDateString('en-AU')}<br>${alertDate.toLocaleTimeString('en-AU', {hour: '2-digit', minute: '2-digit'})}
+                    <div style="font-size:10px; color:#000; font-weight:700; margin:2px 0;">Job #${alert.jobNum}: ${alert.jobName}</div>
+                    <div style="font-size:9px; color:#666;">${alert.client} • ${alert.totalParts} parts • ${alert.totalSqm} SQM</div>
+                    <div style="font-size:9px; color:#999; margin-top:4px;">
+                        ${alertDate.toLocaleDateString('en-AU')} ${alertDate.toLocaleTimeString('en-AU', {hour: '2-digit', minute: '2-digit'})}
                     </div>
                 </div>
             </div>`;
@@ -2496,6 +2496,15 @@
         }
         
         notificationsDiv.innerHTML = notificationsHTML;
+    }
+    
+    // Delete a notification from adminAlerts
+    function deleteAdminAlert(index) {
+        let adminAlerts = JSON.parse(localStorage.getItem('adminAlerts')) || [];
+        adminAlerts.splice(index, 1);
+        localStorage.setItem('adminAlerts', JSON.stringify(adminAlerts));
+        console.log(`🗑️ Deleted notification at index ${index}`);
+        renderGlobalNotifications(); // Re-render to update display
     }
     
     function checkForNewUnallocatedDoors() {
@@ -2523,18 +2532,23 @@
         if (placeholder) placeholder.remove();
         
         const alertHTML = `
-            <div data-alert="unallocated-doors" style="background:#ffebee; border-left:4px solid #ff3b30; padding:12px; margin-bottom:8px; border-radius:4px;">
-                <div style="font-weight:900; color:#ff3b30; margin-bottom:6px; font-size:12px;">
-                    ⚠️ ${unallocated.length} DOOR(S) NEED ALLOCATING
+            <div data-alert="unallocated-doors" style="background:#ffebee; border-left:4px solid #ff3b30; padding:12px; margin-bottom:8px; border-radius:4px; display:flex; justify-content:space-between; align-items:start;">
+                <div style="flex:1;">
+                    <div style="font-weight:900; color:#ff3b30; margin-bottom:6px; font-size:12px;">
+                        ⚠️ ${unallocated.length} DOOR(S) NEED ALLOCATING
+                    </div>
+                    <div style="color:#d32f2f; font-size:11px;">
+                        ${unallocated.map(d => `• ${d.name}`).join('<br>')}
+                    </div>
+                    <div style="margin-top:8px; display:flex; gap:8px;">
+                        <button onclick="tab('admin'); setTimeout(() => switchAdminTab('pricing'), 200)" style="background:#ff3b30; color:#fff; border:none; padding:6px 12px; border-radius:4px; font-weight:900; font-size:10px; cursor:pointer;">
+                            GO TO MATRIX →
+                        </button>
+                    </div>
                 </div>
-                <div style="color:#d32f2f; font-size:11px;">
-                    ${unallocated.map(d => `• ${d.name}`).join('<br>')}
-                </div>
-                <div style="margin-top:8px; text-align:right;">
-                    <button onclick="tab('admin'); setTimeout(() => switchAdminTab('pricing'), 200)" style="background:#ff3b30; color:#fff; border:none; padding:6px 12px; border-radius:4px; font-weight:900; font-size:10px; cursor:pointer;">
-                        GO TO MATRIX →
-                    </button>
-                </div>
+                <button onclick="this.parentElement.remove()" style="background:#ff3b30; color:#fff; border:none; padding:6px 12px; border-radius:4px; font-weight:900; font-size:10px; cursor:pointer; white-space:nowrap; margin-left:8px; height:fit-content;">
+                    ✕ DISMISS
+                </button>
             </div>
         `;
         
@@ -2567,9 +2581,6 @@
     }
     
     
-    function renderGanttChart(year, month) {
-        // Gantt chart removed from database
-    }
 
     function toggleJobPhaseById(jobNum, dateReceived, client, phaseKey) {
         try {
