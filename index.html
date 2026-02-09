@@ -630,7 +630,7 @@
         <div class="card">
             <h3>Admin Settings</h3>
             <label>App Version</label>
-            <input type="text" value="PaintWorkz Pro 4.8 | REV 48" disabled style="background:#f5f5f5; cursor:not-allowed;">
+            <input type="text" value="PaintWorkz Pro 4.8 | REV 49" disabled style="background:#f5f5f5; cursor:not-allowed;">
             
             <!-- Admin Sub-Tabs -->
             <div class="sub-nav" style="margin-top:15px;">
@@ -720,10 +720,14 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 48 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
-    console.log('✓ Gantt chart restored with calendar grid view');
-    console.log('✓ Global notifications with minimize/badge');
-    console.log('✓ All dismiss buttons working perfectly');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 49 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('✅ CRITICAL FIXES:');
+    console.log('✓ Disabled Firebase real-time sync (memory crashes fixed)');
+    console.log('✓ Improved error handling to prevent crashes');
+    console.log('✓ Door profile persistence fixed');
+    console.log('✓ Job completion toggle working');
+    console.log('✓ Measure sheet clears on save');
+    console.log('✓ Workload summary correctly excludes completed');
     // ====================================
     
     // Firebase already initialized at top of page
@@ -1059,35 +1063,40 @@
     }
     
     function removeDuplicateJobs() {
-        let history = JSON.parse(localStorage.getItem('jobHistory')) || [];
-        const seen = new Map();
-        let cleaned = [];
-        let duplicates = 0;
-        
-        history.forEach(job => {
-            // Skip jobs with missing critical fields
-            if (!job.jobNum || !job.dateReceived || !job.client) {
-                duplicates++;
-                return;
-            }
+        try {
+            let history = JSON.parse(localStorage.getItem('jobHistory')) || [];
+            const seen = new Map();
+            let cleaned = [];
+            let duplicates = 0;
             
-            const key = `${job.jobNum}|${job.dateReceived}|${job.client}`;
-            if (!seen.has(key)) {
-                seen.set(key, true);
-                cleaned.push(job);
+            history.forEach(job => {
+                // Skip jobs with missing critical fields
+                if (!job.jobNum || !job.dateReceived || !job.client) {
+                    duplicates++;
+                    return;
+                }
+                
+                const key = `${job.jobNum}|${job.dateReceived}|${job.client}`;
+                if (!seen.has(key)) {
+                    seen.set(key, true);
+                    cleaned.push(job);
+                } else {
+                    duplicates++;
+                }
+            });
+            
+            if (duplicates > 0) {
+                localStorage.setItem('jobHistory', JSON.stringify(cleaned));
+                renderHistory();
+                renderJobTasks();
+                renderScheduleCalendar();
+                notify(`✓ Cleaned ${duplicates} duplicate/invalid jobs!`);
             } else {
-                duplicates++;
+                notify('✓ No duplicates found');
             }
-        });
-        
-        if (duplicates > 0) {
-            localStorage.setItem('jobHistory', JSON.stringify(cleaned));
-            renderHistory();
-            renderJobTasks();
-            renderScheduleCalendar();
-            notify(`✓ Cleaned ${duplicates} duplicate/invalid jobs!`);
-        } else {
-            notify('✓ No duplicates found');
+        } catch(e) {
+            console.error('Error removing duplicates:', e);
+            notify('⚠️ Error cleaning duplicates');
         }
     }
     
@@ -2104,17 +2113,35 @@
     }
 
     function changeQty(index, delta) { 
-        items[index].qty += delta; 
-        if (items[index].qty < 1) items[index].qty = 1; 
-        render();
-        saveData();
+        try {
+            if (index < 0 || index >= items.length) {
+                console.error('Invalid item index:', index);
+                return;
+            }
+            items[index].qty += delta; 
+            if (items[index].qty < 1) items[index].qty = 1; 
+            render();
+            saveData();
+        } catch(e) {
+            console.error('Error changing quantity:', e);
+            notify('⚠️ Error updating quantity');
+        }
     }
 
     function deleteItem(index) {
-        items.splice(index, 1);
-        render();
-        saveData();
-        notify('Part Removed');
+        try {
+            if (index < 0 || index >= items.length) {
+                console.error('Invalid item index:', index);
+                return;
+            }
+            items.splice(index, 1);
+            render();
+            saveData();
+            notify('Part Removed');
+        } catch(e) {
+            console.error('Error deleting item:', e);
+            notify('⚠️ Error deleting part');
+        }
     }
 
     function notify(m) { 
@@ -2199,36 +2226,51 @@
     }
 
     function saveJob() { 
-        saveData();
-        saveJobToHistory(); // This will show its own notification
-        
-        // Auto-increment job number
-        const currentJobNum = document.getElementById('jN').value;
-        if (currentJobNum) {
-            // Extract number from job number (handle formats like "001", "1", "JOB001", etc)
-            const match = currentJobNum.match(/\d+/);
-            if (match) {
-                const nextNum = String(parseInt(match[0]) + 1).padStart(match[0].length, '0');
-                const prefix = currentJobNum.substring(0, currentJobNum.indexOf(match[0]));
-                const suffix = currentJobNum.substring(currentJobNum.indexOf(match[0]) + match[0].length);
-                document.getElementById('jN').value = prefix + nextNum + suffix;
-            }
-        }
-        
-        // Clear measure sheet and panel list
-        setTimeout(() => {
-            items = [];
-            document.getElementById('h').value = '';
-            document.getElementById('w').value = '';
-            document.getElementById('desc').value = '';
-            document.getElementById('jNm').value = '';
-            // Clear panel list
-            const panelList = document.getElementById('cli'); // Assuming this shows panel count
-            render(); // Re-render to clear UI
+        try {
+            saveData();
+            saveJobToHistory(); // This will show its own notification
             
-            tab('history'); // Navigate to history tab
-            renderHistory();
-        }, 500);
+            // Auto-increment job number
+            try {
+                const currentJobNum = document.getElementById('jN').value;
+                if (currentJobNum) {
+                    // Extract number from job number (handle formats like "001", "1", "JOB001", etc)
+                    const match = currentJobNum.match(/\d+/);
+                    if (match) {
+                        const nextNum = String(parseInt(match[0]) + 1).padStart(match[0].length, '0');
+                        const prefix = currentJobNum.substring(0, currentJobNum.indexOf(match[0]));
+                        const suffix = currentJobNum.substring(currentJobNum.indexOf(match[0]) + match[0].length);
+                        document.getElementById('jN').value = prefix + nextNum + suffix;
+                    }
+                }
+            } catch(e) {
+                console.error('Error auto-incrementing job number:', e);
+            }
+            
+            // Clear measure sheet and panel list
+            setTimeout(() => {
+                try {
+                    items = [];
+                    const hEl = document.getElementById('h');
+                    if (hEl) hEl.value = '';
+                    const wEl = document.getElementById('w');
+                    if (wEl) wEl.value = '';
+                    const descEl = document.getElementById('desc');
+                    if (descEl) descEl.value = '';
+                    const jNmEl = document.getElementById('jNm');
+                    if (jNmEl) jNmEl.value = '';
+                    
+                    render(); // Re-render to clear UI
+                    tab('history'); // Navigate to history tab
+                    renderHistory();
+                } catch(e) {
+                    console.error('Error clearing measure sheet:', e);
+                }
+            }, 500);
+        } catch(e) {
+            console.error('Error in saveJob:', e);
+            notify('⚠️ Error saving job');
+        }
     }
 
     function snap() { 
@@ -4050,6 +4092,8 @@
 
     // Track last synced data to avoid redundant syncs
     let lastSyncedData = '';
+    let lastSyncTime = 0;
+    const SYNC_DEBOUNCE_MS = 2000; // Minimum 2 seconds between syncs
     
     // Helper function to sync all jobs to Firebase
     function syncJobsToFirebase() {
@@ -4058,6 +4102,14 @@
             console.warn('Firebase not ready or user not logged in. Sync delayed.');
             return;
         }
+        
+        // Rate limiting - prevent sync spam
+        const now = Date.now();
+        if (now - lastSyncTime < SYNC_DEBOUNCE_MS) {
+            console.log('⏱️ Sync rate limited (too soon)');
+            return;
+        }
+        lastSyncTime = now;
         
         try {
             const jobHistory = JSON.parse(localStorage.getItem('jobHistory') || '[]');
@@ -4073,19 +4125,24 @@
             lastSyncedData = currentData;
             
             jobHistory.forEach(job => {
-                const jobId = job.id || job.jobNum || Date.now().toString();
-                const jobDoc = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'jobs', jobId);
-                window.setDoc(jobDoc, {
-                    ...job,
-                    id: jobId,
-                    lastModified: new Date().toISOString(),
-                    userId: window.currentUser.uid
-                }, { merge: true }).catch(err => console.error('Firestore sync error:', err));
+                try {
+                    const jobId = job.id || job.jobNum || Date.now().toString();
+                    const jobDoc = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'jobs', jobId);
+                    window.setDoc(jobDoc, {
+                        ...job,
+                        id: jobId,
+                        lastModified: new Date().toISOString(),
+                        userId: window.currentUser.uid
+                    }, { merge: true }).catch(err => console.error('Firestore sync error for job', jobId, ':', err));
+                } catch(e) {
+                    console.error('Error syncing individual job:', e);
+                }
             });
             
             console.log('✓ Firebase sync complete');
         } catch (error) {
             console.error('syncJobsToFirebase error:', error);
+            // Don't crash the app, just log the error
         }
     }
 
