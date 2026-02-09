@@ -3,13 +3,13 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 54 | 2026-02-09 | Jobs Chart Scrolling + Root Cause Found  ║
-║ - ADDED: Horizontal scroll for Jobs Chart (smooth, grab cursor) ║
-║ - ADDED: ☢️ NUKE ALL LOCALSTORAGE button (extreme reset)       ║
-║ - FIXED: Clarified button purposes - "Reset Defaults" warning  ║
-║ - ROOT CAUSE FOUND: Restore Defaults button was resetting doors║
-║ - IMPROVED: Clearer button descriptions to prevent accidents    ║
-║ - Version now in footer (admin tab only)                        ║
+║ REV 55 | 2026-02-09 | FOUND THE BUG! Clear Firebase Fixed       ║
+║ - 🎯 ROOT CAUSE: clearFirebaseProfilesData() was resetting ALL  ║
+║ - FIXED: Now keeps your current assignments, doesn't reset      ║
+║ - RENAMED: "Clear Firebase" → "Sync to Firebase (Keep Assign.)"║
+║ - REMOVED: Dangerous orange "Reset to 20 Defaults" button       ║
+║ - ADDED: 🔍 DIAGNOSE STORAGE to debug storage issues            ║
+║ - Doors should STOP reappearing now!                            ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -695,7 +695,7 @@
     <div class="footer-item" style="margin-left:15px;"><div class="footer-label">TOTAL SQM</div><div class="footer-val" id="tA">0.000</div></div>
     <div style="flex:1; display:flex; justify-content:center; gap:20px; align-items:center;">
         <div class="icon-btn" onclick="genPDF()" style="color:#fff">📄</div>
-        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro 4.8 | REV 54</div>
+        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro 4.8 | REV 55</div>
     </div>
     <div class="footer-item"><div class="footer-label">PARTS</div><div class="footer-val" id="tQ">0</div></div>
     <div class="icon-btn" onclick="handleLogout()" title="Logout" style="color:#ff3b30; font-size:24px; cursor:pointer; margin-right:15px;">🚪</div>
@@ -703,7 +703,7 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 54 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 55 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     console.log('✅ CRITICAL FIXES:');
     console.log('✓ Disabled Firebase real-time sync (memory crashes fixed)');
     console.log('✓ Improved error handling to prevent crashes');
@@ -926,7 +926,7 @@
     
     // Clear stale Firebase profile data and force fresh sync
     function clearFirebaseProfilesData() {
-        if (!confirm('🚨 NUCLEAR RESET:\n- Clears ALL profile data (local + Firebase)\n- Resets price matrix to defaults\n- May take 10-15 seconds\n\nProceed?')) {
+        if (!confirm('🚨 CLEAR FIREBASE DATA:\n- Removes old Firebase profile data\n- Keeps your current door assignments\n- Syncs fresh to Firebase\n\nProceed?')) {
             return;
         }
         
@@ -936,45 +936,27 @@
         }
         
         try {
-            console.log('🗑️ NUCLEAR: Clearing ALL stale profile & matrix data...');
+            console.log('🗑️ Clearing stale Firebase data...');
             
-            // 1. Clear localStorage doorProfiles completely
-            localStorage.removeItem('doorProfiles');
-            console.log('✓ Cleared localStorage doorProfiles');
-            
-            // 2. Clear localStorage masterMatrix to reset to defaults
-            localStorage.removeItem('masterMatrix');
-            console.log('✓ Cleared localStorage masterMatrix');
-            
-            // 3. Reset profiles array to defaults
-            profiles = [...DEFAULT_PROFILES];
-            console.log(`✓ Reset profiles to ${profiles.length} defaults`);
-            
-            // 4. Reset masterMatrix to pristine defaults
-            masterMatrix = JSON.parse(JSON.stringify(defaultMasterMatrix));
-            console.log(`✓ Reset masterMatrix to fresh defaults (${Object.keys(masterMatrix).length} tiers)`);
-            
-            // 5. Delete the old Firebase documents to remove stale data
+            // 1. Delete the old Firebase documents to remove stale data
             const configDoc = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'config', 'doorProfiles');
             window.deleteDoc(configDoc).then(() => {
-                console.log('✓ Deleted Firebase doorProfiles document');
+                console.log('✓ Deleted old Firebase doorProfiles document');
             }).catch(err => {
                 console.error('Note: Could not delete Firebase doc (may already be gone):', err);
             });
             
-            // 6. Force immediate re-sync of fresh defaults
+            // 2. Force immediate re-sync of CURRENT profiles and masterMatrix (not defaults!)
             setTimeout(() => {
-                saveProfilesToStorage();
-                localStorage.setItem('masterMatrix', JSON.stringify(masterMatrix));
+                console.log(`📤 Syncing current state to Firebase (${profiles.length} profiles, ${Object.keys(masterMatrix).length} tiers)`);
                 syncProfilesToFirebase();
                 renderPricingMatrix();
-                renderJobTasks();
-                notify('✅ NUCLEAR RESET COMPLETE - All data cleared and reset to factory defaults');
-                console.log('✅ All systems reset to defaults');
-            }, 1000);
+                notify('✅ Firebase cleared and current data re-synced!');
+                console.log('✅ Firebase sync complete');
+            }, 500);
         } catch (error) {
-            console.error('Error during nuclear reset:', error);
-            alert('Error during reset. Check console.\n\nManually:\n1. Clear browser cache\n2. Clear localStorage\n3. Refresh page');
+            console.error('Error clearing Firebase:', error);
+            alert('Error clearing Firebase. Check console.');
         }
     }
     
@@ -1003,6 +985,19 @@
             console.error('Error clearing storage:', error);
             alert('Error during clear. Try manually clearing browser cache and refreshing.');
         }
+    }
+    
+    // Diagnostic: Show what's actually in localStorage
+    function diagnoseStorage() {
+        console.log('=== STORAGE DIAGNOSTIC ===');
+        console.log('doorProfiles in localStorage:', localStorage.getItem('doorProfiles')?.substring(0, 100) + '...');
+        console.log('masterMatrix in localStorage:', localStorage.getItem('masterMatrix')?.substring(0, 100) + '...');
+        console.log('Current profiles array:', profiles);
+        console.log('Current masterMatrix:', masterMatrix);
+        console.log('Unallocated doors:', getUnallocatedDoors());
+        
+        // Show in alert too
+        alert('Check console (F12) for diagnostic info.\n\nprofiles count: ' + profiles.length + '\nmasterMatrix tiers: ' + Object.keys(masterMatrix).length + '\nunallocated doors: ' + getUnallocatedDoors().length);
     }
     
     // Check for new unallocated doors and show notification
@@ -3327,20 +3322,21 @@
         
         let html = `
             <div style="margin-bottom:15px; display:flex; gap:10px; flex-wrap:wrap;">
-                <button onclick="clearFirebaseProfilesData()" style="background:#d32f2f; color:#fff; border:none; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">
-                    🗑️ CLEAR FIREBASE (Fix Doors Reappearing)
+                <button onclick="clearFirebaseProfilesData()" style="background:#2196f3; color:#fff; border:none; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">
+                    🔄 SYNC TO FIREBASE (Keep Assignments)
                 </button>
                 <button onclick="clearAllLocalStorage()" style="background:#000; color:#fff; border:none; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">
-                    ☢️ NUKE ALL LOCALSTORAGE
+                    ☢️ NUKE ALL - Start From Scratch
                 </button>
-                <button onclick="restoreDefaultProfiles()" style="background:#ff9500; color:#fff; border:none; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;" title="CAUTION: Resets ALL doors to original 20 defaults - loses all your custom assignments!">
-                    ⚠️ RESET TO 20 DEFAULTS (Loses Assignments!)
+                <button onclick="diagnoseStorage()" style="background:#9c27b0; color:#fff; border:none; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;" title="Debug: Check console (F12) to see what's in storage">
+                    🔍 DIAGNOSE STORAGE
                 </button>
             </div>
-            <p style="font-size:10px; color:#666; margin-bottom:15px;">
-                <strong style="color:#d32f2f;">Clear Firebase:</strong> Use this first if doors keep reappearing<br>
-                <strong style="color:#000;">Nuke All:</strong> Last resort - clears everything, hard refreshes<br>
-                <strong style="color:#ff9500;">Reset Defaults:</strong> ⚠️ CAUTION - Brings back all 20 original doors, loses your tier assignments!
+            <p style="font-size:10px; color:#666; margin-bottom:15px; background:#fffaf0; padding:10px; border-radius:4px; border-left:3px solid #ff9500;">
+                <strong style="color:#2196f3;">✓ Sync to Firebase:</strong> Clears stale Firebase, keeps YOUR current assignments<br>
+                <strong style="color:#000;">☢️ Nuke All:</strong> Last resort - deletes everything, forces hard refresh<br>
+                <strong style="color:#9c27b0;">🔍 Diagnose:</strong> Shows exactly what's in browser storage (check console F12)<br>
+                <strong style="color:#ff9500;">❌ DO NOT CLICK:</strong> "Reset to 20 Defaults" button (below) - it resets all doors!
             </p>
             
             <table style="width:100%; border-collapse:collapse; font-size:10px; background:#fff;">
