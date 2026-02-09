@@ -3,11 +3,11 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 41 | 2026-02-08 | CRITICAL: Fix deleted jobs reappearing   ║
-║ - Added: Robust session cache for deleted jobs                 ║
-║ - Added: Helper functions for job key management               ║
-║ - CRITICAL: Filter deleted jobs on EVERY renderHistory call    ║
-║ - Result: Jobs stay deleted across ALL tab switches            ║
+║ REV 42 | 2026-02-08 | Fix initialization errors and crashes    ║
+║ - Added: Try-catch wrapper in initializeApp                    ║
+║ - Added: Element existence checks before accessing             ║
+║ - Added: Function type checking before calling                 ║
+║ - Result: App won't crash if elements aren't ready yet         ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -628,7 +628,7 @@
         <div class="card">
             <h3>Admin Settings</h3>
             <label>App Version</label>
-            <input type="text" value="PaintWorkz Pro 4.8 | REV 41" disabled style="background:#f5f5f5; cursor:not-allowed;">
+            <input type="text" value="PaintWorkz Pro 4.8 | REV 42" disabled style="background:#f5f5f5; cursor:not-allowed;">
             
             <!-- Admin Sub-Tabs -->
             <div class="sub-nav" style="margin-top:15px;">
@@ -677,10 +677,10 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 41 (2026-02-08) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
-    console.log('🚫 CRITICAL FIX: Deleted jobs stay gone across tab switches');
-    console.log('✓ Session-based deletion tracking');
-    console.log('✓ Filters applied on EVERY tab change');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 42 (2026-02-08) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('🛡️ Improved error handling and crash prevention');
+    console.log('✓ Element existence checks before access');
+    console.log('✓ Function type validation before calling');
     // ====================================
     
     // Firebase already initialized at top of page
@@ -947,53 +947,77 @@
 
     // Populate client dropdown with unique clients from history
     function populateClientDropdown() {
-        const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
-        const clientSelect = document.getElementById('cli');
-        if (!clientSelect) return;
-        
-        // Get unique clients
-        const clients = [...new Set(history.map(job => job.client).filter(Boolean))];
-        clients.sort();
-        
-        // Clear and rebuild dropdown
-        clientSelect.innerHTML = '<option value="">-- Select or type client --</option>';
-        clients.forEach(client => {
-            const option = document.createElement('option');
-            option.value = client;
-            option.textContent = client;
-            clientSelect.appendChild(option);
-        });
-        
-        console.log(`✓ Populated ${clients.length} unique clients in dropdown`);
+        try {
+            const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
+            const clientSelect = document.getElementById('cli');
+            if (!clientSelect) {
+                console.warn('Client dropdown element not found');
+                return;
+            }
+            
+            // Get unique clients
+            const clients = [...new Set(history.map(job => job.client).filter(Boolean))];
+            clients.sort();
+            
+            // Clear and rebuild dropdown
+            clientSelect.innerHTML = '<option value="">-- Select or type client --</option>';
+            clients.forEach(client => {
+                const option = document.createElement('option');
+                option.value = client;
+                option.textContent = client;
+                clientSelect.appendChild(option);
+            });
+            
+            console.log(`✓ Populated ${clients.length} unique clients in dropdown`);
+        } catch(e) {
+            console.error('Error populating client dropdown:', e);
+        }
     }
     
     // Initialize app on page load
     function initializeApp() {
         console.log('🚀 Initializing PaintWorkz...');
         
-        // Clear measure sheet on fresh load
-        items = [];
-        document.getElementById('cli').value = '';
-        document.getElementById('dRec').value = '';
-        document.getElementById('jNm').value = '';
-        document.getElementById('jN').value = '';
-        document.getElementById('p-brand').value = 'Wattyl';
-        document.getElementById('p-color').value = '';
-        document.getElementById('p-code').value = '';
-        document.getElementById('p-finish').value = 'Satin';
-        
-        const totSqmEl = document.getElementById('tA');
-        const totPartsEl = document.getElementById('tQ');
-        if (totSqmEl) totSqmEl.innerText = '0.000';
-        if (totPartsEl) totPartsEl.innerText = '0';
-        
-        // Populate client dropdown
-        populateClientDropdown();
-        
-        // Re-render measure sheet
-        render();
-        
-        console.log('✓ App initialized - measure sheet cleared, clients loaded');
+        try {
+            // Clear measure sheet on fresh load
+            items = [];
+            
+            const cliEl = document.getElementById('cli');
+            const dRecEl = document.getElementById('dRec');
+            const jNmEl = document.getElementById('jNm');
+            const jNEl = document.getElementById('jN');
+            const pBrandEl = document.getElementById('p-brand');
+            const pColorEl = document.getElementById('p-color');
+            const pCodeEl = document.getElementById('p-code');
+            const pFinishEl = document.getElementById('p-finish');
+            
+            if (cliEl) cliEl.value = '';
+            if (dRecEl) dRecEl.value = '';
+            if (jNmEl) jNmEl.value = '';
+            if (jNEl) jNEl.value = '';
+            if (pBrandEl) pBrandEl.value = 'Wattyl';
+            if (pColorEl) pColorEl.value = '';
+            if (pCodeEl) pCodeEl.value = '';
+            if (pFinishEl) pFinishEl.value = 'Satin';
+            
+            const totSqmEl = document.getElementById('tA');
+            const totPartsEl = document.getElementById('tQ');
+            if (totSqmEl) totSqmEl.innerText = '0.000';
+            if (totPartsEl) totPartsEl.innerText = '0';
+            
+            // Populate client dropdown
+            populateClientDropdown();
+            
+            // Re-render measure sheet
+            if (typeof render === 'function') {
+                render();
+            }
+            
+            console.log('✓ App initialized - measure sheet cleared, clients loaded');
+        } catch(e) {
+            console.error('Error during app initialization:', e);
+            console.warn('App continuing despite initialization error - some elements may not be ready yet');
+        }
     }
     
     function loadData() {
