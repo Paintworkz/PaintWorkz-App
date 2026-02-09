@@ -3,13 +3,13 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 51 | 2026-02-09 | Jobs Chart Toggle + Nuclear Profile Fix  ║
-║ - Added: Minimize/Maximize toggle button for Jobs Chart         ║
-║ - Fixed: NUCLEAR option to clear corrupt profiles (localStorage)║
-║ - Added: Profile corruption detection and auto-cleanup          ║
-║ - Added: Duplicate profile filtering                            ║
-║ - Improved: Firebase sync now uses merge: false (overwrites)    ║
-║ - Previous: Removed admin Gantt, fixed spelling, added numpad   ║
+║ REV 52 | 2026-02-09 | Workload Update + Unallocated Door Fix   ║
+║ - FIXED: Workload summary now updates when switching tabs       ║
+║ - FIXED: Unallocated doors reappearing (masterMatrix validation)║
+║ - Added: validateAndCleanMasterMatrix() on startup & operations ║
+║ - Improved: Nuclear reset also clears localStorage masterMatrix ║
+║ - Added: Orphaned door detection and removal                    ║
+║ - Previous: Jobs Chart minimize toggle, profile corruption fix  ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -633,7 +633,7 @@
         <div class="card">
             <h3>Admin Settings</h3>
             <label>App Version</label>
-            <input type="text" value="PaintWorkz Pro 4.8 | REV 51" disabled style="background:#f5f5f5; cursor:not-allowed;">
+            <input type="text" value="PaintWorkz Pro 4.8 | REV 52" disabled style="background:#f5f5f5; cursor:not-allowed;">
             
             <!-- Admin Sub-Tabs -->
             <div class="sub-nav" style="margin-top:15px;">
@@ -703,7 +703,7 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 51 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 52 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     console.log('✅ CRITICAL FIXES:');
     console.log('✓ Disabled Firebase real-time sync (memory crashes fixed)');
     console.log('✓ Improved error handling to prevent crashes');
@@ -926,7 +926,7 @@
     
     // Clear stale Firebase profile data and force fresh sync
     function clearFirebaseProfilesData() {
-        if (!confirm('🚨 This will clear old Firebase profile data and reset to defaults.\n\nAre you sure? (Your price matrix will be restored to defaults)')) {
+        if (!confirm('🚨 NUCLEAR RESET:\n- Clears ALL profile data (local + Firebase)\n- Resets price matrix to defaults\n- May take 10-15 seconds\n\nProceed?')) {
             return;
         }
         
@@ -936,34 +936,45 @@
         }
         
         try {
-            console.log('🗑️ NUCLEAR: Clearing ALL stale profile data (localStorage + Firebase)...');
+            console.log('🗑️ NUCLEAR: Clearing ALL stale profile & matrix data...');
             
             // 1. Clear localStorage doorProfiles completely
             localStorage.removeItem('doorProfiles');
             console.log('✓ Cleared localStorage doorProfiles');
             
-            // 2. Reset profiles array to defaults
+            // 2. Clear localStorage masterMatrix to reset to defaults
+            localStorage.removeItem('masterMatrix');
+            console.log('✓ Cleared localStorage masterMatrix');
+            
+            // 3. Reset profiles array to defaults
             profiles = [...DEFAULT_PROFILES];
             console.log(`✓ Reset profiles to ${profiles.length} defaults`);
             
-            // 3. Delete the old Firebase document to remove stale data
+            // 4. Reset masterMatrix to pristine defaults
+            masterMatrix = JSON.parse(JSON.stringify(defaultMasterMatrix));
+            console.log(`✓ Reset masterMatrix to fresh defaults (${Object.keys(masterMatrix).length} tiers)`);
+            
+            // 5. Delete the old Firebase documents to remove stale data
             const configDoc = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'config', 'doorProfiles');
             window.deleteDoc(configDoc).then(() => {
-                console.log('✓ Deleted old Firebase profile document');
+                console.log('✓ Deleted Firebase doorProfiles document');
             }).catch(err => {
-                console.error('Error deleting Firebase document:', err);
+                console.error('Note: Could not delete Firebase doc (may already be gone):', err);
             });
             
-            // 4. Force immediate re-sync of fresh defaults
+            // 6. Force immediate re-sync of fresh defaults
             setTimeout(() => {
                 saveProfilesToStorage();
+                localStorage.setItem('masterMatrix', JSON.stringify(masterMatrix));
                 syncProfilesToFirebase();
                 renderPricingMatrix();
-                notify('✅ NUCLEAR RESET COMPLETE - All profiles cleared and reset to defaults');
-            }, 500);
+                renderJobTasks();
+                notify('✅ NUCLEAR RESET COMPLETE - All data cleared and reset to factory defaults');
+                console.log('✅ All systems reset to defaults');
+            }, 1000);
         } catch (error) {
-            console.error('Error clearing profiles:', error);
-            alert('Error during reset. Check console.');
+            console.error('Error during nuclear reset:', error);
+            alert('Error during reset. Check console.\n\nManually:\n1. Clear browser cache\n2. Clear localStorage\n3. Refresh page');
         }
     }
     
@@ -1933,6 +1944,12 @@
         // Render schedule calendar when viewing schedule tab
         if (t === 'schedule') {
             renderScheduleCalendar();
+        }
+        
+        // ALWAYS update workload summary when switching to schedule or admin tabs
+        if (t === 'schedule' || t === 'admin') {
+            renderJobTasks();
+            console.log('🔄 Updated workload summary for tab: ' + t);
         }
     }
 
@@ -3267,6 +3284,33 @@
     
     let masterMatrix = (storedMatrix && Object.keys(storedMatrix).length > 0) ? storedMatrix : defaultMasterMatrix;
     
+    // VALIDATION: Clean up masterMatrix to remove doors no longer in profiles
+    // This prevents orphaned door references from showing as "unallocated"
+    function validateAndCleanMasterMatrix() {
+        const doorsInProfiles = new Set(profiles);
+        let cleaned = false;
+        
+        Object.keys(masterMatrix).forEach(tierName => {
+            const tier = masterMatrix[tierName];
+            Object.keys(tier).forEach(code => {
+                const doorName = tier[code][0];
+                if (!doorsInProfiles.has(doorName)) {
+                    console.warn(`⚠️ Removing orphaned door "${doorName}" from ${tierName} (not in current profiles)`);
+                    delete tier[code];
+                    cleaned = true;
+                }
+            });
+        });
+        
+        if (cleaned) {
+            localStorage.setItem('masterMatrix', JSON.stringify(masterMatrix));
+            console.log('✓ Cleaned masterMatrix of orphaned doors');
+        }
+    }
+    
+    // Run validation on startup
+    validateAndCleanMasterMatrix();
+    
     // Always ensure defaults are saved
     localStorage.setItem('masterMatrix', JSON.stringify(masterMatrix));
     
@@ -3413,6 +3457,9 @@
         saveProfilesToStorage(); // SAVE TO STORAGE - CRITICAL!
         console.log(`✓ Removed ${doorName} from unallocated. Remaining: ${profiles.length}`);
         
+        // Clean masterMatrix of any orphaned doors
+        validateAndCleanMasterMatrix();
+        
         // Sync to Firebase AND delete old profile data
         syncProfilesToFirebase();
         
@@ -3431,6 +3478,9 @@
         profiles = profiles.filter(p => p !== doorName);
         saveProfilesToStorage(); // SAVE TO STORAGE
         console.log(`✓ Removed from profiles array. Remaining: ${profiles.length}`);
+        
+        // Clean masterMatrix of any orphaned doors
+        validateAndCleanMasterMatrix();
         
         // Sync to Firebase
         syncProfilesToFirebase();
