@@ -3,13 +3,13 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 56 | 2026-02-09 | FOUND THE BUG! Clear Firebase Fixed       ║
-║ - 🎯 ROOT CAUSE: clearFirebaseProfilesData() was resetting ALL  ║
-║ - FIXED: Now keeps your current assignments, doesn't reset      ║
-║ - RENAMED: "Clear Firebase" → "Sync to Firebase (Keep Assign.)"║
-║ - REMOVED: Dangerous orange "Reset to 20 Defaults" button       ║
-║ - ADDED: 🔍 DIAGNOSE STORAGE to debug storage issues            ║
-║ - Doors should STOP reappearing now!                            ║
+║ REV 57 | 2026-02-09 | Door Management + Global Notifications   ║
+║ - ADDED: New doors now show in unallocated section instantly   ║
+║ - ADDED: Red global notification when new door added           ║
+║ - ADDED: Edit door names (click name in price matrix)          ║
+║ - ADDED: Move doors between tiers (🔄 button)                  ║
+║ - ADDED: Delete doors from matrix (✕ button)                  ║
+║ - IMPROVED: Full door lifecycle management in price matrix     ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -695,7 +695,7 @@
     <div class="footer-item" style="margin-left:15px;"><div class="footer-label">TOTAL SQM</div><div class="footer-val" id="tA">0.000</div></div>
     <div style="flex:1; display:flex; justify-content:center; gap:20px; align-items:center;">
         <div class="icon-btn" onclick="genPDF()" style="color:#fff">📄</div>
-        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro 4.8 | REV 56</div>
+        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro 4.8 | REV 57</div>
     </div>
     <div class="footer-item"><div class="footer-label">PARTS</div><div class="footer-val" id="tQ">0</div></div>
     <div class="icon-btn" onclick="handleLogout()" title="Logout" style="color:#ff3b30; font-size:24px; cursor:pointer; margin-right:15px;">🚪</div>
@@ -703,7 +703,7 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 56 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 57 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     console.log('✅ CRITICAL FIXES:');
     console.log('✓ Disabled Firebase real-time sync (memory crashes fixed)');
     console.log('✓ Improved error handling to prevent crashes');
@@ -2080,9 +2080,15 @@
         let v = document.getElementById('new-profile').value.trim(); 
         if(v && !profiles.includes(v)){ 
             profiles.push(v); 
+            saveProfilesToStorage(); // SAVE TO LOCALSTORAGE
             document.getElementById('new-profile').value=''; 
             refreshLists();
-            notify('Profile Added');
+            
+            // Show global notification in red
+            showGlobalNotification(`⚠️ NEW DOOR ADDED: "${v}"\n\nGo to Price Matrix to allocate to a tier!`, '#ff3b30');
+            
+            // Update unallocated doors in price matrix if visible
+            renderPricingMatrix();
         } else if (profiles.includes(v)) {
             notify('Profile Already Exists');
         }
@@ -2285,6 +2291,55 @@
         t.innerText = m; 
         t.style.display = 'block'; 
         setTimeout(()=>t.style.display='none', 1500); 
+    }
+    
+    // Show global notification in the red alert area
+    function showGlobalNotification(message, bgColor = '#ffebee', borderColor = '#ff3b30') {
+        const alertArea = document.getElementById('globalNotifications');
+        if (!alertArea) return;
+        
+        // Remove placeholder if exists
+        const placeholder = alertArea.querySelector('p');
+        if (placeholder) placeholder.remove();
+        
+        const notifDiv = document.createElement('div');
+        notifDiv.style.cssText = `
+            background: ${bgColor};
+            border-left: 4px solid ${borderColor};
+            padding: 12px;
+            margin-bottom: 8px;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            font-size: 11px;
+            color: ${borderColor};
+            font-weight: 900;
+            white-space: pre-line;
+        `;
+        
+        const messageSpan = document.createElement('div');
+        messageSpan.style.flex = '1';
+        messageSpan.innerText = message;
+        
+        const dismissBtn = document.createElement('button');
+        dismissBtn.innerText = '✕';
+        dismissBtn.style.cssText = `
+            background: ${borderColor};
+            color: #fff;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 900;
+            margin-left: 8px;
+            flex-shrink: 0;
+        `;
+        dismissBtn.onclick = () => notifDiv.remove();
+        
+        notifDiv.appendChild(messageSpan);
+        notifDiv.appendChild(dismissBtn);
+        alertArea.appendChild(notifDiv);
     }
 
     function genForm(type) { 
@@ -3404,8 +3459,16 @@
                 
                 html += `<tr>
                     <td style="padding:8px;">
-                        <div style="font-weight:900;">${profileName}</div>
-                        <div style="font-size:9px; color:#999;">(${code})</div>
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <div>
+                                <div style="font-weight:900; cursor:pointer;" onclick="editDoorName('${tierName}', ${code}, '${profileName}')" title="Click to edit name">${profileName}</div>
+                                <div style="font-size:9px; color:#999;">(${code})</div>
+                            </div>
+                            <div style="display:flex; gap:4px;">
+                                <button onclick="editDoorTier('${tierName}', ${code}, '${profileName}')" style="background:#2196f3; color:#fff; border:none; padding:4px 6px; border-radius:3px; font-weight:900; font-size:9px; cursor:pointer;" title="Change tier">🔄</button>
+                                <button onclick="deleteDoorFromMatrix('${tierName}', ${code}, '${profileName}')" style="background:#ff3b30; color:#fff; border:none; padding:4px 6px; border-radius:3px; font-weight:900; font-size:9px; cursor:pointer;" title="Delete door">✕</button>
+                            </div>
+                        </div>
                     </td>
                     <td style="padding:8px; text-align:center;">
                         <input type="number" inputmode="numeric" value="${prices[0]}" onchange="updatePricingMatrix('${tierName}', ${code}, 0, this.value)" style="width:60px; padding:6px; border:1px solid #ddd; border-radius:4px; text-align:center;"> $
@@ -3538,6 +3601,64 @@
         masterMatrix[tier][code][priceIndex + 1] = parseFloat(val);
         localStorage.setItem('masterMatrix', JSON.stringify(masterMatrix));
         notify('✓ Price Updated');
+    }
+    
+    // Edit door name in price matrix
+    function editDoorName(tier, code, oldName) {
+        const newName = prompt(`Edit door name:\n\nCurrent: ${oldName}`, oldName);
+        if (newName && newName.trim() !== '' && newName.trim() !== oldName) {
+            const trimmed = newName.trim();
+            // Update in masterMatrix
+            masterMatrix[tier][code][0] = trimmed;
+            localStorage.setItem('masterMatrix', JSON.stringify(masterMatrix));
+            
+            // Update in profiles array
+            const idx = profiles.indexOf(oldName);
+            if (idx > -1) {
+                profiles[idx] = trimmed;
+                saveProfilesToStorage();
+            }
+            
+            renderPricingMatrix();
+            notify(`✓ Renamed to "${trimmed}"`);
+        }
+    }
+    
+    // Change door tier in price matrix
+    function editDoorTier(tier, code, doorName) {
+        const tierNames = Object.keys(masterMatrix);
+        let selection = '';
+        tierNames.forEach(t => selection += t + '\n');
+        
+        const newTier = prompt(`Move "${doorName}" to which tier?\n\n${selection}`, tier);
+        if (newTier && tierNames.includes(newTier) && newTier !== tier) {
+            // Get the door data
+            const doorData = masterMatrix[tier][code];
+            
+            // Find new code in target tier (next available)
+            const newCode = parseInt(Object.keys(masterMatrix[newTier]).sort().reverse()[0] || 0) + 1;
+            
+            // Move to new tier
+            masterMatrix[newTier][newCode] = doorData;
+            delete masterMatrix[tier][code];
+            localStorage.setItem('masterMatrix', JSON.stringify(masterMatrix));
+            
+            renderPricingMatrix();
+            notify(`✓ Moved to ${newTier}`);
+        }
+    }
+    
+    // Delete door from price matrix (returns it to unallocated)
+    function deleteDoorFromMatrix(tier, code, doorName) {
+        if (!confirm(`Remove "${doorName}" from ${tier}?\n\nIt will appear as unallocated.`)) {
+            return;
+        }
+        
+        delete masterMatrix[tier][code];
+        localStorage.setItem('masterMatrix', JSON.stringify(masterMatrix));
+        
+        renderPricingMatrix();
+        notify(`🗑️ Removed from tier`);
     }
 
     // TIMELINE EDITOR
