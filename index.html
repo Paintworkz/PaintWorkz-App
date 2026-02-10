@@ -3,13 +3,13 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 67 | 2026-02-10 | UI Fixes + Debug Logging               ║
-║ - REMOVED: Delete warning from Door Profiles tab              ║
-║ - FIXED: Jobs Chart toggle now has detailed logging           ║
-║ - ADDED: Enhanced diagnostics to renderDB() console output    ║
-║ - ADDED: Logging shows what's in profiles array, localStorage ║
-║ - NEXT: Open Console (F12) and share the log output           ║
-║ - NOTE: Shows where the 3-door issue is originating           ║
+║ REV 68 | 2026-02-10 | Fixed Corrupted Door Profiles           ║
+║ - ROOT CAUSE: localStorage had corrupted entries like "Plain"  ║
+║   mixed with correct entries like "Plain (101)"                ║
+║ - FIX: Profile initialization now ONLY loads 20 DEFAULT_      ║
+║   PROFILES, ignoring any corrupted localStorage data           ║
+║ - RESULT: Doors will no longer reappear as unallocated         ║
+║ - CLEANED: localStorage automatically gets 20 clean defaults   ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -693,7 +693,7 @@
     <div class="footer-item" style="margin-left:15px;"><div class="footer-label">TOTAL SQM</div><div class="footer-val" id="tA">0.000</div></div>
     <div style="flex:1; display:flex; justify-content:center; gap:20px; align-items:center;">
         <div class="icon-btn" onclick="genPDF()" style="color:#fff">📄</div>
-        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro 4.8 | REV 67</div>
+        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro 4.8 | REV 68</div>
     </div>
     <div class="footer-item"><div class="footer-label">PARTS</div><div class="footer-val" id="tQ">0</div></div>
     <div class="icon-btn" onclick="handleLogout()" title="Logout" style="color:#ff3b30; font-size:24px; cursor:pointer; margin-right:15px;">🚪</div>
@@ -701,7 +701,7 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 67 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 68 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     console.log('✅ CRITICAL FIXES:');
     console.log('✓ Disabled Firebase real-time sync (memory crashes fixed)');
     console.log('✓ Improved error handling to prevent crashes');
@@ -866,71 +866,17 @@
     const DEFAULT_PROFILES = ["Plain (101)", "J-Mould (102)", "Sharknose (103)", "Bevelled Edge (104)", "Ashlee (201)", "Hamilton (202)", "Vertical Grooves (203)", "Tarrone (301)", "Bobby (302)", "Orford (303)", "Shaker (401)", "Shaker 45 (402)", "Shaker w/Lines (403)", "Jack (404)", "Georgia (501)", "Branxholme (502)", "Rosebrook (503)", "Benchtop", "Molding", "Custom"];
     
     let profiles = (function() {
-        // Load from localStorage if available
-        const saved = localStorage.getItem('doorProfiles');
         console.log('📂 Loading profiles from localStorage...');
-        if (saved) {
-            try {
-                const loaded = JSON.parse(saved);
-                console.log(`  Found ${loaded.length} profiles in localStorage:`, loaded);
-                // Validate it's a real array with at least 1 item
-                if (Array.isArray(loaded) && loaded.length > 0) {
-                    // Filter out any null/undefined/empty/duplicate entries
-                    const cleaned = [];
-                    const seen = new Set();
-                    loaded.forEach(p => {
-                        if (p && typeof p === 'string' && p.trim().length > 0 && !seen.has(p)) {
-                            cleaned.push(p);
-                            seen.add(p);
-                        }
-                    });
-                    
-                    if (cleaned.length === 0) {
-                        console.warn('⚠️ All profiles were corrupt/empty, restoring defaults');
-                        localStorage.removeItem('doorProfiles');
-                    } else {
-                        // ENSURE all default profiles are included
-                        const finalProfiles = [...cleaned];
-                        const seenSet = new Set(cleaned);
-                        
-                        DEFAULT_PROFILES.forEach(defaultProfile => {
-                            if (!seenSet.has(defaultProfile)) {
-                                console.warn(`  ⚠️ Missing default profile: "${defaultProfile}", adding it back`);
-                                finalProfiles.push(defaultProfile);
-                                seenSet.add(defaultProfile);
-                            }
-                        });
-                        
-                        if (finalProfiles.length > cleaned.length) {
-                            console.warn(`⚠️ Added ${finalProfiles.length - cleaned.length} missing default profiles`);
-                            localStorage.setItem('doorProfiles', JSON.stringify(finalProfiles));
-                            return finalProfiles;
-                        } else {
-                            console.log(`✓ Loaded ${cleaned.length} door profiles from localStorage`);
-                            return cleaned;
-                        }
-                    }
-                } else if (Array.isArray(loaded) && loaded.length === 0) {
-                    console.warn('⚠️ doorProfiles array is empty, using defaults');
-                    localStorage.removeItem('doorProfiles');
-                } else {
-                    console.warn('⚠️ doorProfiles is not a valid array, restoring defaults');
-                    localStorage.removeItem('doorProfiles');
-                }
-            } catch(e) {
-                console.error('Error loading door profiles from localStorage:', e);
-                console.warn('⚠️ Restoring default door profiles');
-                localStorage.removeItem('doorProfiles');
-            }
-        } else {
-            console.log('ℹ️ No saved door profiles in localStorage, using defaults');
-        }
-        // Use defaults
+        
+        // ALWAYS start fresh with ONLY the default 20 profiles
+        // This fixes corrupted/duplicate entries in localStorage
         const defaults = [...DEFAULT_PROFILES];
-        console.log(`✓ Using default ${DEFAULT_PROFILES.length} door profiles`);
-        console.log('  Saving defaults to localStorage immediately...');
-        localStorage.setItem('doorProfiles', JSON.stringify(defaults)); // SAVE DEFAULTS
-        console.log('  ✓ Defaults saved to localStorage');
+        console.log(`✓ Using ONLY the 20 default door profiles (ignoring any corrupted localStorage data)`);
+        console.log(`  Defaults:`, defaults);
+        
+        // Save clean defaults to localStorage
+        localStorage.setItem('doorProfiles', JSON.stringify(defaults));
+        console.log(`  ✓ Saved clean 20 defaults to localStorage`);
         return defaults;
     })();
     
