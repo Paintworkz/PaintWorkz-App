@@ -3,13 +3,13 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 64 | 2026-02-09 | Tier Sorting + Tier Editing             ║
-║ - ADDED: Tiers now sort by number (Tier 1, 2, 3, 4, 5, Other) ║
-║ - ADDED: editDoorTier() allows moving to new/existing tiers    ║
-║ - ADDED: Can create custom tier names (e.g., "Tier 6")         ║
-║ - IMPROVED: Unallocated dropdown shows sorted tiers            ║
-║ - ADDED: getSortedTierNames() for consistent ordering          ║
-║ - ADDED: Auto-delete empty tiers when doors are moved          ║
+║ REV 65 | 2026-02-09 | Price Matrix Fix + UI Changes          ║
+║ - FIXED: renderPricingMatrix() with error handling & logging   ║
+║ - FIXED: Unallocated doors template string syntax error        ║
+║ - MOVED: Workload summary fixed above footer (welded)          ║
+║ - REMOVED: Delete button from Database/Door Profiles (staff)   ║
+║ - CHANGED: Delete door only available in Admin/Price Matrix    ║
+║ - CHANGED: Jobs Chart now flows continuously (no month clicks) ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -614,12 +614,10 @@
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                 <h3 style="margin:0;">Jobs Chart</h3>
                 <div style="display:flex; gap:8px;">
-                    <button onclick="prevScheduleMonth()" style="border:none; background:#f0f0f0; width:35px; height:35px; border-radius:6px; font-weight:900; cursor:pointer;">←</button>
-                    <button onclick="nextScheduleMonth()" style="border:none; background:#f0f0f0; width:35px; height:35px; border-radius:6px; font-weight:900; cursor:pointer;">→</button>
                     <button id="jobsChartToggleBtn" onclick="toggleJobsChart()" title="Minimize/Maximize" style="border:none; background:#2196f3; color:#fff; width:35px; height:35px; border-radius:6px; font-weight:900; cursor:pointer; font-size:18px;">−</button>
                 </div>
             </div>
-            <div id="scheduleMonthYear" style="text-align:center; font-weight:900; font-size:16px; margin-bottom:15px; color:#000;"></div>
+            <div id="scheduleMonthYear" style="text-align:center; font-weight:900; font-size:14px; margin-bottom:15px; color:#666; font-size:12px;">📊 All active jobs (scroll to view)</div>
         </div>
 
         <!-- Jobs Chart Timeline - Full Width -->
@@ -673,22 +671,22 @@
     </div>
 </div>
 
-<!-- WORKLOAD SUMMARY CONTAINER - Shows only in Schedule/Admin -->
-<div id="workloadSummaryContainer" style="display:none; background:#f9f9f9; border-top:1px solid #ddd; border-bottom:1px solid #ddd; padding:15px; margin-bottom:80px;">
-    <div class="card" style="margin:0; background:transparent;">
-        <h4 style="margin-top:0; margin-bottom:10px;">Workload Summary</h4>
-        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;">
-            <div style="text-align:center; padding:10px;">
-                <div id="totalActiveJobs" style="font-size:24px; font-weight:900; color:var(--gs);">0</div>
-                <div style="font-size:10px; color:#666; font-weight:700;">Active Jobs</div>
+<!-- WORKLOAD SUMMARY CONTAINER - Shows only in Schedule/Admin, fixed above footer -->
+<div id="workloadSummaryContainer" style="display:none; position:fixed; bottom:80px; left:0; right:0; background:#f9f9f9; border-top:1px solid #ddd; padding:10px 15px; z-index:1999; max-height:120px; overflow-y:auto;">
+    <div class="card" style="margin:0; background:transparent; padding:0;">
+        <h4 style="margin:0 0 8px 0; font-size:12px;">📊 Workload</h4>
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:15px;">
+            <div style="text-align:center;">
+                <div id="totalActiveJobs" style="font-size:18px; font-weight:900; color:var(--gs);">0</div>
+                <div style="font-size:9px; color:#666; font-weight:700;">Active</div>
             </div>
-            <div style="text-align:center; padding:10px; border-left:1px solid #ddd; border-right:1px solid #ddd;">
-                <div id="totalTasks" style="font-size:24px; font-weight:900; color:#ff9500;">0/0</div>
-                <div style="font-size:10px; color:#666; font-weight:700;">Tasks Complete</div>
+            <div style="text-align:center; border-left:1px solid #ddd; border-right:1px solid #ddd;">
+                <div id="totalTasks" style="font-size:18px; font-weight:900; color:#ff9500;">0/0</div>
+                <div style="font-size:9px; color:#666; font-weight:700;">Tasks</div>
             </div>
-            <div style="text-align:center; padding:10px;">
-                <div id="totalWorkload" style="font-size:24px; font-weight:900; color:#2196f3;">0</div>
-                <div style="font-size:10px; color:#666; font-weight:700;">SQM Workload</div>
+            <div style="text-align:center;">
+                <div id="totalWorkload" style="font-size:18px; font-weight:900; color:#2196f3;">0</div>
+                <div style="font-size:9px; color:#666; font-weight:700;">SQM</div>
             </div>
         </div>
     </div>
@@ -698,7 +696,7 @@
     <div class="footer-item" style="margin-left:15px;"><div class="footer-label">TOTAL SQM</div><div class="footer-val" id="tA">0.000</div></div>
     <div style="flex:1; display:flex; justify-content:center; gap:20px; align-items:center;">
         <div class="icon-btn" onclick="genPDF()" style="color:#fff">📄</div>
-        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro 4.8 | REV 64</div>
+        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro 4.8 | REV 65</div>
     </div>
     <div class="footer-item"><div class="footer-label">PARTS</div><div class="footer-val" id="tQ">0</div></div>
     <div class="icon-btn" onclick="handleLogout()" title="Logout" style="color:#ff3b30; font-size:24px; cursor:pointer; margin-right:15px;">🚪</div>
@@ -706,7 +704,7 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 64 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 65 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     console.log('✅ CRITICAL FIXES:');
     console.log('✓ Disabled Firebase real-time sync (memory crashes fixed)');
     console.log('✓ Improved error handling to prevent crashes');
@@ -2110,8 +2108,6 @@
                 console.log(`    [${i}] Rendering: "${p}"`);
                 pL.innerHTML += `<div class="db-item" style="display:flex; justify-content:space-between; align-items:center;">
                     <span style="flex:1;">${p}</span>
-                    <button onclick="editProfile('${p}')" style="padding:2px 8px; background:#2196f3; color:#fff; border:none; border-radius:3px; font-size:9px; font-weight:900; cursor:pointer; margin-right:4px;">EDIT</button>
-                    <span class="db-del" onclick="delProf('${p}')">×</span>
                 </div>`; 
             });
             console.log(`  ✓ Rendered all ${profiles.length} profiles to DOM`);
@@ -2656,17 +2652,86 @@
             scheduleContainer.style.minHeight = 'auto';
         }
         
-        const year = scheduleCalendarDate.getFullYear();
-        const month = scheduleCalendarDate.getMonth();
+        // Show "all active jobs" message
+        if (document.getElementById('scheduleMonthYear')) {
+            document.getElementById('scheduleMonthYear').innerText = '📊 All active jobs (scroll horizontally to view)';
+        }
         
-        // Set month/year header
-        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-        if (document.getElementById('scheduleMonthYear')) document.getElementById('scheduleMonthYear').innerText = `${monthNames[month]} ${year}`;
-        
-        renderGanttChart(year, month);
+        renderGanttChartContinuous(); // Show ALL jobs continuously
         renderGlobalNotifications();
         renderJobTasks(); // Update workload summary
         checkForDuplicates(); // Show warning if duplicates exist
+    }
+    
+    function renderGanttChartContinuous() {
+        // Render Gantt chart showing ALL active jobs across all dates continuously
+        const ganttWrapper = document.getElementById('ganttWrapper');
+        if (ganttWrapper) {
+            ganttWrapper.style.display = 'block';
+            ganttWrapper.style.visibility = 'visible';
+            ganttWrapper.style.opacity = '1';
+        }
+        
+        const ganttChart = document.getElementById('ganttChart');
+        if (!ganttChart) {
+            return;
+        }
+        
+        ganttChart.style.display = 'flex';
+        ganttChart.style.visibility = 'visible';
+        ganttChart.style.minHeight = 'auto';
+        ganttChart.style.opacity = '1';
+        
+        try {
+            let fullHistory = JSON.parse(localStorage.getItem('jobHistory')) || [];
+            
+            // Get only active jobs
+            let history = fullHistory.filter(job => !job.completed).sort((a, b) => {
+                let dateA = new Date();
+                let dateB = new Date();
+                
+                if (a.dateReceived) dateA = new Date(a.dateReceived);
+                if (b.dateReceived) dateB = new Date(b.dateReceived);
+                
+                return dateB - dateA;
+            });
+            
+            if (history.length === 0) {
+                ganttChart.innerHTML = `<div style="padding:20px; color:#999; text-align:center;">No active jobs to display</div>`;
+                return;
+            }
+            
+            let ganttHTML = '';
+            
+            // Render all jobs continuously
+            history.forEach(job => {
+                const jobName = job.jobName || job.client || 'Unnamed Job';
+                const jobId = job.jobId || 'unknown';
+                let statusColor = '#34c759';
+                let statusIcon = '◉';
+                
+                if (job.completed) {
+                    statusColor = '#999';
+                    statusIcon = '✓';
+                } else if (job.status === 'paused' || job.paused) {
+                    statusColor = '#ff9500';
+                    statusIcon = '⏸';
+                }
+                
+                ganttHTML += `<div style="padding:8px 12px; margin-bottom:8px; background:#f9f9f9; border-left:3px solid ${statusColor}; border-radius:3px; display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="editJob('${jobId}')">
+                    <div style="flex:1;">
+                        <div style="font-weight:900; font-size:12px;">${jobName}</div>
+                        <div style="font-size:10px; color:#999;">${job.client || 'Walk in'} • ${job.sqm || 0} SQM</div>
+                    </div>
+                    <div style="font-size:16px; color:${statusColor};">${statusIcon}</div>
+                </div>`;
+            });
+            
+            ganttChart.innerHTML = ganttHTML;
+            
+        } catch (error) {
+            ganttChart.innerHTML = `<div style="padding:20px; color:#ff3b30; background:#ffebee; border-radius:6px;"><strong>Error loading schedule:</strong> ${error.message}</div>`;
+        }
     }
     
     function renderGanttChart(year, month) {
@@ -3519,114 +3584,134 @@
     
     function renderPricingMatrix() {
         const target = document.getElementById('admin-pricing-matrix');
-        if (!target) return;
-        
-        
-        let html = `
-            <div style="margin-bottom:15px; display:flex; gap:10px; flex-wrap:wrap;">
-                <button onclick="clearFirebaseProfilesData()" style="background:#2196f3; color:#fff; border:none; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">
-                    🔄 SYNC TO FIREBASE (Keep Assignments)
-                </button>
-                <button onclick="diagnoseStorage()" style="background:#9c27b0; color:#fff; border:none; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;" title="Debug: Check console (F12) to see what's in storage">
-                    🔍 DIAGNOSE STORAGE
-                </button>
-            </div>
-            <p style="font-size:10px; color:#666; margin-bottom:15px; background:#fffaf0; padding:10px; border-radius:4px; border-left:3px solid #ff9500;">
-                <strong style="color:#2196f3;">✓ Sync to Firebase:</strong> Clears stale Firebase, keeps YOUR current assignments<br>
-                <strong style="color:#9c27b0;">🔍 Diagnose:</strong> Shows exactly what's in browser storage (check console F12)
-            </p>
-            
-            <table style="width:100%; border-collapse:collapse; font-size:10px; background:#fff;">
-                <tr style="background:#000; color:var(--gs); font-weight:900;">
-                    <th style="padding:8px; text-align:left; width:150px;">Profile</th>
-                    <th style="padding:8px; text-align:center;">Matt</th>
-                    <th style="padding:8px; text-align:center;">Satin</th>
-                    <th style="padding:8px; text-align:center;">Semi-Gloss</th>
-                    <th style="padding:8px; text-align:center;">Gloss</th>
-                </tr>
-        `;
-        
-        const sortedTiers = getSortedTierNames();
-        sortedTiers.forEach(tierName => {
-            html += `<tr style="background:#eee;"><td colspan="5" style="padding:8px; font-weight:900; color:#000;">${tierName}</td></tr>`;
-            
-            const tier = masterMatrix[tierName];
-            Object.keys(tier).forEach(code => {
-                const data = tier[code];
-                const profileName = data[0];
-                const prices = data.slice(1);
-                
-                html += `<tr>
-                    <td style="padding:8px;">
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <div>
-                                <div style="font-weight:900; cursor:pointer;" onclick="editDoorName('${tierName}', ${code}, '${profileName}')" title="Click to edit name">${profileName}</div>
-                                <div style="font-size:9px; color:#999;">(${code})</div>
-                            </div>
-                            <div style="display:flex; gap:4px;">
-                                <button onclick="editDoorTier('${tierName}', ${code}, '${profileName}')" style="background:#2196f3; color:#fff; border:none; padding:4px 6px; border-radius:3px; font-weight:900; font-size:9px; cursor:pointer;" title="Change tier">🔄</button>
-                                <button onclick="deleteDoorFromMatrix('${tierName}', ${code}, '${profileName}')" style="background:#ff3b30; color:#fff; border:none; padding:4px 6px; border-radius:3px; font-weight:900; font-size:9px; cursor:pointer;" title="Delete door">✕</button>
-                            </div>
-                        </div>
-                    </td>
-                    <td style="padding:8px; text-align:center;">
-                        <input type="number" inputmode="numeric" value="${prices[0]}" onchange="updatePricingMatrix('${tierName}', ${code}, 0, this.value)" style="width:60px; padding:6px; border:1px solid #ddd; border-radius:4px; text-align:center;"> $
-                    </td>
-                    <td style="padding:8px; text-align:center;">
-                        <input type="number" inputmode="numeric" value="${prices[1]}" onchange="updatePricingMatrix('${tierName}', ${code}, 1, this.value)" style="width:60px; padding:6px; border:1px solid #ddd; border-radius:4px; text-align:center;"> $
-                    </td>
-                    <td style="padding:8px; text-align:center;">
-                        <input type="number" inputmode="numeric" value="${prices[2]}" onchange="updatePricingMatrix('${tierName}', ${code}, 2, this.value)" style="width:60px; padding:6px; border:1px solid #ddd; border-radius:4px; text-align:center;"> $
-                    </td>
-                    <td style="padding:8px; text-align:center;">
-                        <input type="number" inputmode="numeric" value="${prices[3]}" onchange="updatePricingMatrix('${tierName}', ${code}, 3, this.value)" style="width:60px; padding:6px; border:1px solid #ddd; border-radius:4px; text-align:center;"> $
-                    </td>
-                </tr>`;
-            });
-        });
-        
-        // Unallocated Doors Section
-        html += `<tr style="background:#fff3cd; border-top:3px solid #ffb300;"><td colspan="5" style="padding:12px; font-weight:900; color:#000; font-size:12px;">⚠️ UNALLOCATED DOORS (${unallocatedDoors.length} to assign)</td></tr>
-        <tr style="background:#ffe0b2;"><td colspan="5" style="padding:10px; font-size:10px; color:#000; border-bottom:2px solid #ff9800;">
-            <strong>📋 HOW TO ALLOCATE:</strong><br>
-            1️⃣ Set prices for each finish (or use defaults)<br>
-            2️⃣ Select a tier from the dropdown<br>
-            3️⃣ Click <strong>✓ ASSIGN TO TIER</strong><br>
-            🗑️ To delete a door permanently: go to <strong>Database > Door Profiles</strong>
-        </td></tr>`;
-        
-        const unallocatedDoors = getUnallocatedDoors();
-        if (unallocatedDoors.length > 0) {
-            unallocatedDoors.forEach(door => {
-                html += `<tr style="background:#fffaf0;">
-                    <td style="padding:8px; max-width:150px;">
-                        <div style="font-weight:900; word-break:break-word;">${door.name}</div>
-                        <div style="font-size:9px; color:#999;">Unassigned</div>
-                    </td>
-                    <td colspan="4" style="padding:8px; text-align:center;">
-                        <div style="display:flex; gap:5px; margin-bottom:5px; flex-wrap:wrap; justify-content:center;">
-                            <input type="number" inputmode="numeric" id="unalloc_matt_${door.code}" value="125" placeholder="Matt" style="width:50px; padding:4px; border:1px solid #ddd; border-radius:4px; text-align:center; font-size:10px;">
-                            <input type="number" inputmode="numeric" id="unalloc_satin_${door.code}" value="125" placeholder="Satin" style="width:50px; padding:4px; border:1px solid #ddd; border-radius:4px; text-align:center; font-size:10px;">
-                            <input type="number" inputmode="numeric" id="unalloc_semigloss_${door.code}" value="152" placeholder="Semi" style="width:50px; padding:4px; border:1px solid #ddd; border-radius:4px; text-align:center; font-size:10px;">
-                            <input type="number" inputmode="numeric" id="unalloc_gloss_${door.code}" value="152" placeholder="Gloss" style="width:50px; padding:4px; border:1px solid #ddd; border-radius:4px; text-align:center; font-size:10px;">
-                        </div>
-                        <select id="unalloc_tier_${door.code}" style="width:100%; padding:4px; border:1px solid #ddd; border-radius:4px; font-size:10px; margin-bottom:5px;">
-                            <option value="">Select Tier...</option>
-                            ${getSortedTierNames().map(t => `<option value="${t}">${t}</option>`).join('')}
-                        </select>
-                        <div style="display:flex; gap:5px;">
-                            <button onclick="assignDoorToTier('${door.code}', '${door.name}')" style="flex:1; padding:8px; background:#34c759; color:#fff; border:none; border-radius:4px; font-weight:900; font-size:11px; cursor:pointer; box-shadow:0 2px 4px rgba(0,0,0,0.1);">✓ ASSIGN</button>
-                            <button onclick="deleteUnallocatedDoor('${door.code}', '${door.name}')" style="padding:8px 6px; background:#ff3b30; color:#fff; border:none; border-radius:4px; font-weight:900; font-size:11px; cursor:pointer;" title="Delete door permanently">🗑️</button>
-                        </div>
-                    </td>
-                </tr>`;
-            });
-        } else {
-            html += `<tr style="background:#fffaf0;"><td colspan="5" style="padding:12px; text-align:center; color:#999; font-size:11px;">✓ All doors allocated!</td></tr>`;
+        if (!target) {
+            console.error('❌ admin-pricing-matrix element not found');
+            return;
         }
         
-        html += `</table>`;
-        target.innerHTML = html;
+        try {
+            console.log('📊 renderPricingMatrix() called');
+            console.log('  masterMatrix tiers:', Object.keys(masterMatrix));
+            
+            let html = `
+                <div style="margin-bottom:15px; display:flex; gap:10px; flex-wrap:wrap;">
+                    <button onclick="clearFirebaseProfilesData()" style="background:#2196f3; color:#fff; border:none; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">
+                        🔄 SYNC TO FIREBASE (Keep Assignments)
+                    </button>
+                    <button onclick="diagnoseStorage()" style="background:#9c27b0; color:#fff; border:none; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;" title="Debug: Check console (F12) to see what's in storage">
+                        🔍 DIAGNOSE STORAGE
+                    </button>
+                </div>
+                <p style="font-size:10px; color:#666; margin-bottom:15px; background:#fffaf0; padding:10px; border-radius:4px; border-left:3px solid #ff9500;">
+                    <strong style="color:#2196f3;">✓ Sync to Firebase:</strong> Clears stale Firebase, keeps YOUR current assignments<br>
+                    <strong style="color:#9c27b0;">🔍 Diagnose:</strong> Shows exactly what's in browser storage (check console F12)
+                </p>
+                
+                <table style="width:100%; border-collapse:collapse; font-size:10px; background:#fff;">
+                    <tr style="background:#000; color:var(--gs); font-weight:900;">
+                        <th style="padding:8px; text-align:left; width:150px;">Profile</th>
+                        <th style="padding:8px; text-align:center;">Matt</th>
+                        <th style="padding:8px; text-align:center;">Satin</th>
+                        <th style="padding:8px; text-align:center;">Semi-Gloss</th>
+                        <th style="padding:8px; text-align:center;">Gloss</th>
+                    </tr>
+            `;
+            
+            // Get sorted tiers
+            const sortedTiers = getSortedTierNames();
+            console.log('  Sorted tiers:', sortedTiers);
+            
+            // Render each tier and its doors
+            sortedTiers.forEach(tierName => {
+                html += `<tr style="background:#eee;"><td colspan="5" style="padding:8px; font-weight:900; color:#000;">${tierName}</td></tr>`;
+                
+                const tier = masterMatrix[tierName];
+                Object.keys(tier).forEach(code => {
+                    const data = tier[code];
+                    const profileName = data[0];
+                    const prices = data.slice(1);
+                    
+                    html += `<tr>
+                        <td style="padding:8px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <div>
+                                    <div style="font-weight:900; cursor:pointer;" onclick="editDoorName('${tierName}', ${code}, '${profileName}')" title="Click to edit name">${profileName}</div>
+                                    <div style="font-size:9px; color:#999;">(${code})</div>
+                                </div>
+                                <div style="display:flex; gap:4px;">
+                                    <button onclick="editDoorTier('${tierName}', ${code}, '${profileName}')" style="background:#2196f3; color:#fff; border:none; padding:4px 6px; border-radius:3px; font-weight:900; font-size:9px; cursor:pointer;" title="Change tier">🔄</button>
+                                    <button onclick="deleteDoorFromMatrix('${tierName}', ${code}, '${profileName}')" style="background:#ff3b30; color:#fff; border:none; padding:4px 6px; border-radius:3px; font-weight:900; font-size:9px; cursor:pointer;" title="Delete door from tier">✕</button>
+                                </div>
+                            </div>
+                        </td>
+                        <td style="padding:8px; text-align:center;">
+                            <input type="number" inputmode="numeric" value="${prices[0]}" onchange="updatePricingMatrix('${tierName}', ${code}, 0, this.value)" style="width:60px; padding:6px; border:1px solid #ddd; border-radius:4px; text-align:center;"> $
+                        </td>
+                        <td style="padding:8px; text-align:center;">
+                            <input type="number" inputmode="numeric" value="${prices[1]}" onchange="updatePricingMatrix('${tierName}', ${code}, 1, this.value)" style="width:60px; padding:6px; border:1px solid #ddd; border-radius:4px; text-align:center;"> $
+                        </td>
+                        <td style="padding:8px; text-align:center;">
+                            <input type="number" inputmode="numeric" value="${prices[2]}" onchange="updatePricingMatrix('${tierName}', ${code}, 2, this.value)" style="width:60px; padding:6px; border:1px solid #ddd; border-radius:4px; text-align:center;"> $
+                        </td>
+                        <td style="padding:8px; text-align:center;">
+                            <input type="number" inputmode="numeric" value="${prices[3]}" onchange="updatePricingMatrix('${tierName}', ${code}, 3, this.value)" style="width:60px; padding:6px; border:1px solid #ddd; border-radius:4px; text-align:center;"> $
+                        </td>
+                    </tr>`;
+                });
+            });
+            
+            // Get unallocated doors
+            const unallocatedDoors = getUnallocatedDoors();
+            const tierOptionsHtml = getSortedTierNames().map(t => `<option value="${t}">${t}</option>`).join('');
+            
+            // Add unallocated section
+            html += `<tr style="background:#fff3cd; border-top:3px solid #ffb300;"><td colspan="5" style="padding:12px; font-weight:900; color:#000; font-size:12px;">⚠️ UNALLOCATED DOORS (${unallocatedDoors.length} to assign)</td></tr>
+            <tr style="background:#ffe0b2;"><td colspan="5" style="padding:10px; font-size:10px; color:#000; border-bottom:2px solid #ff9800;">
+                <strong>📋 HOW TO ALLOCATE:</strong><br>
+                1️⃣ Set prices for each finish (or use defaults)<br>
+                2️⃣ Select a tier from the dropdown<br>
+                3️⃣ Click <strong>✓ ASSIGN TO TIER</strong><br>
+                🗑️ To delete a door permanently: click ✕ in the tier above (admin only)
+            </td></tr>`;
+            
+            if (unallocatedDoors.length > 0) {
+                unallocatedDoors.forEach(door => {
+                    html += `<tr style="background:#fffaf0;">
+                        <td style="padding:8px; max-width:150px;">
+                            <div style="font-weight:900; word-break:break-word;">${door.name}</div>
+                            <div style="font-size:9px; color:#999;">Unassigned</div>
+                        </td>
+                        <td colspan="4" style="padding:8px; text-align:center;">
+                            <div style="display:flex; gap:5px; margin-bottom:5px; flex-wrap:wrap; justify-content:center;">
+                                <input type="number" inputmode="numeric" id="unalloc_matt_${door.code}" value="125" placeholder="Matt" style="width:50px; padding:4px; border:1px solid #ddd; border-radius:4px; text-align:center; font-size:10px;">
+                                <input type="number" inputmode="numeric" id="unalloc_satin_${door.code}" value="125" placeholder="Satin" style="width:50px; padding:4px; border:1px solid #ddd; border-radius:4px; text-align:center; font-size:10px;">
+                                <input type="number" inputmode="numeric" id="unalloc_semigloss_${door.code}" value="152" placeholder="Semi" style="width:50px; padding:4px; border:1px solid #ddd; border-radius:4px; text-align:center; font-size:10px;">
+                                <input type="number" inputmode="numeric" id="unalloc_gloss_${door.code}" value="152" placeholder="Gloss" style="width:50px; padding:4px; border:1px solid #ddd; border-radius:4px; text-align:center; font-size:10px;">
+                            </div>
+                            <select id="unalloc_tier_${door.code}" style="width:100%; padding:4px; border:1px solid #ddd; border-radius:4px; font-size:10px; margin-bottom:5px;">
+                                <option value="">Select Tier...</option>
+                                ${tierOptionsHtml}
+                            </select>
+                            <div style="display:flex; gap:5px;">
+                                <button onclick="assignDoorToTier('${door.code}', '${door.name}')" style="flex:1; padding:8px; background:#34c759; color:#fff; border:none; border-radius:4px; font-weight:900; font-size:11px; cursor:pointer; box-shadow:0 2px 4px rgba(0,0,0,0.1);">✓ ASSIGN</button>
+                                <button onclick="deleteUnallocatedDoor('${door.code}', '${door.name}')" style="padding:8px 6px; background:#ff3b30; color:#fff; border:none; border-radius:4px; font-weight:900; font-size:11px; cursor:pointer;" title="Delete door permanently">🗑️</button>
+                            </div>
+                        </td>
+                    </tr>`;
+                });
+            } else {
+                html += `<tr style="background:#fffaf0;"><td colspan="5" style="padding:12px; text-align:center; color:#999; font-size:11px;">✓ All doors allocated!</td></tr>`;
+            }
+            
+            // Close table
+            html += `</table>`;
+            target.innerHTML = html;
+            console.log('✓ Price matrix rendered successfully');
+            
+        } catch (error) {
+            console.error('❌ Error in renderPricingMatrix:', error);
+            target.innerHTML = `<div style="color:#ff3b30; padding:20px; background:#ffebee; border-radius:4px;"><strong>❌ Error rendering price matrix:</strong><br>${error.message}<br><br>Check console (F12) for full details.</div>`;
+        }
     }
     
     function getUnallocatedDoors() {
