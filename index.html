@@ -3,13 +3,12 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 69 | 2026-02-10 | Door Names + Jobs Chart Fixes           ║
-║ - FIXED: defaultMasterMatrix door names now match profiles     ║
-║   (e.g., "Plain (101)" instead of "Plain")                     ║
-║ - FIXED: Unallocated doors should no longer reappear           ║
-║ - FIXED: Jobs Chart now starts visible (not minimized)         ║
-║ - ADDED: Enhanced logging to renderGanttChartContinuous        ║
-║ - RESULT: Allocated doors stay allocated, chart visible        ║
+║ REV 70 | 2026-02-10 | Jobs Chart Now Renders on Toggle       ║
+║ - FIXED: toggleJobsChart() now calls renderGanttChartContinuous ║
+║ - FIXED: Jobs display when you maximize the chart              ║
+║ - ADDED: Detailed logging to trace job loading from storage    ║
+║ - ADDED: Better job filtering (handles various states)         ║
+║ - NEXT: Toggle the chart and check console for job logs        ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -693,7 +692,7 @@
     <div class="footer-item" style="margin-left:15px;"><div class="footer-label">TOTAL SQM</div><div class="footer-val" id="tA">0.000</div></div>
     <div style="flex:1; display:flex; justify-content:center; gap:20px; align-items:center;">
         <div class="icon-btn" onclick="genPDF()" style="color:#fff">📄</div>
-        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro 4.8 | REV 69</div>
+        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro 4.8 | REV 70</div>
     </div>
     <div class="footer-item"><div class="footer-label">PARTS</div><div class="footer-val" id="tQ">0</div></div>
     <div class="icon-btn" onclick="handleLogout()" title="Logout" style="color:#ff3b30; font-size:24px; cursor:pointer; margin-right:15px;">🚪</div>
@@ -701,7 +700,7 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 69 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 70 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     console.log('✅ CRITICAL FIXES:');
     console.log('✓ Disabled Firebase real-time sync (memory crashes fixed)');
     console.log('✓ Improved error handling to prevent crashes');
@@ -2610,6 +2609,7 @@
     let scheduleCalendarDate = new Date();
 
     function renderScheduleCalendar() {
+        console.log('📅 renderScheduleCalendar() called');
         
         // FORCE SCHEDULE CONTAINER TO BE VISIBLE
         const scheduleContainer = document.getElementById('schedule');
@@ -2617,6 +2617,7 @@
             scheduleContainer.style.display = 'block';
             scheduleContainer.style.visibility = 'visible';
             scheduleContainer.style.minHeight = 'auto';
+            console.log('  ✓ Schedule container forced visible');
         }
         
         // Show "all active jobs" message
@@ -2624,6 +2625,7 @@
             document.getElementById('scheduleMonthYear').innerText = '📊 All active jobs (scroll horizontally to view)';
         }
         
+        console.log('  → Calling renderGanttChartContinuous()...');
         renderGanttChartContinuous(); // Show ALL jobs continuously
         renderGlobalNotifications();
         renderJobTasks(); // Update workload summary
@@ -2658,10 +2660,18 @@
         
         try {
             let fullHistory = JSON.parse(localStorage.getItem('jobHistory')) || [];
-            console.log(`  Jobs in localStorage: ${fullHistory.length}`);
+            console.log(`  📦 Jobs in localStorage: ${fullHistory.length}`);
+            if (fullHistory.length > 0) {
+                fullHistory.forEach((job, idx) => {
+                    console.log(`    [${idx}] ${job.jobName || job.client || 'Unnamed'} | completed: ${job.completed}`);
+                });
+            }
             
-            // Get only active jobs
-            let history = fullHistory.filter(job => !job.completed).sort((a, b) => {
+            // Get only active jobs (not completed)
+            let history = fullHistory.filter(job => {
+                // A job is active if completed is NOT true
+                return job.completed !== true;
+            }).sort((a, b) => {
                 let dateA = new Date();
                 let dateB = new Date();
                 
@@ -2671,7 +2681,12 @@
                 return dateB - dateA;
             });
             
-            console.log(`  Active jobs: ${history.length}`);
+            console.log(`  ✓ Active jobs after filtering: ${history.length}`);
+            if (history.length > 0) {
+                history.forEach((job, idx) => {
+                    console.log(`    [${idx}] ${job.jobName || job.client || 'Unnamed'} (${job.sqm || 0} SQM)`);
+                });
+            }
             
             if (history.length === 0) {
                 ganttChart.innerHTML = `<div style="padding:20px; color:#999; text-align:center;">No active jobs to display</div>`;
@@ -4048,8 +4063,8 @@
         console.log('  Current state: isMinimized =', isMinimized);
         
         if (isMinimized) {
-            // Restore (maximize)
-            console.log('  → MAXIMIZING...');
+            // Restore (maximize) - ALSO RE-RENDER THE JOBS
+            console.log('  → MAXIMIZING and re-rendering...');
             wrapper.style.display = 'block';
             wrapper.style.visibility = 'visible';
             wrapper.style.opacity = '1';
@@ -4061,7 +4076,11 @@
             btn.style.background = '#2196f3';
             btn.title = 'Minimize';
             localStorage.setItem('jobsChartMinimized', 'false');
-            console.log('  ✓ Jobs Chart maximized');
+            
+            // RE-RENDER THE JOBS WHEN EXPANDING
+            console.log('  Calling renderGanttChartContinuous()...');
+            renderGanttChartContinuous();
+            console.log('  ✓ Jobs Chart maximized and re-rendered');
         } else {
             // Minimize
             console.log('  → MINIMIZING...');
