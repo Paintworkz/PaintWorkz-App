@@ -3,13 +3,13 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 65 | 2026-02-09 | Price Matrix Fix + UI Changes          ║
-║ - FIXED: renderPricingMatrix() with error handling & logging   ║
-║ - FIXED: Unallocated doors template string syntax error        ║
-║ - MOVED: Workload summary fixed above footer (welded)          ║
-║ - REMOVED: Delete button from Database/Door Profiles (staff)   ║
-║ - CHANGED: Delete door only available in Admin/Price Matrix    ║
-║ - CHANGED: Jobs Chart now flows continuously (no month clicks) ║
+║ REV 66 | 2026-02-10 | Door Profiles Loading Fix              ║
+║ - FIXED: Profiles initialization to always include ALL 20     ║
+║ - FIXED: Missing defaults are auto-restored if localStorage   ║
+║          was corrupted or incomplete                           ║
+║ - ADDED: Better console logging in renderDB() for debugging   ║
+║ - LOGIC: Ensures all 20 default doors always present          ║
+║ - RESULT: Should now show all 20 doors in Database tab        ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -696,7 +696,7 @@
     <div class="footer-item" style="margin-left:15px;"><div class="footer-label">TOTAL SQM</div><div class="footer-val" id="tA">0.000</div></div>
     <div style="flex:1; display:flex; justify-content:center; gap:20px; align-items:center;">
         <div class="icon-btn" onclick="genPDF()" style="color:#fff">📄</div>
-        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro 4.8 | REV 65</div>
+        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro 4.8 | REV 66</div>
     </div>
     <div class="footer-item"><div class="footer-label">PARTS</div><div class="footer-val" id="tQ">0</div></div>
     <div class="icon-btn" onclick="handleLogout()" title="Logout" style="color:#ff3b30; font-size:24px; cursor:pointer; margin-right:15px;">🚪</div>
@@ -704,7 +704,7 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 65 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 66 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     console.log('✅ CRITICAL FIXES:');
     console.log('✓ Disabled Firebase real-time sync (memory crashes fixed)');
     console.log('✓ Improved error handling to prevent crashes');
@@ -891,14 +891,27 @@
                     if (cleaned.length === 0) {
                         console.warn('⚠️ All profiles were corrupt/empty, restoring defaults');
                         localStorage.removeItem('doorProfiles');
-                    } else if (cleaned.length !== loaded.length) {
-                        console.warn(`⚠️ Removed ${loaded.length - cleaned.length} corrupt/duplicate entries, kept ${cleaned.length}`);
-                        localStorage.setItem('doorProfiles', JSON.stringify(cleaned));
-                        console.log('  Cleaned profiles:', cleaned);
-                        return cleaned;
                     } else {
-                        console.log(`✓ Loaded ${loaded.length} door profiles from localStorage`);
-                        return loaded;
+                        // ENSURE all default profiles are included
+                        const finalProfiles = [...cleaned];
+                        const seenSet = new Set(cleaned);
+                        
+                        DEFAULT_PROFILES.forEach(defaultProfile => {
+                            if (!seenSet.has(defaultProfile)) {
+                                console.warn(`  ⚠️ Missing default profile: "${defaultProfile}", adding it back`);
+                                finalProfiles.push(defaultProfile);
+                                seenSet.add(defaultProfile);
+                            }
+                        });
+                        
+                        if (finalProfiles.length > cleaned.length) {
+                            console.warn(`⚠️ Added ${finalProfiles.length - cleaned.length} missing default profiles`);
+                            localStorage.setItem('doorProfiles', JSON.stringify(finalProfiles));
+                            return finalProfiles;
+                        } else {
+                            console.log(`✓ Loaded ${cleaned.length} door profiles from localStorage`);
+                            return cleaned;
+                        }
                     }
                 } else if (Array.isArray(loaded) && loaded.length === 0) {
                     console.warn('⚠️ doorProfiles array is empty, using defaults');
@@ -2078,8 +2091,8 @@
     // DATABASE OPS
     function renderDB() {
         console.log(`📋 renderDB() called`);
-        console.log(`  profiles array:`, profiles);
-        console.log(`  profiles.length = ${profiles.length}`);
+        console.log(`  profiles array length: ${profiles.length}`);
+        console.log(`  profiles array contents:`, profiles);
         
         const cL = document.getElementById('list-clients'); 
         if (!cL) {
@@ -2098,19 +2111,28 @@
             return;
         }
         pL.innerHTML = '';
-        console.log(`  Rendering ${profiles.length} profiles...`);
+        console.log(`  📝 About to render ${profiles.length} profiles...`);
         
         if (profiles.length === 0) {
             console.warn('  ⚠️ profiles array is EMPTY! Will show empty list');
             pL.innerHTML = '<p style="color:#999; text-align:center; font-size:11px;">No profiles yet. Add one above.</p>';
         } else {
-            profiles.sort().forEach((p, i) => { 
-                console.log(`    [${i}] Rendering: "${p}"`);
-                pL.innerHTML += `<div class="db-item" style="display:flex; justify-content:space-between; align-items:center;">
-                    <span style="flex:1;">${p}</span>
-                </div>`; 
+            let profileCount = 0;
+            const sortedProfiles = profiles.sort();
+            console.log(`  Sorted profiles:`, sortedProfiles);
+            
+            sortedProfiles.forEach((p, i) => { 
+                if (p && typeof p === 'string' && p.trim().length > 0) {
+                    console.log(`    [${i}] Rendering: "${p}"`);
+                    pL.innerHTML += `<div class="db-item" style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="flex:1;">${p}</span>
+                    </div>`; 
+                    profileCount++;
+                } else {
+                    console.warn(`    [${i}] SKIPPED invalid profile: "${p}"`);
+                }
             });
-            console.log(`  ✓ Rendered all ${profiles.length} profiles to DOM`);
+            console.log(`  ✓ Rendered ${profileCount} valid profiles to DOM (out of ${profiles.length} total)`);
         }
     }
 
