@@ -3,13 +3,13 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 66 | 2026-02-10 | Door Profiles Loading Fix              ║
-║ - FIXED: Profiles initialization to always include ALL 20     ║
-║ - FIXED: Missing defaults are auto-restored if localStorage   ║
-║          was corrupted or incomplete                           ║
-║ - ADDED: Better console logging in renderDB() for debugging   ║
-║ - LOGIC: Ensures all 20 default doors always present          ║
-║ - RESULT: Should now show all 20 doors in Database tab        ║
+║ REV 67 | 2026-02-10 | UI Fixes + Debug Logging               ║
+║ - REMOVED: Delete warning from Door Profiles tab              ║
+║ - FIXED: Jobs Chart toggle now has detailed logging           ║
+║ - ADDED: Enhanced diagnostics to renderDB() console output    ║
+║ - ADDED: Logging shows what's in profiles array, localStorage ║
+║ - NEXT: Open Console (F12) and share the log output           ║
+║ - NOTE: Shows where the 3-door issue is originating           ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -533,10 +533,7 @@
         <div id="sub-profiles" class="sub-section" style="display:none;">
             <div class="card">
                 <h4 style="margin-bottom:15px; font-weight:900;">Door Profiles</h4>
-                <p style="font-size:11px; color:#666; margin-bottom:15px;">Add new profiles or edit existing names. Profiles are used in your pricing matrix tiers. <strong>To permanently delete a door, click the red × next to it below.</strong></p>
-                <div style="background:#ffebee; border:1px solid #ff3b30; padding:10px; border-radius:4px; margin-bottom:15px; font-size:10px; color:#c00;">
-                    <strong>⚠️ WARNING:</strong> Deleting a door here is PERMANENT and will remove it from all tiers in the Price Matrix!
-                </div>
+                <p style="font-size:11px; color:#666; margin-bottom:15px;">Add new profiles or edit existing names. Profiles are used in your pricing matrix tiers.</p>
                 
                 <div class="add-row">
                     <input type="text" id="new-profile" placeholder="New Profile Name (e.g., Shaker, Ashlee)" style="margin-bottom:0;">
@@ -696,7 +693,7 @@
     <div class="footer-item" style="margin-left:15px;"><div class="footer-label">TOTAL SQM</div><div class="footer-val" id="tA">0.000</div></div>
     <div style="flex:1; display:flex; justify-content:center; gap:20px; align-items:center;">
         <div class="icon-btn" onclick="genPDF()" style="color:#fff">📄</div>
-        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro 4.8 | REV 66</div>
+        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro 4.8 | REV 67</div>
     </div>
     <div class="footer-item"><div class="footer-label">PARTS</div><div class="footer-val" id="tQ">0</div></div>
     <div class="icon-btn" onclick="handleLogout()" title="Logout" style="color:#ff3b30; font-size:24px; cursor:pointer; margin-right:15px;">🚪</div>
@@ -704,7 +701,7 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 66 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 67 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     console.log('✅ CRITICAL FIXES:');
     console.log('✓ Disabled Firebase real-time sync (memory crashes fixed)');
     console.log('✓ Improved error handling to prevent crashes');
@@ -2093,6 +2090,8 @@
         console.log(`📋 renderDB() called`);
         console.log(`  profiles array length: ${profiles.length}`);
         console.log(`  profiles array contents:`, profiles);
+        console.log(`  DEFAULT_PROFILES:`, DEFAULT_PROFILES);
+        console.log(`  localStorage.getItem('doorProfiles'):`, localStorage.getItem('doorProfiles'));
         
         const cL = document.getElementById('list-clients'); 
         if (!cL) {
@@ -4075,28 +4074,43 @@
         const monthYear = document.getElementById('scheduleMonthYear');
         const btn = document.getElementById('jobsChartToggleBtn');
         
-        if (!wrapper) return;
+        console.log('🔘 toggleJobsChart called');
+        console.log('  wrapper:', wrapper);
+        console.log('  wrapper.style.display:', wrapper ? wrapper.style.display : 'N/A');
+        
+        if (!wrapper) {
+            console.error('  ✗ ganttWrapper element not found!');
+            return;
+        }
         
         const isMinimized = localStorage.getItem('jobsChartMinimized') === 'true';
+        console.log('  Current state: isMinimized =', isMinimized);
         
         if (isMinimized) {
             // Restore (maximize)
+            console.log('  → MAXIMIZING...');
             wrapper.style.display = 'block';
-            monthYear.style.display = 'block';
+            wrapper.style.visibility = 'visible';
+            wrapper.style.opacity = '1';
+            if (monthYear) {
+                monthYear.style.display = 'block';
+                monthYear.style.visibility = 'visible';
+            }
             btn.textContent = '−';
             btn.style.background = '#2196f3';
             btn.title = 'Minimize';
             localStorage.setItem('jobsChartMinimized', 'false');
-            console.log('📊 Jobs Chart maximized');
+            console.log('  ✓ Jobs Chart maximized');
         } else {
             // Minimize
+            console.log('  → MINIMIZING...');
             wrapper.style.display = 'none';
-            monthYear.style.display = 'none';
+            if (monthYear) monthYear.style.display = 'none';
             btn.textContent = '+';
             btn.style.background = '#666';
             btn.title = 'Maximize';
             localStorage.setItem('jobsChartMinimized', 'true');
-            console.log('📊 Jobs Chart minimized');
+            console.log('  ✓ Jobs Chart minimized');
         }
     }
     
