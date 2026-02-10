@@ -3,12 +3,12 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 72 | 2026-02-10 | Schedule Tab Visibility Fix             ║
-║ - FIXED: Global Notifications now force visible in renderFn   ║
-║ - FIXED: Jobs Chart wrapper always visible on Schedule tab    ║
-║ - FIXED: schedule div gets "active" class if missing           ║
-║ - ADDED: Enhanced logging to trace visibility issues          ║
-║ - RESULT: Both notifications & jobs should now appear!         ║
+║ REV 73 | 2026-02-10 | Jobs Chart Height + Visibility Fix      ║
+║ - FIXED: ganttChart height was 0px (min-height:auto issue)    ║
+║ - FIXED: ganttWrapper changed to flex to match children       ║
+║ - FIXED: ganttChart now has min-height:200px (won't collapse) ║
+║ - ADDED: Detailed logging to show computed CSS and heights    ║
+║ - RESULT: Jobs should now be visible on Schedule tab!         ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -617,9 +617,9 @@
         </div>
 
         <!-- Jobs Chart Timeline - Full Width -->
-        <div id="ganttWrapper" style="width:100vw; margin-left:calc(-50vw + 50%); background:#fff; padding:15px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow-x:auto; overflow-y:auto; min-height:600px; display:block; visibility:visible; scroll-behavior:smooth; cursor:grab;">
+        <div id="ganttWrapper" style="width:100vw; margin-left:calc(-50vw + 50%); background:#fff; padding:15px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow-x:auto; overflow-y:auto; min-height:600px; display:flex; flex-direction:column; visibility:visible; scroll-behavior:smooth; cursor:grab; position:relative; z-index:1;">
             <!-- Jobs Chart Container -->
-            <div id="ganttChart" style="width:100%; min-width:1200px; padding:0; display:flex; flex-direction:column; user-select:none; min-height:auto; background:#fff;">
+            <div id="ganttChart" style="width:100%; padding:0; display:flex; flex-direction:column; user-select:none; min-height:200px; height:auto; background:#fff;">
                 <!-- Jobs chart will render here -->
             </div>
         </div>
@@ -692,7 +692,7 @@
     <div class="footer-item" style="margin-left:15px;"><div class="footer-label">TOTAL SQM</div><div class="footer-val" id="tA">0.000</div></div>
     <div style="flex:1; display:flex; justify-content:center; gap:20px; align-items:center;">
         <div class="icon-btn" onclick="genPDF()" style="color:#fff">📄</div>
-        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro 4.8 | REV 72</div>
+        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro 4.8 | REV 73</div>
     </div>
     <div class="footer-item"><div class="footer-label">PARTS</div><div class="footer-val" id="tQ">0</div></div>
     <div class="icon-btn" onclick="handleLogout()" title="Logout" style="color:#ff3b30; font-size:24px; cursor:pointer; margin-right:15px;">🚪</div>
@@ -700,7 +700,7 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 72 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 73 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     console.log('✅ CRITICAL FIXES:');
     console.log('✓ Disabled Firebase real-time sync (memory crashes fixed)');
     console.log('✓ Improved error handling to prevent crashes');
@@ -2686,10 +2686,15 @@
         }
         
         ganttChart.style.display = 'flex';
+        ganttChart.style.flexDirection = 'column';
         ganttChart.style.visibility = 'visible';
-        ganttChart.style.minHeight = 'auto';
+        ganttChart.style.minHeight = '200px';
+        ganttChart.style.height = 'auto';
         ganttChart.style.opacity = '1';
-        console.log('  ✓ ganttChart forced to display:flex');
+        ganttChart.style.width = '100%';
+        ganttChart.style.position = 'relative';
+        ganttChart.style.zIndex = '1';
+        console.log('  ✓ ganttChart forced to display:flex with proper height');
         
         try {
             let fullHistory = JSON.parse(localStorage.getItem('jobHistory')) || [];
@@ -2756,15 +2761,21 @@
             ganttChart.innerHTML = ganttHTML;
             console.log(`  ✓ Rendered ${history.length} jobs to ganttChart`);
             
-            // VERIFY the HTML is actually in the DOM
+            // VERIFY the HTML is actually in the DOM and visible
             console.log(`  📝 ganttChart.innerHTML length: ${ganttChart.innerHTML.length} chars`);
             console.log(`  📝 ganttChart.childNodes.length: ${ganttChart.childNodes.length} elements`);
             console.log(`  📝 ganttChart.children.length: ${ganttChart.children.length} children`);
+            console.log(`  📝 ganttChart computed height: ${window.getComputedStyle(ganttChart).height}`);
+            console.log(`  📝 ganttChart computed display: ${window.getComputedStyle(ganttChart).display}`);
+            console.log(`  📝 ganttChart computed visibility: ${window.getComputedStyle(ganttChart).visibility}`);
+            console.log(`  📝 ganttChart offsetHeight: ${ganttChart.offsetHeight}px`);
             
             if (ganttChart.innerHTML.length === 0) {
                 console.error('  ✗ ERROR: ganttChart.innerHTML is empty!');
+            } else if (ganttChart.offsetHeight === 0) {
+                console.warn('  ⚠️ WARNING: ganttChart has HTML but offsetHeight is 0px (not visible!)');
             } else {
-                console.log('  ✓ HTML successfully inserted into ganttChart');
+                console.log(`  ✓ ganttChart has content and ${ganttChart.offsetHeight}px height`);
             }
             
         } catch (error) {
