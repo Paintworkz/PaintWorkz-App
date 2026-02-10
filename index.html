@@ -3,12 +3,12 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 71 | 2026-02-10 | CRITICAL FIXES - Syntax + Door Names   ║
-║ - FIXED: Syntax error on line 2731 (extra closing braces)     ║
-║ - FIXED: Tabs now work (application no longer locked up)      ║
-║ - FIXED: masterMatrix now uses defaults with correct names    ║
-║ - FIXED: Door names now match between profiles & masterMatrix ║
-║ - RESULT: Doors should no longer appear in unallocated        ║
+║ REV 72 | 2026-02-10 | Schedule Tab Visibility Fix             ║
+║ - FIXED: Global Notifications now force visible in renderFn   ║
+║ - FIXED: Jobs Chart wrapper always visible on Schedule tab    ║
+║ - FIXED: schedule div gets "active" class if missing           ║
+║ - ADDED: Enhanced logging to trace visibility issues          ║
+║ - RESULT: Both notifications & jobs should now appear!         ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -617,13 +617,13 @@
         </div>
 
         <!-- Jobs Chart Timeline - Full Width -->
-        <div id="ganttWrapper" style="width:100vw; margin-left:calc(-50vw + 50%); background:#fff; padding:15px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow-x:auto; overflow-y:hidden; min-height:600px; display:block; visibility:visible; scroll-behavior:smooth; cursor:grab;">
+        <div id="ganttWrapper" style="width:100vw; margin-left:calc(-50vw + 50%); background:#fff; padding:15px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow-x:auto; overflow-y:auto; min-height:600px; display:block; visibility:visible; scroll-behavior:smooth; cursor:grab;">
             <!-- Jobs Chart Container -->
-            <div id="ganttChart" style="min-width:1200px; padding:0; display:flex; flex-direction:column; user-select:none;">
+            <div id="ganttChart" style="width:100%; min-width:1200px; padding:0; display:flex; flex-direction:column; user-select:none; min-height:auto; background:#fff;">
                 <!-- Jobs chart will render here -->
             </div>
         </div>
-        <div style="text-align:center; font-size:11px; color:#999; margin-top:8px;">← Scroll horizontally to view different months →</div>
+        <div style="text-align:center; font-size:11px; color:#999; margin-top:8px;">← Scroll horizontally to view all jobs →</div>
 
     </div>
     
@@ -692,7 +692,7 @@
     <div class="footer-item" style="margin-left:15px;"><div class="footer-label">TOTAL SQM</div><div class="footer-val" id="tA">0.000</div></div>
     <div style="flex:1; display:flex; justify-content:center; gap:20px; align-items:center;">
         <div class="icon-btn" onclick="genPDF()" style="color:#fff">📄</div>
-        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro 4.8 | REV 71</div>
+        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro 4.8 | REV 72</div>
     </div>
     <div class="footer-item"><div class="footer-label">PARTS</div><div class="footer-val" id="tQ">0</div></div>
     <div class="icon-btn" onclick="handleLogout()" title="Logout" style="color:#ff3b30; font-size:24px; cursor:pointer; margin-right:15px;">🚪</div>
@@ -700,7 +700,7 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 71 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 72 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     console.log('✅ CRITICAL FIXES:');
     console.log('✓ Disabled Firebase real-time sync (memory crashes fixed)');
     console.log('✓ Improved error handling to prevent crashes');
@@ -2611,13 +2611,43 @@
     function renderScheduleCalendar() {
         console.log('📅 renderScheduleCalendar() called');
         
-        // FORCE SCHEDULE CONTAINER TO BE VISIBLE
+        // ENSURE SCHEDULE CONTAINER IS ACTIVE AND VISIBLE
         const scheduleContainer = document.getElementById('schedule');
         if (scheduleContainer) {
+            // Make sure it has the active class
+            if (!scheduleContainer.classList.contains('active')) {
+                console.log('  ⚠️ schedule div missing "active" class, adding it...');
+                scheduleContainer.classList.add('active');
+            }
             scheduleContainer.style.display = 'block';
             scheduleContainer.style.visibility = 'visible';
             scheduleContainer.style.minHeight = 'auto';
             console.log('  ✓ Schedule container forced visible');
+        } else {
+            console.error('  ✗ schedule container not found!');
+            return;
+        }
+        
+        // FORCE GANTT WRAPPER TO BE VISIBLE
+        const ganttWrapper = document.getElementById('ganttWrapper');
+        if (ganttWrapper) {
+            ganttWrapper.style.display = 'block';
+            ganttWrapper.style.visibility = 'visible';
+            ganttWrapper.style.opacity = '1';
+            ganttWrapper.style.zIndex = '1';
+            ganttWrapper.style.position = 'relative';
+            ganttWrapper.style.height = 'auto';
+            console.log('  ✓ Gantt wrapper forced visible');
+        }
+        
+        // FORCE GLOBAL NOTIFICATIONS TO BE VISIBLE
+        const notificationsDiv = document.getElementById('globalNotifications');
+        if (notificationsDiv) {
+            notificationsDiv.style.display = 'block';
+            notificationsDiv.style.visibility = 'visible';
+            notificationsDiv.style.opacity = '1';
+            notificationsDiv.style.maxHeight = '200px';
+            console.log('  ✓ Global notifications div forced visible');
         }
         
         // Show "all active jobs" message
@@ -2625,9 +2655,12 @@
             document.getElementById('scheduleMonthYear').innerText = '📊 All active jobs (scroll horizontally to view)';
         }
         
+        console.log('  → Calling renderGlobalNotifications()...');
+        renderGlobalNotifications();
+        
         console.log('  → Calling renderGanttChartContinuous()...');
         renderGanttChartContinuous(); // Show ALL jobs continuously
-        renderGlobalNotifications();
+        
         renderJobTasks(); // Update workload summary
         checkForDuplicates(); // Show warning if duplicates exist
     }
@@ -2722,6 +2755,17 @@
             
             ganttChart.innerHTML = ganttHTML;
             console.log(`  ✓ Rendered ${history.length} jobs to ganttChart`);
+            
+            // VERIFY the HTML is actually in the DOM
+            console.log(`  📝 ganttChart.innerHTML length: ${ganttChart.innerHTML.length} chars`);
+            console.log(`  📝 ganttChart.childNodes.length: ${ganttChart.childNodes.length} elements`);
+            console.log(`  📝 ganttChart.children.length: ${ganttChart.children.length} children`);
+            
+            if (ganttChart.innerHTML.length === 0) {
+                console.error('  ✗ ERROR: ganttChart.innerHTML is empty!');
+            } else {
+                console.log('  ✓ HTML successfully inserted into ganttChart');
+            }
             
         } catch (error) {
             console.error('  ✗ Error rendering gantt chart:', error);
@@ -3059,15 +3103,25 @@
     
     function renderGlobalNotifications() {
         const notificationsDiv = document.getElementById('globalNotifications');
-        if (!notificationsDiv) return; // Exit if not on Schedule tab
+        if (!notificationsDiv) {
+            console.warn('⚠️ globalNotifications div not found!');
+            return;
+        }
+        
+        // FORCE VISIBILITY
+        notificationsDiv.style.display = 'block';
+        notificationsDiv.style.visibility = 'visible';
+        notificationsDiv.style.opacity = '1';
         
         const adminAlerts = JSON.parse(localStorage.getItem('adminAlerts')) || [];
+        console.log(`🔔 renderGlobalNotifications: ${adminAlerts.length} alerts`);
         
         // Update badge count
         updateNotificationBadge();
         
         if (adminAlerts.length === 0) {
             notificationsDiv.innerHTML = '<p style="color:#999; text-align:center; font-size:12px;">No notifications yet</p>';
+            console.log('  → No notifications to display');
             return;
         }
         
@@ -3094,6 +3148,7 @@
         }
         
         notificationsDiv.innerHTML = notificationsHTML;
+        console.log(`  ✓ Rendered ${Math.min(5, adminAlerts.length)} notifications to DOM`);
     }
     
     // Toggle notifications visibility and update badge
@@ -4056,15 +4111,21 @@
         
         console.log('🔘 toggleJobsChart called');
         console.log('  wrapper:', wrapper);
-        console.log('  wrapper.style.display:', wrapper ? wrapper.style.display : 'N/A');
         
         if (!wrapper) {
             console.error('  ✗ ganttWrapper element not found!');
             return;
         }
         
+        // ALWAYS ensure wrapper is visible with proper styling
+        wrapper.style.position = 'relative';
+        wrapper.style.zIndex = '1';
+        wrapper.style.opacity = '1';
+        wrapper.style.visibility = 'visible';
+        
         const isMinimized = localStorage.getItem('jobsChartMinimized') === 'true';
         console.log('  Current state: isMinimized =', isMinimized);
+        console.log('  wrapper.style.display before toggle:', wrapper.style.display);
         
         if (isMinimized) {
             // Restore (maximize) - ALSO RE-RENDER THE JOBS
@@ -4072,6 +4133,7 @@
             wrapper.style.display = 'block';
             wrapper.style.visibility = 'visible';
             wrapper.style.opacity = '1';
+            wrapper.style.height = 'auto';
             if (monthYear) {
                 monthYear.style.display = 'block';
                 monthYear.style.visibility = 'visible';
@@ -4085,6 +4147,7 @@
             console.log('  Calling renderGanttChartContinuous()...');
             renderGanttChartContinuous();
             console.log('  ✓ Jobs Chart maximized and re-rendered');
+            console.log('  wrapper.style.display after toggle:', wrapper.style.display);
         } else {
             // Minimize
             console.log('  → MINIMIZING...');
