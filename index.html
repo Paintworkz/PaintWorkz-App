@@ -3,15 +3,12 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ FINAL +6 | 2026-02-10 | Full Job Data Estimate + DB Clean     ║
-║ 1. LOGO: Top-left corner on all PDFs                           ║
-║ 2. FORM DATA: All job fields auto-populated from form inputs   ║
-║    - Client, Job Name, Job Number, Date                        ║
-║    - Door Style, Thickness, Colour, Gloss                      ║
-║    - Paint Brand, Color, Code, Finish                          ║
-║ 3. DATABASE: Delete warning removed from Door Profiles         ║
-║ 4. LAYOUT: Professional multi-section form                     ║
-║ 5. PREVIOUS: All prior fixes remain intact                     ║
+║ FINAL +7 | 2026-02-10 | Job View Mode + Go Back Button       ║
+║ 1. LOAD JOB: No auto-save - loads in view-only mode           ║
+║ 2. GO BACK: Button shows when viewing job                     ║
+║ 3. CHANGE DETECT: Prompts to save if changes made             ║
+║ 4. CLEAN EXIT: Can view/print forms without saving            ║
+║ 5. PREVIOUS: All prior fixes remain intact                    ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -390,6 +387,7 @@
     <div class="icon-btn" onclick="tab('history')">🔍</div>
     <div class="logo-box"><span class="logo-text">PaintWorkz</span></div>
     <div style="display:flex; gap:10px; align-items:center;">
+        <div id="goBackBtn" class="icon-btn" onclick="goBackJob()" style="display:none;" title="Exit without saving if no changes made">← Back</div>
         <div class="icon-btn" onclick="saveJob()">💾</div>
     </div>
 </header>
@@ -705,7 +703,7 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 FINAL +6 (2026-02-10) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 FINAL +7 (2026-02-10) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     console.log('✅ CRITICAL FIXES:');
     console.log('✓ Disabled Firebase real-time sync (memory crashes fixed)');
     console.log('✓ Improved error handling to prevent crashes');
@@ -1512,6 +1510,8 @@
 
     // Track the current job being edited (if loaded from history)
     let currentEditingJobIndex = null;
+    let isJobViewMode = false; // Track if viewing job without editing
+    let jobDataBeforeLoad = null; // Store original data to detect changes
 
     function loadJobFromHistory(index) {
         const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
@@ -1520,6 +1520,7 @@
         if (!job) return;
         
         currentEditingJobIndex = index; // Track this job for overwrite
+        isJobViewMode = true; // Set view mode
         
         items = job.items || [];
         document.getElementById('cli').value = job.client || '';
@@ -1531,10 +1532,78 @@
         document.getElementById('p-code').value = job.code || '';
         document.getElementById('p-finish').value = job.finish || 'Satin';
         
+        // Store original data to detect changes
+        jobDataBeforeLoad = JSON.stringify({
+            items: items,
+            client: job.client,
+            dateReceived: job.dateReceived,
+            jobName: job.jobName,
+            jobNum: job.jobNum,
+            brand: job.brand,
+            color: job.color,
+            code: job.code,
+            finish: job.finish
+        });
+        
         render();
+        updateGoBackButton();
         tab('measure');
-        notify('✓ Job Loaded - Editing (will overwrite on save)');
-        saveData();
+        notify('✓ Job Loaded - View Only (changes can be saved)');
+    }
+
+    function updateGoBackButton() {
+        const btn = document.getElementById('goBackBtn');
+        if (isJobViewMode) {
+            btn.style.display = 'flex';
+        } else {
+            btn.style.display = 'none';
+        }
+    }
+
+    function goBackJob() {
+        // Get current data
+        const currentData = JSON.stringify({
+            items: items,
+            client: document.getElementById('cli').value,
+            dateReceived: document.getElementById('dRec').value,
+            jobName: document.getElementById('jNm').value,
+            jobNum: document.getElementById('jN').value,
+            brand: document.getElementById('p-brand').value,
+            color: document.getElementById('p-color').value,
+            code: document.getElementById('p-code').value,
+            finish: document.getElementById('p-finish').value
+        });
+
+        // Check if there are changes
+        const hasChanges = currentData !== jobDataBeforeLoad;
+        
+        if (hasChanges) {
+            if (confirm('You have unsaved changes. Save before going back?')) {
+                saveJob();
+                return;
+            }
+        }
+        
+        // Reset view mode and clear editing
+        isJobViewMode = false;
+        currentEditingJobIndex = null;
+        jobDataBeforeLoad = null;
+        items = [];
+        updateGoBackButton();
+        
+        // Clear form
+        document.getElementById('cli').value = '';
+        document.getElementById('dRec').value = '';
+        document.getElementById('jNm').value = '';
+        document.getElementById('jN').value = '';
+        document.getElementById('p-brand').value = 'Wattyl';
+        document.getElementById('p-color').value = '';
+        document.getElementById('p-code').value = '';
+        document.getElementById('p-finish').value = 'Satin';
+        
+        render();
+        tab('history');
+        notify('✓ Exited Job View');
     }
 
     // Delete a job from Firebase permanently
@@ -2556,6 +2625,11 @@
         try {
             saveData();
             saveJobToHistory(); // This will show its own notification
+            
+            // Clear view mode when saving
+            isJobViewMode = false;
+            jobDataBeforeLoad = null;
+            updateGoBackButton();
             
             // Auto-increment job number
             try {
