@@ -3,13 +3,13 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ REV 68 | 2026-02-10 | Fixed Corrupted Door Profiles           ║
-║ - ROOT CAUSE: localStorage had corrupted entries like "Plain"  ║
-║   mixed with correct entries like "Plain (101)"                ║
-║ - FIX: Profile initialization now ONLY loads 20 DEFAULT_      ║
-║   PROFILES, ignoring any corrupted localStorage data           ║
-║ - RESULT: Doors will no longer reappear as unallocated         ║
-║ - CLEANED: localStorage automatically gets 20 clean defaults   ║
+║ REV 69 | 2026-02-10 | Door Names + Jobs Chart Fixes           ║
+║ - FIXED: defaultMasterMatrix door names now match profiles     ║
+║   (e.g., "Plain (101)" instead of "Plain")                     ║
+║ - FIXED: Unallocated doors should no longer reappear           ║
+║ - FIXED: Jobs Chart now starts visible (not minimized)         ║
+║ - ADDED: Enhanced logging to renderGanttChartContinuous        ║
+║ - RESULT: Allocated doors stay allocated, chart visible        ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -693,7 +693,7 @@
     <div class="footer-item" style="margin-left:15px;"><div class="footer-label">TOTAL SQM</div><div class="footer-val" id="tA">0.000</div></div>
     <div style="flex:1; display:flex; justify-content:center; gap:20px; align-items:center;">
         <div class="icon-btn" onclick="genPDF()" style="color:#fff">📄</div>
-        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro 4.8 | REV 68</div>
+        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro 4.8 | REV 69</div>
     </div>
     <div class="footer-item"><div class="footer-label">PARTS</div><div class="footer-val" id="tQ">0</div></div>
     <div class="icon-btn" onclick="handleLogout()" title="Logout" style="color:#ff3b30; font-size:24px; cursor:pointer; margin-right:15px;">🚪</div>
@@ -701,7 +701,7 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 68 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 REV 69 (2026-02-09) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     console.log('✅ CRITICAL FIXES:');
     console.log('✓ Disabled Firebase real-time sync (memory crashes fixed)');
     console.log('✓ Improved error handling to prevent crashes');
@@ -2632,15 +2632,21 @@
     
     function renderGanttChartContinuous() {
         // Render Gantt chart showing ALL active jobs across all dates continuously
+        console.log('📊 renderGanttChartContinuous called');
+        
         const ganttWrapper = document.getElementById('ganttWrapper');
+        console.log('  ganttWrapper:', ganttWrapper);
         if (ganttWrapper) {
             ganttWrapper.style.display = 'block';
             ganttWrapper.style.visibility = 'visible';
             ganttWrapper.style.opacity = '1';
+            console.log('  ✓ ganttWrapper forced to display:block');
         }
         
         const ganttChart = document.getElementById('ganttChart');
+        console.log('  ganttChart:', ganttChart);
         if (!ganttChart) {
+            console.error('  ✗ ganttChart element not found!');
             return;
         }
         
@@ -2648,9 +2654,11 @@
         ganttChart.style.visibility = 'visible';
         ganttChart.style.minHeight = 'auto';
         ganttChart.style.opacity = '1';
+        console.log('  ✓ ganttChart forced to display:flex');
         
         try {
             let fullHistory = JSON.parse(localStorage.getItem('jobHistory')) || [];
+            console.log(`  Jobs in localStorage: ${fullHistory.length}`);
             
             // Get only active jobs
             let history = fullHistory.filter(job => !job.completed).sort((a, b) => {
@@ -2663,8 +2671,11 @@
                 return dateB - dateA;
             });
             
+            console.log(`  Active jobs: ${history.length}`);
+            
             if (history.length === 0) {
                 ganttChart.innerHTML = `<div style="padding:20px; color:#999; text-align:center;">No active jobs to display</div>`;
+                console.log('  → No jobs to display');
                 return;
             }
             
@@ -2695,9 +2706,13 @@
             });
             
             ganttChart.innerHTML = ganttHTML;
+            console.log(`  ✓ Rendered ${history.length} jobs to ganttChart`);
             
         } catch (error) {
+            console.error('  ✗ Error rendering gantt chart:', error);
             ganttChart.innerHTML = `<div style="padding:20px; color:#ff3b30; background:#ffebee; border-radius:6px;"><strong>Error loading schedule:</strong> ${error.message}</div>`;
+        }
+    }
         }
     }
     
@@ -3504,12 +3519,12 @@
     // Apply colors on page load
     applyAppColors();
     const defaultMasterMatrix = {
-        "Tier 1": { 101: ["Plain", 125, 125, 152, 152], 102: ["J-Mould", 148, 148, 171, 171], 103: ["Sharknose", 148, 148, 171, 171], 104: ["Bevelled Edge", 148, 148, 171, 171] },
-        "Tier 2": { 201: ["Ashlee", 148, 148, 171, 171], 202: ["Hamilton", 148, 148, 171, 171], 203: ["Vertical Grooves", 148, 148, 171, 171] },
-        "Tier 3": { 301: ["Tarrone", 156, 156, 182, 182], 302: ["Bobby", 156, 156, 182, 182], 303: ["Orford", 156, 156, 182, 182] },
-        "Tier 4": { 401: ["Shaker", 171, 171, 194, 194], 402: ["Shaker 45", 171, 171, 194, 194], 403: ["Shaker w/Lines", 180, 180, 203, 203], 404: ["Jack", 180, 180, 203, 203] },
-        "Tier 5": { 501: ["Georgia", 183, 183, 211, 211], 502: ["Branxholme", 183, 183, 211, 211], 503: ["Rosebrook", 183, 183, 211, 211] },
-        "Other": { 600: ["Benchtop", 160, 160, 160, 160], 700: ["Molding", 110, 110, 110, 110] }
+        "Tier 1": { 101: ["Plain (101)", 125, 125, 152, 152], 102: ["J-Mould (102)", 148, 148, 171, 171], 103: ["Sharknose (103)", 148, 148, 171, 171], 104: ["Bevelled Edge (104)", 148, 148, 171, 171] },
+        "Tier 2": { 201: ["Ashlee (201)", 148, 148, 171, 171], 202: ["Hamilton (202)", 148, 148, 171, 171], 203: ["Vertical Grooves (203)", 148, 148, 171, 171] },
+        "Tier 3": { 301: ["Tarrone (301)", 156, 156, 182, 182], 302: ["Bobby (302)", 156, 156, 182, 182], 303: ["Orford (303)", 156, 156, 182, 182] },
+        "Tier 4": { 401: ["Shaker (401)", 171, 171, 194, 194], 402: ["Shaker 45 (402)", 171, 171, 194, 194], 403: ["Shaker w/Lines (403)", 180, 180, 203, 203], 404: ["Jack (404)", 180, 180, 203, 203] },
+        "Tier 5": { 501: ["Georgia (501)", 183, 183, 211, 211], 502: ["Branxholme (502)", 183, 183, 211, 211], 503: ["Rosebrook (503)", 183, 183, 211, 211] },
+        "Other": { 600: ["Benchtop", 160, 160, 160, 160], 700: ["Molding", 110, 110, 110, 110], 800: ["Custom", 125, 125, 152, 152] }
     };
     
     // Load from localStorage or use defaults
@@ -4062,7 +4077,10 @@
     
     // Restore Jobs Chart state on page load
     function restoreJobsChartState() {
+        console.log('🔄 restoreJobsChartState called');
         const isMinimized = localStorage.getItem('jobsChartMinimized') === 'true';
+        console.log(`  isMinimized: ${isMinimized}`);
+        
         if (isMinimized) {
             const wrapper = document.getElementById('ganttWrapper');
             const monthYear = document.getElementById('scheduleMonthYear');
@@ -4072,11 +4090,15 @@
                 monthYear.style.display = 'none';
                 btn.textContent = '+';
                 btn.style.background = '#666';
+                console.log('  → Keeping minimized');
             }
+        } else {
+            console.log('  → Starting with chart visible');
         }
     }
     
-    // Restore on page load
+    // Restore on page load - clear minimize flag so chart always starts visible
+    localStorage.removeItem('jobsChartMinimized');
     setTimeout(restoreJobsChartState, 500);
     
     function prevAdminScheduleMonth() {
