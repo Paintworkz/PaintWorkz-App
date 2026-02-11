@@ -4644,8 +4644,31 @@
         const clientsDiv = document.getElementById('clientsList');
         if (!clientsDiv) return;
         
+        // Get clients from database
         const db = getClientDatabase();
-        const clients = Object.values(db).sort((a, b) => a.name.localeCompare(b.name));
+        const dbClients = Object.values(db);
+        
+        // Get unique clients from job history
+        const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
+        const historyClientNames = [...new Set(history.map(job => job.client).filter(Boolean))];
+        
+        // Merge: add job history clients to database if not already there
+        historyClientNames.forEach(clientName => {
+            if (!dbClients.some(c => c.name === clientName)) {
+                const newId = 'client-' + clientName.replace(/\s+/g, '-');
+                dbClients.push({
+                    id: newId,
+                    name: clientName,
+                    email: '',
+                    phone: '',
+                    address: '',
+                    createdDate: new Date().toISOString(),
+                    notes: 'Imported from job history'
+                });
+            }
+        });
+        
+        const clients = dbClients.sort((a, b) => a.name.localeCompare(b.name));
         
         if (clients.length === 0) {
             clientsDiv.innerHTML = '<p style="text-align:center; color:#999; font-size:12px; padding:20px;">No clients yet. Add one to get started!</p>';
