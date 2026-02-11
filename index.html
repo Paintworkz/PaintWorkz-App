@@ -3,12 +3,12 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ FINAL +7 | 2026-02-10 | Job View Mode + Go Back Button       ║
-║ 1. LOAD JOB: No auto-save - loads in view-only mode           ║
-║ 2. GO BACK: Button shows when viewing job                     ║
-║ 3. CHANGE DETECT: Prompts to save if changes made             ║
-║ 4. CLEAN EXIT: Can view/print forms without saving            ║
-║ 5. PREVIOUS: All prior fixes remain intact                    ║
+║ 1.1.1 | 2026-02-10 | Paint Formula Database + Popup Popup   ║
+║ 1. PAINT DATABASE: Manage formulas in Database Paint tab     ║
+║ 2. FORMULA SEARCH: Type colour → popup shows matching forms  ║
+║ 3. LITRE SCALING: Real-time scaling of tinter amounts        ║
+║ 4. AUTO-SAVE: Formula saves to job + mixes card auto-populates║
+║ 5. PREVIOUS: All fixes remain intact (pricing, job view UX)  ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -443,7 +443,7 @@
                     </div>
                     <div style="flex:1">
                         <label>Color Name</label>
-                        <input type="text" id="p-color" placeholder="e.g. Lexicon" style="height:35px; font-size:12px;">
+                        <input type="text" id="p-color" placeholder="e.g. Lexicon" style="height:35px; font-size:12px;" oninput="openPaintFormulaSearch()">
                     </div>
                 </div>
                 <div style="display:flex; gap:8px;">
@@ -513,6 +513,34 @@
         <div id="list"></div>
     </div>
 
+    <!-- Paint Formula Popup Modal -->
+    <div id="paintFormulaModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:2000; display:none;">
+        <div style="position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; border-radius:8px; padding:20px; width:90%; max-width:500px; max-height:80vh; overflow-y:auto; box-shadow:0 4px 16px rgba(0,0,0,0.3);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <h3 style="margin:0; font-size:16px;">Paint Formula</h3>
+                <button onclick="closePaintFormulaModal()" style="background:none; border:none; font-size:20px; cursor:pointer;">×</button>
+            </div>
+            
+            <div id="formulaDisplay" style="margin:15px 0;">
+                <!-- Formula will be populated here -->
+            </div>
+            
+            <div style="background:#f5f5f5; padding:10px; border-radius:4px; margin:15px 0; max-height:200px; overflow-y:auto;">
+                <div style="font-size:12px; font-weight:900; margin-bottom:10px;">Litres to Mix:</div>
+                <input type="number" id="mixLitres" value="1" min="0.1" step="0.1" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px; font-size:14px;" oninput="updateFormulaScaling()">
+            </div>
+            
+            <div id="scaledFormula" style="background:#f9f9f9; padding:10px; border-radius:4px; margin:15px 0; font-size:11px;">
+                <!-- Scaled formula will appear here -->
+            </div>
+            
+            <div style="display:flex; gap:10px;">
+                <button onclick="savePaintFormulaToJob()" style="flex:1; background:#34c759; color:#fff; border:none; padding:10px; border-radius:4px; font-weight:900; cursor:pointer;">Save to Job</button>
+                <button onclick="closePaintFormulaModal()" style="flex:1; background:#999; color:#fff; border:none; padding:10px; border-radius:4px; font-weight:900; cursor:pointer;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <div id="db" class="view-section">
         <div class="sub-nav">
             <button class="sub-btn active" id="sub-btn-clients" onclick="subTab('clients')">CLIENTS</button>
@@ -546,19 +574,24 @@
         <div id="sub-paint" class="sub-section" style="display:none;">
             <div class="card">
                 <h4 style="margin-bottom:15px; font-weight:900;">Paint Formula Database</h4>
+                <p style="font-size:11px; color:#666; margin-bottom:15px;">Manage your paint formulas. When you type a colour in the Measure tab, matching formulas will appear automatically.</p>
+                
                 <div style="margin-bottom:20px;">
                     <h5 style="margin-bottom:10px; font-weight:900; font-size:12px;">Add New Formula</h5>
                     <div style="background:#f9f9f9; padding:15px; border-radius:8px; border:1px solid #ddd;">
-                        <input type="text" id="newPaintBrand" placeholder="Brand (e.g., Wattyl)" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; margin-bottom:10px; box-sizing:border-box; font-size:12px;">
-                        <input type="text" id="newPaintColor" placeholder="Color (e.g., White)" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; margin-bottom:10px; box-sizing:border-box; font-size:12px;">
-                        <textarea id="newPaintFormula" placeholder="Formula in grams (e.g., Base 800g + Hard 200g)" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; margin-bottom:10px; box-sizing:border-box; font-size:12px; min-height:60px;"></textarea>
-                        <button onclick="addNewPaintFormula()" style="width:100%; padding:10px; background:#34c759; color:#fff; border:none; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">+ ADD FORMULA</button>
+                        <div style="display:flex; gap:10px; margin-bottom:10px;">
+                            <input type="text" id="newPaintColor" placeholder="Colour Name (e.g., Lexicon)" style="flex:1; padding:10px; border:1px solid #ddd; border-radius:6px; box-sizing:border-box; font-size:12px;">
+                            <input type="text" id="newPaintCode" placeholder="Formula Code (e.g., XTSW1E3)" style="flex:1; padding:10px; border:1px solid #ddd; border-radius:6px; box-sizing:border-box; font-size:12px;">
+                        </div>
+                        <input type="text" id="newPaintProduct" placeholder="Product (e.g., 690 30% XTint Poly)" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; margin-bottom:10px; box-sizing:border-box; font-size:12px;">
+                        <textarea id="newPaintNotes" placeholder="Notes (optional)" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; margin-bottom:10px; box-sizing:border-box; font-size:12px; min-height:40px;"></textarea>
+                        <button onclick="addNewPaintFormulaUI()" style="width:100%; padding:10px; background:#34c759; color:#fff; border:none; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">+ ADD FORMULA</button>
                     </div>
                 </div>
                 
                 <div>
-                    <h5 style="margin-bottom:10px; font-weight:900; font-size:12px;">Existing Formulas</h5>
-                    <div id="paintFormulaList" style="background:#fff; border:1px solid #ddd; border-radius:8px; overflow:hidden;"></div>
+                    <h5 style="margin-bottom:10px; font-weight:900; font-size:12px;">Existing Formulas (${paintDatabase.length})</h5>
+                    <div id="paintFormulaList" style="background:#fff; border:1px solid #ddd; border-radius:8px; overflow:hidden; max-height:400px; overflow-y:auto;"></div>
                 </div>
             </div>
         </div>
@@ -703,7 +736,7 @@
 
 <script>
     // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro 4.8 FINAL +7 (2026-02-10) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('%c 🎨 PaintWorkz Pro 4.8 1.1.1 (2026-02-10) ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     console.log('✅ CRITICAL FIXES:');
     console.log('✓ Disabled Firebase real-time sync (memory crashes fixed)');
     console.log('✓ Improved error handling to prevent crashes');
@@ -944,6 +977,323 @@
         notify('✓ Door profiles restored to defaults');
     }
     
+    // ===== PAINT FORMULA DATABASE =====
+    let paintDatabase = (function() {
+        const saved = localStorage.getItem('paintFormulas');
+        if (saved) {
+            try {
+                const loaded = JSON.parse(saved);
+                if (Array.isArray(loaded) && loaded.length > 0) {
+                    console.log(`✓ Loaded ${loaded.length} paint formulas from localStorage`);
+                    return loaded;
+                }
+            } catch(e) {
+                console.error('Error loading paint formulas:', e);
+            }
+        }
+        
+        // Default example formula
+        const defaults = [
+            {
+                id: 'lexicon-690-30',
+                brand: 'Evic',
+                color: 'Lexicon',
+                product: '690 30% XTint Poly',
+                code: 'XTSW1E3',
+                finishes: ['Satin', 'Gloss', 'Matt'],
+                baseSize: 1,
+                baseTinters: [
+                    { code: 'ITE003', amount: 7.47 },
+                    { code: 'XB6930', amount: 1359.04, name: 'White Base' }
+                ],
+                colourants: [
+                    { code: 'ITE303', amount: 5.88 },
+                    { code: 'ITE306', amount: 5.95 },
+                    { code: 'ITE310', amount: 5.75 }
+                ],
+                notes: 'DULUX WOC Series II 2018'
+            }
+        ];
+        
+        console.log(`✓ Using ${defaults.length} default paint formulas`);
+        localStorage.setItem('paintFormulas', JSON.stringify(defaults));
+        return defaults;
+    })();
+
+    function savePaintFormulas() {
+        localStorage.setItem('paintFormulas', JSON.stringify(paintDatabase));
+        console.log(`✓ Saved ${paintDatabase.length} paint formulas to localStorage`);
+    }
+
+    function getPaintFormula(colorName) {
+        const formula = paintDatabase.find(f => 
+            f.color.toLowerCase() === colorName.toLowerCase()
+        );
+        return formula || null;
+    }
+
+    function addOrUpdateFormula(formulaData) {
+        const index = paintDatabase.findIndex(f => f.id === formulaData.id);
+        if (index >= 0) {
+            paintDatabase[index] = formulaData;
+        } else {
+            formulaData.id = 'formula-' + Date.now();
+            paintDatabase.push(formulaData);
+        }
+        savePaintFormulas();
+        console.log(`✓ Saved formula: ${formulaData.color}`);
+    }
+
+    // ===== PAINT FORMULA UI FUNCTIONS =====
+    let selectedFormula = null;
+
+    function openPaintFormulaSearch() {
+        const colorInput = document.getElementById('p-color').value.trim();
+        
+        if (!colorInput) {
+            // Show all formulas if input is empty
+            displayFormulaOptions(paintDatabase);
+        } else {
+            // Filter formulas by color name
+            const matching = paintDatabase.filter(f =>
+                f.color.toLowerCase().includes(colorInput.toLowerCase())
+            );
+            displayFormulaOptions(matching);
+        }
+    }
+
+    function displayFormulaOptions(formulas) {
+        if (formulas.length === 0) {
+            notify('No matching formulas found');
+            return;
+        }
+        
+        // Show modal with first matching formula
+        selectedFormula = formulas[0];
+        displayPaintFormulaModal();
+    }
+
+    function displayPaintFormulaModal() {
+        if (!selectedFormula) return;
+        
+        const modal = document.getElementById('paintFormulaModal');
+        const display = document.getElementById('formulaDisplay');
+        
+        // Build formula display HTML
+        let html = `
+            <div style="margin-bottom:15px;">
+                <div style="font-size:14px; font-weight:900; margin-bottom:5px;">${selectedFormula.color}</div>
+                <div style="font-size:11px; color:#666; margin-bottom:8px;">
+                    <div>${selectedFormula.product}</div>
+                    <div style="margin-top:5px;"><strong>Code:</strong> ${selectedFormula.code}</div>
+                </div>
+            </div>
+            
+            <div style="margin:10px 0;">
+                <div style="font-size:12px; font-weight:900; margin-bottom:8px;">Base Tinters (per 1L):</div>
+        `;
+        
+        selectedFormula.baseTinters.forEach(t => {
+            html += `<div style="display:flex; justify-content:space-between; font-size:11px; margin:4px 0;">
+                <span>${t.code}${t.name ? ' (' + t.name + ')' : ''}</span>
+                <span>${t.amount.toFixed(2)}g</span>
+            </div>`;
+        });
+        
+        html += `
+            </div>
+            
+            <div style="margin:10px 0;">
+                <div style="font-size:12px; font-weight:900; margin-bottom:8px;">Colourants (per 1L):</div>
+        `;
+        
+        selectedFormula.colourants.forEach(c => {
+            html += `<div style="display:flex; justify-content:space-between; font-size:11px; margin:4px 0;">
+                <span>${c.code}</span>
+                <span>${c.amount.toFixed(2)}g</span>
+            </div>`;
+        });
+        
+        html += '</div>';
+        
+        if (selectedFormula.notes) {
+            html += `<div style="font-size:10px; color:#666; margin-top:10px; padding-top:10px; border-top:1px solid #eee;">Notes: ${selectedFormula.notes}</div>`;
+        }
+        
+        display.innerHTML = html;
+        document.getElementById('mixLitres').value = '1';
+        updateFormulaScaling();
+        
+        modal.style.display = 'block';
+    }
+
+    function updateFormulaScaling() {
+        if (!selectedFormula) return;
+        
+        const litres = parseFloat(document.getElementById('mixLitres').value) || 1;
+        const scaleFactor = litres / selectedFormula.baseSize;
+        
+        let html = `<div style="font-size:12px; font-weight:900; margin-bottom:10px;">Scaled for ${litres}L:</div>`;
+        
+        html += '<div style="margin-bottom:10px;"><strong>Base Tinters:</strong></div>';
+        selectedFormula.baseTinters.forEach(t => {
+            const scaledAmount = (t.amount * scaleFactor).toFixed(2);
+            html += `<div style="display:flex; justify-content:space-between; font-size:11px; margin:4px 0;">
+                <span>${t.code}</span>
+                <span style="color:#d4af37; font-weight:900;">${scaledAmount}g</span>
+            </div>`;
+        });
+        
+        html += '<div style="margin-top:10px; margin-bottom:10px;"><strong>Colourants:</strong></div>';
+        selectedFormula.colourants.forEach(c => {
+            const scaledAmount = (c.amount * scaleFactor).toFixed(2);
+            html += `<div style="display:flex; justify-content:space-between; font-size:11px; margin:4px 0;">
+                <span>${c.code}</span>
+                <span style="color:#d4af37; font-weight:900;">${scaledAmount}g</span>
+            </div>`;
+        });
+        
+        document.getElementById('scaledFormula').innerHTML = html;
+    }
+
+    function savePaintFormulaToJob() {
+        if (!selectedFormula) return;
+        
+        const litres = parseFloat(document.getElementById('mixLitres').value) || 1;
+        
+        // Populate form fields
+        document.getElementById('p-color').value = selectedFormula.color;
+        document.getElementById('p-code').value = `${selectedFormula.code} - ${selectedFormula.color} (${selectedFormula.product})`;
+        
+        // Save to job data
+        const jobData = {
+            paintFormula: selectedFormula,
+            mixLitres: litres,
+            savedAt: new Date().toLocaleString('en-AU')
+        };
+        
+        // Store formula in current job
+        if (window.currentJobData) {
+            window.currentJobData.paintFormula = jobData;
+        }
+        
+        // Also add to used formulas (optional, for history)
+        if (!localStorage.getItem('usedFormulas')) {
+            localStorage.setItem('usedFormulas', JSON.stringify([]));
+        }
+        const used = JSON.parse(localStorage.getItem('usedFormulas')) || [];
+        if (!used.find(f => f.id === selectedFormula.id)) {
+            used.push(selectedFormula);
+            localStorage.setItem('usedFormulas', JSON.stringify(used));
+        }
+        
+        closePaintFormulaModal();
+        notify(`✓ Formula saved: ${selectedFormula.color} (${litres}L)`);
+        saveData(); // Save current job
+    }
+
+    function closePaintFormulaModal() {
+        document.getElementById('paintFormulaModal').style.display = 'none';
+        selectedFormula = null;
+    }
+
+    // ===== PAINT FORMULA DATABASE MANAGEMENT =====
+    function renderPaintFormulaList() {
+        const list = document.getElementById('paintFormulaList');
+        if (!list) return;
+        
+        if (paintDatabase.length === 0) {
+            list.innerHTML = '<div style="padding:15px; text-align:center; color:#999; font-size:11px;">No formulas yet. Add one above.</div>';
+            return;
+        }
+        
+        let html = '';
+        paintDatabase.forEach((f, idx) => {
+            html += `
+            <div style="padding:12px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <div style="font-weight:900; font-size:12px;">${f.color}</div>
+                    <div style="font-size:10px; color:#666; margin-top:3px;">
+                        <div>${f.code} - ${f.product}</div>
+                    </div>
+                </div>
+                <div style="display:flex; gap:6px;">
+                    <button onclick="editPaintFormula(${idx})" style="padding:4px 10px; background:#2196f3; color:#fff; border:none; border-radius:3px; font-size:9px; font-weight:900; cursor:pointer;">Edit</button>
+                    <button onclick="deletePaintFormula(${idx})" style="padding:4px 10px; background:#ff3b30; color:#fff; border:none; border-radius:3px; font-size:9px; font-weight:900; cursor:pointer;">Delete</button>
+                </div>
+            </div>
+            `;
+        });
+        
+        list.innerHTML = html;
+    }
+
+    function addNewPaintFormulaUI() {
+        const color = document.getElementById('newPaintColor').value.trim();
+        const code = document.getElementById('newPaintCode').value.trim();
+        const product = document.getElementById('newPaintProduct').value.trim();
+        const notes = document.getElementById('newPaintNotes').value.trim();
+        
+        if (!color || !code) {
+            notify('Please enter Colour Name and Formula Code');
+            return;
+        }
+        
+        // Create new formula (simplified for manual entry)
+        const newFormula = {
+            id: 'formula-' + Date.now(),
+            brand: 'Evic',
+            color: color,
+            product: product || 'Custom Product',
+            code: code,
+            finishes: ['Satin'],
+            baseSize: 1,
+            baseTinters: [
+                { code: 'BASE', amount: 800 },
+                { code: 'HARD', amount: 200 }
+            ],
+            colourants: [],
+            notes: notes
+        };
+        
+        paintDatabase.push(newFormula);
+        savePaintFormulas();
+        
+        // Clear form
+        document.getElementById('newPaintColor').value = '';
+        document.getElementById('newPaintCode').value = '';
+        document.getElementById('newPaintProduct').value = '';
+        document.getElementById('newPaintNotes').value = '';
+        
+        renderPaintFormulaList();
+        notify(`✓ Formula added: ${color}`);
+    }
+
+    function editPaintFormula(idx) {
+        const f = paintDatabase[idx];
+        if (!f) return;
+        
+        const newColor = prompt('Edit Color Name:', f.color);
+        if (newColor === null) return;
+        
+        f.color = newColor;
+        savePaintFormulas();
+        renderPaintFormulaList();
+        notify(`✓ Formula updated: ${newColor}`);
+    }
+
+    function deletePaintFormula(idx) {
+        const f = paintDatabase[idx];
+        if (!f) return;
+        
+        if (confirm(`Delete formula "${f.color}"?`)) {
+            paintDatabase.splice(idx, 1);
+            savePaintFormulas();
+            renderPaintFormulaList();
+            notify(`✓ Formula deleted: ${f.color}`);
+        }
+    }
+    
     // Clear stale Firebase profile data and force fresh sync
     function clearFirebaseProfilesData() {
         if (!confirm('🚨 CLEAR FIREBASE DATA:\n- Removes old Firebase profile data\n- Keeps your current door assignments\n- Syncs fresh to Firebase\n\nProceed?')) {
@@ -1087,27 +1437,28 @@
     // Populate client dropdown with unique clients from history
     function populateClientDropdown() {
         try {
-            const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
             const clientSelect = document.getElementById('cli');
             if (!clientSelect) {
                 console.warn('Client dropdown element not found');
                 return;
             }
             
-            // Get unique clients
-            const clients = [...new Set(history.map(job => job.client).filter(Boolean))];
-            clients.sort();
+            // Use global clients array + any new ones from history
+            const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
+            const historyClients = [...new Set(history.map(job => job.client).filter(Boolean))];
+            const allClients = [...new Set([...clients, ...historyClients])];
+            allClients.sort();
             
             // Clear and rebuild dropdown
             clientSelect.innerHTML = '<option value="">-- Select or type client --</option>';
-            clients.forEach(client => {
+            allClients.forEach(client => {
                 const option = document.createElement('option');
                 option.value = client;
                 option.textContent = client;
                 clientSelect.appendChild(option);
             });
             
-            console.log(`✓ Populated ${clients.length} unique clients in dropdown`);
+            console.log(`✓ Populated ${allClients.length} clients (${clients.length} from master + ${historyClients.length} from jobs)`);
         } catch(e) {
             console.error('Error populating client dropdown:', e);
         }
