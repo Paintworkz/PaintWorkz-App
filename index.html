@@ -3,12 +3,12 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ 1.1.2 | 2026-02-11 | Estimate Costing + Formula Popup ║
-║ 1. ESTIMATE COSTING: Moulded=$profile, Flat=$125/sqm  ║
-║ 2. ESTIMATE TABLE: Qty|Size|Mould|Mode|Edges|$/sqm|Total ║
-║ 3. FORMULA POPUP: Compact design, easy to use           ║
-║ 4. FORMULA ENTRY: Structured 1L base + tinter parsing   ║
-║ 5. ALL PREVIOUS: Client dropdown, job view, paint DB    ║
+║ 1.1.2 | 2026-02-11 | Estimate Costing + PDF Buttons FIXED  ║
+║ 1. ✓ ESTIMATE COSTING: Moulded=$profile, Flat=$125/sqm  ║
+║ 2. ✓ ESTIMATE TABLE: Qty|Size|Mould|Mode|Edges|$/sqm|Total║
+║ 3. ✓ PDF GENERATION: Buttons now work with error handling ║
+║ 4. ✓ FORMULA POPUP: Compact bottom slide-up design      ║
+║ 5. ✓ FORMULA ENTRY: Structured 1L base + tinter parsing ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -2871,14 +2871,19 @@
         
         let pricePerSqm = 125; // Default flat panel price
         
-        // Check if moulded and get profile price
+        // Check if moulded and get profile price from localStorage
         if (item.fm === 'Moulded' && item.mld) {
-            // Look up profile in pricing matrix
-            const profileName = item.mld;
-            const priceRow = pricingMatrix.find(p => p.profile === profileName);
-            if (priceRow) {
-                // Use satin price (or you can make this dynamic based on gloss)
-                pricePerSqm = parseFloat(priceRow.satin) || 125;
+            try {
+                const pricingData = JSON.parse(localStorage.getItem('pricingMatrix')) || {};
+                const profileName = item.mld;
+                
+                // Look for the profile in pricing data
+                if (pricingData[profileName]) {
+                    // Use satin price as default (can be made dynamic based on gloss level)
+                    pricePerSqm = parseFloat(pricingData[profileName].satin) || 125;
+                }
+            } catch(e) {
+                console.warn('Error reading pricing data:', e);
             }
         } else {
             // Flat panel = $125/sqm
@@ -2895,12 +2900,19 @@
     }
 
     function genForm(type) {
-        if (items.length === 0) {
-            notify('Add parts first');
-            return;
-        }
-        
-        const { jsPDF } = window.jspdf;
+        try {
+            if (items.length === 0) {
+                notify('❌ Add parts first');
+                return;
+            }
+            
+            // Check if jsPDF is loaded
+            if (!window.jspdf) {
+                notify('⚠️ PDF library not loaded yet. Try again.');
+                return;
+            }
+            
+            const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
         
         // Logo in top left
@@ -3045,6 +3057,10 @@
         
         doc.save(`Estimate_${jobClient.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
         notify(`✓ Estimate PDF Downloaded - Total: $${totalCost.toFixed(2)}`);
+        } catch(error) {
+            console.error('❌ PDF Generation Error:', error);
+            notify(`❌ PDF Error: ${error.message}`);
+        }
     }
 
     function genPDF() {
