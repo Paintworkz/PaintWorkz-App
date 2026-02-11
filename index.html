@@ -3,12 +3,12 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ 1.1.6 | 2026-02-12 | CLIENT DATABASE IN ADMIN TAB   ║
-║ 1. ✓ NEW: Admin > Clients database tab                ║
-║ 2. ✓ STORE: Name, Email, Phone, Address, Notes        ║
-║ 3. ✓ MANAGE: Add, Edit, Delete clients with modal UI  ║
-║ 4. ✓ GLOBAL NOTIFY: Alert when client added/edited    ║
-║ 5. ✓ BACKUP: All data saved to localStorage           ║
+║ 1.1.8 | 2026-02-12 | FULL CLIENT LIST + SEARCH         ║
+║ 1. ✓ Fixed: Edit button modal now works properly        ║
+║ 2. ✓ Added: Search functionality in Client tab          ║
+║ 3. ✓ Fixed: All clients from job history now persist    ║
+║ 4. ✓ Enhanced: Client cards show data for filtering     ║
+║ 5. ✓ Console: Logs total clients loaded for debugging   ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!DOCTYPE html>
@@ -723,7 +723,8 @@
             <div id="admin-tab-clients-content" style="display:none;">
                 <h4 style="margin-top:20px; margin-bottom:10px; font-weight:900;">Client Database</h4>
                 <p style="font-size:11px; color:#666; margin-bottom:15px;">Manage customer details, addresses, phone & email</p>
-                <button onclick="showAddClientForm()" style="border:none; background:#34c759; color:#fff; padding:12px 20px; border-radius:6px; font-weight:900; font-size:12px; cursor:pointer; width:100%; margin-bottom:15px;">➕ ADD NEW CLIENT</button>
+                <button onclick="showAddClientForm()" style="border:none; background:#34c759; color:#fff; padding:12px 20px; border-radius:6px; font-weight:900; font-size:12px; cursor:pointer; width:100%; margin-bottom:10px;">➕ ADD NEW CLIENT</button>
+                <input type="text" id="clientSearchBox" placeholder="🔍 Search clients by name..." style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; margin-bottom:15px; box-sizing:border-box;" onkeyup="filterClientsList()">
                 <div id="clientsList" style="margin-top:15px;"></div>
             </div>
             
@@ -760,7 +761,7 @@
     <div class="footer-item" style="margin-left:15px;"><div class="footer-label">TOTAL SQM (m²)</div><div class="footer-val" id="tA">0.000</div></div>
     <div style="flex:1; display:flex; justify-content:center; gap:20px; align-items:center;">
         <div class="icon-btn" onclick="genPDF()" style="color:#fff">📄</div>
-        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro 4.8 v1.1.6</div>
+        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro 4.8 v1.1.8</div>
     </div>
     <div class="footer-item"><div class="footer-label">PARTS</div><div class="footer-val" id="tQ">0</div></div>
     <div class="icon-btn" onclick="handleLogout()" title="Logout" style="color:#ff3b30; font-size:24px; cursor:pointer; margin-right:15px;">🚪</div>
@@ -4670,6 +4671,15 @@
         
         const clients = dbClients.sort((a, b) => a.name.localeCompare(b.name));
         
+        // Save merged clients back to database for persistence
+        const updatedDb = {};
+        clients.forEach(c => {
+            updatedDb[c.id] = c;
+        });
+        saveClientDatabase(updatedDb);
+        
+        console.log(`📋 CLIENTS LOADED: ${clients.length} total (${Object.values(db).length} in database + ${historyClientNames.length} from job history)`);
+        
         if (clients.length === 0) {
             clientsDiv.innerHTML = '<p style="text-align:center; color:#999; font-size:12px; padding:20px;">No clients yet. Add one to get started!</p>';
             return;
@@ -4677,7 +4687,7 @@
         
         let html = '';
         clients.forEach(client => {
-            html += `<div style="background:#f9f9f9; border:1px solid #e0e0e0; border-radius:8px; padding:12px; margin-bottom:10px;">
+            html += `<div data-client-name="${client.name}" style="background:#f9f9f9; border:1px solid #e0e0e0; border-radius:8px; padding:12px; margin-bottom:10px;">
                 <div style="margin-bottom:8px;"><strong>${client.name}</strong></div>
                 <div style="font-size:11px; color:#666; margin-bottom:4px;">📧 ${client.email || 'N/A'}</div>
                 <div style="font-size:11px; color:#666; margin-bottom:4px;">📱 ${client.phone || 'N/A'}</div>
@@ -4721,31 +4731,68 @@
     function editClient(clientId) {
         const db = getClientDatabase();
         const client = db[clientId];
-        if (!client) return;
+        if (!client) {
+            notify('❌ Client not found');
+            return;
+        }
+        
+        const modalId = 'editClientModal-' + Date.now();
+        const overlayId = 'editOverlay-' + Date.now();
+        
+        const overlay = document.createElement('div');
+        overlay.id = overlayId;
+        overlay.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; z-index:4999; background:rgba(0,0,0,0.3); cursor:pointer;';
+        overlay.onclick = () => {
+            document.getElementById(modalId).remove();
+            overlay.remove();
+        };
         
         const modal = document.createElement('div');
+        modal.id = modalId;
+        modal.style.cssText = 'position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); z-index:5000; background:#fff; border-radius:12px; padding:20px; border:2px solid #2196f3; max-width:90%; width:400px; box-shadow:0 10px 40px rgba(0,0,0,0.3);';
         modal.innerHTML = `
-            <div style="background:#fff; border-radius:12px; padding:20px; border:2px solid #2196f3; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); z-index:5000; max-width:90%; width:400px; box-shadow:0 10px 40px rgba(0,0,0,0.3);">
-                <h3 style="margin-top:0; margin-bottom:20px; font-weight:900;">✏️ Edit Client</h3>
-                <label style="margin-top:15px;">Client Name *</label>
-                <input type="text" id="modalClientName" value="${client.name}" placeholder="e.g., John Smith" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
-                <label>Email Address</label>
-                <input type="email" id="modalClientEmail" value="${client.email || ''}" placeholder="john@example.com" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
-                <label>Phone Number</label>
-                <input type="tel" id="modalClientPhone" value="${client.phone || ''}" placeholder="0438 803 032" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
-                <label>Address</label>
-                <input type="text" id="modalClientAddress" value="${client.address || ''}" placeholder="123 Main Street, Sydney NSW 2000" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
-                <label>Notes (Optional)</label>
-                <textarea id="modalClientNotes" placeholder="e.g., Prefers morning appointments" style="margin-bottom:15px; width:100%; height:60px; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box; font-family:inherit;">${client.notes || ''}</textarea>
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-                    <button onclick="document.querySelector('div[style*=z-index:5000]').parentNode.removeChild(document.querySelector('div[style*=z-index:5000]')); document.querySelector('div[style*=z-index:4999]').remove();" style="padding:12px; border:1px solid #ccc; background:#fff; border-radius:6px; font-weight:900; cursor:pointer;">CANCEL</button>
-                    <button onclick="saveEditClient('${clientId}')" style="padding:12px; border:none; background:#2196f3; color:#fff; border-radius:6px; font-weight:900; cursor:pointer;">💾 SAVE CHANGES</button>
-                </div>
+            <h3 style="margin-top:0; margin-bottom:20px; font-weight:900;">✏️ Edit Client</h3>
+            <label style="margin-top:15px; display:block; font-weight:900; font-size:12px; margin-bottom:5px;">Client Name *</label>
+            <input type="text" id="editClientName" value="${client.name}" placeholder="e.g., John Smith" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box; font-size:12px;">
+            <label style="display:block; font-weight:900; font-size:12px; margin-bottom:5px;">Email Address</label>
+            <input type="email" id="editClientEmail" value="${client.email || ''}" placeholder="john@example.com" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box; font-size:12px;">
+            <label style="display:block; font-weight:900; font-size:12px; margin-bottom:5px;">Phone Number</label>
+            <input type="tel" id="editClientPhone" value="${client.phone || ''}" placeholder="0438 803 032" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box; font-size:12px;">
+            <label style="display:block; font-weight:900; font-size:12px; margin-bottom:5px;">Address</label>
+            <input type="text" id="editClientAddress" value="${client.address || ''}" placeholder="123 Main Street, Sydney NSW 2000" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box; font-size:12px;">
+            <label style="display:block; font-weight:900; font-size:12px; margin-bottom:5px;">Notes (Optional)</label>
+            <textarea id="editClientNotes" placeholder="e.g., Prefers morning appointments" style="margin-bottom:15px; width:100%; height:60px; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box; font-family:inherit; font-size:12px;">${client.notes || ''}</textarea>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                <button onclick="document.getElementById('${modalId}').remove(); document.getElementById('${overlayId}').remove();" style="padding:12px; border:1px solid #ccc; background:#fff; border-radius:6px; font-weight:900; cursor:pointer; font-size:12px;">CANCEL</button>
+                <button onclick="saveEditClientModal('${clientId}', '${modalId}', '${overlayId}')" style="padding:12px; border:none; background:#2196f3; color:#fff; border-radius:6px; font-weight:900; cursor:pointer; font-size:12px;">💾 SAVE</button>
             </div>
-            <div style="position:fixed; top:0; left:0; width:100%; height:100%; z-index:4999; background:rgba(0,0,0,0.3);"></div>
         `;
+        
+        document.body.appendChild(overlay);
         document.body.appendChild(modal);
-        document.getElementById('modalClientName').focus();
+        document.getElementById('editClientName').focus();
+    }
+    
+    function saveEditClientModal(clientId, modalId, overlayId) {
+        const name = document.getElementById('editClientName').value.trim();
+        const email = document.getElementById('editClientEmail').value.trim();
+        const phone = document.getElementById('editClientPhone').value.trim();
+        const address = document.getElementById('editClientAddress').value.trim();
+        const notes = document.getElementById('editClientNotes').value.trim();
+        
+        if (!name) {
+            alert('Client name is required!');
+            return;
+        }
+        
+        const db = getClientDatabase();
+        db[clientId] = { id: clientId, name, email, phone, address, createdDate: db[clientId].createdDate, notes };
+        saveClientDatabase(db);
+        
+        document.getElementById(modalId).remove();
+        document.getElementById(overlayId).remove();
+        notify('✓ Client Updated: ' + name);
+        renderClientsList();
     }
     
     function saveNewClient(clientId) {
@@ -4769,25 +4816,21 @@
         renderClientsList();
     }
     
-    function saveEditClient(clientId) {
-        const name = document.getElementById('modalClientName').value.trim();
-        const email = document.getElementById('modalClientEmail').value.trim();
-        const phone = document.getElementById('modalClientPhone').value.trim();
-        const address = document.getElementById('modalClientAddress').value.trim();
-        const notes = document.getElementById('modalClientNotes').value.trim();
+    
+    function filterClientsList() {
+        const searchBox = document.getElementById('clientSearchBox');
+        const searchTerm = searchBox.value.toLowerCase();
+        const clientDiv = document.getElementById('clientsList');
+        const clientCards = clientDiv.querySelectorAll('[data-client-name]');
         
-        if (!name) {
-            alert('Client name is required!');
-            return;
-        }
-        
-        const db = getClientDatabase();
-        db[clientId] = { id: clientId, name, email, phone, address, notes };
-        saveClientDatabase(db);
-        
-        document.querySelectorAll('div[style*="z-index:5000"], div[style*="z-index:4999"]').forEach(el => el.remove());
-        showGlobalNotification(`✅ CLIENT UPDATED: "${name}"`, '#e8f5e9', '#34c759');
-        renderClientsList();
+        clientCards.forEach(card => {
+            const clientName = card.getAttribute('data-client-name').toLowerCase();
+            if (clientName.includes(searchTerm)) {
+                card.style.display = 'block';
+            } else {
+                card.style.display = 'none';
+            }
+        });
     }
     
     function deleteClient(clientId) {
