@@ -1527,6 +1527,9 @@
             // Populate client dropdown
             populateClientDropdown();
             
+            // Render clients in admin tab
+            renderClientsList();
+            
             // Re-render measure sheet
             if (typeof render === 'function') {
                 render();
@@ -2541,7 +2544,7 @@
         }
         cL.innerHTML = '';
         clients.sort().forEach((c, i) => { 
-            cL.innerHTML += `<div class="db-item"><span>${c}</span><span class="db-del" onclick="delCli('${c}')">×</span></div>`; 
+            cL.innerHTML += `<div class="db-item"><span>${c}</span></div>`; 
         });
         console.log(`  ✓ Rendered ${clients.length} clients`);
         
@@ -3540,8 +3543,100 @@
         }
     }
 
+    let cameraStream = null;
+    let isVideoBroadcasting = false;
+
     function snap() { 
-        notify("📸 Camera function ready"); 
+        if (!isVideoBroadcasting) {
+            startCamera();
+        } else {
+            capturePhoto();
+        }
+    }
+
+    function startCamera() {
+        const constraints = {
+            video: { facingMode: 'environment' },
+            audio: false
+        };
+        
+        navigator.mediaDevices.getUserMedia(constraints)
+            .then(stream => {
+                cameraStream = stream;
+                isVideoBroadcasting = true;
+                
+                let cameraModal = document.getElementById('cameraModal');
+                if (!cameraModal) {
+                    cameraModal = document.createElement('div');
+                    cameraModal.id = 'cameraModal';
+                    cameraModal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:9999;';
+                    document.body.appendChild(cameraModal);
+                }
+                
+                let videoEl = document.getElementById('cameraVideo');
+                if (!videoEl) {
+                    videoEl = document.createElement('video');
+                    videoEl.id = 'cameraVideo';
+                    videoEl.style.cssText = 'width:100%; height:100%; object-fit:cover;';
+                    cameraModal.innerHTML = '';
+                    cameraModal.appendChild(videoEl);
+                    
+                    const buttons = document.createElement('div');
+                    buttons.style.cssText = 'position:absolute; bottom:20px; left:0; right:0; display:flex; gap:10px; justify-content:center; padding:0 20px;';
+                    buttons.innerHTML = `
+                        <button onclick="capturePhoto()" style="background:#34c759; color:#fff; border:none; padding:12px 24px; border-radius:8px; font-weight:900; font-size:14px; cursor:pointer;">📸 CAPTURE</button>
+                        <button onclick="closeCamera()" style="background:#ff3b30; color:#fff; border:none; padding:12px 24px; border-radius:8px; font-weight:900; font-size:14px; cursor:pointer;">✕ CLOSE</button>
+                    `;
+                    cameraModal.appendChild(buttons);
+                }
+                
+                cameraModal.style.display = 'flex';
+                videoEl.srcObject = stream;
+                videoEl.play();
+                notify('📸 Camera Active - Tap CAPTURE to take photo');
+            })
+            .catch(error => {
+                console.error('Camera error:', error);
+                notify('❌ Camera access denied. Check permissions.');
+            });
+    }
+
+    function capturePhoto() {
+        if (!cameraStream) return;
+        
+        const video = document.getElementById('cameraVideo');
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext('2d').drawImage(video, 0, 0);
+        
+        const photoData = canvas.toDataURL('image/jpeg');
+        savePhotoToJob(photoData);
+        closeCamera();
+    }
+
+    function closeCamera() {
+        if (cameraStream) {
+            cameraStream.getTracks().forEach(track => track.stop());
+            cameraStream = null;
+            isVideoBroadcasting = false;
+        }
+        const cameraModal = document.getElementById('cameraModal');
+        if (cameraModal) cameraModal.style.display = 'none';
+    }
+
+    function savePhotoToJob(photoData) {
+        if (!currentJob) {
+            notify('❌ No active job. Create a job first.');
+            return;
+        }
+        currentJob.photos = currentJob.photos || [];
+        currentJob.photos.push({
+            timestamp: new Date().toISOString(),
+            data: photoData
+        });
+        saveData();
+        notify('✓ Photo saved to job');
     }
 
     function clearAllData() {
