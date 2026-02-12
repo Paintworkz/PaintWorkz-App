@@ -5948,32 +5948,66 @@ function genPDF() {
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 
 <script>
-/* ================= VERSION ================= */
-const APP_VERSION = "1.3.0";
-console.log("🎨 PaintWorkz Pro 4.9 - Version", APP_VERSION);
 
-/* ================= SAFE JOB HEADER ================= */
-function printJobHeader(doc) {
-    const cli = document.getElementById('cli')?.value || '';
-    const date = document.getElementById('dRec')?.value || '';
-    const jobName = document.getElementById('jNm')?.value || '';
-    const jobNum = document.getElementById('jN')?.value || '';
+<script>
+/* ================= VERSION ================= */
+const APP_VERSION = "1.3.1";
+console.log("🎨 PaintWorkz Pro - Version", APP_VERSION);
+
+/* ================= SAFE DATA GETTERS ================= */
+
+function getVal(id) {
+    return document.getElementById(id)?.value || '';
+}
+
+/* Detect your real parts array safely */
+function getPartsArray() {
+    if (typeof parts !== "undefined") return parts;
+    if (typeof items !== "undefined") return items;
+    if (typeof panelList !== "undefined") return panelList;
+    if (typeof jobParts !== "undefined") return jobParts;
+    return [];
+}
+
+/* ================= HEADER ================= */
+
+function printJobHeader(doc, formType) {
+
+    const client = getVal('cli');
+    const jobName = getVal('jNm');
+    const jobNum  = getVal('jN');
+    const date    = getVal('dRec');
+
+    const brand   = getVal('p-brand');
+    const colour  = getVal('p-color');
+    const code    = getVal('p-code');
+    const finish  = getVal('p-finish');
 
     doc.setFontSize(14);
     doc.setFont(undefined, 'bold');
-    doc.text("PAINTWORKZ FORM", 14, 15);
+    doc.text(`PAINTWORKZ - ${formType}`, 14, 15);
 
     doc.setFontSize(10);
     doc.setFont(undefined, 'normal');
-    doc.text(`Client: ${cli}`, 14, 22);
-    doc.text(`Job: ${jobName}`, 14, 28);
-    doc.text(`Job #: ${jobNum}`, 14, 34);
-    doc.text(`Date: ${date}`, 150, 22);
+
+    doc.text(`Client: ${client}`, 14, 24);
+    doc.text(`Job: ${jobName}`, 14, 30);
+    doc.text(`Job #: ${jobNum}`, 14, 36);
+    doc.text(`Date: ${date}`, 150, 24);
+
+    doc.text(`Brand: ${brand}`, 14, 44);
+    doc.text(`Colour: ${colour}`, 14, 50);
+    doc.text(`Code: ${code}`, 100, 44);
+    doc.text(`Finish: ${finish}`, 100, 50);
 }
 
-/* ================= SAFE TABLE RENDER ================= */
-function renderPartsTable(doc, parts, startY = 45) {
-    if (!doc.autoTable || !Array.isArray(parts)) return;
+/* ================= PARTS TABLE ================= */
+
+function renderPartsTable(doc, startY = 60) {
+
+    const partsArray = getPartsArray();
+
+    if (!doc.autoTable || !Array.isArray(partsArray)) return;
 
     doc.autoTable({
         startY: startY,
@@ -5981,67 +6015,57 @@ function renderPartsTable(doc, parts, startY = 45) {
             "QTY",
             "TYPE",
             "DESCRIPTION",
-            "L (mm)",
-            "W (mm)",
+            "L",
+            "W",
             "THK",
             "MODE",
             "EDGES"
         ]],
-        body: parts.map(p => [
+        body: partsArray.map(p => [
             p.qty || '',
             p.type || '',
             p.desc || '',
-            p.h || '',
-            p.w || '',
-            p.thk || '',
+            p.h || p.length || '',
+            p.w || p.width || '',
+            p.thk || p.thickness || '',
             p.mode || '',
-            Array.isArray(p.edges) ? p.edges.join(", ") : ''
+            Array.isArray(p.edges) ? p.edges.join(", ") : (p.edges || '')
         ]),
         theme: 'grid',
         styles: { fontSize: 8 },
-        headStyles: { fillColor: [0, 0, 0], textColor: 255 }
+        headStyles: { fillColor: [0,0,0], textColor: 255 }
     });
 }
 
-/* ================= SAFE FORM BUILDER ================= */
+/* ================= BUILD FORM WITH REAL DATA ================= */
+
 function buildBatchForm(doc, formType) {
 
-    printJobHeader(doc);
+    printJobHeader(doc, formType);
 
-    doc.setFontSize(12);
-    doc.setFont(undefined, 'bold');
-    doc.text(formType.toUpperCase(), 14, 42);
+    renderPartsTable(doc, 60);
 
-    doc.setFont(undefined, 'normal');
-
-    if (typeof items !== "undefined") {
-        renderPartsTable(doc, items, 50);
-    }
-
-    const pageCount = doc.internal.getNumberOfPages();
+    /* Footer */
     const pageWidth = doc.internal.pageSize.width;
+    const pageHeight = doc.internal.pageSize.height;
 
     doc.setFontSize(8);
     doc.text(
-        `PaintWorkz Pro 4.9 v${APP_VERSION} | Page ${pageCount}`,
+        `PaintWorkz Pro v${APP_VERSION}`,
         pageWidth / 2,
-        290,
+        pageHeight - 10,
         { align: "center" }
     );
 }
 
-/* ================= SAFE BATCH GENERATOR ================= */
-function genPDFBatchSafe() {
+/* ================= BATCH GENERATOR ================= */
 
-    if (!window.jspdf) {
-        alert("jsPDF not loaded");
-        return;
-    }
+function genPDFBatchSafe() {
 
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
 
-    const jobName = document.getElementById('jNm')?.value || 'Job';
+    const jobName = getVal('jNm') || "Job";
 
     let pageIndex = 0;
 
@@ -6063,60 +6087,15 @@ function genPDFBatchSafe() {
     doc.save(`${jobName}_BatchForms.pdf`);
 }
 
-/* ================= SAFELY REPLACE FOOTER PDF BUTTON ================= */
+/* ================= SAFELY REPLACE BUTTON ================= */
+
 document.addEventListener("DOMContentLoaded", function () {
     const pdfBtn = document.querySelector('.sticky-footer .icon-btn[onclick="genPDF()"]');
     if (pdfBtn) {
         pdfBtn.setAttribute("onclick", "genPDFBatchSafe()");
     }
-
-    const versionDisplay = document.getElementById('footerVersionDisplay');
-    if (versionDisplay) {
-        versionDisplay.style.display = "block";
-        versionDisplay.innerText = `PaintWorkz Pro 4.9 v${APP_VERSION}`;
-    }
 });
-
-/* ================= MOBILE CAMERA FIX ================= */
-
-// Create hidden camera input if not already present
-if (!document.getElementById("cameraInput")) {
-    const camInput = document.createElement("input");
-    camInput.type = "file";
-    camInput.accept = "image/*";
-    camInput.capture = "environment";
-    camInput.id = "cameraInput";
-    camInput.style.display = "none";
-    document.body.appendChild(camInput);
-
-    camInput.addEventListener("change", function(e){
-        const file = e.target.files[0];
-        if (!file) return;
-        console.log("📸 Photo captured:", file.name);
-    });
-}
-
-// Override snap safely
-window.snap = function () {
-    const input = document.getElementById("cameraInput");
-    if (input) input.click();
-};
-
 </script>
-
-<style>
-/* ================= FOOTER SAFE WELD ================= */
-.sticky-footer {
-    position: fixed;
-    bottom: env(safe-area-inset-bottom);
-    left: 0;
-    right: 0;
-    height: 80px;
-}
-</style>
-
-<!-- ================== END SAFE UPGRADE ================== -->
-
     
 </body>
 </html>
