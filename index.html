@@ -134,7 +134,7 @@
 <body>
     <!-- Firebase SDK - Modern Modular Approach -->
     <script type="module">
-        import { initializeApp as firebaseInitializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
         import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js";
         import { getFirestore, collection, doc, setDoc, addDoc, getDoc, onSnapshot, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
         
@@ -149,7 +149,7 @@
         
         let app, auth, db;
         try {
-            app = firebaseInitializeApp(firebaseConfig);
+            app = initializeApp(firebaseConfig);
             auth = getAuth(app);
             db = getFirestore(app);
             console.log('✓ Firebase initialized successfully');
@@ -767,7 +767,7 @@
 <div class="sticky-footer">
     <div class="footer-item" style="margin-left:15px;"><div class="footer-label">TOTAL SQM (m²)</div><div class="footer-val" id="tA">0.000</div></div>
     <div style="flex:1; display:flex; justify-content:center; gap:20px; align-items:center;">
-        <div class="icon-btn" onclick="generateBatchPDFs(currentJob)" style="color:#fff">📄</div>
+        <div class="icon-btn" onclick="genPDF()" style="color:#fff">📄</div>
         <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro 4.8 v1.2.1</div>
     </div>
     <div class="footer-item"><div class="footer-label">PARTS</div><div class="footer-val" id="tQ">0</div></div>
@@ -2108,7 +2108,7 @@
             }
             
             // Generate batch PDFs
-            generateBatchPDFs(currentJob);
+            generateBatchPDFs(job);
             
             // Alert admins
             alertAdmins(job);
@@ -2152,7 +2152,7 @@
             history[jobIdx] = job;
             localStorage.setItem('jobHistory', JSON.stringify(history));
             
-            console.log(`📋 Job #${job.jobNum} unmarked as complete`); 
+            console.log(`📋 Job #${job.jobNum} unmarked as complete`);
             
             // Sync to Firebase
             if (window.syncJobsToFirebase) {
@@ -2223,30 +2223,7 @@
         }, 20000);
     }
 
-function generateBatchPDFs(job) {
-
-    if (!job) {
-        notify("❌ No active job selected.");
-        return;
-    }
-
-    if (!window.jspdf || !window.jspdf.jsPDF) {
-        notify("❌ PDF library not loaded.");
-        return;
-    }
-
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-
-    const items = job.items || [];
-
-    console.log("Generating batch for:", job.jobName);
-
-    // ALL your PDF logic must stay inside here
-
-} // <-- ONLY one closing brace at the very end
-
-        
+    function generateBatchPDFs(job) {
         // Check if jsPDF is loaded
         if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) {
             notify('❌ PDF library not loaded. Please refresh the page.');
@@ -2322,94 +2299,81 @@ function generateBatchPDFs(job) {
         doc.text(`Total Parts: ${items.length}`, 20, y + 10);
         
         // ===== PAGE 2: SUPPLY DOCKET =====
-        // ===== SUPPLY DOCKET ×3 =====
-        for (let s = 0; s < 3; s++) {
-
-    doc.addPage();
-    let y = 20;
-
-    doc.setFontSize(18);
-    doc.text('SUPPLY DOCKET', 20, y);
-    y += 10;
-
-    doc.setFontSize(10);
-    doc.text(`Client: ${job.client}`, 20, y);
-    y += 5;
-    doc.text(`Job #: ${job.jobNum} - ${job.jobName}`, 20, y);
-    y += 5;
-    doc.text(`Paint: ${job.brand} - ${job.color}`, 20, y);
-    y += 5;
-    doc.text(`Code: ${job.code} | Finish: ${job.finish}`, 20, y);
-    y += 10;
-
-    doc.setFontSize(9);
-    let x = 20;
-    headers.forEach((h, i) => {
-        doc.text(h, x, y);
-        x += colWidths[i];
-    });
-
-    y += 8;
-
-    items.forEach(it => {
+        doc.addPage();
+        y = 20;
+        doc.setFontSize(18);
+        doc.text('SUPPLY DOCKET', 20, y);
+        y += 10;
+        doc.setFontSize(10);
+        doc.text(`Client: ${job.client}`, 20, y);
+        y += 5;
+        doc.text(`Job #: ${job.jobNum} - ${job.jobName}`, 20, y);
+        y += 5;
+        doc.text(`Paint: ${job.brand} - ${job.color}`, 20, y);
+        y += 5;
+        doc.text(`Code: ${job.code} | Finish: ${job.finish}`, 20, y);
+        y += 10;
+        
+        doc.setFontSize(9);
         x = 20;
-        const rowSqm = parseFloat(it.sqm) * it.qty;
-
-        doc.text(it.desc.substring(0, 20), x, y); x += colWidths[0];
-        doc.text(`${it.h}×${it.w}`, x, y); x += colWidths[1];
-        doc.text(it.qty.toString(), x, y); x += colWidths[2];
-        doc.text(it.prof.substring(0, 15), x, y); x += colWidths[3];
-        doc.text(it.mode, x, y); x += colWidths[4];
-        doc.text(rowSqm.toFixed(3), x, y);
-
+        doc.setFillColor(0, 0, 0);
+        doc.setTextColor(255, 255, 255);
+        headers.forEach((h, i) => {
+            doc.text(h, x, y);
+            x += colWidths[i];
+        });
         y += 8;
-        if (y > 270) {
-            doc.addPage();
-            y = 20;
-        }
-    });
-}
-
-
-// ===== MIXING CARD ×2 =====
-for (let m = 0; m < 2; m++) {
-
-    doc.addPage();
-    let y = 20;
-
-    doc.setFontSize(18);
-    doc.text('MIXING CARD - PAINT SHOP', 20, y);
-    y += 12;
-
-    doc.setFontSize(11);
-    doc.text(`Brand: ${job.brand}`, 20, y);
-    y += 6;
-    doc.text(`Color: ${job.color}`, 20, y);
-    y += 6;
-    doc.text(`Code/Formula: ${job.code}`, 20, y);
-    y += 6;
-    doc.text(`Finish: ${job.finish}`, 20, y);
-    y += 12;
-
-    doc.setFontSize(9);
-    doc.text(`Total SQM (m²) Required: ${totalSqm.toFixed(3)}`, 20, y);
-    y += 6;
-    doc.text(`Jobs/Items: ${items.length}`, 20, y);
-    y += 10;
-
-    doc.setFontSize(10);
-    doc.text(`Date: ${new Date().toLocaleDateString('en-AU')}`, 20, y);
-    y += 6;
-    doc.text(`Prepared by: ___________________`, 20, y);
-    y += 6;
-    doc.text(`Mixed by: ___________________`, 20, y);
-}
-
+        doc.setTextColor(0, 0, 0);
+        
+        items.forEach(it => {
+            x = 20;
+            const rowSqm = parseFloat(it.sqm) * it.qty;
+            
+            doc.text(it.desc.substring(0, 20), x, y); x += colWidths[0];
+            doc.text(`${it.h}×${it.w}`, x, y); x += colWidths[1];
+            doc.text(it.qty.toString(), x, y); x += colWidths[2];
+            doc.text(it.prof.substring(0, 15), x, y); x += colWidths[3];
+            doc.text(it.mode, x, y); x += colWidths[4];
+            doc.text(rowSqm.toFixed(3), x, y);
+            
+            y += 8;
+            if (y > 270) {
+                doc.addPage();
+                y = 20;
+            }
+        });
+        
+        // ===== PAGE 3: MIXING CARD =====
+        doc.addPage();
+        y = 20;
+        doc.setFontSize(18);
+        doc.text('MIXING CARD - PAINT SHOP', 20, y);
+        y += 12;
+        doc.setFontSize(11);
+        doc.text(`Brand: ${job.brand}`, 20, y);
+        y += 6;
+        doc.text(`Color: ${job.color}`, 20, y);
+        y += 6;
+        doc.text(`Code/Formula: ${job.code}`, 20, y);
+        y += 6;
+        doc.text(`Finish: ${job.finish}`, 20, y);
+        y += 12;
+        
+        doc.setFontSize(9);
+        doc.text(`Total SQM (m²) Required: ${totalSqm.toFixed(3)}`, 20, y);
+        y += 6;
+        doc.text(`Jobs/Items: ${items.length}`, 20, y);
+        y += 10;
+        
+        doc.setFontSize(10);
+        doc.text(`Date: ${new Date().toLocaleDateString('en-AU')}`, 20, y);
+        y += 6;
+        doc.text(`Prepared by: ___________________`, 20, y);
+        y += 6;
+        doc.text(`Mixed by: ___________________`, 20, y);
         
         // Save combined PDF to localStorage instead of auto-download
-       const filename = `Job_${job.jobNum}_${job.client.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
-doc.save(filename);
-
+        const filename = `Job_${job.jobNum}_${job.client.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
         
         // Store PDF in localStorage or just skip auto-download
         try {
@@ -2983,49 +2947,48 @@ doc.save(filename);
         };
     }
 
-    function genForm(type, batchMode = false) {
-    try {
-        if (items.length === 0) {
-            notify('❌ Add parts first');
-            return null;
-        }
-
+    function genForm(type) {
+        try {
+            if (items.length === 0) {
+                notify('❌ Add parts first');
+                return;
+            }
+            
+            // Check if jsPDF is loaded
+            if (!window.jspdf) {
+                notify('⚠️ PDF library not loaded yet. Try again.');
+                return;
+            }
+            
+            // Check if jsPDF is loaded
         if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) {
             notify('❌ PDF library not loaded. Please refresh the page.');
             console.error('jsPDF not available at window.jspdf');
-            return null;
+            return;
         }
-
+        
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
-
-        // Pass doc into generators
-        if (type === 'Supply Docket') {
-            genSupplyDocket(doc);
-        } else if (type === 'Mixing Card') {
-            genMixingCard(doc);
-        } else if (type === 'Invoice') {
-            genInvoice(doc);
-        } else if (type === 'Quote Form') {
-            genQuoteForm(doc);
-        } else {
-            genEstimate(doc);
+            
+            // Route to correct form generator
+            if (type === 'Supply Docket') {
+                genSupplyDocket();
+            } else if (type === 'Mixing Card') {
+                genMixingCard();
+            } else if (type === 'Invoice') {
+                genInvoice();
+            } else if (type === 'Quote Form') {
+                genQuoteForm();
+            } else {
+                // Default to Estimate
+                genEstimate();
+            }
+        } catch(error) {
+            console.error('❌ PDF Generation Error:', error);
+            notify('PDF Error: ' + error.message);
         }
-
-        if (!batchMode) {
-            const jobName = document.getElementById('jNm')?.value || "Job";
-            doc.save(`${jobName}_${type}.pdf`);
-        }
-
-        return doc;
-
-    } catch(error) {
-        console.error('❌ PDF Generation Error:', error);
-        notify('PDF Error: ' + error.message);
-        return null;
     }
-}
-  
+    
     // ===== PDF HEADER WITH LOGO HELPER =====
     function addPDFHeader(doc, title, logoBase64) {
         try {
@@ -3053,7 +3016,7 @@ doc.save(filename);
     }
 
     // ===== SUPPLY DOCKET =====
-    function genSupplyDocket(doc) {
+    function genSupplyDocket() {
     try {
         if (!window.jspdf || !window.jspdf.jsPDF) {
             notify('❌ PDF library loading...');
@@ -3087,7 +3050,7 @@ doc.save(filename);
 }
 
     // ===== MIXING CARD =====
-    function genMixingCard(doc) {
+    function genMixingCard() {
     try {
         if (!window.jspdf || !window.jspdf.jsPDF) {
             notify('❌ PDF library loading... Please wait');
@@ -3123,7 +3086,7 @@ doc.save(filename);
 }
 
     // ===== INVOICE (stub) =====
-    function genInvoice(doc) {
+    function genInvoice() {
     try {
         if (!window.jspdf || !window.jspdf.jsPDF) {
             notify('❌ PDF library loading...');
@@ -3158,7 +3121,7 @@ doc.save(filename);
 }
 
     // ===== QUOTE FORM (stub) =====
-    function genQuoteForm(doc) {
+    function genQuoteForm() {
     try {
         if (!window.jspdf || !window.jspdf.jsPDF) {
             notify('❌ PDF library loading...');
@@ -3196,7 +3159,7 @@ function genPDF() {
     genEstimate();
 }
 
-    function genEstimate(doc) {
+    function genEstimate() {
     try {
         // Verify jsPDF is loaded
         if (!window.jspdf || !window.jspdf.jsPDF) {
@@ -3258,7 +3221,7 @@ function genPDF() {
     }
 }
 
-    function genSupplyDocket(doc) {
+    function genSupplyDocket() {
         // Check if jsPDF is loaded
         if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) {
             notify('❌ PDF library not loaded. Please refresh the page.');
@@ -3367,7 +3330,7 @@ function genPDF() {
         notify("Supply Docket Downloaded");
     }
 
-    function genMixingCard(doc) {
+    function genMixingCard() {
         // Check if jsPDF is loaded
         if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) {
             notify('❌ PDF library not loaded. Please refresh the page.');
@@ -4311,7 +4274,7 @@ function genPDF() {
         
         // Generate PDFs and alert admins
         try {
-            generateBatchPDFs(currentJob);
+            generateBatchPDFs(job);
         } catch(e) {
         }
         
@@ -5979,102 +5942,5 @@ function genPDF() {
 </script>
 
 </div> <!-- Close appContainer -->
-
-<script>    
-/* ==========================================================
-   SAFE MOBILE CAMERA UPGRADE
-   Does NOT interfere with existing logic
-========================================================== */
-
-document.addEventListener("DOMContentLoaded", function () {
-
-    // Create hidden camera input if it doesn't exist
-    if (!document.getElementById("cameraInput")) {
-
-        const camInput = document.createElement("input");
-        camInput.type = "file";
-        camInput.accept = "image/*";
-        camInput.capture = "environment"; // rear camera
-        camInput.id = "cameraInput";
-        camInput.style.display = "none";
-
-        document.body.appendChild(camInput);
-
-        camInput.addEventListener("change", function(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            console.log("📸 Photo captured:", file.name);
-
-            // If you already have image handling logic,
-            // it will still run normally.
-        });
-    }
-
-});
-
-/* Safely override snap() only if it exists */
-if (typeof snap === "function") {
-
-    const originalSnap = snap;
-
-    window.snap = function () {
-
-        const input = document.getElementById("cameraInput");
-
-        if (input) {
-            input.click();
-        } else {
-            originalSnap(); // fallback to original behaviour
-        }
-    };
-
-}
-</script>
-   
-<script>
-/* ==========================================================
-   PAINTWORKZ SIMPLE STABLE BATCH PRINT
-   Does NOT modify genForm()
-   Does NOT require return doc
-========================================================== */
-
-function genPDFBatchSafe() {
-
-    if (typeof genForm !== "function") {
-        alert("genForm() not found.");
-        return;
-    }
-
-    const jobName = document.getElementById('jNm')?.value || "Job";
-
-    // 1 Estimate
-    genForm("Estimate");
-
-    // 3 Supply Docket
-    setTimeout(() => genForm("Supply Docket"), 500);
-    setTimeout(() => genForm("Supply Docket"), 1000);
-    setTimeout(() => genForm("Supply Docket"), 1500);
-
-    // 2 Mixing Card
-    setTimeout(() => genForm("Mixing Card"), 2000);
-    setTimeout(() => genForm("Mixing Card"), 2500);
-}
-
-/* Replace footer PDF button safely */
-document.addEventListener("DOMContentLoaded", function () {
-
-    const pdfBtn = document.querySelector(
-        '.sticky-footer .icon-btn[onclick="genPDF()"]'
-    );
-
-    if (pdfBtn) {
-        pdfBtn.setAttribute("onclick", "genPDFBatchSafe()");
-    }
-
-});
-
-</script>
-  
 </body>
 </html>
