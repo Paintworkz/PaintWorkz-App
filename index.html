@@ -5942,160 +5942,76 @@ function genPDF() {
 </script>
 
 </div> <!-- Close appContainer -->
-<!-- ================== PAINTWORKZ SAFE PDF & CAMERA UPGRADE ================== -->
-
-<!-- AutoTable (Required for table layout) -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
-
 <script>
-
 <script>
-/* ================= VERSION ================= */
-const APP_VERSION = "1.3.1";
-console.log("🎨 PaintWorkz Pro - Version", APP_VERSION);
+/* ==========================================================
+   CLEAN BATCH SYSTEM - STABLE VERSION
+========================================================== */
 
-/* ================= SAFE DATA GETTERS ================= */
+async function genPDFBatchSafe() {
 
-function getVal(id) {
-    return document.getElementById(id)?.value || '';
-}
-
-/* Detect your real parts array safely */
-function getPartsArray() {
-    if (typeof parts !== "undefined") return parts;
-    if (typeof items !== "undefined") return items;
-    if (typeof panelList !== "undefined") return panelList;
-    if (typeof jobParts !== "undefined") return jobParts;
-    return [];
-}
-
-/* ================= HEADER ================= */
-
-function printJobHeader(doc, formType) {
-
-    const client = getVal('cli');
-    const jobName = getVal('jNm');
-    const jobNum  = getVal('jN');
-    const date    = getVal('dRec');
-
-    const brand   = getVal('p-brand');
-    const colour  = getVal('p-color');
-    const code    = getVal('p-code');
-    const finish  = getVal('p-finish');
-
-    doc.setFontSize(14);
-    doc.setFont(undefined, 'bold');
-    doc.text(`PAINTWORKZ - ${formType}`, 14, 15);
-
-    doc.setFontSize(10);
-    doc.setFont(undefined, 'normal');
-
-    doc.text(`Client: ${client}`, 14, 24);
-    doc.text(`Job: ${jobName}`, 14, 30);
-    doc.text(`Job #: ${jobNum}`, 14, 36);
-    doc.text(`Date: ${date}`, 150, 24);
-
-    doc.text(`Brand: ${brand}`, 14, 44);
-    doc.text(`Colour: ${colour}`, 14, 50);
-    doc.text(`Code: ${code}`, 100, 44);
-    doc.text(`Finish: ${finish}`, 100, 50);
-}
-
-/* ================= PARTS TABLE ================= */
-
-function renderPartsTable(doc, startY = 60) {
-
-    const partsArray = getPartsArray();
-
-    if (!doc.autoTable || !Array.isArray(partsArray)) return;
-
-    doc.autoTable({
-        startY: startY,
-        head: [[
-            "QTY",
-            "TYPE",
-            "DESCRIPTION",
-            "L",
-            "W",
-            "THK",
-            "MODE",
-            "EDGES"
-        ]],
-        body: partsArray.map(p => [
-            p.qty || '',
-            p.type || '',
-            p.desc || '',
-            p.h || p.length || '',
-            p.w || p.width || '',
-            p.thk || p.thickness || '',
-            p.mode || '',
-            Array.isArray(p.edges) ? p.edges.join(", ") : (p.edges || '')
-        ]),
-        theme: 'grid',
-        styles: { fontSize: 8 },
-        headStyles: { fillColor: [0,0,0], textColor: 255 }
-    });
-}
-
-/* ================= BUILD FORM WITH REAL DATA ================= */
-
-function buildBatchForm(doc, formType) {
-
-    printJobHeader(doc, formType);
-
-    renderPartsTable(doc, 60);
-
-    /* Footer */
-    const pageWidth = doc.internal.pageSize.width;
-    const pageHeight = doc.internal.pageSize.height;
-
-    doc.setFontSize(8);
-    doc.text(
-        `PaintWorkz Pro v${APP_VERSION}`,
-        pageWidth / 2,
-        pageHeight - 10,
-        { align: "center" }
-    );
-}
-
-/* ================= BATCH GENERATOR ================= */
-
-function genPDFBatchSafe() {
+    if (typeof genForm !== "function") {
+        alert("genForm() not found.");
+        return;
+    }
 
     const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-
-    const jobName = getVal('jNm') || "Job";
+    const finalDoc = new jsPDF();
 
     let pageIndex = 0;
 
-    function addForm(type) {
-        if (pageIndex > 0) doc.addPage();
-        buildBatchForm(doc, type);
-        pageIndex++;
+    async function appendForm(type, copies) {
+
+        for (let i = 0; i < copies; i++) {
+
+            const tempDoc = await genForm(type, true);
+
+            if (!tempDoc) continue;
+
+            const totalPages = tempDoc.internal.getNumberOfPages();
+
+            for (let p = 1; p <= totalPages; p++) {
+
+                if (pageIndex > 0) finalDoc.addPage();
+
+                const pageImg = tempDoc.output("datauristring");
+
+                finalDoc.addImage(
+                    pageImg,
+                    "PNG",
+                    0,
+                    0,
+                    210,
+                    297
+                );
+
+                pageIndex++;
+            }
+        }
     }
 
-    // 1 Estimate
-    addForm("Estimate");
+    await appendForm("Estimate", 1);
+    await appendForm("Supply Docket", 3);
+    await appendForm("Mixing Card", 2);
 
-    // 3 Supply Docket
-    for (let i = 0; i < 3; i++) addForm("Supply Docket");
-
-    // 2 Mixing Card
-    for (let i = 0; i < 2; i++) addForm("Mixing Card");
-
-    doc.save(`${jobName}_BatchForms.pdf`);
+    const jobName = document.getElementById('jNm')?.value || "Job";
+    finalDoc.save(`${jobName}_BatchForms.pdf`);
 }
 
-/* ================= SAFELY REPLACE BUTTON ================= */
-
+/* Replace button */
 document.addEventListener("DOMContentLoaded", function () {
-    const pdfBtn = document.querySelector('.sticky-footer .icon-btn[onclick="genPDF()"]');
+
+    const pdfBtn = document.querySelector(
+        '.sticky-footer .icon-btn[onclick="genPDF()"]'
+    );
+
     if (pdfBtn) {
         pdfBtn.setAttribute("onclick", "genPDFBatchSafe()");
     }
+
 });
 </script>
-    
+
+   
 </body>
 </html>
