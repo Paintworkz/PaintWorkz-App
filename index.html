@@ -767,7 +767,7 @@
 <div class="sticky-footer">
     <div class="footer-item" style="margin-left:15px;"><div class="footer-label">TOTAL SQM (m²)</div><div class="footer-val" id="tA">0.000</div></div>
     <div style="flex:1; display:flex; justify-content:center; gap:20px; align-items:center;">
-        <div class="icon-btn" onclick="genPDF()" style="color:#fff">📄</div>
+        <div class="icon-btn" onclick="generateBatchPDFs(currentJob)" style="color:#fff">📄</div>
         <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro 4.8 v1.2.1</div>
     </div>
     <div class="footer-item"><div class="footer-label">PARTS</div><div class="footer-val" id="tQ">0</div></div>
@@ -2299,81 +2299,94 @@
         doc.text(`Total Parts: ${items.length}`, 20, y + 10);
         
         // ===== PAGE 2: SUPPLY DOCKET =====
-        doc.addPage();
-        y = 20;
-        doc.setFontSize(18);
-        doc.text('SUPPLY DOCKET', 20, y);
-        y += 10;
-        doc.setFontSize(10);
-        doc.text(`Client: ${job.client}`, 20, y);
-        y += 5;
-        doc.text(`Job #: ${job.jobNum} - ${job.jobName}`, 20, y);
-        y += 5;
-        doc.text(`Paint: ${job.brand} - ${job.color}`, 20, y);
-        y += 5;
-        doc.text(`Code: ${job.code} | Finish: ${job.finish}`, 20, y);
-        y += 10;
-        
-        doc.setFontSize(9);
+        // ===== SUPPLY DOCKET ×3 =====
+        for (let s = 0; s < 3; s++) {
+
+    doc.addPage();
+    let y = 20;
+
+    doc.setFontSize(18);
+    doc.text('SUPPLY DOCKET', 20, y);
+    y += 10;
+
+    doc.setFontSize(10);
+    doc.text(`Client: ${job.client}`, 20, y);
+    y += 5;
+    doc.text(`Job #: ${job.jobNum} - ${job.jobName}`, 20, y);
+    y += 5;
+    doc.text(`Paint: ${job.brand} - ${job.color}`, 20, y);
+    y += 5;
+    doc.text(`Code: ${job.code} | Finish: ${job.finish}`, 20, y);
+    y += 10;
+
+    doc.setFontSize(9);
+    let x = 20;
+    headers.forEach((h, i) => {
+        doc.text(h, x, y);
+        x += colWidths[i];
+    });
+
+    y += 8;
+
+    items.forEach(it => {
         x = 20;
-        doc.setFillColor(0, 0, 0);
-        doc.setTextColor(255, 255, 255);
-        headers.forEach((h, i) => {
-            doc.text(h, x, y);
-            x += colWidths[i];
-        });
+        const rowSqm = parseFloat(it.sqm) * it.qty;
+
+        doc.text(it.desc.substring(0, 20), x, y); x += colWidths[0];
+        doc.text(`${it.h}×${it.w}`, x, y); x += colWidths[1];
+        doc.text(it.qty.toString(), x, y); x += colWidths[2];
+        doc.text(it.prof.substring(0, 15), x, y); x += colWidths[3];
+        doc.text(it.mode, x, y); x += colWidths[4];
+        doc.text(rowSqm.toFixed(3), x, y);
+
         y += 8;
-        doc.setTextColor(0, 0, 0);
-        
-        items.forEach(it => {
-            x = 20;
-            const rowSqm = parseFloat(it.sqm) * it.qty;
-            
-            doc.text(it.desc.substring(0, 20), x, y); x += colWidths[0];
-            doc.text(`${it.h}×${it.w}`, x, y); x += colWidths[1];
-            doc.text(it.qty.toString(), x, y); x += colWidths[2];
-            doc.text(it.prof.substring(0, 15), x, y); x += colWidths[3];
-            doc.text(it.mode, x, y); x += colWidths[4];
-            doc.text(rowSqm.toFixed(3), x, y);
-            
-            y += 8;
-            if (y > 270) {
-                doc.addPage();
-                y = 20;
-            }
-        });
-        
-        // ===== PAGE 3: MIXING CARD =====
-        doc.addPage();
-        y = 20;
-        doc.setFontSize(18);
-        doc.text('MIXING CARD - PAINT SHOP', 20, y);
-        y += 12;
-        doc.setFontSize(11);
-        doc.text(`Brand: ${job.brand}`, 20, y);
-        y += 6;
-        doc.text(`Color: ${job.color}`, 20, y);
-        y += 6;
-        doc.text(`Code/Formula: ${job.code}`, 20, y);
-        y += 6;
-        doc.text(`Finish: ${job.finish}`, 20, y);
-        y += 12;
-        
-        doc.setFontSize(9);
-        doc.text(`Total SQM (m²) Required: ${totalSqm.toFixed(3)}`, 20, y);
-        y += 6;
-        doc.text(`Jobs/Items: ${items.length}`, 20, y);
-        y += 10;
-        
-        doc.setFontSize(10);
-        doc.text(`Date: ${new Date().toLocaleDateString('en-AU')}`, 20, y);
-        y += 6;
-        doc.text(`Prepared by: ___________________`, 20, y);
-        y += 6;
-        doc.text(`Mixed by: ___________________`, 20, y);
+        if (y > 270) {
+            doc.addPage();
+            y = 20;
+        }
+    });
+}
+
+
+// ===== MIXING CARD ×2 =====
+for (let m = 0; m < 2; m++) {
+
+    doc.addPage();
+    let y = 20;
+
+    doc.setFontSize(18);
+    doc.text('MIXING CARD - PAINT SHOP', 20, y);
+    y += 12;
+
+    doc.setFontSize(11);
+    doc.text(`Brand: ${job.brand}`, 20, y);
+    y += 6;
+    doc.text(`Color: ${job.color}`, 20, y);
+    y += 6;
+    doc.text(`Code/Formula: ${job.code}`, 20, y);
+    y += 6;
+    doc.text(`Finish: ${job.finish}`, 20, y);
+    y += 12;
+
+    doc.setFontSize(9);
+    doc.text(`Total SQM (m²) Required: ${totalSqm.toFixed(3)}`, 20, y);
+    y += 6;
+    doc.text(`Jobs/Items: ${items.length}`, 20, y);
+    y += 10;
+
+    doc.setFontSize(10);
+    doc.text(`Date: ${new Date().toLocaleDateString('en-AU')}`, 20, y);
+    y += 6;
+    doc.text(`Prepared by: ___________________`, 20, y);
+    y += 6;
+    doc.text(`Mixed by: ___________________`, 20, y);
+}
+
         
         // Save combined PDF to localStorage instead of auto-download
-        const filename = `Job_${job.jobNum}_${job.client.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+       const filename = `Job_${job.jobNum}_${job.client.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+doc.save(filename);
+
         
         // Store PDF in localStorage or just skip auto-download
         try {
@@ -2947,48 +2960,49 @@
         };
     }
 
-    function genForm(type) {
-        try {
-            if (items.length === 0) {
-                notify('❌ Add parts first');
-                return;
-            }
-            
-            // Check if jsPDF is loaded
-            if (!window.jspdf) {
-                notify('⚠️ PDF library not loaded yet. Try again.');
-                return;
-            }
-            
-            // Check if jsPDF is loaded
+    function genForm(type, batchMode = false) {
+    try {
+        if (items.length === 0) {
+            notify('❌ Add parts first');
+            return null;
+        }
+
         if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) {
             notify('❌ PDF library not loaded. Please refresh the page.');
             console.error('jsPDF not available at window.jspdf');
-            return;
+            return null;
         }
-        
+
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
-            
-            // Route to correct form generator
-            if (type === 'Supply Docket') {
-                genSupplyDocket();
-            } else if (type === 'Mixing Card') {
-                genMixingCard();
-            } else if (type === 'Invoice') {
-                genInvoice();
-            } else if (type === 'Quote Form') {
-                genQuoteForm();
-            } else {
-                // Default to Estimate
-                genEstimate();
-            }
-        } catch(error) {
-            console.error('❌ PDF Generation Error:', error);
-            notify('PDF Error: ' + error.message);
+
+        // Pass doc into generators
+        if (type === 'Supply Docket') {
+            genSupplyDocket(doc);
+        } else if (type === 'Mixing Card') {
+            genMixingCard(doc);
+        } else if (type === 'Invoice') {
+            genInvoice(doc);
+        } else if (type === 'Quote Form') {
+            genQuoteForm(doc);
+        } else {
+            genEstimate(doc);
         }
+
+        if (!batchMode) {
+            const jobName = document.getElementById('jNm')?.value || "Job";
+            doc.save(`${jobName}_${type}.pdf`);
+        }
+
+        return doc;
+
+    } catch(error) {
+        console.error('❌ PDF Generation Error:', error);
+        notify('PDF Error: ' + error.message);
+        return null;
     }
-    
+}
+  
     // ===== PDF HEADER WITH LOGO HELPER =====
     function addPDFHeader(doc, title, logoBase64) {
         try {
@@ -3016,7 +3030,7 @@
     }
 
     // ===== SUPPLY DOCKET =====
-    function genSupplyDocket() {
+    function genSupplyDocket(doc) {
     try {
         if (!window.jspdf || !window.jspdf.jsPDF) {
             notify('❌ PDF library loading...');
@@ -3050,7 +3064,7 @@
 }
 
     // ===== MIXING CARD =====
-    function genMixingCard() {
+    function genMixingCard(doc) {
     try {
         if (!window.jspdf || !window.jspdf.jsPDF) {
             notify('❌ PDF library loading... Please wait');
@@ -3086,7 +3100,7 @@
 }
 
     // ===== INVOICE (stub) =====
-    function genInvoice() {
+    function genInvoice(doc) {
     try {
         if (!window.jspdf || !window.jspdf.jsPDF) {
             notify('❌ PDF library loading...');
@@ -3121,7 +3135,7 @@
 }
 
     // ===== QUOTE FORM (stub) =====
-    function genQuoteForm() {
+    function genQuoteForm(doc) {
     try {
         if (!window.jspdf || !window.jspdf.jsPDF) {
             notify('❌ PDF library loading...');
@@ -3159,7 +3173,7 @@ function genPDF() {
     genEstimate();
 }
 
-    function genEstimate() {
+    function genEstimate(doc) {
     try {
         // Verify jsPDF is loaded
         if (!window.jspdf || !window.jspdf.jsPDF) {
@@ -3221,7 +3235,7 @@ function genPDF() {
     }
 }
 
-    function genSupplyDocket() {
+    function genSupplyDocket(doc) {
         // Check if jsPDF is loaded
         if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) {
             notify('❌ PDF library not loaded. Please refresh the page.');
@@ -3330,7 +3344,7 @@ function genPDF() {
         notify("Supply Docket Downloaded");
     }
 
-    function genMixingCard() {
+    function genMixingCard(doc) {
         // Check if jsPDF is loaded
         if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) {
             notify('❌ PDF library not loaded. Please refresh the page.');
@@ -6036,6 +6050,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
 });
+
 </script>
   
 </body>
