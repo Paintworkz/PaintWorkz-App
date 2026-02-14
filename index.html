@@ -3581,75 +3581,54 @@ function genPDF() {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF('p', 'mm', 'a4');
         
-        // Helper function to format edges properly
-        function formatEdges(edgeData) {
-            if (!edgeData) return '';
-            
-            // If it's an array, join with /
-            if (Array.isArray(edgeData)) {
-                return edgeData.filter(e => e && e !== 'true' && e !== 'false').join('/');
-            }
-            
-            // If it's a string with "true", parse it
-            if (typeof edgeData === 'string') {
-                const cleaned = edgeData.replace(/true|false|\[|\]/g, '').split(',').filter(e => e.trim());
-                return cleaned.join('/');
-            }
-            
-            return '';
-        }
-        
         // Get job info
         const jobClient = document.getElementById('cli')?.value || '';
         const jobNum = document.getElementById('jNum')?.value || document.getElementById('jN')?.value || '';
         const jobName = document.getElementById('jNm')?.value || '';
-        const doorStyle = document.getElementById('prof')?.value || '';
         const paintColor = document.getElementById('p-color')?.value || '';
         
-        // Get unique profiles/moulds from items
-        const profiles = [...new Set(items.map(it => it.prof).filter(p => p && p.toLowerCase() !== 'plain'))];
+        // Get ONLY the profiles actually used in THIS job
+        const usedProfiles = [...new Set(items
+            .map(it => it.prof)
+            .filter(p => p && p.toLowerCase() !== 'plain' && p.trim())
+        )].sort();
         
         // Count items
         const totalItems = items.reduce((sum, item) => sum + parseInt(item.qty || 1), 0);
         
-        // ===== HEADER =====
-        let y = 12;
-        doc.setFontSize(18);
+        // ===== CLEAN HEADER =====
+        let y = 10;
+        doc.setFontSize(20);
         doc.setFont(undefined, 'bold');
         doc.text('SUPPLY DOCKET', 15, y);
-        y += 10;
+        y += 12;
         
-        // ===== IMPROVED JOB DETAILS LAYOUT =====
+        // ===== SIMPLE JOB DETAILS =====
         doc.setFontSize(11);
         doc.setFont(undefined, 'bold');
-        doc.text(`Customer: ${jobClient}`, 15, y);
+        doc.text(`${jobClient}`, 15, y);
+        y += 7;
+        
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'normal');
+        const jobLabel = jobName ? `${jobName}  |  Job #${jobNum}` : `Job #${jobNum}`;
+        doc.text(jobLabel, 15, y);
         y += 6;
         
-        doc.setFontSize(9);
-        doc.setFont(undefined, 'normal');
-        doc.text(`Job Name: ${jobName}     Job Number: ${jobNum}`, 15, y);
-        y += 5;
+        const doorStyleText = usedProfiles.length > 0 ? usedProfiles.join(' / ') : 'Flat';
+        doc.text(`Door Profiles: ${doorStyleText}`, 15, y);
+        y += 6;
         
-        doc.setFont(undefined, 'normal');
-        const profileText = profiles.length > 0 ? profiles.join(' / ') : 'Flat';
-        doc.text(`Door Styles: ${profileText}`, 15, y);
-        y += 5;
+        doc.text(`Paint: ${paintColor}  |  Total Parts: ${totalItems}`, 15, y);
+        y += 10;
         
-        doc.text(`Paint Colour: ${paintColor}`, 15, y);
-        y += 5;
-        
-        doc.setFont(undefined, 'bold');
-        doc.text(`Total Parts: ${totalItems}`, 15, y);
-        y += 8;
-        
-        // ===== TABLE WITH PROPER WIDTH & CENTERING =====
+        // ===== TABLE WITH BETTER WIDTHS =====
         const margin = 8;
         const pageWidth = doc.internal.pageSize.getWidth();
-        const tableWidth = pageWidth - (margin * 2);
         
-        // Columns: Qty, Height, Width, Thick, Moulded, Edges, P.Mode, Panel Type, Mould Type, Paint Colour
-        const headers = ['Qty', 'Height', 'Width', 'Thick', 'Moulded', 'Edges', 'P.Mode', 'Panel Type', 'Mould Type', 'Paint Colour'];
-        const colWidths = [8, 13, 13, 10, 10, 13, 9, 13, 13, 18];
+        // Column headers - SHORT names so they fit on ONE line
+        const headers = ['Qty', 'H', 'W', 'Thick', 'Moulded', 'Edges', 'Mode', 'Panel', 'Profile', 'Colour'];
+        const colWidths = [7, 11, 11, 11, 10, 12, 8, 13, 25, 17];
         const cellHeight = 7;
         
         // Draw header row
@@ -3683,24 +3662,23 @@ function genPDF() {
         items.forEach((item) => {
             x = margin;
             
-            // Prepare data using correct field names
+            // Prepare data
             const qty = item.qty || 1;
             const height = item.h || '';
             const width = item.w || '';
             const thickness = item.thk || '';
             
-            // Moulded: Y if has mould profile (prof), N if blank or 'Plain'
+            // Moulded: Y/N
             const mouldType = item.prof || '';
             const isMoulded = (mouldType && mouldType.toLowerCase() !== 'plain' && mouldType !== '') ? 'Y' : 'N';
             
-            // Edges: use item.e which should be array or edge codes
-            let edgesText = '';
-            if (item.e) {
-                if (Array.isArray(item.e)) {
-                    edgesText = item.e.filter(e => e && e !== true && e !== false).join('/');
-                } else if (typeof item.e === 'string') {
-                    edgesText = item.e.replace(/true|false|\[|\]|,/g, '').trim();
-                }
+            // EDGES - handle array properly
+            let edgesDisplay = '';
+            if (item.e && Array.isArray(item.e)) {
+                edgesDisplay = item.e.filter(e => e && e !== 'true' && e !== 'false').join('/');
+            } else if (item.e && typeof item.e === 'object') {
+                // If it's an object with boolean keys
+                edgesDisplay = Object.keys(item.e).filter(key => item.e[key] === true).join('/');
             }
             
             // Paint mode
@@ -3709,10 +3687,13 @@ function genPDF() {
             // Panel type
             const panelType = item.type || '';
             
-            // Paint colour
-            const itemPaintColor = item.color || '';
+            // Profile/Mould type - full name
+            const profile = item.prof || '';
             
-            const data = [qty, height, width, thickness, isMoulded, edgesText, paintMode, panelType, mouldType, itemPaintColor];
+            // Paint colour
+            const colour = item.color || '';
+            
+            const data = [qty, height, width, thickness, isMoulded, edgesDisplay, paintMode, panelType, profile, colour];
             
             // Draw cells
             data.forEach((value, i) => {
@@ -3722,8 +3703,8 @@ function genPDF() {
                 // Draw border
                 doc.rect(x, y, colWidths[i], cellHeight);
                 
-                // Draw text CENTERED with proper alignment
-                const displayText = value.toString().substring(0, 20);
+                // Draw text CENTERED
+                const displayText = value.toString().substring(0, 30);
                 doc.text(displayText, x + colWidths[i]/2, y + cellHeight/2 + 0.8, { 
                     align: 'center',
                     valign: 'middle',
@@ -3735,12 +3716,13 @@ function genPDF() {
             
             // Page break - leave room for footer
             if (y > 260) {
-                // Add footer with date
+                // Add footer with BIGGER timestamp
                 const now = new Date();
                 const timestamp = now.toLocaleString('en-AU');
-                doc.setFontSize(7);
+                doc.setFontSize(10);
                 doc.setFont(undefined, 'normal');
-                doc.text(`Generated: ${timestamp}`, 15, doc.internal.pageSize.getHeight() - 8);
+                doc.setTextColor(80, 80, 80);
+                doc.text(`Generated: ${timestamp}`, 15, doc.internal.pageSize.getHeight() - 10);
                 
                 doc.addPage();
                 y = 20;
@@ -3767,13 +3749,13 @@ function genPDF() {
             }
         });
         
-        // Add footer on last page
+        // Add footer on last page - BIGGER FONT
         const now = new Date();
         const timestamp = now.toLocaleString('en-AU');
-        doc.setFontSize(7);
+        doc.setFontSize(10);
         doc.setFont(undefined, 'normal');
-        doc.setTextColor(100, 100, 100);
-        doc.text(`Generated: ${timestamp}`, 15, doc.internal.pageSize.getHeight() - 8);
+        doc.setTextColor(80, 80, 80);
+        doc.text(`Generated: ${timestamp}`, 15, doc.internal.pageSize.getHeight() - 10);
         
         // Show preview
         const pdfDataUri = doc.output('datauristring');
