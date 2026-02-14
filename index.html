@@ -3,7 +3,7 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ 1.3.7 | 2026-02-14 | SE edge labels (LR/SR) + Type colors + ABM restored            ║
+║ 1.3.8 | 2026-02-14 | Global job notifications + Jobs Chart render on tab open            ║
 ║ 1. ✓ FIX: Client name edit syncs to all jobs referencing it REMOVED: Corrupted base64 logo (caused jsPDF failure)      ║
 ║ 2. ✓ FIX: Qty resets to 1 after add, cursor focuses on length REBUILT: 5 PDF functions (Estimate, Quote, Invoice, Mixing, Supply)            ║
 ║ 3. ✓ FIX: Color popup centered on screen, proper z-index ADDED: genPDF() main export function  ║
@@ -749,7 +749,7 @@
     <div class="footer-item" style="margin-left:15px;"><div class="footer-label">TOTAL SQM (m²)</div><div class="footer-val" id="tA">0.000</div></div>
     <div style="flex:1; display:flex; justify-content:center; gap:20px; align-items:center;">
         <div class="icon-btn" onclick="genPDF()" style="color:#fff">📄</div>
-        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro 4.8 v1.2.1</div>
+        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro v1.3.8</div>
     </div>
     <div class="footer-item"><div class="footer-label">PARTS</div><div class="footer-val" id="tQ">0</div></div>
     <div class="icon-btn" onclick="handleLogout()" title="Logout" style="color:#ff3b30; font-size:24px; cursor:pointer; margin-right:15px;">🚪</div>
@@ -1675,6 +1675,7 @@
                 history[currentEditingJobIndex] = jobData;
                 currentEditingJobIndex = null; // Reset for next job
                 notify('✓ Job Updated');
+                showGlobalNotification(`✏️ JOB UPDATED #${jobData.jobNum}\n${jobData.client} • ${jobData.totalParts} parts`, '#e3f2fd', '#2196f3');
             } else {
                 return; // Don't save if user cancels
             }
@@ -1687,6 +1688,7 @@
                 if (confirm(`Job #${jobData.jobNum} already exists. Replace it?`)) {
                     history[existingIdx] = jobData;
                     notify('✓ Job Updated (duplicate prevented)');
+                    showGlobalNotification(`✏️ JOB UPDATED #${jobData.jobNum}\n${jobData.client} • ${jobData.totalParts} parts`, '#e3f2fd', '#2196f3');
                 } else {
                     return;
                 }
@@ -1694,6 +1696,7 @@
                 // New unique job
                 history.unshift(jobData);
                 notify('✓ Job Saved');
+                showGlobalNotification(`✅ NEW JOB SAVED #${jobData.jobNum}\n${jobData.client} • ${jobData.totalParts} parts`, '#e8f5e9', '#34c759');
             }
         }
         
@@ -2136,6 +2139,7 @@
             alertAdmins(job);
             
             notify('✓ Job Completed - PDFs Generated');
+            showGlobalNotification(`✅ JOB COMPLETED #${job.jobNum}\n${job.client} • ${job.totalParts} parts`, '#e8f5e9', '#34c759');
             
             // Re-render ALL views to show completion
             renderHistory();
@@ -2544,9 +2548,10 @@
             renderAdminAlerts();
         }
         
-        // Render schedule calendar when viewing schedule tab
+        // Render schedule calendar and jobs chart when viewing schedule tab
         if (t === 'schedule') {
             renderScheduleCalendar();
+            renderGanttChart();
         }
         
         // ALWAYS update workload summary when switching to schedule or admin tabs
