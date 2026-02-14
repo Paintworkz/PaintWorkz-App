@@ -262,6 +262,9 @@
 <!-- TOAST NOTIFICATION -->
 <div id="toast" style="display:none; position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#34c759; color:#fff; padding:12px 25px; border-radius:25px; font-weight:900; z-index:5000; font-size:11px; box-shadow:0 4px 12px rgba(52, 199, 89, 0.3); animation: slideUp 0.4s ease-out, slideDown 0.4s ease-in 2.6s forwards; white-space:nowrap;"></div>
 
+<!-- PERSISTENT NOTIFICATIONS (ALL TABS) -->
+<div id="persistentNotifications" style="position:fixed; top:70px; right:10px; width:300px; max-height:500px; overflow-y:auto; z-index:4999; display:none; background:#fff; border-radius:8px; box-shadow:0 4px 20px rgba(0,0,0,0.15); padding:10px; pointer-events:all;"></div>
+
 <style>
 @keyframes slideUp {
     from {
@@ -692,7 +695,8 @@
                 <div style="background:linear-gradient(135deg, #f0f0f0 0%, #fff 100%); border-left:5px solid #d4af37; padding:15px; border-radius:8px; margin-bottom:20px;">
                     <p style="margin:0; font-size:12px; color:#333; line-height:1.8; font-weight:700;">
                         <strong>🎨 PAINTWORKZ PRO</strong><br>
-                        <strong style="color:#d4af37; font-size:12px;">Colin Bedford</strong><br>
+                        <strong style="color:#666;">Created by:</strong><br>
+                        <strong style="color:#d4af37; font-size:13px;">Colin Bedford</strong><br>
                         <span style="color:#666; font-size:11px;">Paintworkz PTY LTD • 14/02/2026</span><br>
                         <span style="color:#d4af37; font-weight:900; font-size:11px; margin-top:8px; display:block;">Current Version: <span id="versionDisplay">v1.4.2</span></span>
                     </p>
@@ -2600,7 +2604,7 @@
             clients.push(v); 
             document.getElementById('new-client').value=''; 
             refreshLists();
-            notify('Client Added');
+            coloredToast(`✅ NEW CLIENT ADDED: "${v}" - Go to Admin tab to fill details!`, '#34c759');
         } else if (clients.includes(v)) {
             notify('Client Already Exists');
         }
@@ -2970,66 +2974,109 @@
             setTimeout(() => toast.style.display = 'none', 3000);
         }
         
-        // ALSO add to Global Notifications list
+        // Add to PERSISTENT notifications (visible on all tabs)
+        const persistentNotif = document.getElementById('persistentNotifications');
+        if (persistentNotif) {
+            // Create notification item
+            const notifItem = document.createElement('div');
+            notifItem.style.cssText = `
+                background: ${bgColor};
+                color: #fff;
+                padding: 12px 14px;
+                margin-bottom: 8px;
+                border-radius: 6px;
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                font-weight: 900;
+                font-size: 11px;
+                word-break: break-word;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            `;
+            
+            const textSpan = document.createElement('span');
+            textSpan.innerText = message;
+            textSpan.style.flex = '1';
+            
+            const dismissBtn = document.createElement('button');
+            dismissBtn.innerText = '✕';
+            dismissBtn.style.cssText = `
+                background: transparent;
+                color: #fff;
+                border: none;
+                cursor: pointer;
+                font-weight: 900;
+                font-size: 16px;
+                margin-left: 12px;
+                padding: 0;
+                line-height: 1;
+                flex-shrink: 0;
+            `;
+            dismissBtn.onclick = (e) => {
+                e.stopPropagation();
+                notifItem.remove();
+                // Hide container if empty
+                if (persistentNotif.children.length === 0) {
+                    persistentNotif.style.display = 'none';
+                }
+            };
+            
+            notifItem.appendChild(textSpan);
+            notifItem.appendChild(dismissBtn);
+            persistentNotif.appendChild(notifItem);
+            persistentNotif.style.display = 'block';
+            
+            console.log('✓ Notification added to persistent panel');
+        }
+        
+        // ALSO add to Schedule view's globalNotifications if it exists (for Schedule tab)
         const globalNotif = document.getElementById('globalNotifications');
-        if (!globalNotif) {
-            console.warn('⚠️ globalNotifications element not found');
-            return;
+        if (globalNotif) {
+            const placeholder = globalNotif.querySelector('p');
+            if (placeholder) {
+                placeholder.remove();
+            }
+            
+            const notifItem = document.createElement('div');
+            notifItem.style.cssText = `
+                background: ${bgColor};
+                color: #fff;
+                padding: 10px 12px;
+                margin-bottom: 8px;
+                border-radius: 4px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                font-weight: 900;
+                font-size: 11px;
+                word-break: break-word;
+            `;
+            
+            const textSpan = document.createElement('span');
+            textSpan.innerText = message;
+            textSpan.style.flex = '1';
+            
+            const dismissBtn = document.createElement('button');
+            dismissBtn.innerText = '✕';
+            dismissBtn.style.cssText = `
+                background: transparent;
+                color: #fff;
+                border: none;
+                cursor: pointer;
+                font-weight: 900;
+                font-size: 14px;
+                margin-left: 10px;
+                padding: 0;
+                line-height: 1;
+            `;
+            dismissBtn.onclick = () => notifItem.remove();
+            
+            notifItem.appendChild(textSpan);
+            notifItem.appendChild(dismissBtn);
+            globalNotif.appendChild(notifItem);
+            
+            console.log('✓ Notification also added to schedule view');
         }
-        
-        console.log('✓ Found globalNotifications element');
-        
-        // Remove "No notifications yet" placeholder
-        const placeholder = globalNotif.querySelector('p');
-        if (placeholder) {
-            console.log('✓ Found placeholder, removing it');
-            placeholder.remove();
-        }
-        
-        // Create notification item for list
-        const notifItem = document.createElement('div');
-        notifItem.style.cssText = `
-            background: ${bgColor};
-            color: #fff;
-            padding: 10px 12px;
-            margin-bottom: 8px;
-            border-radius: 4px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-weight: 900;
-            font-size: 11px;
-            word-break: break-word;
-        `;
-        
-        const textSpan = document.createElement('span');
-        textSpan.innerText = message;
-        textSpan.style.flex = '1';
-        
-        const dismissBtn = document.createElement('button');
-        dismissBtn.innerText = '✕';
-        dismissBtn.style.cssText = `
-            background: transparent;
-            color: #fff;
-            border: none;
-            cursor: pointer;
-            font-weight: 900;
-            font-size: 16px;
-            margin-left: 10px;
-            padding: 0;
-            line-height: 1;
-        `;
-        dismissBtn.onclick = (e) => {
-            e.stopPropagation();
-            notifItem.remove();
-            console.log('✓ Notification dismissed');
-        };
-        
-        notifItem.appendChild(textSpan);
-        notifItem.appendChild(dismissBtn);
-        globalNotif.appendChild(notifItem);
-        
-        console.log('✓ Notification added to list:', message);
     }
     
     // Update job history and send notification
@@ -5289,10 +5336,11 @@ function genPDF() {
         const searchBox = document.getElementById('clientSearchBox');
         const searchTerm = searchBox.value.toLowerCase();
         const clientDiv = document.getElementById('clientsList');
-        const clientCards = clientDiv.querySelectorAll('[data-client-name]');
+        const clientCards = clientDiv.querySelectorAll('[data-client-id]');
         
         clientCards.forEach(card => {
-            const clientName = card.getAttribute('data-client-name').toLowerCase();
+            const clientNameDiv = card.querySelector('strong');
+            const clientName = clientNameDiv ? clientNameDiv.innerText.toLowerCase() : '';
             if (clientName.includes(searchTerm)) {
                 card.style.display = 'block';
             } else {
