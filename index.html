@@ -3,7 +3,7 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ 1.3.1 | 2026-02-14 | PROFILE INITIALIZATION + STABILITY            ║
+║ 1.3.2 | 2026-02-14 | CRITICAL BUGS: Unallocated doors, Filter UI, Client sync            ║
 ║ 1. ✓ FIX: Client name edit syncs to all jobs referencing it REMOVED: Corrupted base64 logo (caused jsPDF failure)      ║
 ║ 2. ✓ FIX: Qty resets to 1 after add, cursor focuses on length REBUILT: 5 PDF functions (Estimate, Quote, Invoice, Mixing, Supply)            ║
 ║ 3. ✓ FIX: Color popup centered on screen, proper z-index ADDED: genPDF() main export function  ║
@@ -2794,14 +2794,22 @@
     function filterPanels(filterType) {
         currentPanelFilter = filterType;
         
-        // Update button styles
+        // Update button styles - find the actual button element
+        const clickedBtn = event.target.tagName === 'BUTTON' ? event.target : event.target.closest('button');
+        
         document.querySelectorAll('.filter-btn').forEach(btn => {
             btn.style.background = '#fff';
             btn.style.border = '1px solid #ddd';
+            btn.style.color = '#333';  // Reset text color
+            btn.style.fontWeight = '900';  // Keep bold
         });
-        event.target.style.background = '#2196f3';
-        event.target.style.color = '#fff';
-        event.target.style.border = '1px solid #2196f3';
+        
+        if (clickedBtn) {
+            clickedBtn.style.background = '#2196f3';
+            clickedBtn.style.color = '#fff';
+            clickedBtn.style.border = '1px solid #2196f3';
+            clickedBtn.style.fontWeight = '900';
+        }
         
         render(); // Re-render with filter applied
     }
@@ -4939,7 +4947,10 @@ function genPDF() {
             db[clientId] = { id: clientId, name, email, phone, address, createdDate: db[clientId].createdDate, notes };
             saveClientDatabase(db);
             
-            // SYNC: Update all jobs that reference this client
+            // SYNC: Update all jobs that reference this client in ALL storage locations
+            let jobsSynced = 0;
+            
+            // 1. Update paintworkz-jobs (working jobs)
             try {
                 const jobsJson = localStorage.getItem('paintworkz-jobs') || '[]';
                 let jobs = JSON.parse(jobsJson);
@@ -4949,20 +4960,57 @@ function genPDF() {
                         job.client.email = email;
                         job.client.phone = phone;
                         job.client.address = address;
+                        jobsSynced++;
                     }
                     return job;
                 });
                 localStorage.setItem('paintworkz-jobs', JSON.stringify(jobs));
-                console.log('✓ Synced client to ' + jobs.filter(j => j.client && j.client.id === clientId).length + ' jobs');
+                console.log(`✓ Synced client to ${jobsSynced} working jobs`);
             } catch(e) {
-                console.error('Error syncing client to jobs:', e);
+                console.error('Error syncing client to working jobs:', e);
             }
             
-            console.log('✓ Client updated:', name);
+            // 2. Update jobHistory (saved/completed jobs)
+            try {
+                const historyJson = localStorage.getItem('jobHistory') || '[]';
+                let history = JSON.parse(historyJson);
+                history = history.map(job => {
+                    if (job.client && job.client.id === clientId) {
+                        job.client.name = name;
+                        job.client.email = email;
+                        job.client.phone = phone;
+                        job.client.address = address;
+                        jobsSynced++;
+                    } else if (job.clientName === db[clientId].name) {
+                        // Also match by old name in case ID wasn't stored
+                        job.clientName = name;
+                        jobsSynced++;
+                    }
+                    return job;
+                });
+                localStorage.setItem('jobHistory', JSON.stringify(history));
+                console.log(`✓ Synced client to job history (total synced: ${jobsSynced})`);
+            } catch(e) {
+                console.error('Error syncing client to job history:', e);
+            }
+            
+            // 3. Update current job if it's this client
+            try {
+                const currentClientField = document.getElementById('cli');
+                if (currentClientField && currentClientField.value === db[clientId].name) {
+                    currentClientField.value = name;  // Update dropdown to show new name
+                    console.log('✓ Updated current job client field');
+                }
+            } catch(e) {
+                console.warn('Could not update current job client field:', e);
+            }
+            
+            console.log('✓ Client updated:', name, `(${jobsSynced} jobs synced)`);
             modal.remove();
             overlay.remove();
-            notify('✓ Client Updated: ' + name);
+            notify(`✓ Client Updated: ${name} (${jobsSynced} jobs synced)`);
             renderClientsList();
+            renderHistory();  // Refresh history to show updated names
         });
         
         overlay.addEventListener('click', () => {
@@ -5144,16 +5192,35 @@ function genPDF() {
         const doorsInMatrix = new Set();
         Object.values(masterMatrix).forEach(tier => {
             Object.keys(tier).forEach(code => {
-                doorsInMatrix.add(tier[code][0]); // Store door name
+                const doorName = tier[code][0];
+                // Add both the full name and the base name (without code suffix)
+                doorsInMatrix.add(doorName);
+                // Also add without parenthetical code suffix
+                const baseNameOnly = doorName.split('(')[0].trim();
+                doorsInMatrix.add(baseNameOnly);
             });
         });
         
+        console.log('🔍 Doors in matrix:', Array.from(doorsInMatrix));
+        console.log('📋 All profiles:', profiles);
+        
         const unallocated = [];
         profiles.forEach((profileName, idx) => {
-            if (!doorsInMatrix.has(profileName)) {
+            // Extract base name (without code suffix like "(101)")
+            const baseName = profileName.split('(')[0].trim();
+            
+            // Check if either full name or base name is in matrix
+            const isAllocated = doorsInMatrix.has(profileName) || doorsInMatrix.has(baseName);
+            
+            if (!isAllocated) {
+                console.warn(`  ⚠️ NOT FOUND: "${profileName}" (base: "${baseName}")`);
                 unallocated.push({ name: profileName, code: 9000 + idx });
+            } else {
+                console.log(`  ✓ ALLOCATED: "${profileName}"`);
             }
         });
+        
+        console.log(`Final unallocated: ${unallocated.length}`, unallocated);
         return unallocated;
     }
     
