@@ -656,6 +656,28 @@
     </div>
     
     <div id="schedule" class="view-section" style="width:100vw; margin-left:calc(-50vw + 50%); position:relative;">
+    <!-- PDF Preview Modal -->
+    <div id="pdfPreviewModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:9999; justify-content:center; align-items:center;">
+        <div style="background:#fff; border-radius:12px; width:90%; max-width:900px; height:90%; display:flex; flex-direction:column; box-shadow:0 10px 40px rgba(0,0,0,0.3);">
+            <!-- Header -->
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:20px; border-bottom:1px solid #eee; background:#f9f9f9; border-radius:12px 12px 0 0;">
+                <h3 id="pdfPreviewTitle" style="margin:0; color:#333;">PDF Preview</h3>
+                <button onclick="closePDFPreview()" style="border:none; background:none; font-size:24px; cursor:pointer; color:#999;">✕</button>
+            </div>
+            
+            <!-- Preview Container -->
+            <div id="pdfPreviewContainer" style="flex:1; overflow:auto; padding:20px; background:#f5f5f5; display:flex; justify-content:center; align-items:flex-start;">
+                <iframe id="pdfPreviewIframe" style="width:100%; height:100%; border:none; background:#fff; border-radius:8px;"></iframe>
+            </div>
+            
+            <!-- Footer Buttons -->
+            <div style="display:flex; gap:10px; padding:20px; border-top:1px solid #eee; background:#f9f9f9; border-radius:0 0 12px 12px;">
+                <button onclick="closePDFPreview()" style="flex:1; border:none; background:#f0f0f0; color:#333; padding:12px; border-radius:8px; font-weight:900; cursor:pointer; font-size:14px;">CANCEL</button>
+                <button id="downloadPDFBtn" onclick="downloadCurrentPDF()" style="flex:1; border:none; background:#d4af37; color:#000; padding:12px; border-radius:8px; font-weight:900; cursor:pointer; font-size:14px;">✓ DOWNLOAD PDF</button>
+            </div>
+        </div>
+    </div>
+
         <!-- Global Notifications -->
         <div class="card" style="background:#f0fdf4; border-left:5px solid #34c759; margin-left:0; margin-right:0;">
             <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -3335,40 +3357,6 @@
     }
 
     // ===== SUPPLY DOCKET =====
-    function genSupplyDocket() {
-    try {
-        if (!window.jspdf || !window.jspdf.jsPDF) {
-            notify('❌ PDF library loading...');
-            return;
-        }
-        
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF();
-        
-        const job = window.currentJob || {};
-        
-        doc.setFontSize(16);
-        doc.text('SUPPLY DOCKET', 20, 20);
-        
-        doc.setFontSize(10);
-        doc.text('Job ID: ' + (job.jobId || 'N/A'), 20, 40);
-        doc.text('Date: ' + new Date().toLocaleDateString(), 20, 50);
-        
-        doc.text('Materials Supplied:', 20, 70);
-        doc.text('- Paint (colour TBD)', 25, 80);
-        doc.text('- Primer (if required)', 25, 90);
-        doc.text('- Undercoat (if required)', 25, 100);
-        
-        doc.save(`SupplyDocket_${job.jobId || 'Job'}.pdf`);
-        notify('✓ Supply Docket downloaded');
-        
-    } catch(err) {
-        console.error('Supply docket error:', err);
-        notify('❌ Error: ' + err.message);
-    }
-}
-
-    // ===== MIXING CARD =====
     function genMixingCard() {
     try {
         if (!window.jspdf || !window.jspdf.jsPDF) {
@@ -3575,37 +3563,45 @@ function genPDF() {
         doc.text('PARTS LIST', 15, y);
         y += 8;
         
-        // Table header
+        // Table header - Single row format
         doc.setFontSize(8);
         doc.setFillColor(220, 220, 220);
-        const headers = ['Qty', 'Part Size (HxWxT)', 'Profile', 'Mode', 'Edges'];
-        const colWidths = [12, 45, 30, 18, 60];
+        const headers = ['Qty', 'Height', 'Width', 'Moulded', 'Mode', 'Edges', 'Panel Type', 'Mould Type'];
+        const colWidths = [12, 20, 20, 15, 14, 18, 20, 25];
         let x = 15;
         
+        // Draw header row
         headers.forEach((h, i) => {
             doc.rect(x, y - 4, colWidths[i], 6, 'F');
             doc.setTextColor(0);
-            doc.text(h, x + 2, y);
+            doc.setFont(undefined, 'bold');
+            doc.setFontSize(7);
+            doc.text(h, x + 1, y, { maxWidth: colWidths[i] - 2, align: 'center' });
             x += colWidths[i];
         });
-        y += 8;
+        y += 7;
         
-        // Table rows
+        // Table rows - Single line per item
         doc.setFont(undefined, 'normal');
         doc.setFontSize(7);
         items.forEach(it => {
             x = 15;
-            const qty = parseInt(it.qty) || 1;
-            const partSize = `${it.h}x${it.w}x${it.thk || 18}`;
-            const profile = it.mld || it.fm || 'Flat';
-            const mode = it.mode || 'N/A';
-            const edges = it.edges || 'N/A';
             
-            doc.text(qty.toString(), x + 2, y); x += colWidths[0];
-            doc.text(partSize, x + 2, y); x += colWidths[1];
-            doc.text(profile, x + 2, y); x += colWidths[2];
-            doc.text(mode, x + 2, y); x += colWidths[3];
-            doc.text(edges, x + 2, y);
+            const qty = parseInt(it.qty) || 1;
+            const height = it.height || it.h || '—';
+            const width = it.width || it.w || '—';
+            const moulded = (it.moulded || it.type === 'moulded') ? 'Y' : 'N';
+            const mode = it.paintMode || it.mode || 'SS';
+            const edges = it.edgeText || it.edges || '—';
+            const panelType = it.type || 'Panel';
+            const mouldType = it.doorProfile || it.mld || it.fm || '—';
+            
+            // Draw cells
+            const cellData = [qty, height, width, moulded, mode, edges, panelType, mouldType];
+            cellData.forEach((cell, i) => {
+                doc.text(String(cell), x + colWidths[i]/2, y, { align: 'center', maxWidth: colWidths[i] - 2 });
+                x += colWidths[i];
+            });
             
             y += 5;
             if (y > 270) {
@@ -3620,8 +3616,11 @@ function genPDF() {
         y += 5;
         doc.text(`Date: ${new Date().toLocaleDateString('en-AU')}`, 15, y);
         
-        doc.save(`SupplyDocket_${jobClient.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
-        notify("Supply Docket Downloaded");
+        // Show preview instead of auto-download
+        const pdfDataUri = doc.output('datauristring');
+        const filename = `SupplyDocket_${jobClient.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+        showPDFPreview(pdfDataUri, filename, '📦 Supply Docket Preview');
+        notify("✓ Supply Docket Ready - Review & Download");
     }
 
     function genMixingCard() {
@@ -5134,7 +5133,35 @@ function genPDF() {
             console.log(`✓ PDF generated: ${formType} for ${jobName}`);
         }
     };
-    // ==================== END PAINTWORKZ PDF ENGINE ====================
+    // ==================== PDF PREVIEW SYSTEM ====================
+    let currentPDFData = null; // Store current PDF for download
+    let currentPDFFilename = 'document.pdf';
+    
+    function closePDFPreview() {
+        document.getElementById('pdfPreviewModal').style.display = 'none';
+        currentPDFData = null;
+    }
+    
+    function downloadCurrentPDF() {
+        if (!currentPDFData) {
+            alert('No PDF to download');
+            return;
+        }
+        const link = document.createElement('a');
+        link.href = currentPDFData;
+        link.download = currentPDFFilename;
+        link.click();
+        console.log(`✓ Downloaded: ${currentPDFFilename}`);
+    }
+    
+    function showPDFPreview(pdfDataUri, filename, title) {
+        currentPDFData = pdfDataUri;
+        currentPDFFilename = filename;
+        document.getElementById('pdfPreviewTitle').textContent = title || 'PDF Preview';
+        document.getElementById('pdfPreviewIframe').src = pdfDataUri;
+        document.getElementById('pdfPreviewModal').style.display = 'flex';
+    }
+    // ==================== END PDF PREVIEW SYSTEM ====================
     
     function getSortedTierNames() {
         // Sort tier names: Tier 1, 2, 3, 4, 5, then Other
