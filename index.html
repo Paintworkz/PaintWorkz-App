@@ -3587,17 +3587,16 @@ function genPDF() {
             
             // If it's an array, join with /
             if (Array.isArray(edgeData)) {
-                return edgeData.filter(e => e).join('/');
+                return edgeData.filter(e => e && e !== 'true' && e !== 'false').join('/');
             }
             
-            // If it's an object with boolean values, get the true keys
-            if (typeof edgeData === 'object' && !Array.isArray(edgeData)) {
-                const trueKeys = Object.keys(edgeData).filter(k => edgeData[k] === true);
-                return trueKeys.join('/');
+            // If it's a string with "true", parse it
+            if (typeof edgeData === 'string') {
+                const cleaned = edgeData.replace(/true|false|\[|\]/g, '').split(',').filter(e => e.trim());
+                return cleaned.join('/');
             }
             
-            // Otherwise return as string
-            return String(edgeData || '');
+            return '';
         }
         
         // Get job info
@@ -3607,6 +3606,9 @@ function genPDF() {
         const doorStyle = document.getElementById('prof')?.value || '';
         const paintColor = document.getElementById('p-color')?.value || '';
         
+        // Get unique profiles/moulds from items
+        const profiles = [...new Set(items.map(it => it.prof).filter(p => p && p.toLowerCase() !== 'plain'))];
+        
         // Count items
         const totalItems = items.reduce((sum, item) => sum + parseInt(item.qty || 1), 0);
         
@@ -3615,43 +3617,44 @@ function genPDF() {
         doc.setFontSize(18);
         doc.setFont(undefined, 'bold');
         doc.text('SUPPLY DOCKET', 15, y);
-        y += 8;
-        
-        doc.setFontSize(9);
-        doc.setFont(undefined, 'normal');
-        doc.text('Paintworkz | 17 West Boundary Road, Hamilton 3300 VIC', 15, y);
-        y += 3;
-        doc.text('Phone: 0438 803 032 | Email: paint_workz@outlook.com', 15, y);
         y += 10;
         
-        // ===== JOB DETAILS =====
+        // ===== IMPROVED JOB DETAILS LAYOUT =====
+        doc.setFontSize(11);
         doc.setFont(undefined, 'bold');
-        doc.setFontSize(10);
-        doc.text('JOB DETAILS', 15, y);
+        doc.text(`Customer: ${jobClient}`, 15, y);
         y += 6;
         
-        doc.setFont(undefined, 'normal');
         doc.setFontSize(9);
-        doc.text(`Customer: ${jobClient}     Job Number: ${jobNum}`, 15, y);
+        doc.setFont(undefined, 'normal');
+        doc.text(`Job Name: ${jobName}     Job Number: ${jobNum}`, 15, y);
         y += 5;
-        doc.text(`Job Name: ${jobName}     Door Style: ${doorStyle}`, 15, y);
-        y += 5;
-        doc.text(`Total Items: ${totalItems}     Paint: ${paintColor}     Date: ${new Date().toLocaleDateString('en-AU')}`, 15, y);
-        y += 10;
         
-        // ===== TABLE WITH FULL WIDTH =====
+        doc.setFont(undefined, 'normal');
+        const profileText = profiles.length > 0 ? profiles.join(' / ') : 'Flat';
+        doc.text(`Door Styles: ${profileText}`, 15, y);
+        y += 5;
+        
+        doc.text(`Paint Colour: ${paintColor}`, 15, y);
+        y += 5;
+        
+        doc.setFont(undefined, 'bold');
+        doc.text(`Total Parts: ${totalItems}`, 15, y);
+        y += 8;
+        
+        // ===== TABLE WITH PROPER WIDTH & CENTERING =====
         const margin = 8;
         const pageWidth = doc.internal.pageSize.getWidth();
         const tableWidth = pageWidth - (margin * 2);
         
-        // Columns: Qty, Height, Width, Thickness, Moulded, Edges, P.Mode, Panel Type, Mould Type, Paint Colour
+        // Columns: Qty, Height, Width, Thick, Moulded, Edges, P.Mode, Panel Type, Mould Type, Paint Colour
         const headers = ['Qty', 'Height', 'Width', 'Thick', 'Moulded', 'Edges', 'P.Mode', 'Panel Type', 'Mould Type', 'Paint Colour'];
-        const colWidths = [9, 14, 14, 11, 10, 14, 10, 14, 14, 19];
+        const colWidths = [8, 13, 13, 10, 10, 13, 9, 13, 13, 18];
         const cellHeight = 7;
         
         // Draw header row
         doc.setFont(undefined, 'bold');
-        doc.setFontSize(8);  // Bigger font
+        doc.setFontSize(8);
         
         let x = margin;
         headers.forEach((header, i) => {
@@ -3663,15 +3666,19 @@ function genPDF() {
             // Draw cell
             doc.rect(x, y, colWidths[i], cellHeight, 'FD');
             
-            // Draw text
-            doc.text(header, x + colWidths[i]/2, y + 3.5, { align: 'center', maxWidth: colWidths[i] - 1 });
+            // Draw text CENTERED
+            doc.text(header, x + colWidths[i]/2, y + cellHeight/2 + 0.8, { 
+                align: 'center', 
+                valign: 'middle',
+                maxWidth: colWidths[i] - 0.5 
+            });
             x += colWidths[i];
         });
         y += cellHeight;
         
         // Draw data rows
         doc.setFont(undefined, 'normal');
-        doc.setFontSize(8);  // Bigger font
+        doc.setFontSize(8);
         
         items.forEach((item) => {
             x = margin;
@@ -3686,8 +3693,15 @@ function genPDF() {
             const mouldType = item.prof || '';
             const isMoulded = (mouldType && mouldType.toLowerCase() !== 'plain' && mouldType !== '') ? 'Y' : 'N';
             
-            // Edges: properly format the edge codes
-            const edgesText = formatEdges(item.e);
+            // Edges: use item.e which should be array or edge codes
+            let edgesText = '';
+            if (item.e) {
+                if (Array.isArray(item.e)) {
+                    edgesText = item.e.filter(e => e && e !== true && e !== false).join('/');
+                } else if (typeof item.e === 'string') {
+                    edgesText = item.e.replace(/true|false|\[|\]|,/g, '').trim();
+                }
+            }
             
             // Paint mode
             const paintMode = item.mode || 'SS';
@@ -3708,18 +3722,26 @@ function genPDF() {
                 // Draw border
                 doc.rect(x, y, colWidths[i], cellHeight);
                 
-                // Draw text (centered, truncated if needed)
-                const displayText = value.toString().substring(0, 25);
-                doc.text(displayText, x + colWidths[i]/2, y + 3.5, { 
-                    align: 'center', 
-                    maxWidth: colWidths[i] - 1 
+                // Draw text CENTERED with proper alignment
+                const displayText = value.toString().substring(0, 20);
+                doc.text(displayText, x + colWidths[i]/2, y + cellHeight/2 + 0.8, { 
+                    align: 'center',
+                    valign: 'middle',
+                    maxWidth: colWidths[i] - 0.5
                 });
                 x += colWidths[i];
             });
             y += cellHeight;
             
-            // Page break
-            if (y > 270) {
+            // Page break - leave room for footer
+            if (y > 260) {
+                // Add footer with date
+                const now = new Date();
+                const timestamp = now.toLocaleString('en-AU');
+                doc.setFontSize(7);
+                doc.setFont(undefined, 'normal');
+                doc.text(`Generated: ${timestamp}`, 15, doc.internal.pageSize.getHeight() - 8);
+                
                 doc.addPage();
                 y = 20;
                 
@@ -3732,7 +3754,11 @@ function genPDF() {
                     doc.setDrawColor(0, 0, 0);
                     doc.setTextColor(255, 255, 255);
                     doc.rect(x, y, colWidths[i], cellHeight, 'FD');
-                    doc.text(header, x + colWidths[i]/2, y + 3.5, { align: 'center', maxWidth: colWidths[i] - 1 });
+                    doc.text(header, x + colWidths[i]/2, y + cellHeight/2 + 0.8, { 
+                        align: 'center',
+                        valign: 'middle',
+                        maxWidth: colWidths[i] - 0.5
+                    });
                     x += colWidths[i];
                 });
                 y += cellHeight;
@@ -3740,6 +3766,14 @@ function genPDF() {
                 doc.setFontSize(8);
             }
         });
+        
+        // Add footer on last page
+        const now = new Date();
+        const timestamp = now.toLocaleString('en-AU');
+        doc.setFontSize(7);
+        doc.setFont(undefined, 'normal');
+        doc.setTextColor(100, 100, 100);
+        doc.text(`Generated: ${timestamp}`, 15, doc.internal.pageSize.getHeight() - 8);
         
         // Show preview
         const pdfDataUri = doc.output('datauristring');
