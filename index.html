@@ -5143,14 +5143,8 @@ function genPDF() {
             // Sort alphabetically by name
             allClients.sort((a, b) => a.name.localeCompare(b.name));
             
-            // Save merged clients back to database for persistence
-            const updatedDb = {};
-            allClients.forEach(c => {
-                updatedDb[c.id] = c;
-            });
-            saveClientDatabase(updatedDb);
-            
             console.log(`✓ Admin Clients: ${allClients.length} clients loaded`);
+            
             
             if (allClients.length === 0) {
                 clientsDiv.innerHTML = '<p style="text-align:center; color:#999; font-size:12px; padding:20px;">No clients yet. Add one to get started!</p>';
@@ -5534,11 +5528,30 @@ function genPDF() {
         
         if (!confirm('Delete ' + clientName + '?')) return;
         
+        // 1. Delete from database
         delete db[clientId];
         saveClientDatabase(db);
+        console.log(`✓ Deleted ${clientName} from database`);
+        
+        // 2. Remove ALL jobs with this client from job history
+        const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
+        const originalCount = history.length;
+        const filteredHistory = history.filter(job => job.client && job.client.toLowerCase() !== clientName.toLowerCase());
+        localStorage.setItem('jobHistory', JSON.stringify(filteredHistory));
+        console.log(`✓ Removed ${originalCount - filteredHistory.length} jobs for ${clientName} from jobHistory`);
+        
+        // 3. Remove from legacy clients array
+        if (typeof clients !== 'undefined' && Array.isArray(clients)) {
+            const originalLen = clients.length;
+            clients = clients.filter(c => c && c.toLowerCase() !== clientName.toLowerCase());
+            console.log(`✓ Removed from legacy clients array (${originalLen} → ${clients.length})`);
+        }
         
         addAdminAlert('CLIENT_DELETED', `🗑️ CLIENT DELETED: "${clientName}"`, {clientName: clientName});
+        
+        // Refresh the list
         renderClientsList();
+        console.log(`✓ Client list refreshed`);
     }
     
     function renderPricingMatrix() {
