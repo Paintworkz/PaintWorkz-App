@@ -747,10 +747,18 @@
             <!-- Clients Database Tab -->
             <div id="admin-tab-clients-content" style="display:none;">
                 <h4 style="margin-top:20px; margin-bottom:10px; font-weight:900;">Client Database</h4>
-                <p style="font-size:11px; color:#666; margin-bottom:15px;">Manage customer details, addresses, phone & email</p>
-                <button onclick="showAddClientForm()" style="border:none; background:#34c759; color:#fff; padding:12px 20px; border-radius:6px; font-weight:900; font-size:12px; cursor:pointer; width:100%; margin-bottom:10px;">➕ ADD NEW CLIENT</button>
-                <input type="text" id="clientSearchBox" placeholder="🔍 Search clients by name..." style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; margin-bottom:15px; box-sizing:border-box;" onkeyup="filterClientsList()">
-                <div id="clientsList" style="margin-top:15px;"></div>
+                <p style="font-size:11px; color:#666; margin-bottom:15px;">Type to search, select to edit, or add new</p>
+                <button onclick="showAddClientForm()" style="border:none; background:#34c759; color:#fff; padding:12px 20px; border-radius:6px; font-weight:900; font-size:12px; cursor:pointer; width:100%; margin-bottom:15px;">➕ ADD NEW CLIENT</button>
+                
+                <!-- Type-ahead search box -->
+                <div style="position:relative; margin-bottom:15px;">
+                    <input type="text" id="clientSearchBox" placeholder="Type client name..." style="width:100%; padding:12px; border:1px solid #ddd; border-radius:6px; font-size:13px; box-sizing:border-box;" onkeyup="updateClientDropdown()" onfocus="updateClientDropdown()" autocomplete="off">
+                    <!-- Dropdown with matching clients -->
+                    <div id="clientDropdown" style="display:none; position:absolute; top:100%; left:0; right:0; background:#fff; border:1px solid #ddd; border-top:none; border-radius:0 0 6px 6px; max-height:200px; overflow-y:auto; z-index:1000; box-shadow:0 2px 8px rgba(0,0,0,0.1);"></div>
+                </div>
+                
+                <!-- Selected client card for editing -->
+                <div id="selectedClientCard" style="display:none; background:#f5f5f5; border:1px solid #ddd; border-radius:6px; padding:15px; margin-top:15px;"></div>
             </div>
             
             <!-- Price Matrix Tab -->
@@ -2724,7 +2732,7 @@
             clients.push(v); 
             document.getElementById('new-client').value=''; 
             refreshLists();
-            notify('Client Added');
+            addAdminAlert('NEW_CLIENT', `✅ NEW CLIENT ADDED: "${v}"`, {clientName: v});
         } else if (clients.includes(v)) {
             notify('Client Already Exists');
         }
@@ -5118,6 +5126,67 @@ function genPDF() {
         clientsDiv.innerHTML = html;
     }
     
+    function showEditClientForm(clientId) {
+        const db = getClientDatabase();
+        const client = db[clientId];
+        if (!client) return;
+        
+        const modal = document.createElement('div');
+        modal.innerHTML = `
+            <div style="background:#fff; border-radius:12px; padding:20px; border:2px solid #2196f3; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); z-index:5000; max-width:90%; width:500px; max-height:85vh; overflow-y:auto; box-shadow:0 10px 40px rgba(0,0,0,0.3);">
+                <h3 style="margin-top:0; margin-bottom:20px; font-weight:900;">✏️ Edit Client</h3>
+                
+                <label style="margin-top:10px; font-weight:900; font-size:11px; color:#666;">Client Company Name *</label>
+                <input type="text" id="modalClientName" value="${client.name || ''}" placeholder="e.g., ABC Kitchens" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
+                
+                <label style="font-weight:900; font-size:11px; color:#666;">Contact Person Name</label>
+                <input type="text" id="modalClientContactName" value="${client.contactName || ''}" placeholder="e.g., John Smith" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
+                
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                    <div>
+                        <label style="font-weight:900; font-size:11px; color:#666;">Landline</label>
+                        <input type="tel" id="modalClientLandline" value="${client.landline || ''}" placeholder="(03) 1234 5678" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
+                    </div>
+                    <div>
+                        <label style="font-weight:900; font-size:11px; color:#666;">Mobile</label>
+                        <input type="tel" id="modalClientMobile" value="${client.mobile || ''}" placeholder="0438 803 032" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
+                    </div>
+                </div>
+                
+                <label style="font-weight:900; font-size:11px; color:#666;">Email Address 1</label>
+                <input type="email" id="modalClientEmail1" value="${client.email1 || client.email || ''}" placeholder="john@example.com" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
+                
+                <label style="font-weight:900; font-size:11px; color:#666;">Email Address 2 (Optional)</label>
+                <input type="email" id="modalClientEmail2" value="${client.email2 || ''}" placeholder="jane@example.com" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
+                
+                <label style="font-weight:900; font-size:11px; color:#666;">Street Address</label>
+                <input type="text" id="modalClientAddress" value="${client.address || ''}" placeholder="123 Main Street" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
+                
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                    <div>
+                        <label style="font-weight:900; font-size:11px; color:#666;">Town/City</label>
+                        <input type="text" id="modalClientTown" value="${client.town || ''}" placeholder="Geelong" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
+                    </div>
+                    <div>
+                        <label style="font-weight:900; font-size:11px; color:#666;">Postcode</label>
+                        <input type="text" id="modalClientPostcode" value="${client.postcode || ''}" placeholder="3220" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
+                    </div>
+                </div>
+                
+                <div style="display:flex; gap:10px; margin-top:20px;">
+                    <button onclick="saveNewClient('${clientId}')" style="flex:1; background:#2196f3; color:#fff; border:none; padding:12px; border-radius:6px; font-weight:900; font-size:12px; cursor:pointer;">✓ Save</button>
+                    <button onclick="document.querySelector('div[style*=\"z-index:5000\"]').remove()" style="flex:1; background:#e0e0e0; color:#333; border:none; padding:12px; border-radius:6px; font-weight:900; font-size:12px; cursor:pointer;">Cancel</button>
+                </div>
+            </div>
+        `;
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:4999;';
+        overlay.onclick = () => { overlay.remove(); modal.remove(); };
+        document.body.appendChild(overlay);
+        document.body.appendChild(modal);
+        document.getElementById('modalClientName').focus();
+    }
+    
     function showAddClientForm() {
         const newId = 'client-' + Date.now();
         const modal = document.createElement('div');
@@ -5406,21 +5475,89 @@ function genPDF() {
     }
     
     
-    function filterClientsList() {
+    // Type-ahead dropdown for client search and selection
+    function updateClientDropdown() {
         const searchBox = document.getElementById('clientSearchBox');
-        const searchTerm = searchBox.value.toLowerCase();
-        const clientDiv = document.getElementById('clientsList');
-        const clientCards = clientDiv.querySelectorAll('[data-client-name]');
+        const searchTerm = searchBox.value.toLowerCase().trim();
+        const dropdown = document.getElementById('clientDropdown');
         
-        clientCards.forEach(card => {
-            const clientName = card.getAttribute('data-client-name').toLowerCase();
-            if (clientName.includes(searchTerm)) {
-                card.style.display = 'block';
-            } else {
-                card.style.display = 'none';
-            }
+        if (!searchTerm) {
+            dropdown.style.display = 'none';
+            return;
+        }
+        
+        // Get all clients from database
+        const db = getClientDatabase();
+        const clients = Object.values(db).filter(c => c.name.toLowerCase().includes(searchTerm));
+        
+        if (clients.length === 0) {
+            dropdown.innerHTML = '<div style="padding:12px; color:#999; font-size:12px;">No clients found</div>';
+            dropdown.style.display = 'block';
+            return;
+        }
+        
+        let html = '';
+        clients.forEach(client => {
+            html += `<div onclick="selectClientForEdit('${client.id}')" style="padding:12px; border-bottom:1px solid #f0f0f0; cursor:pointer; hover: background:#f9f9f9;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='#fff'">
+                <div style="font-weight:700; font-size:12px; color:#333;">${client.name}</div>
+                <div style="font-size:10px; color:#999;">${client.mobile || client.landline || 'N/A'}</div>
+            </div>`;
         });
+        
+        dropdown.innerHTML = html;
+        dropdown.style.display = 'block';
     }
+    
+    // Select a client and show editing card
+    function selectClientForEdit(clientId) {
+        const db = getClientDatabase();
+        const client = db[clientId];
+        if (!client) return;
+        
+        // Clear search and hide dropdown
+        document.getElementById('clientSearchBox').value = client.name;
+        document.getElementById('clientDropdown').style.display = 'none';
+        
+        // Show card for editing
+        const card = document.getElementById('selectedClientCard');
+        const address = client.address || 'N/A';
+        const town = client.town || '';
+        const postcode = client.postcode || '';
+        const contactName = client.contactName || 'N/A';
+        const landline = client.landline || 'N/A';
+        const mobile = client.mobile || 'N/A';
+        const email1 = client.email1 || client.email || 'N/A';
+        const email2 = client.email2 || 'N/A';
+        
+        card.innerHTML = `
+            <div style="margin-bottom:15px;">
+                <div style="font-size:16px; font-weight:900; color:#333; margin-bottom:10px;">${client.name}</div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px; font-size:11px;">
+                    <div><div style="color:#999; font-weight:700; margin-bottom:2px;">Contact Name</div><div style="color:#333;">${contactName}</div></div>
+                    <div><div style="color:#999; font-weight:700; margin-bottom:2px;">Landline</div><div style="color:#333;">${landline}</div></div>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px; font-size:11px;">
+                    <div><div style="color:#999; font-weight:700; margin-bottom:2px;">Mobile</div><div style="color:#333;">${mobile}</div></div>
+                    <div><div style="color:#999; font-weight:700; margin-bottom:2px;">Email 1</div><div style="color:#0288d1;">${email1}</div></div>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px; font-size:11px;">
+                    <div><div style="color:#999; font-weight:700; margin-bottom:2px;">Email 2</div><div style="color:#0288d1;">${email2}</div></div>
+                    <div></div>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:12px; font-size:11px;">
+                    <div><div style="color:#999; font-weight:700; margin-bottom:2px;">Address</div><div style="color:#333;">${address}</div></div>
+                    <div><div style="color:#999; font-weight:700; margin-bottom:2px;">Town</div><div style="color:#333;">${town}</div></div>
+                    <div><div style="color:#999; font-weight:700; margin-bottom:2px;">Postcode</div><div style="color:#333;">${postcode}</div></div>
+                </div>
+                <div style="display:flex; gap:8px; margin-top:15px;">
+                    <button onclick="showEditClientForm('${clientId}')" style="flex:1; background:#2196f3; color:#fff; border:none; padding:10px; border-radius:4px; font-weight:900; font-size:11px; cursor:pointer;">✏️ EDIT</button>
+                    <button onclick="deleteClient('${clientId}')" style="flex:1; background:#ff3b30; color:#fff; border:none; padding:10px; border-radius:4px; font-weight:900; font-size:11px; cursor:pointer;">🗑️ DELETE</button>
+                </div>
+            </div>
+        `;
+        card.style.display = 'block';
+    }
+
     
     function deleteClient(clientId) {
         const db = getClientDatabase();
