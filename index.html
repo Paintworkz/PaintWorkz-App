@@ -3,7 +3,7 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ 1.3.0 | 2026-02-14 | 10 MAJOR QUALITY FIXES            ║
+║ 1.3.1 | 2026-02-14 | PROFILE INITIALIZATION + STABILITY            ║
 ║ 1. ✓ FIX: Client name edit syncs to all jobs referencing it REMOVED: Corrupted base64 logo (caused jsPDF failure)      ║
 ║ 2. ✓ FIX: Qty resets to 1 after add, cursor focuses on length REBUILT: 5 PDF functions (Estimate, Quote, Invoice, Mixing, Supply)            ║
 ║ 3. ✓ FIX: Color popup centered on screen, proper z-index ADDED: genPDF() main export function  ║
@@ -556,6 +556,8 @@
                 <h4 style="margin-bottom:15px; font-weight:900;">Door Profiles</h4>
                 <p style="font-size:11px; color:#666; margin-bottom:15px;">Add new profiles or edit existing names. Profiles are used in your pricing matrix tiers.</p>
                 
+                <button onclick="restoreDefaultProfiles()" style="width:100%; padding:10px; margin-bottom:15px; background:#4caf50; color:#fff; border:none; border-radius:6px; font-weight:900; font-size:12px; cursor:pointer;">✓ Restore All 20 Default Profiles</button>
+                
                 <div class="add-row">
                     <input type="text" id="new-profile" placeholder="New Profile Name (e.g., Shaker, Ashlee)" style="margin-bottom:0;">
                     <button class="btn-small" onclick="addProfile()">ADD</button>
@@ -927,8 +929,16 @@
             try {
                 const loaded = JSON.parse(saved);
                 console.log(`  Found ${loaded.length} profiles in localStorage:`, loaded);
-                // Validate it's a real array with at least 1 item
-                if (Array.isArray(loaded) && loaded.length > 0) {
+                
+                // CRITICAL FIX: If profiles list is significantly shorter than defaults, it's outdated
+                // (Users may have previously deleted or lost profiles accidentally)
+                const expectedCount = DEFAULT_PROFILES.length;
+                if (Array.isArray(loaded) && loaded.length > 0 && loaded.length < expectedCount * 0.7) {
+                    console.warn(`⚠️ INCOMPLETE PROFILE LIST DETECTED (${loaded.length}/${expectedCount})`);
+                    console.warn('   Restoring full default profile list...');
+                    localStorage.removeItem('doorProfiles');
+                    // Fall through to use defaults below
+                } else if (Array.isArray(loaded) && loaded.length > 0) {
                     // Filter out any null/undefined/empty/duplicate entries
                     const cleaned = [];
                     const seen = new Set();
@@ -990,10 +1000,28 @@
         profiles = [...DEFAULT_PROFILES];
         saveProfilesToStorage(); // Save to localStorage
         console.log(`✓ Restored ${profiles.length} default door profiles`);
-        syncProfilesToFirebase(); // Sync to Firebase
-        renderPricingMatrix();
-        checkForNewUnallocatedDoors();
-        notify('✓ Door profiles restored to defaults');
+        
+        // Try Firebase sync but don't fail if unavailable
+        try {
+            if (window.firebaseReady && window.currentUser) {
+                syncProfilesToFirebase();
+            } else {
+                console.log('ℹ️ Firebase not ready, skipping profile sync');
+            }
+        } catch(e) {
+            console.warn('⚠️ Firebase sync failed (non-critical):', e);
+        }
+        
+        // Update UI
+        try {
+            renderPricingMatrix();
+            checkForNewUnallocatedDoors();
+            renderDB(); // Refresh admin display
+        } catch(e) {
+            console.warn('⚠️ UI update failed:', e);
+        }
+        
+        notify('✓ Door profiles restored to 20 defaults');
     }
     
     // ===== PAINT FORMULA DATABASE =====
