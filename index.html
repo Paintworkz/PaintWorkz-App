@@ -3,7 +3,7 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ 1.4.1 | 2026-02-14 | FIXED: Syntax error + Default thickness/SE return in Admin            ║
+║ 1.4.1 | 2026-02-14 | CREDIT NOTE added + Syntax error fixed + Defaults working            ║
 ║ 1. ✓ FIX: Client name edit syncs to all jobs referencing it REMOVED: Corrupted base64 logo (caused jsPDF failure)      ║
 ║ 2. ✓ FIX: Qty resets to 1 after add, cursor focuses on length REBUILT: 5 PDF functions (Estimate, Quote, Invoice, Mixing, Supply)            ║
 ║ 3. ✓ FIX: Color popup centered on screen, proper z-index ADDED: genPDF() main export function  ║
@@ -26,7 +26,9 @@
             --panel-clr: #34c759; --door-clr: #ff9500; --drawer-clr: #2196f3; --custom-clr: #af52de;
             --bg: #f2f2f7;
         }
-        body { margin:0; font-family:-apple-system, system-ui, sans-serif; background:var(--bg); padding-bottom:140px; -webkit-tap-highlight-color:transparent; }
+        body { margin:0; font-family:-apple-system, system-ui, sans-serif; background:var(--bg); padding-bottom:140px; padding-top:0; -webkit-tap-highlight-color:transparent; }
+        
+        #globalNotificationsBanner { padding-top: env(safe-area-inset-top); }
         
         header { background:var(--rainbow); padding:env(safe-area-inset-top) 15px 5px; display:flex; align-items:center; justify-content:space-between; border-bottom:4px solid #aa841e; position:sticky; top:0; z-index:1000; height:80px; box-sizing: border-box; }
         .logo-box { background:#000; padding:6px 18px; border-radius:50px; border:2px solid var(--gs); }
@@ -689,6 +691,16 @@
         <div class="card">
             <!-- General Settings Tab -->
             <div id="admin-tab-general-content">
+                <div style="background:linear-gradient(135deg, #f0f0f0 0%, #fff 100%); border-left:5px solid #d4af37; padding:15px; border-radius:8px; margin-bottom:20px;">
+                    <p style="margin:0; font-size:12px; color:#333; line-height:1.6; font-weight:700;">
+                        <strong>🎨 PAINTWORKZ PRO</strong><br>
+                        Created by Colin Bedford<br>
+                        Paintworkz PTY LTD<br>
+                        <span style="color:#666; font-size:11px;">Date: 14/02/2026</span><br>
+                        <span style="color:#d4af37; font-weight:900; font-size:11px;">Current Version: <span id="versionDisplay">v1.4.1</span></span>
+                    </p>
+                </div>
+                
                 <h4 style="margin-top:20px; margin-bottom:10px; font-weight:900;">Measure Tab Defaults</h4>
                 <p style="font-size:11px; color:#666; margin-bottom:15px;">Set default values for new parts in the Measure tab</p>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-bottom:20px;">
@@ -712,6 +724,18 @@
                 
                 <h4 style="margin-top:20px; margin-bottom:10px; font-weight:900;">Database Status</h4>
                 <p style="font-size:11px; color:#666; margin-bottom:10px; background:#f0f0f0; padding:10px; border-radius:6px;">All systems operational. Job history is clean and synced.</p>
+                
+                <hr style="margin:30px 0; border:none; border-top:1px solid #ddd;">
+                
+                <div style="background:#f5f5f5; border-left:4px solid #d4af37; padding:15px; border-radius:6px; margin-top:20px;">
+                    <p style="font-size:10px; color:#666; margin:0; line-height:1.6;">
+                        <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
+                        <span style="color:#999;">Created by Colin Bedford</span><br>
+                        <span style="color:#999;">Paintworkz PTY LTD</span><br>
+                        <span style="color:#999;">14 February 2026</span><br><br>
+                        <span id="versionDisplay" style="color:#d4af37; font-weight:900;">Current Version: v1.4.1</span>
+                    </p>
+                </div>
             </div>
             
             <!-- Colours Tab -->
@@ -760,7 +784,7 @@
 </div>
 
     <!-- Global Notifications Banner - Visible on all tabs -->
-    <div id="globalNotificationsBanner" style="position:fixed; top:0; left:0; right:0; z-index:3500; background:#fff; border-bottom:3px solid #ffc107; padding:12px; max-height:200px; overflow-y:auto; display:none; box-shadow:0 2px 8px rgba(0,0,0,0.1);">
+    <div id="globalNotificationsBanner" style="position:fixed; top:0; left:0; right:0; z-index:9999; background:linear-gradient(90deg, #fffef0 0%, #fffff8 100%); border-bottom:4px solid #ffc107; padding:16px; padding-top:20px; min-height:60px; max-height:250px; overflow-y:auto; display:none; box-shadow:0 4px 12px rgba(255, 193, 7, 0.3);">
         <div id="globalNotificationsList" style="margin:0;"></div>
     </div>
     
@@ -2578,6 +2602,18 @@ ${jobData.client} • ${jobData.totalParts} parts`, '#fff8e1', '#ffc107');
             profSel.appendChild(o); 
         });
         
+        // Set default door profile to Shaker 45
+        if (profSel.options.length > 0) {
+            const shakerOption = Array.from(profSel.options).find(opt => opt.value === 'Shaker 45');
+            if (shakerOption) {
+                profSel.value = 'Shaker 45';
+                console.log('✓ Default door profile set to Shaker 45');
+            } else {
+                console.warn('⚠️ Shaker 45 not found in profiles, using first available');
+                profSel.value = profSel.options[0].value;
+            }
+        }
+        
         console.log(`  ✓ Final prof-select count: ${profSel.options.length} options`);
         
         if (profSel.options.length === 0 && profiles.length > 0) {
@@ -3058,17 +3094,18 @@ ${jobData.client} • ${jobData.totalParts} parts`, '#fff8e1', '#ffc107');
         const notifDiv = document.createElement('div');
         notifDiv.style.cssText = `
             background: ${bgColor};
-            border-left: 4px solid ${borderColor};
-            padding: 12px;
-            margin-bottom: 8px;
-            border-radius: 4px;
+            border-left: 5px solid ${borderColor};
+            border-radius: 6px;
+            padding: 14px;
+            margin-bottom: 10px;
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
-            font-size: 12px;
-            color: #333;
+            font-size: 13px;
+            color: #222;
             font-weight: 900;
             white-space: pre-line;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         `;
         
         const messageSpan = document.createElement('div');
