@@ -3,7 +3,7 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ 1.3.9 | 2026-02-14 | Job update notifications YELLOW + Client dropdown deduplication            ║
+║ 1.4.1 | 2026-02-14 | FIXED: Syntax error + Default thickness/SE return in Admin            ║
 ║ 1. ✓ FIX: Client name edit syncs to all jobs referencing it REMOVED: Corrupted base64 logo (caused jsPDF failure)      ║
 ║ 2. ✓ FIX: Qty resets to 1 after add, cursor focuses on length REBUILT: 5 PDF functions (Estimate, Quote, Invoice, Mixing, Supply)            ║
 ║ 3. ✓ FIX: Color popup centered on screen, proper z-index ADDED: genPDF() main export function  ║
@@ -689,6 +689,20 @@
         <div class="card">
             <!-- General Settings Tab -->
             <div id="admin-tab-general-content">
+                <h4 style="margin-top:20px; margin-bottom:10px; font-weight:900;">Measure Tab Defaults</h4>
+                <p style="font-size:11px; color:#666; margin-bottom:15px;">Set default values for new parts in the Measure tab</p>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-bottom:20px;">
+                    <div>
+                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Default Material Thickness (mm)</label>
+                        <input type="number" id="defaultThickness" value="18" min="1" max="50" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
+                    </div>
+                    <div>
+                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Default SE Return Value (mm)</label>
+                        <input type="number" id="defaultSEReturn" value="100" min="10" max="500" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
+                    </div>
+                </div>
+                <button onclick="saveDefaultSettings()" style="border:none; background:#34c759; color:#fff; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">✓ SAVE DEFAULTS</button>
+                
                 <h4 style="margin-top:20px; margin-bottom:10px; font-weight:900;">Default Timeline Settings</h4>
                 <p style="font-size:11px; color:#666; margin-bottom:10px;">Edit the default timeline phases for all new jobs</p>
                 <button onclick="editDefaultTimeline()" style="border:none; background:#2196f3; color:#fff; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">⚙️ EDIT DEFAULT TIMELINE</button>
@@ -745,11 +759,16 @@
     </div>
 </div>
 
+    <!-- Global Notifications Banner - Visible on all tabs -->
+    <div id="globalNotificationsBanner" style="position:fixed; top:0; left:0; right:0; z-index:3500; background:#fff; border-bottom:3px solid #ffc107; padding:12px; max-height:200px; overflow-y:auto; display:none; box-shadow:0 2px 8px rgba(0,0,0,0.1);">
+        <div id="globalNotificationsList" style="margin:0;"></div>
+    </div>
+    
 <div class="sticky-footer">
     <div class="footer-item" style="margin-left:15px;"><div class="footer-label">TOTAL SQM (m²)</div><div class="footer-val" id="tA">0.000</div></div>
     <div style="flex:1; display:flex; justify-content:center; gap:20px; align-items:center;">
         <div class="icon-btn" onclick="genPDF()" style="color:#fff">📄</div>
-        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro v1.3.9</div>
+        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro v1.4.1</div>
     </div>
     <div class="footer-item"><div class="footer-label">PARTS</div><div class="footer-val" id="tQ">0</div></div>
     <div class="icon-btn" onclick="handleLogout()" title="Logout" style="color:#ff3b30; font-size:24px; cursor:pointer; margin-right:15px;">🚪</div>
@@ -909,6 +928,7 @@
         refreshLists();
         renderHistory();
         renderScheduleCalendar();
+        initializeDefaultSettings();  // Load default thickness and SE return values
       } catch (error) {
       }
     }
@@ -2782,7 +2802,8 @@ ${jobData.client} • ${jobData.totalParts} parts`, '#fff8e1', '#ffc107');
         const eS = (document.getElementById('E3').classList.contains('active')?1:0) + (document.getElementById('E4').classList.contains('active')?1:0);
         let area = (h * w);
         if(mode === 'DS') area *= 2;
-        if(mode === 'SE') area += ((eL * h) + (eS * w)) * 100;
+        const defaults = loadDefaultSettings();
+        if(mode === 'SE') area += ((eL * h) + (eS * w)) * defaults.seReturn;
         area += ((eL * h * thk) + (eS * w * thk));
         if (document.getElementById('liveSq')) document.getElementById('liveSq').innerText = (area / 1000000).toFixed(3);
     }
@@ -2834,6 +2855,8 @@ ${jobData.client} • ${jobData.totalParts} parts`, '#fff8e1', '#ffc107');
         document.getElementById('h').value = ''; 
         document.getElementById('w').value = '';
         document.getElementById('desc').value = '';
+        const defaults = loadDefaultSettings();
+        document.getElementById('thk').value = defaults.thickness;  // Reset to default thickness
         
         // Focus on length (h) input for continuous data entry
         setTimeout(() => {
@@ -3019,14 +3042,18 @@ ${jobData.client} • ${jobData.totalParts} parts`, '#fff8e1', '#ffc107');
         console.log(`📝 Job #${job.jobNum} updated and saved to history`);
     }
     
-    // Show global notification in the red alert area
+    // Show global notification in visible banner (on all tabs)
     function showGlobalNotification(message, bgColor = '#ffebee', borderColor = '#ff3b30') {
-        const alertArea = document.getElementById('globalNotifications');
-        if (!alertArea) return;
+        const banner = document.getElementById('globalNotificationsBanner');
+        const notifList = document.getElementById('globalNotificationsList');
         
-        // Remove placeholder if exists
-        const placeholder = alertArea.querySelector('p');
-        if (placeholder) placeholder.remove();
+        if (!banner || !notifList) {
+            console.warn('Global notifications banner not found');
+            return;
+        }
+        
+        // Show banner
+        banner.style.display = 'block';
         
         const notifDiv = document.createElement('div');
         notifDiv.style.cssText = `
@@ -3038,8 +3065,8 @@ ${jobData.client} • ${jobData.totalParts} parts`, '#fff8e1', '#ffc107');
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
-            font-size: 11px;
-            color: ${borderColor};
+            font-size: 12px;
+            color: #333;
             font-weight: 900;
             white-space: pre-line;
         `;
@@ -3059,17 +3086,32 @@ ${jobData.client} • ${jobData.totalParts} parts`, '#fff8e1', '#ffc107');
             cursor: pointer;
             font-weight: 900;
             margin-left: 8px;
-            flex-shrink: 0;
+            font-size: 12px;
         `;
-        dismissBtn.onclick = () => notifDiv.remove();
+        dismissBtn.onclick = () => {
+            notifDiv.remove();
+            if (notifList.children.length === 0) {
+                banner.style.display = 'none';
+            }
+        };
+        
+        // Auto-dismiss after 8 seconds
+        setTimeout(() => {
+            if (notifDiv.parentElement) {
+                notifDiv.remove();
+                if (notifList.children.length === 0) {
+                    banner.style.display = 'none';
+                }
+            }
+        }, 8000);
         
         notifDiv.appendChild(messageSpan);
         notifDiv.appendChild(dismissBtn);
-        alertArea.appendChild(notifDiv);
+        notifList.appendChild(notifDiv);
+        
+        console.log('✅ Global notification shown:', message);
     }
 
-
-    // ===== PRICING CALCULATIONS =====
     function getProfilePrice(profileName) {
         if (!pricingMatrix || pricingMatrix.length === 0) return 0;
         const row = pricingMatrix.find(p => p.profile === profileName);
@@ -5500,6 +5542,46 @@ function genPDF() {
         timelineEditMode = 'default';
         timelineEditData = getDefaultTimeline();
         renderTimelineEditor();
+    }
+    
+    // Load default settings
+    function loadDefaultSettings() {
+        const settings = JSON.parse(localStorage.getItem('paintworkz-defaults')) || {};
+        return {
+            thickness: settings.thickness || 18,
+            seReturn: settings.seReturn || 100
+        };
+    }
+    
+    // Save default settings
+    function saveDefaultSettings() {
+        const thickness = parseFloat(document.getElementById('defaultThickness')?.value) || 18;
+        const seReturn = parseFloat(document.getElementById('defaultSEReturn')?.value) || 100;
+        
+        const settings = {
+            thickness: thickness,
+            seReturn: seReturn
+        };
+        
+        localStorage.setItem('paintworkz-defaults', JSON.stringify(settings));
+        showGlobalNotification(`✓ DEFAULTS SAVED\nThickness: ${thickness}mm • SE Return: ${seReturn}mm`, '#e8f5e9', '#34c759');
+        console.log('✓ Default settings saved:', settings);
+    }
+    
+    // Load defaults on page load
+    function initializeDefaultSettings() {
+        const settings = loadDefaultSettings();
+        const thkInput = document.getElementById('defaultThickness');
+        const seInput = document.getElementById('defaultSEReturn');
+        
+        if (thkInput) thkInput.value = settings.thickness;
+        if (seInput) seInput.value = settings.seReturn;
+        
+        // Also set measure tab thickness field to default
+        const measureThk = document.getElementById('thk');
+        if (measureThk) measureThk.value = settings.thickness;
+        
+        console.log('✓ Default settings loaded:', settings);
     }
 
     function editJobTimeline(jobIdx) {
