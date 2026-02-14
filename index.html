@@ -5579,27 +5579,70 @@ function genPDF() {
             
             let html = '';
             allClients.forEach(client => {
-                html += `<div data-client-name="${client.name}" style="display:flex; justify-content:space-between; align-items:center; padding:12px 15px; background:#fff; border-bottom:1px solid #f0f0f0; flex-shrink:0;">
+                const clientId = client.id || '';
+                console.log('Rendering client:', client.name, 'ID:', clientId);
+                html += `<div data-client-name="${client.name}" data-client-id="${clientId}" style="display:flex; justify-content:space-between; align-items:center; padding:12px 15px; background:#fff; border-bottom:1px solid #f0f0f0; flex-shrink:0;">
                     <div style="flex:1;">
                         <div style="font-weight:900; font-size:13px; color:#333;">${client.name}</div>
                     </div>
                     <div style="display:flex; gap:8px;">
-                        <button onclick="showEditClientForm('${client.id}')" style="background:#2196f3; color:#fff; border:none; padding:8px 14px; border-radius:4px; font-weight:900; font-size:11px; cursor:pointer;">✏️ EDIT</button>
-                        <button onclick="if(confirm('Delete ${client.name}?')) { deleteClient('${client.id}'); }" style="background:#ff3b30; color:#fff; border:none; padding:8px 14px; border-radius:4px; font-weight:900; font-size:11px; cursor:pointer;">🗑️ DELETE</button>
+                        <button class="editClientBtn" style="background:#2196f3; color:#fff; border:none; padding:8px 14px; border-radius:4px; font-weight:900; font-size:11px; cursor:pointer;">✏️ EDIT</button>
+                        <button class="deleteClientBtn" style="background:#ff3b30; color:#fff; border:none; padding:8px 14px; border-radius:4px; font-weight:900; font-size:11px; cursor:pointer;">🗑️ DELETE</button>
                     </div>
                 </div>`;
             });
             
             clientsDiv.innerHTML = html;
+            
+            // Add event listeners to edit/delete buttons
+            document.querySelectorAll('.editClientBtn').forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    const clientId = this.closest('[data-client-id]').getAttribute('data-client-id');
+                    const clientName = this.closest('[data-client-name]').getAttribute('data-client-name');
+                    console.log('Edit button clicked for:', clientName, 'ID:', clientId);
+                    showEditClientForm(clientId);
+                });
+            });
+            
+            document.querySelectorAll('.deleteClientBtn').forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    const clientId = this.closest('[data-client-id]').getAttribute('data-client-id');
+                    const clientName = this.closest('[data-client-name]').getAttribute('data-client-name');
+                    if(confirm(`Delete ${clientName}?`)) {
+                        deleteClient(clientId);
+                    }
+                });
+            });
         } catch(e) {
             console.error('Error rendering clients list:', e);
             clientsDiv.innerHTML = '<p style="color:red; padding:20px;">Error loading clients</p>';
         }
     }
     function showEditClientForm(clientId) {
+        console.log('Opening edit form for clientId:', clientId);
         const db = getClientDatabase();
-        const client = db[clientId];
-        if (!client) return;
+        console.log('Database keys:', Object.keys(db));
+        
+        let client = db[clientId];
+        
+        // Fallback: search by ID if direct lookup fails
+        if (!client) {
+            console.warn('Client not found with ID:', clientId, '- searching database...');
+            for (let key in db) {
+                if (db[key] && db[key].id === clientId) {
+                    client = db[key];
+                    break;
+                }
+            }
+        }
+        
+        if (!client) {
+            console.error('Client not found:', clientId);
+            alert('Error: Client not found');
+            return;
+        }
+        
+        console.log('Found client:', client.name);
         
         const modalId = 'editClientModal-' + Date.now();
         const overlayId = 'editOverlay-' + Date.now();
