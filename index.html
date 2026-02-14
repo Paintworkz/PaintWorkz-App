@@ -718,8 +718,13 @@
                 <p style="font-size:11px; color:#666; margin-bottom:10px;">Edit the default timeline phases for all new jobs</p>
                 <button onclick="editDefaultTimeline()" style="border:none; background:#2196f3; color:#fff; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">⚙️ EDIT DEFAULT TIMELINE</button>
                 
-                <h4 style="margin-top:20px; margin-bottom:10px; font-weight:900;">Job Completion Alerts</h4>
-                <div id="admin-alerts"></div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:20px; margin-bottom:10px;">
+                    <h4 style="margin:0; font-weight:900;">Notification Archive</h4>
+                    <button onclick="toggleAdminAlerts()" style="background:none; border:none; cursor:pointer; font-weight:900; font-size:18px; color:#999;">−</button>
+                </div>
+                <div id="admin-alerts-container" style="display:block;">
+                    <div id="admin-alerts"></div>
+                </div>
                 
                 <h4 style="margin-top:20px; margin-bottom:10px; font-weight:900;">Database Status</h4>
                 <p style="font-size:11px; color:#666; margin-bottom:10px; background:#f0f0f0; padding:10px; border-radius:6px;">All systems operational. Job history is clean and synced.</p>
@@ -2550,6 +2555,18 @@
         setTimeout(() => alertDiv.remove(), 4000);
     }
 
+    function toggleAdminAlerts() {
+        const container = document.getElementById('admin-alerts-container');
+        const btn = event.target;
+        if (container.style.display === 'none') {
+            container.style.display = 'block';
+            btn.innerText = '−';
+        } else {
+            container.style.display = 'none';
+            btn.innerText = '+';
+        }
+    }
+
     function renderAdminAlerts() {
         const adminAlertsDiv = document.getElementById('admin-alerts');
         if (!adminAlertsDiv) return;
@@ -2557,27 +2574,52 @@
         const alerts = JSON.parse(localStorage.getItem('adminAlerts')) || [];
         
         if (alerts.length === 0) {
-            adminAlertsDiv.innerHTML = '<div class="card"><p style="color:#999; text-align:center; font-size:12px;">No job completions yet</p></div>';
+            adminAlertsDiv.innerHTML = '<div class="card"><p style="color:#999; text-align:center; font-size:12px;">No notifications yet</p></div>';
             return;
         }
         
         adminAlertsDiv.innerHTML = '';
         alerts.forEach((alert, i) => {
             const alertDate = new Date(alert.timestamp);
-            adminAlertsDiv.innerHTML += `<div class="card" style="border-left:5px solid #34c759; background:#f0fdf4;">
+            let icon = '📌';
+            let bgColor = '#f0f0f0';
+            let borderColor = '#999';
+            
+            if (alert.type === 'JOB_COMPLETED') {
+                icon = '✅';
+                bgColor = '#f0fdf4';
+                borderColor = '#34c759';
+            } else if (alert.type === 'JOB_SAVED') {
+                icon = '✅';
+                bgColor = '#f0fdf4';
+                borderColor = '#34c759';
+            } else if (alert.type === 'JOB_UPDATED') {
+                icon = '✏️';
+                bgColor = '#fffbf0';
+                borderColor = '#ffc107';
+            } else if (alert.type === 'NEW_CLIENT') {
+                icon = '👤';
+                bgColor = '#f0fdf4';
+                borderColor = '#34c759';
+            } else if (alert.type === 'CLIENT_DELETED') {
+                icon = '🗑️';
+                bgColor = '#fdf0f0';
+                borderColor = '#ff3b30';
+            } else if (alert.type === 'PROFILE_ADDED') {
+                icon = '🚪';
+                bgColor = '#fff3e0';
+                borderColor = '#ff9800';
+            }
+            
+            adminAlertsDiv.innerHTML += `<div class="card" style="border-left:5px solid ${borderColor}; background:${bgColor}; margin-bottom:10px;">
                 <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:8px;">
                     <div style="flex:1;">
-                        <div style="font-weight:900; color:#000; font-size:13px;">✓ Job #${alert.jobNum}: ${alert.jobName}</div>
-                        <div style="font-size:11px; color:#666; font-weight:700;">${alert.client}</div>
+                        <div style="font-weight:900; color:#000; font-size:13px;">${icon} ${alert.message}</div>
                     </div>
-                    <div style="font-size:10px; color:#888; font-weight:700; text-align:right;">
+                    <div style="font-size:10px; color:#888; font-weight:700; text-align:right; white-space:nowrap; margin-left:10px;">
                         <div>${alertDate.toLocaleDateString('en-AU')}</div>
                         <div>${alertDate.toLocaleTimeString('en-AU', {hour: '2-digit', minute: '2-digit'})}</div>
                     </div>
-                </div>
-                <div style="display:flex; gap:10px; padding:8px 0; font-size:11px; font-weight:700; color:#666;">
-                    <div>📊 ${alert.totalParts} Parts</div>
-                    <div>📐 ${alert.totalSqm} SQM (m²)</div>
                 </div>
             </div>`;
         });
@@ -4732,6 +4774,7 @@ function genPDF() {
         if (tab === 'general') {
             document.getElementById('admin-tab-general-content').style.display = 'block';
             document.getElementById('admin-tab-general').classList.add('active');
+            renderAdminAlerts(); // Refresh all notifications
         } else if (tab === 'colours') {
             document.getElementById('admin-tab-colours-content').style.display = 'block';
             document.getElementById('admin-tab-colours').classList.add('active');
@@ -5008,6 +5051,16 @@ function genPDF() {
     }
     
     function renderClientsList() {
+        // Initialize search interface
+        const searchBox = document.getElementById('clientSearchBox');
+        const dropdown = document.getElementById('clientDropdown');
+        const card = document.getElementById('selectedClientCard');
+        if (searchBox) searchBox.value = '';
+        if (dropdown) dropdown.style.display = 'none';
+        if (card) card.style.display = 'none';
+        return;
+        
+        // Old code below kept for reference but not used
         const clientsDiv = document.getElementById('clientsList');
         if (!clientsDiv) return;
         
