@@ -3587,11 +3587,13 @@ function genPDF() {
         const jobName = document.getElementById('jNm')?.value || '';
         const paintColor = document.getElementById('p-color')?.value || '';
         
-        // Get ONLY the profiles actually used in THIS job
-        const usedProfiles = [...new Set(items
-            .map(it => it.prof)
-            .filter(p => p && p.toLowerCase() !== 'plain' && p.trim())
-        )].sort();
+        // Get ONLY the profiles actually used in THIS job - EXCLUDE Plain completely
+        const allProfiles = items.map(it => it.prof).filter(p => p && p.trim());
+        const usedProfiles = [...new Set(allProfiles)].filter(p => {
+            const lower = p.toLowerCase();
+            // Exclude anything with "plain" in it
+            return !lower.includes('plain');
+        }).sort();
         
         // Count items
         const totalItems = items.reduce((sum, item) => sum + parseInt(item.qty || 1), 0);
@@ -3637,12 +3639,11 @@ function genPDF() {
         // ===== TABLE - FULL WIDTH =====
         const margin = 10;
         const pageWidth = doc.internal.pageSize.getWidth();
-        const rightMargin = 10;
-        const maxTableWidth = pageWidth - margin - rightMargin;
         
         // Column headers with Description column
         const headers = ['Qty', 'H', 'W', 'Thick', 'Moulded', 'Edges', 'Mode', 'Panel', 'Profile', 'Description', 'Colour'];
-        const colWidths = [6, 9, 9, 9, 9, 11, 7, 11, 20, 25, 14];
+        // Full page width = 210mm - 20mm margins = 190mm
+        const colWidths = [7, 16, 16, 12, 9, 13, 8, 14, 28, 48, 19];
         const cellHeight = 7;
         
         // Draw header row
@@ -3726,7 +3727,7 @@ function genPDF() {
                 doc.rect(x, y, colWidths[i], cellHeight);
                 
                 // Draw text CENTERED
-                const displayText = value.toString().substring(0, 30);
+                const displayText = value.toString().substring(0, 40);
                 doc.text(displayText, x + colWidths[i]/2, y + cellHeight/2 + 0.8, { 
                     align: 'center',
                     valign: 'middle',
