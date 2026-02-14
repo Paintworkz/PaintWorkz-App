@@ -5047,17 +5047,54 @@ function genPDF() {
         const clientsDiv = document.getElementById('clientsList');
         if (!clientsDiv) return;
         
-        // Get ALL clients from database
+        // Get clients from database
         const db = getClientDatabase();
-        const clients = Object.values(db).sort((a, b) => a.name.localeCompare(b.name));
+        let allClients = Object.values(db);
         
-        if (clients.length === 0) {
+        // Also pull from job history to get ANY clients that might be stored there
+        const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
+        const jobsHistory = JSON.parse(localStorage.getItem('paintworkz-jobs')) || [];
+        const allJobs = [...history, ...jobsHistory];
+        
+        // Create a set of client IDs already in database
+        const dbClientIds = new Set(allClients.map(c => c.id));
+        
+        // Add any clients from job history that aren't in database
+        allJobs.forEach(job => {
+            if (job.client && job.client.id && !dbClientIds.has(job.client.id)) {
+                allClients.push({
+                    id: job.client.id,
+                    name: job.client.name,
+                    contactName: job.client.contactName || '',
+                    landline: job.client.landline || '',
+                    mobile: job.client.mobile || job.client.phone || '',
+                    email1: job.client.email1 || job.client.email || '',
+                    email2: job.client.email2 || '',
+                    address: job.client.address || '',
+                    town: job.client.town || '',
+                    postcode: job.client.postcode || ''
+                });
+                dbClientIds.add(job.client.id);
+            }
+        });
+        
+        // Sort alphabetically by name
+        allClients.sort((a, b) => a.name.localeCompare(b.name));
+        
+        // Save merged clients back to database for persistence
+        const updatedDb = {};
+        allClients.forEach(c => {
+            updatedDb[c.id] = c;
+        });
+        saveClientDatabase(updatedDb);
+        
+        if (allClients.length === 0) {
             clientsDiv.innerHTML = '<p style="text-align:center; color:#999; font-size:12px; padding:20px;">No clients yet. Add one to get started!</p>';
             return;
         }
         
         let html = '';
-        clients.forEach(client => {
+        allClients.forEach(client => {
             html += `<div style="display:flex; justify-content:space-between; align-items:center; padding:12px 15px; background:#fff; border:1px solid #e0e0e0; border-radius:6px; margin-bottom:8px;">
                 <div style="flex:1;">
                     <div style="font-weight:900; font-size:13px; color:#333;">${client.name}</div>
