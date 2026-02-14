@@ -3532,6 +3532,7 @@ function genPDF() {
         const jobNum = document.getElementById('jNum')?.value || document.getElementById('jN')?.value || '';
         const jobName = document.getElementById('jNm')?.value || '';
         const doorStyle = document.getElementById('prof')?.value || '';
+        const paintColor = document.getElementById('p-color')?.value || '';
         
         // Count items
         const totalItems = items.reduce((sum, item) => sum + parseInt(item.qty || 1), 0);
@@ -3562,76 +3563,79 @@ function genPDF() {
         y += 5;
         doc.text(`Job Name: ${jobName}     Door Style: ${doorStyle}`, 20, y);
         y += 5;
-        doc.text(`Total Items: ${totalItems}     Date: ${new Date().toLocaleDateString('en-AU')}`, 20, y);
+        doc.text(`Total Items: ${totalItems}     Paint: ${paintColor}     Date: ${new Date().toLocaleDateString('en-AU')}`, 20, y);
         y += 10;
         
-        // ===== TABLE WITH BETTER LAYOUT =====
-        const pageWidth = doc.internal.pageSize.getWidth();
-        const margin = 18;
-        const tableWidth = pageWidth - (margin * 2);
+        // ===== TABLE WITH ALL COLUMNS =====
+        const margin = 12;
         
-        // Only show columns with data: Qty, Height, Width, Moulded, Paint Mode, Panel Type, Mould Type
-        const headers = ['Qty', 'Height', 'Width', 'Moulded', 'Paint Mode', 'Panel Type', 'Mould Type'];
-        const colWidths = [14, 20, 20, 16, 18, 25, 27];
+        // Columns: Qty, Height, Width, Moulded, Edges, Paint Mode, Panel Type, Mould Type, Paint Colour
+        const headers = ['Qty', 'Height', 'Width', 'Moulded', 'Edges', 'P.Mode', 'Panel Type', 'Mould Type', 'Paint Colour'];
+        const colWidths = [9, 13, 13, 10, 13, 10, 16, 16, 19];
         const cellHeight = 6;
         
-        // Draw header row with white text on black background
+        // Draw header row
         doc.setFont(undefined, 'bold');
-        doc.setFontSize(8);
+        doc.setFontSize(6);
         
         let x = margin;
         headers.forEach((header, i) => {
-            // Set colors BEFORE drawing
-            doc.setFillColor(0, 0, 0);  // Black fill
-            doc.setDrawColor(0, 0, 0);  // Black border
-            
-            // Draw filled rectangle with border
-            doc.rect(x, y, colWidths[i], cellHeight, 'FD');
-            
-            // Set text color to white
+            // Set colors
+            doc.setFillColor(0, 0, 0);
+            doc.setDrawColor(0, 0, 0);
             doc.setTextColor(255, 255, 255);
             
+            // Draw cell
+            doc.rect(x, y, colWidths[i], cellHeight, 'FD');
+            
             // Draw text
-            doc.text(header, x + colWidths[i]/2, y + 4.2, { align: 'center', maxWidth: colWidths[i] - 1 });
+            doc.text(header, x + colWidths[i]/2, y + 2.8, { align: 'center', maxWidth: colWidths[i] - 1 });
             x += colWidths[i];
         });
         y += cellHeight;
         
-        // Draw data rows - reset colors for data
+        // Draw data rows
         doc.setFont(undefined, 'normal');
-        doc.setFontSize(8);
-        doc.setTextColor(0, 0, 0);
-        doc.setFillColor(255, 255, 255);
-        doc.setDrawColor(150, 150, 150);  // Gray borders for data rows
+        doc.setFontSize(6);
         
         items.forEach((item) => {
             x = margin;
             
-            // Prepare data
+            // Prepare data using CORRECT field names
             const qty = item.qty || 1;
-            const height = item.height || item.h || '';
-            const width = item.width || item.w || '';
+            const height = item.h || '';
+            const width = item.w || '';
             
-            // Moulded: Y if doorProfile/mould exists and is NOT "Plain", else N
-            const mouldType = item.doorProfile || item.profile || item.mould || '';
-            const isMoulded = (mouldType && mouldType.toLowerCase() !== 'plain' && mouldType.toLowerCase() !== '') ? 'Y' : 'N';
+            // Moulded: Y if has mould profile (prof), N if blank or 'Plain'
+            const mouldType = item.prof || '';
+            const isMoulded = (mouldType && mouldType.toLowerCase() !== 'plain' && mouldType !== '') ? 'Y' : 'N';
             
-            const paintMode = item.paintMode || item.mode || 'SS';
+            // Edges: item.e is an array like ['1s', 'r', '2s'], join with /
+            const edgesArray = item.e || [];
+            const edgesText = Array.isArray(edgesArray) ? edgesArray.join('/') : (edgesArray || '');
+            
+            // Paint mode
+            const paintMode = item.mode || 'SS';
+            
+            // Panel type
             const panelType = item.type || '';
             
-            const data = [qty, height, width, isMoulded, paintMode, panelType, mouldType];
+            // Paint colour (stored as 'color')
+            const itemPaintColor = item.color || '';
+            
+            const data = [qty, height, width, isMoulded, edgesText, paintMode, panelType, mouldType, itemPaintColor];
             
             // Draw cells
             data.forEach((value, i) => {
-                // Set colors for data cells
-                doc.setDrawColor(150, 150, 150);  // Gray border
-                doc.setTextColor(0, 0, 0);  // Black text
+                doc.setDrawColor(150, 150, 150);
+                doc.setTextColor(0, 0, 0);
                 
-                // Draw border only
+                // Draw border
                 doc.rect(x, y, colWidths[i], cellHeight);
                 
-                // Center text
-                doc.text(value.toString().substring(0, 15), x + colWidths[i]/2, y + 4.2, { 
+                // Draw text (centered, truncated if needed)
+                const displayText = value.toString().substring(0, 25);
+                doc.text(displayText, x + colWidths[i]/2, y + 3, { 
                     align: 'center', 
                     maxWidth: colWidths[i] - 1 
                 });
@@ -3646,20 +3650,19 @@ function genPDF() {
                 
                 // Redraw header on new page
                 doc.setFont(undefined, 'bold');
-                doc.setFontSize(8);
-                doc.setFillColor(0, 0, 0);
-                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(6);
                 x = margin;
                 headers.forEach((header, i) => {
-                    doc.rect(x, y, colWidths[i], cellHeight, 'F');
-                    doc.rect(x, y, colWidths[i], cellHeight, 'S');
-                    doc.text(header, x + colWidths[i]/2, y + 4.2, { align: 'center', maxWidth: colWidths[i] - 1 });
+                    doc.setFillColor(0, 0, 0);
+                    doc.setDrawColor(0, 0, 0);
+                    doc.setTextColor(255, 255, 255);
+                    doc.rect(x, y, colWidths[i], cellHeight, 'FD');
+                    doc.text(header, x + colWidths[i]/2, y + 2.8, { align: 'center', maxWidth: colWidths[i] - 1 });
                     x += colWidths[i];
                 });
                 y += cellHeight;
                 doc.setFont(undefined, 'normal');
-                doc.setFontSize(8);
-                doc.setTextColor(0, 0, 0);
+                doc.setFontSize(6);
             }
         });
         
