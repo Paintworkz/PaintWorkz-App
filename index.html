@@ -11,7 +11,7 @@
 ║ 5. ✓ VERIFIED: Job auto-increment +manual override working VERIFIED: JavaScript syntax passes validation   ║
 ╚════════════════════════════════════════════════════════════════╝
 -->
-<!DOCTYPE html>   
+<!DOCTYPE html>
 <html lang="en-AU">
 <head>
     <meta charset="UTF-8">
@@ -3596,39 +3596,53 @@ function genPDF() {
         // Count items
         const totalItems = items.reduce((sum, item) => sum + parseInt(item.qty || 1), 0);
         
-        // ===== CLEAN HEADER =====
+        // ===== COMPANY HEADER =====
         let y = 10;
-        doc.setFontSize(20);
+        doc.setFontSize(16);
         doc.setFont(undefined, 'bold');
         doc.text('SUPPLY DOCKET', 15, y);
-        y += 12;
+        y += 7;
         
-        // ===== SIMPLE JOB DETAILS =====
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'bold');
+        doc.text('Paintworkz', 15, y);
+        y += 4;
+        
+        doc.setFontSize(9);
+        doc.setFont(undefined, 'normal');
+        doc.text('17 West Boundary Road, Hamilton 3300 VIC', 15, y);
+        y += 3;
+        doc.text('Phone: 0438 803 032 | Email: paint_workz@outlook.com', 15, y);
+        y += 8;
+        
+        // ===== JOB DETAILS =====
         doc.setFontSize(11);
         doc.setFont(undefined, 'bold');
         doc.text(`${jobClient}`, 15, y);
-        y += 7;
+        y += 6;
         
         doc.setFontSize(10);
         doc.setFont(undefined, 'normal');
         const jobLabel = jobName ? `${jobName}  |  Job #${jobNum}` : `Job #${jobNum}`;
         doc.text(jobLabel, 15, y);
-        y += 6;
+        y += 5;
         
         const doorStyleText = usedProfiles.length > 0 ? usedProfiles.join(' / ') : 'Flat';
         doc.text(`Door Profiles: ${doorStyleText}`, 15, y);
-        y += 6;
+        y += 5;
         
         doc.text(`Paint: ${paintColor}  |  Total Parts: ${totalItems}`, 15, y);
-        y += 10;
+        y += 8;
         
-        // ===== TABLE WITH BETTER WIDTHS =====
-        const margin = 8;
+        // ===== TABLE - FULL WIDTH =====
+        const margin = 10;
         const pageWidth = doc.internal.pageSize.getWidth();
+        const rightMargin = 10;
+        const maxTableWidth = pageWidth - margin - rightMargin;
         
-        // Column headers - SHORT names so they fit on ONE line
-        const headers = ['Qty', 'H', 'W', 'Thick', 'Moulded', 'Edges', 'Mode', 'Panel', 'Profile', 'Colour'];
-        const colWidths = [7, 11, 11, 11, 10, 12, 8, 13, 25, 17];
+        // Column headers with Description column
+        const headers = ['Qty', 'H', 'W', 'Thick', 'Moulded', 'Edges', 'Mode', 'Panel', 'Profile', 'Description', 'Colour'];
+        const colWidths = [6, 9, 9, 9, 9, 11, 7, 11, 20, 25, 14];
         const cellHeight = 7;
         
         // Draw header row
@@ -3672,13 +3686,18 @@ function genPDF() {
             const mouldType = item.prof || '';
             const isMoulded = (mouldType && mouldType.toLowerCase() !== 'plain' && mouldType !== '') ? 'Y' : 'N';
             
-            // EDGES - handle array properly
+            // EDGES - properly calculate from array of booleans
             let edgesDisplay = '';
             if (item.e && Array.isArray(item.e)) {
-                edgesDisplay = item.e.filter(e => e && e !== 'true' && e !== 'false').join('/');
-            } else if (item.e && typeof item.e === 'object') {
-                // If it's an object with boolean keys
-                edgesDisplay = Object.keys(item.e).filter(key => item.e[key] === true).join('/');
+                const leftCount = (item.e[0]?1:0) + (item.e[1]?1:0);
+                const sideCount = (item.e[2]?1:0) + (item.e[3]?1:0);
+                const leftLabel = item.mode === 'SE' ? 'LR' : 'L';
+                const sideLabel = item.mode === 'SE' ? 'SR' : 'S';
+                
+                let parts = [];
+                if (leftCount > 0) parts.push(leftCount + leftLabel);
+                if (sideCount > 0) parts.push(sideCount + sideLabel);
+                edgesDisplay = parts.join('/');
             }
             
             // Paint mode
@@ -3687,13 +3706,16 @@ function genPDF() {
             // Panel type
             const panelType = item.type || '';
             
-            // Profile/Mould type - full name
+            // Profile/Mould type
             const profile = item.prof || '';
+            
+            // Description
+            const description = item.desc || '';
             
             // Paint colour
             const colour = item.color || '';
             
-            const data = [qty, height, width, thickness, isMoulded, edgesDisplay, paintMode, panelType, profile, colour];
+            const data = [qty, height, width, thickness, isMoulded, edgesDisplay, paintMode, panelType, profile, description, colour];
             
             // Draw cells
             data.forEach((value, i) => {
@@ -3716,7 +3738,7 @@ function genPDF() {
             
             // Page break - leave room for footer
             if (y > 260) {
-                // Add footer with BIGGER timestamp
+                // Add footer with bigger timestamp
                 const now = new Date();
                 const timestamp = now.toLocaleString('en-AU');
                 doc.setFontSize(10);
@@ -3749,7 +3771,7 @@ function genPDF() {
             }
         });
         
-        // Add footer on last page - BIGGER FONT
+        // Add footer on last page
         const now = new Date();
         const timestamp = now.toLocaleString('en-AU');
         doc.setFontSize(10);
