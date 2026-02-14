@@ -3637,7 +3637,7 @@ function genPDF() {
         const totalItems = items.reduce((sum, item) => sum + parseInt(item.qty || 1), 0);
         
         // ===== HEADER WITH LOGO & COMPANY INFO =====
-        let y = 15;  // Increased top margin from 10 to 15 for equal spacing
+        let y = 25;  // Increased to 25 to ensure 15mm+ blank space at top, then content starts
         let x = 15;
         
         // Try to load logo from localStorage
@@ -3789,13 +3789,26 @@ function genPDF() {
                 // Draw border
                 doc.rect(startX, y, colWidths[i], cellHeight);
                 
-                // Draw text CENTERED
-                const displayText = value.toString().substring(0, 40);
-                doc.text(displayText, startX + colWidths[i]/2, y + cellHeight/2 + 0.8, { 
-                    align: 'center',
-                    valign: 'middle',
-                    maxWidth: colWidths[i] - 0.5
-                });
+                // Special handling for Colour column (index 9) - smaller font and 2-line support
+                if (i === 9) {
+                    // Colour column - use smaller font and allow text wrapping
+                    doc.setFontSize(7);
+                    const displayText = value.toString();
+                    doc.text(displayText, startX + colWidths[i]/2, y + cellHeight/2, { 
+                        align: 'center',
+                        valign: 'middle',
+                        maxWidth: colWidths[i] - 1
+                    });
+                    doc.setFontSize(8); // Reset font size
+                } else {
+                    // All other columns - normal font
+                    const displayText = value.toString().substring(0, 40);
+                    doc.text(displayText, startX + colWidths[i]/2, y + cellHeight/2 + 0.8, { 
+                        align: 'center',
+                        valign: 'middle',
+                        maxWidth: colWidths[i] - 0.5
+                    });
+                }
                 startX += colWidths[i];
             });
             y += cellHeight;
@@ -5500,9 +5513,11 @@ function genPDF() {
             
             // 1. Get from client database (authoritative source)
             const db = getClientDatabase();
-            Object.values(db).forEach(client => {
+            Object.entries(db).forEach(([clientId, client]) => {
                 if (client.name && !seen.has(client.name.toLowerCase())) {
-                    allClients.push(client);
+                    // Include the ID from the database key
+                    const clientWithId = { ...client, id: clientId };
+                    allClients.push(clientWithId);
                     seen.add(client.name.toLowerCase());
                 }
             });
