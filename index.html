@@ -2797,15 +2797,18 @@
             'se': { bg: '#fbe9e7', text: '#bf360c' }
         };
         
-        // Update all buttons - keep their original colors, but show active state with border/shadow
+        // Update all buttons - keep their original colors, but show active state
         document.querySelectorAll('.filter-btn').forEach(btn => {
-            const btnType = btn.textContent.toLowerCase();
+            const btnText = btn.textContent.trim().toLowerCase();
+            // Map button text to filter type (S/S → ss, D/S → ds, S/E → se)
+            let btnType = btnText.replace(/\//g, '');
             const color = bubbleColors[btnType] || { bg: '#f0f0f0', text: '#333' };
             
             btn.style.background = color.bg;
             btn.style.color = color.text;
             btn.style.border = 'none';
             btn.style.boxShadow = '0 1px 3px rgba(0,0,0,0.08)';
+            btn.style.transition = 'all 0.2s';
             
             // Active state - add darker border and stronger shadow
             if (btnType === filterType.toLowerCase()) {
@@ -2956,6 +2959,8 @@
     }
     
     function coloredToast(message, bgColor = '#34c759') {
+        console.log('🔔 coloredToast called:', message, bgColor);
+        
         // Show toast at bottom
         const toast = document.getElementById('toast');
         if (toast) {
@@ -2967,48 +2972,64 @@
         
         // ALSO add to Global Notifications list
         const globalNotif = document.getElementById('globalNotifications');
-        if (globalNotif) {
-            // Remove "No notifications yet" placeholder
-            const placeholder = globalNotif.querySelector('p');
-            if (placeholder && placeholder.innerText.includes('No notifications')) {
-                placeholder.remove();
-            }
-            
-            // Create notification item for list
-            const notifItem = document.createElement('div');
-            notifItem.style.cssText = `
-                background: ${bgColor};
-                color: #fff;
-                padding: 10px 12px;
-                margin-bottom: 8px;
-                border-radius: 4px;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                font-weight: 900;
-                font-size: 11px;
-            `;
-            
-            const textSpan = document.createElement('span');
-            textSpan.innerText = message;
-            
-            const dismissBtn = document.createElement('button');
-            dismissBtn.innerText = '✕';
-            dismissBtn.style.cssText = `
-                background: transparent;
-                color: #fff;
-                border: none;
-                cursor: pointer;
-                font-weight: 900;
-                font-size: 14px;
-                margin-left: 10px;
-            `;
-            dismissBtn.onclick = () => notifItem.remove();
-            
-            notifItem.appendChild(textSpan);
-            notifItem.appendChild(dismissBtn);
-            globalNotif.appendChild(notifItem);
+        if (!globalNotif) {
+            console.warn('⚠️ globalNotifications element not found');
+            return;
         }
+        
+        console.log('✓ Found globalNotifications element');
+        
+        // Remove "No notifications yet" placeholder
+        const placeholder = globalNotif.querySelector('p');
+        if (placeholder) {
+            console.log('✓ Found placeholder, removing it');
+            placeholder.remove();
+        }
+        
+        // Create notification item for list
+        const notifItem = document.createElement('div');
+        notifItem.style.cssText = `
+            background: ${bgColor};
+            color: #fff;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 900;
+            font-size: 11px;
+            word-break: break-word;
+        `;
+        
+        const textSpan = document.createElement('span');
+        textSpan.innerText = message;
+        textSpan.style.flex = '1';
+        
+        const dismissBtn = document.createElement('button');
+        dismissBtn.innerText = '✕';
+        dismissBtn.style.cssText = `
+            background: transparent;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+            font-weight: 900;
+            font-size: 16px;
+            margin-left: 10px;
+            padding: 0;
+            line-height: 1;
+        `;
+        dismissBtn.onclick = (e) => {
+            e.stopPropagation();
+            notifItem.remove();
+            console.log('✓ Notification dismissed');
+        };
+        
+        notifItem.appendChild(textSpan);
+        notifItem.appendChild(dismissBtn);
+        globalNotif.appendChild(notifItem);
+        
+        console.log('✓ Notification added to list:', message);
     }
     
     // Update job history and send notification
