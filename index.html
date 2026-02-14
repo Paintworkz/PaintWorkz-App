@@ -603,7 +603,7 @@
                 </div>
                 
                 <div>
-                    <h5 style="margin-bottom:10px; font-weight:900; font-size:12px;">Existing Formulas (${paintDatabase.length})</h5>
+                    <h5 style="margin-bottom:10px; font-weight:900; font-size:12px;">Existing Formulas (")` + paintDatabase.length + `(")</h5>
                     <div id="paintFormulaList" style="background:#fff; border:1px solid #ddd; border-radius:8px; overflow:hidden; max-height:400px; overflow-y:auto;"></div>
                 </div>
             </div>
@@ -697,7 +697,7 @@
                         <strong style="color:#666;">Created by:</strong><br>
                         <strong style="color:#d4af37; font-size:13px;">Colin Bedford</strong><br>
                         <span style="color:#666; font-size:11px;">Paintworkz PTY LTD • 14/02/2026</span><br>
-                        <span style="color:#d4af37; font-weight:900; font-size:11px; margin-top:8px; display:block;">Current Version: <span id="versionDisplay">v1.4.4</span></span>
+                        <span style="color:#d4af37; font-weight:900; font-size:11px; margin-top:8px; display:block;">Current Version: <span id="versionDisplay">v1.4.5</span></span>
                     </p>
                 </div>
                 
@@ -778,7 +778,7 @@
     <div class="footer-item" style="margin-left:15px;"><div class="footer-label">TOTAL SQM (m²)</div><div class="footer-val" id="tA">0.000</div></div>
     <div style="flex:1; display:flex; justify-content:center; gap:20px; align-items:center;">
         <div class="icon-btn" onclick="genPDF()" style="color:#fff">📄</div>
-        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro v1.4.4</div>
+        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro v1.4.5</div>
     </div>
     <div class="footer-item"><div class="footer-label">PARTS</div><div class="footer-val" id="tQ">0</div></div>
     <div class="icon-btn" onclick="handleLogout()" title="Logout" style="color:#ff3b30; font-size:24px; cursor:pointer; margin-right:15px;">🚪</div>
@@ -1504,42 +1504,41 @@
 
     // Populate client dropdown with unique clients from history
     function populateClientDropdown() {
-        try {
-            const clientSelect = document.getElementById('cli');
-            if (!clientSelect) {
-                console.warn('Client dropdown element not found');
-                return;
+        const clientSelect = document.getElementById('cli');
+        if (!clientSelect) return;
+        
+        const seen = new Set();
+        const allClients = [];
+        
+        // Get from database
+        const db = getClientDatabase();
+        Object.values(db).forEach(client => {
+            if (client.name && !seen.has(client.name.toLowerCase())) {
+                allClients.push(client.name);
+                seen.add(client.name.toLowerCase());
             }
-            
-            // Build list of clients - ONLY from client database (authoritative source)
-            const seen = new Set();
-            const allClients = [];
-            
-            // Get from client database (the ONLY source of truth)
-            const db = getClientDatabase();
-            Object.values(db).forEach(client => {
-                if (client.name && !seen.has(client.name.toLowerCase())) {
-                    allClients.push(client.name);
-                    seen.add(client.name.toLowerCase());
-                }
-            });
-            
-            // Sort alphabetically
-            allClients.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
-            
-            // Clear and rebuild dropdown
-            clientSelect.innerHTML = '<option value="">-- Select or type client --</option>';
-            allClients.forEach(client => {
-                const option = document.createElement('option');
-                option.value = client;
-                option.textContent = client;
-                clientSelect.appendChild(option);
-            });
-            
-            console.log(`✓ Populated ${allClients.length} clients from Admin/Database (no job history pollution)`);
-        } catch(e) {
-            console.error('Error populating client dropdown:', e);
-        }
+        });
+        
+        // Get from job history (for any jobs with clients not yet in database)
+        const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
+        history.forEach(job => {
+            if (job.client && !seen.has(job.client.toLowerCase())) {
+                allClients.push(job.client);
+                seen.add(job.client.toLowerCase());
+            }
+        });
+        
+        allClients.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+        
+        clientSelect.innerHTML = '<option value="">-- Select client --</option>';
+        allClients.forEach(client => {
+            const option = document.createElement('option');
+            option.value = client;
+            option.textContent = client;
+            clientSelect.appendChild(option);
+        });
+        
+        console.log(`✓ Populated ${allClients.length} clients`);
     }
     
     // Initialize app on page load
@@ -2578,6 +2577,19 @@
             });
             console.log(`  ✓ Rendered all ${profiles.length} profiles to DOM`);
         }
+        // Update paint formulas list
+        const paintList = document.getElementById("paintFormulaList");
+        if (paintList) {
+            if (paintDatabase.length === 0) {
+                paintList.innerHTML = '<div style="padding:15px; text-align:center; color:#999; font-size:11px;">No formulas yet. Add one above.</div>';
+            } else {
+                let html = "";
+                paintDatabase.forEach((f, idx) => {
+                    html += `<div style="padding:12px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;"><div><div style="font-weight:900; font-size:12px;">${f.color}</div><div style="font-size:10px; color:#666; margin-top:3px;">${f.code} - ${f.product}</div></div><div style="display:flex; gap:6px;"><button onclick="editPaintFormula(${idx})" style="padding:4px 10px; background:#2196f3; color:#fff; border:none; border-radius:3px; font-size:9px; font-weight:900; cursor:pointer;">Edit</button><button onclick="deletePaintFormula(${idx})" style="padding:4px 10px; background:#ff3b30; color:#fff; border:none; border-radius:3px; font-size:9px; font-weight:900; cursor:pointer;">Delete</button></div></div>`;
+                });
+                paintList.innerHTML = html;
+            }
+        }
     }
 
     function addClient() { 
@@ -2945,8 +2957,6 @@
     }
     
     function coloredToast(message, bgColor = '#34c759') {
-        console.log('🔔 coloredToast called:', message, bgColor);
-        
         // Show toast at bottom
         const toast = document.getElementById('toast');
         if (toast) {
@@ -2956,48 +2966,28 @@
             setTimeout(() => toast.style.display = 'none', 3000);
         }
         
-        // Add to Schedule view's globalNotifications
+        // Add to globalNotifications list in Schedule view
         const globalNotif = document.getElementById('globalNotifications');
+        if (!globalNotif) return;
         
-        if (!globalNotif) {
-            console.warn('❌ globalNotifications not found');
-            return;
-        }
-        
-        console.log('✓ Found globalNotifications');
-        
-        // Remove placeholder <p> if exists
         const placeholder = globalNotif.querySelector('p');
-        if (placeholder) {
-            placeholder.remove();
-        }
+        if (placeholder) placeholder.remove();
         
-        // Create notification wrapper with proper structure
-        const notifWrapper = document.createElement('div');
-        notifWrapper.style.cssText = `padding: 10px; border-bottom: 1px solid #ddd; background: #fff; display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;`;
+        const notif = document.createElement('div');
+        notif.style.cssText = 'padding:10px; border-bottom:1px solid #ddd; display:flex; justify-content:space-between; align-items:flex-start;';
         
-        // Left content div
-        const contentDiv = document.createElement('div');
-        contentDiv.style.flex = '1';
-        contentDiv.innerHTML = message;
-        contentDiv.style.cssText = `font-weight: 900; font-size: 11px; color: ${bgColor}; line-height: 1.4;`;
+        const text = document.createElement('div');
+        text.innerHTML = message;
+        text.style.cssText = `color:${bgColor}; font-weight:900; font-size:11px; flex:1; line-height:1.4;`;
         
-        // Dismiss button
-        const dismissBtn = document.createElement('button');
-        dismissBtn.innerText = '✕ DISMISS';
-        dismissBtn.style.cssText = `background: transparent; color: ${bgColor}; border: none; cursor: pointer; font-weight: 900; font-size: 10px; white-space: nowrap; padding: 0; margin-left: 10px;`;
-        dismissBtn.onclick = (e) => {
-            e.stopPropagation();
-            notifWrapper.remove();
-            console.log('✓ Notification dismissed');
-        };
+        const btn = document.createElement('button');
+        btn.innerText = '✕ DISMISS';
+        btn.style.cssText = `background:transparent; color:${bgColor}; border:none; cursor:pointer; font-weight:900; font-size:10px; margin-left:10px; padding:0;`;
+        btn.onclick = () => notif.remove();
         
-        // Assemble
-        notifWrapper.appendChild(contentDiv);
-        notifWrapper.appendChild(dismissBtn);
-        globalNotif.appendChild(notifWrapper);
-        
-        console.log('✅ Notification added to globalNotifications');
+        notif.appendChild(text);
+        notif.appendChild(btn);
+        globalNotif.appendChild(notif);
     }
     
     // Update job history and send notification
@@ -6011,11 +6001,11 @@ function genPDF() {
 
     // PAINT FORMULA DATABASE FUNCTIONS
     function getPaintFormulas() {
-        return JSON.parse(localStorage.getItem('paintFormulaDB')) || [];
+        return JSON.parse(localStorage.getItem('paintFormulas')) || [];
     }
 
     function savePaintFormulas(formulas) {
-        localStorage.setItem('paintFormulaDB', JSON.stringify(formulas));
+        localStorage.setItem('paintFormulas', JSON.stringify(formulas));
     }
 
     function openPaintFormulaDatabase() {
