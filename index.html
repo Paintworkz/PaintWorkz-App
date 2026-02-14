@@ -5051,30 +5051,36 @@ function genPDF() {
         const db = getClientDatabase();
         let allClients = Object.values(db);
         
-        // Also pull from job history to get ANY clients that might be stored there
+        // Also extract client names from job history
         const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
-        const jobsHistory = JSON.parse(localStorage.getItem('paintworkz-jobs')) || [];
-        const allJobs = [...history, ...jobsHistory];
         
-        // Create a set of client IDs already in database
-        const dbClientIds = new Set(allClients.map(c => c.id));
+        // Create a set of client names already in database
+        const dbClientNames = new Set(allClients.map(c => c.name.toLowerCase()));
+        
+        // Extract unique client names from job history
+        const jobClientNames = new Set();
+        history.forEach(job => {
+            if (job.client && job.client.trim()) {
+                jobClientNames.add(job.client.trim());
+            }
+        });
         
         // Add any clients from job history that aren't in database
-        allJobs.forEach(job => {
-            if (job.client && job.client.id && !dbClientIds.has(job.client.id)) {
+        jobClientNames.forEach(clientName => {
+            if (!dbClientNames.has(clientName.toLowerCase())) {
                 allClients.push({
-                    id: job.client.id,
-                    name: job.client.name,
-                    contactName: job.client.contactName || '',
-                    landline: job.client.landline || '',
-                    mobile: job.client.mobile || job.client.phone || '',
-                    email1: job.client.email1 || job.client.email || '',
-                    email2: job.client.email2 || '',
-                    address: job.client.address || '',
-                    town: job.client.town || '',
-                    postcode: job.client.postcode || ''
+                    id: 'client-' + Date.now() + Math.random(),
+                    name: clientName,
+                    contactName: '',
+                    landline: '',
+                    mobile: '',
+                    email1: '',
+                    email2: '',
+                    address: '',
+                    town: '',
+                    postcode: ''
                 });
-                dbClientIds.add(job.client.id);
+                dbClientNames.add(clientName.toLowerCase());
             }
         });
         
