@@ -3,7 +3,7 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ 1.4.2 | 2026-02-14 | Toast + Global Notifications list working (Yellow update, Green save) ║
+║ 1.4.3 | 2026-02-14 | Fixed: Remove restore btn, global notifications in Schedule (Yellow update, Green save) ║
 ║ 1. ✓ FIX: Client name edit syncs to all jobs referencing it REMOVED: Corrupted base64 logo (caused jsPDF failure)      ║
 ║ 2. ✓ FIX: Qty resets to 1 after add, cursor focuses on length REBUILT: 5 PDF functions (Estimate, Quote, Invoice, Mixing, Supply)            ║
 ║ 3. ✓ FIX: Color popup centered on screen, proper z-index ADDED: genPDF() main export function  ║
@@ -559,7 +559,6 @@
                 <h4 style="margin-bottom:15px; font-weight:900;">Door Profiles</h4>
                 <p style="font-size:11px; color:#666; margin-bottom:15px;">Add new profiles or edit existing names. Profiles are used in your pricing matrix tiers.</p>
                 
-                <button onclick="restoreDefaultProfiles()" style="width:100%; padding:10px; margin-bottom:15px; background:#4caf50; color:#fff; border:none; border-radius:6px; font-weight:900; font-size:12px; cursor:pointer;">✓ Restore All 20 Default Profiles</button>
                 
                 <div class="add-row">
                     <input type="text" id="new-profile" placeholder="New Profile Name (e.g., Shaker, Ashlee)" style="margin-bottom:0;">
@@ -698,7 +697,7 @@
                         <strong style="color:#666;">Created by:</strong><br>
                         <strong style="color:#d4af37; font-size:13px;">Colin Bedford</strong><br>
                         <span style="color:#666; font-size:11px;">Paintworkz PTY LTD • 14/02/2026</span><br>
-                        <span style="color:#d4af37; font-weight:900; font-size:11px; margin-top:8px; display:block;">Current Version: <span id="versionDisplay">v1.4.2</span></span>
+                        <span style="color:#d4af37; font-weight:900; font-size:11px; margin-top:8px; display:block;">Current Version: <span id="versionDisplay">v1.4.3</span></span>
                     </p>
                 </div>
                 
@@ -779,7 +778,7 @@
     <div class="footer-item" style="margin-left:15px;"><div class="footer-label">TOTAL SQM (m²)</div><div class="footer-val" id="tA">0.000</div></div>
     <div style="flex:1; display:flex; justify-content:center; gap:20px; align-items:center;">
         <div class="icon-btn" onclick="genPDF()" style="color:#fff">📄</div>
-        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro v1.4.2</div>
+        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro v1.4.3</div>
     </div>
     <div class="footer-item"><div class="footer-label">PARTS</div><div class="footer-val" id="tQ">0</div></div>
     <div class="icon-btn" onclick="handleLogout()" title="Logout" style="color:#ff3b30; font-size:24px; cursor:pointer; margin-right:15px;">🚪</div>
@@ -2977,22 +2976,8 @@
         // Add to PERSISTENT notifications (visible on all tabs)
         const persistentNotif = document.getElementById('persistentNotifications');
         if (persistentNotif) {
-            // Create notification item
             const notifItem = document.createElement('div');
-            notifItem.style.cssText = `
-                background: ${bgColor};
-                color: #fff;
-                padding: 12px 14px;
-                margin-bottom: 8px;
-                border-radius: 6px;
-                display: flex;
-                justify-content: space-between;
-                align-items: flex-start;
-                font-weight: 900;
-                font-size: 11px;
-                word-break: break-word;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            `;
+            notifItem.style.cssText = `background: ${bgColor}; color: #fff; padding: 12px 14px; margin-bottom: 8px; border-radius: 6px; display: flex; justify-content: space-between; align-items: flex-start; font-weight: 900; font-size: 11px; word-break: break-word; box-shadow: 0 2px 8px rgba(0,0,0,0.1);`;
             
             const textSpan = document.createElement('span');
             textSpan.innerText = message;
@@ -3000,22 +2985,10 @@
             
             const dismissBtn = document.createElement('button');
             dismissBtn.innerText = '✕';
-            dismissBtn.style.cssText = `
-                background: transparent;
-                color: #fff;
-                border: none;
-                cursor: pointer;
-                font-weight: 900;
-                font-size: 16px;
-                margin-left: 12px;
-                padding: 0;
-                line-height: 1;
-                flex-shrink: 0;
-            `;
+            dismissBtn.style.cssText = `background: transparent; color: #fff; border: none; cursor: pointer; font-weight: 900; font-size: 16px; margin-left: 12px; padding: 0; line-height: 1; flex-shrink: 0;`;
             dismissBtn.onclick = (e) => {
                 e.stopPropagation();
                 notifItem.remove();
-                // Hide container if empty
                 if (persistentNotif.children.length === 0) {
                     persistentNotif.style.display = 'none';
                 }
@@ -3025,32 +2998,27 @@
             notifItem.appendChild(dismissBtn);
             persistentNotif.appendChild(notifItem);
             persistentNotif.style.display = 'block';
-            
-            console.log('✓ Notification added to persistent panel');
+            console.log('✓ Added to persistent notifications');
         }
         
-        // ALSO add to Schedule view's globalNotifications if it exists (for Schedule tab)
+        // Add to Schedule view's globalNotifications (MOST IMPORTANT)
         const globalNotif = document.getElementById('globalNotifications');
+        console.log('Checking for globalNotifications element:', !!globalNotif);
+        
         if (globalNotif) {
-            const placeholder = globalNotif.querySelector('p');
-            if (placeholder) {
-                placeholder.remove();
-            }
+            console.log('globalNotif found! HTML before:', globalNotif.innerHTML.substring(0, 100));
             
+            // Remove placeholder
+            const placeholders = globalNotif.querySelectorAll('p');
+            console.log('Found', placeholders.length, 'placeholder <p> tags');
+            placeholders.forEach(p => {
+                console.log('Removing placeholder:', p.innerText);
+                p.remove();
+            });
+            
+            // Create notification
             const notifItem = document.createElement('div');
-            notifItem.style.cssText = `
-                background: ${bgColor};
-                color: #fff;
-                padding: 10px 12px;
-                margin-bottom: 8px;
-                border-radius: 4px;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                font-weight: 900;
-                font-size: 11px;
-                word-break: break-word;
-            `;
+            notifItem.style.cssText = `background: ${bgColor}; color: #fff; padding: 10px 12px; margin-bottom: 8px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; font-weight: 900; font-size: 11px; word-break: break-word;`;
             
             const textSpan = document.createElement('span');
             textSpan.innerText = message;
@@ -3058,24 +3026,20 @@
             
             const dismissBtn = document.createElement('button');
             dismissBtn.innerText = '✕';
-            dismissBtn.style.cssText = `
-                background: transparent;
-                color: #fff;
-                border: none;
-                cursor: pointer;
-                font-weight: 900;
-                font-size: 14px;
-                margin-left: 10px;
-                padding: 0;
-                line-height: 1;
-            `;
-            dismissBtn.onclick = () => notifItem.remove();
+            dismissBtn.style.cssText = `background: transparent; color: #fff; border: none; cursor: pointer; font-weight: 900; font-size: 14px; margin-left: 10px; padding: 0; line-height: 1;`;
+            dismissBtn.onclick = () => {
+                notifItem.remove();
+                console.log('Dismissed from schedule view');
+            };
             
             notifItem.appendChild(textSpan);
             notifItem.appendChild(dismissBtn);
             globalNotif.appendChild(notifItem);
             
-            console.log('✓ Notification also added to schedule view');
+            console.log('✓✓✓ ADDED TO GLOBAL NOTIFICATIONS LIST - should be visible in Schedule tab now!');
+            console.log('Current globalNotif HTML:', globalNotif.innerHTML.substring(0, 200));
+        } else {
+            console.warn('❌ globalNotifications element NOT found - you must be on a tab other than Schedule');
         }
     }
     
