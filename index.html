@@ -558,7 +558,6 @@
                 <h4 style="margin-bottom:15px; font-weight:900;">Door Profiles</h4>
                 <p style="font-size:11px; color:#666; margin-bottom:15px;">Add new profiles or edit existing names. Profiles are used in your pricing matrix tiers.</p>
                 
-                <button onclick="restoreDefaultProfiles()" style="width:100%; padding:10px; margin-bottom:15px; background:#4caf50; color:#fff; border:none; border-radius:6px; font-weight:900; font-size:12px; cursor:pointer;">✓ Restore All 20 Default Profiles</button>
                 
                 <div class="add-row">
                     <input type="text" id="new-profile" placeholder="New Profile Name (e.g., Shaker, Ashlee)" style="margin-bottom:0;">
@@ -1746,8 +1745,7 @@
                 history[currentEditingJobIndex] = jobData;
                 currentEditingJobIndex = null; // Reset for next job
                 notify('✓ Job Updated');
-                showGlobalNotification(`✏️ JOB UPDATED #${jobData.jobNum}
-${jobData.client} • ${jobData.totalParts} parts`, '#fff8e1', '#ffc107');
+                addAdminAlert('JOB_UPDATED', `✏️ JOB UPDATED #${jobData.jobNum} • ${jobData.client}`, {jobNum: jobData.jobNum, client: jobData.client, totalParts: jobData.totalParts});
             } else {
                 return; // Don't save if user cancels
             }
@@ -1760,8 +1758,7 @@ ${jobData.client} • ${jobData.totalParts} parts`, '#fff8e1', '#ffc107');
                 if (confirm(`Job #${jobData.jobNum} already exists. Replace it?`)) {
                     history[existingIdx] = jobData;
                     notify('✓ Job Updated (duplicate prevented)');
-                    showGlobalNotification(`✏️ JOB UPDATED #${jobData.jobNum}
-${jobData.client} • ${jobData.totalParts} parts`, '#fff8e1', '#ffc107');
+                    addAdminAlert('JOB_UPDATED', `✏️ JOB UPDATED #${jobData.jobNum} • ${jobData.client}`, {jobNum: jobData.jobNum, client: jobData.client, totalParts: jobData.totalParts});
                 } else {
                     return;
                 }
@@ -1769,7 +1766,7 @@ ${jobData.client} • ${jobData.totalParts} parts`, '#fff8e1', '#ffc107');
                 // New unique job
                 history.unshift(jobData);
                 notify('✓ Job Saved');
-                showGlobalNotification(`✅ NEW JOB SAVED #${jobData.jobNum}\n${jobData.client} • ${jobData.totalParts} parts`, '#e8f5e9', '#34c759');
+                addAdminAlert('JOB_SAVED', `✅ NEW JOB SAVED #${jobData.jobNum} • ${jobData.client}`, {jobNum: jobData.jobNum, client: jobData.client, totalParts: jobData.totalParts});
             }
         }
         
@@ -1779,16 +1776,14 @@ ${jobData.client} • ${jobData.totalParts} parts`, '#fff8e1', '#ffc107');
         
         // Send appropriate notification based on what happened
         if (currentEditingJobIndex !== null) {
-            showGlobalNotification(`✏️ JOB UPDATED #${jobData.jobNum}
-${jobData.client} • ${jobData.totalParts} parts`, '#fff8e1', '#ffc107');
+            addAdminAlert('JOB_UPDATED', `✏️ JOB UPDATED #${jobData.jobNum} • ${jobData.client}`, {jobNum: jobData.jobNum, client: jobData.client, totalParts: jobData.totalParts});
         } else if (history.length > 0 && history[0].jobNum === jobData.jobNum) {
             // Check if this was a duplicate update
             const duplicateMatches = history.filter(j => j.jobNum === jobData.jobNum).length;
             if (duplicateMatches > 1) {
-                showGlobalNotification(`✏️ JOB UPDATED #${jobData.jobNum}
-${jobData.client} • ${jobData.totalParts} parts`, '#fff8e1', '#ffc107');
+                addAdminAlert('JOB_UPDATED', `✏️ JOB UPDATED #${jobData.jobNum} • ${jobData.client}`, {jobNum: jobData.jobNum, client: jobData.client, totalParts: jobData.totalParts});
             } else {
-                showGlobalNotification(`✅ NEW JOB SAVED #${jobData.jobNum}\n${jobData.client} • ${jobData.totalParts} parts`, '#e8f5e9', '#34c759');
+                addAdminAlert('JOB_SAVED', `✅ NEW JOB SAVED #${jobData.jobNum} • ${jobData.client}`, {jobNum: jobData.jobNum, client: jobData.client, totalParts: jobData.totalParts});
             }
         }
         
@@ -2523,6 +2518,21 @@ ${jobData.client} • ${jobData.totalParts} parts`, '#fff8e1', '#ffc107');
         // Show toast-style notification
         showAdminAlert(adminAlert.message);
     }
+    
+    // Generic function for all notification types
+    function addAdminAlert(type, message, details = {}) {
+        const adminAlert = {
+            timestamp: new Date().toISOString(),
+            type: type,
+            message: message,
+            ...details
+        };
+        let adminAlerts = JSON.parse(localStorage.getItem('adminAlerts')) || [];
+        adminAlerts.unshift(adminAlert);
+        adminAlerts = adminAlerts.slice(0, 100);
+        localStorage.setItem('adminAlerts', JSON.stringify(adminAlerts));
+        showAdminAlert(message);
+    }
 
     function showAdminAlert(message) {
         const alertDiv = document.createElement('div');
@@ -2602,16 +2612,9 @@ ${jobData.client} • ${jobData.totalParts} parts`, '#fff8e1', '#ffc107');
             profSel.appendChild(o); 
         });
         
-        // Set default door profile to Shaker 45
+        // Set default door profile to first available
         if (profSel.options.length > 0) {
-            const shakerOption = Array.from(profSel.options).find(opt => opt.value === 'Shaker 45');
-            if (shakerOption) {
-                profSel.value = 'Shaker 45';
-                console.log('✓ Default door profile set to Shaker 45');
-            } else {
-                console.warn('⚠️ Shaker 45 not found in profiles, using first available');
-                profSel.value = profSel.options[0].value;
-            }
+            profSel.value = profSel.options[0].value;
         }
         
         console.log(`  ✓ Final prof-select count: ${profSel.options.length} options`);
@@ -4424,11 +4427,9 @@ function genPDF() {
     
     function renderGlobalNotifications() {
         const notificationsDiv = document.getElementById('globalNotifications');
-        if (!notificationsDiv) return; // Exit if not on Schedule tab
+        if (!notificationsDiv) return;
         
         const adminAlerts = JSON.parse(localStorage.getItem('adminAlerts')) || [];
-        
-        // Update badge count
         updateNotificationBadge();
         
         if (adminAlerts.length === 0) {
@@ -4437,16 +4438,37 @@ function genPDF() {
         }
         
         let notificationsHTML = '';
-        adminAlerts.slice(0, 5).forEach((alert, i) => {
+        adminAlerts.slice(0, 10).forEach((alert, i) => {
             const alertDate = new Date(alert.timestamp);
+            let typeLabel = '';
+            let typeColor = '#34c759';
+            
+            if (alert.type === 'JOB_COMPLETED') {
+                typeLabel = '✅ Completed';
+                typeColor = '#34c759';
+            } else if (alert.type === 'JOB_UPDATED') {
+                typeLabel = '✏️ Updated';
+                typeColor = '#ffc107';
+            } else if (alert.type === 'JOB_SAVED') {
+                typeLabel = '✅ Saved';
+                typeColor = '#34c759';
+            } else if (alert.type === 'NEW_CLIENT') {
+                typeLabel = '👤 New Client';
+                typeColor = '#34c759';
+            } else if (alert.type === 'CLIENT_DELETED') {
+                typeLabel = '🗑️ Deleted';
+                typeColor = '#ff3b30';
+            } else {
+                typeLabel = alert.type;
+            }
+            
             notificationsHTML += `<div style="padding:10px; border-bottom:1px solid #ddd; background:#fff; display:flex; justify-content:space-between; align-items:start;">
                 <div style="flex:1;">
                     <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:4px;">
-                        <div style="font-weight:900; color:#34c759; font-size:11px;">✓ Job Completed</div>
-                        <button onclick="deleteAdminAlert(${i})" style="background:#ff3b30; color:#fff; border:none; padding:4px 8px; border-radius:4px; font-weight:900; font-size:9px; cursor:pointer; white-space:nowrap; margin-left:8px;">✕ DISMISS</button>
+                        <div style="font-weight:900; color:${typeColor}; font-size:11px;">${typeLabel}</div>
+                        <button onclick="deleteAdminAlert(${i})" style="background:#ff3b30; color:#fff; border:none; padding:4px 8px; border-radius:4px; font-weight:900; font-size:9px; cursor:pointer; white-space:nowrap; margin-left:8px;">✕</button>
                     </div>
-                    <div style="font-size:10px; color:#000; font-weight:700; margin:2px 0;">Job #${alert.jobNum}: ${alert.jobName}</div>
-                    <div style="font-size:9px; color:#666;">${alert.client} • ${alert.totalParts} parts • ${alert.totalSqm} SQM (m²)</div>
+                    <div style="font-size:10px; color:#000; font-weight:700; margin:2px 0;">${alert.message}</div>
                     <div style="font-size:9px; color:#999; margin-top:4px;">
                         ${alertDate.toLocaleDateString('en-AU')} ${alertDate.toLocaleTimeString('en-AU', {hour: '2-digit', minute: '2-digit'})}
                     </div>
@@ -4454,8 +4476,8 @@ function genPDF() {
             </div>`;
         });
         
-        if (adminAlerts.length > 5) {
-            notificationsHTML += `<div style="padding:10px; text-align:center; color:#999; font-size:10px;">+${adminAlerts.length - 5} more notifications</div>`;
+        if (adminAlerts.length > 10) {
+            notificationsHTML += `<div style="padding:10px; text-align:center; color:#999; font-size:10px;">+${adminAlerts.length - 10} more notifications</div>`;
         }
         
         notificationsDiv.innerHTML = notificationsHTML;
@@ -5374,7 +5396,7 @@ function genPDF() {
         saveClientDatabase(db);
         
         document.querySelectorAll('div[style*="z-index:5000"], div[style*="z-index:4999"]').forEach(el => el.remove());
-        showGlobalNotification(`✅ NEW CLIENT ADDED: "${name}"`, '#e8f5e9', '#34c759');
+        addAdminAlert('NEW_CLIENT', `✅ NEW CLIENT ADDED: "${name}"`, {clientName: name});
         renderClientsList();
     }
     
@@ -5405,7 +5427,7 @@ function genPDF() {
         delete db[clientId];
         saveClientDatabase(db);
         
-        showGlobalNotification(`🗑️ CLIENT DELETED: "${clientName}"`, '#ffebee', '#ff3b30');
+        addAdminAlert('CLIENT_DELETED', `🗑️ CLIENT DELETED: "${clientName}"`, {clientName: clientName});
         renderClientsList();
     }
     
