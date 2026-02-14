@@ -3531,80 +3531,96 @@ function genPDF() {
         const jobName = document.getElementById('jNm')?.value || '';
         const doorStyle = document.getElementById('prof')?.value || '';
         
-        // ===== HEADER WITH TITLE & COMPANY =====
-        let y = 10;
-        doc.setFontSize(16);
+        // Count items
+        const totalItems = items.reduce((sum, item) => sum + parseInt(item.qty || 1), 0);
+        
+        // ===== HEADER =====
+        let y = 12;
+        doc.setFontSize(18);
         doc.setFont(undefined, 'bold');
-        doc.text('SUPPLY DOCKET', 15, y);
+        doc.text('SUPPLY DOCKET', 20, y);
         y += 8;
         
         doc.setFontSize(9);
         doc.setFont(undefined, 'normal');
-        doc.text('Paintworkz', 15, y);
-        y += 4;
-        doc.text('17 West Boundary Road, Hamilton 3300 VIC', 15, y);
-        y += 4;
-        doc.text('Phone: 0438 803 032 | Email: paint_workz@outlook.com', 15, y);
-        y += 8;
+        doc.text('Paintworkz | 17 West Boundary Road, Hamilton 3300 VIC', 20, y);
+        y += 3;
+        doc.text('Phone: 0438 803 032 | Email: paint_workz@outlook.com', 20, y);
+        y += 10;
         
-        // Job details
+        // ===== JOB DETAILS =====
         doc.setFont(undefined, 'bold');
-        doc.text('JOB DETAILS', 15, y);
-        y += 5;
+        doc.setFontSize(10);
+        doc.text('JOB DETAILS', 20, y);
+        y += 6;
         
         doc.setFont(undefined, 'normal');
-        doc.setFontSize(8);
-        doc.text(`Customer: ${jobClient}     Job Number: ${jobNum}`, 15, y);
-        y += 4;
-        doc.text(`Job Name: ${jobName}     Door Style: ${doorStyle}`, 15, y);
-        y += 8;
+        doc.setFontSize(9);
+        doc.text(`Customer: ${jobClient}     Job Number: ${jobNum}`, 20, y);
+        y += 5;
+        doc.text(`Job Name: ${jobName}     Door Style: ${doorStyle}`, 20, y);
+        y += 5;
+        doc.text(`Total Items: ${totalItems}     Date: ${new Date().toLocaleDateString('en-AU')}`, 20, y);
+        y += 10;
         
-        // ===== TABLE WITH PROPER BORDERS & ALIGNMENT =====
-        const headers = ['Qty', 'Height', 'Width', 'Moulded', 'SS/DS/SE', 'Edges', 'Panel Type', 'Mould Type'];
-        const colWidths = [12, 17, 17, 15, 15, 18, 22, 22];
+        // ===== TABLE WITH BETTER LAYOUT =====
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const margin = 18;
+        const tableWidth = pageWidth - (margin * 2);
+        
+        // Only show columns with data: Qty, Height, Width, Moulded, Paint Mode, Panel Type, Mould Type
+        const headers = ['Qty', 'Height', 'Width', 'Moulded', 'Paint Mode', 'Panel Type', 'Mould Type'];
+        const colWidths = [14, 20, 20, 16, 18, 25, 27];
         const cellHeight = 6;
         
-        // Draw header with black background & white text
+        // Draw header row with white text on black background
         doc.setFont(undefined, 'bold');
-        doc.setFontSize(7);
+        doc.setFontSize(8);
         doc.setFillColor(0, 0, 0);
         doc.setTextColor(255, 255, 255);
         
-        let x = 15;
+        let x = margin;
         headers.forEach((header, i) => {
-            // Draw cell with border
+            // Draw cell
             doc.rect(x, y, colWidths[i], cellHeight, 'F');
-            doc.rect(x, y, colWidths[i], cellHeight);
-            // Text centered in cell
-            doc.text(header, x + colWidths[i]/2, y + 4, { align: 'center', maxWidth: colWidths[i] - 1 });
+            doc.rect(x, y, colWidths[i], cellHeight, 'S');
+            // Center text in cell
+            doc.text(header, x + colWidths[i]/2, y + 4.2, { align: 'center', maxWidth: colWidths[i] - 1 });
             x += colWidths[i];
         });
         y += cellHeight;
         
-        // Draw data rows with borders
+        // Draw data rows
         doc.setFont(undefined, 'normal');
-        doc.setFontSize(7);
+        doc.setFontSize(8);
         doc.setTextColor(0, 0, 0);
         
         items.forEach((item) => {
-            x = 15;
+            x = margin;
             
             // Prepare data
             const qty = item.qty || 1;
             const height = item.height || item.h || '';
             const width = item.width || item.w || '';
-            const moulded = (item.moulded || item.type === 'Moulded') ? 'Y' : 'N';
-            const mode = item.paintMode || item.mode || 'SS';
-            const edges = item.edgeText || item.edges || '';
-            const panelType = item.type || '';
-            const mouldType = item.doorProfile || item.profile || '';
             
-            const data = [qty, height, width, moulded, mode, edges, panelType, mouldType];
+            // Moulded: Y if doorProfile/mould exists and is NOT "Plain", else N
+            const mouldType = item.doorProfile || item.profile || item.mould || '';
+            const isMoulded = (mouldType && mouldType.toLowerCase() !== 'plain' && mouldType.toLowerCase() !== '') ? 'Y' : 'N';
+            
+            const paintMode = item.paintMode || item.mode || 'SS';
+            const panelType = item.type || '';
+            
+            const data = [qty, height, width, isMoulded, paintMode, panelType, mouldType];
             
             // Draw cells
             data.forEach((value, i) => {
+                // Only draw border, not fill
                 doc.rect(x, y, colWidths[i], cellHeight);
-                doc.text(value.toString(), x + 1, y + 4, { maxWidth: colWidths[i] - 2 });
+                // Center text
+                doc.text(value.toString().substring(0, 15), x + colWidths[i]/2, y + 4.2, { 
+                    align: 'center', 
+                    maxWidth: colWidths[i] - 1 
+                });
                 x += colWidths[i];
             });
             y += cellHeight;
@@ -3612,15 +3628,26 @@ function genPDF() {
             // Page break
             if (y > 270) {
                 doc.addPage();
-                y = 15;
+                y = 20;
+                
+                // Redraw header on new page
+                doc.setFont(undefined, 'bold');
+                doc.setFontSize(8);
+                doc.setFillColor(0, 0, 0);
+                doc.setTextColor(255, 255, 255);
+                x = margin;
+                headers.forEach((header, i) => {
+                    doc.rect(x, y, colWidths[i], cellHeight, 'F');
+                    doc.rect(x, y, colWidths[i], cellHeight, 'S');
+                    doc.text(header, x + colWidths[i]/2, y + 4.2, { align: 'center', maxWidth: colWidths[i] - 1 });
+                    x += colWidths[i];
+                });
+                y += cellHeight;
+                doc.setFont(undefined, 'normal');
+                doc.setFontSize(8);
+                doc.setTextColor(0, 0, 0);
             }
         });
-        
-        // Footer
-        y += 5;
-        doc.setFontSize(8);
-        doc.setFont(undefined, 'normal');
-        doc.text(`Total Items: ${items.length} | Date: ${new Date().toLocaleDateString('en-AU')}`, 15, y);
         
         // Show preview
         const pdfDataUri = doc.output('datauristring');
