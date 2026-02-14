@@ -3,7 +3,7 @@
 ║                       PAINTWORKZ PRO 4.8                        ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
-║ 1.3.8 | 2026-02-14 | Global job notifications + Jobs Chart render on tab open            ║
+║ 1.3.9 | 2026-02-14 | Job update notifications YELLOW + Client dropdown deduplication            ║
 ║ 1. ✓ FIX: Client name edit syncs to all jobs referencing it REMOVED: Corrupted base64 logo (caused jsPDF failure)      ║
 ║ 2. ✓ FIX: Qty resets to 1 after add, cursor focuses on length REBUILT: 5 PDF functions (Estimate, Quote, Invoice, Mixing, Supply)            ║
 ║ 3. ✓ FIX: Color popup centered on screen, proper z-index ADDED: genPDF() main export function  ║
@@ -749,7 +749,7 @@
     <div class="footer-item" style="margin-left:15px;"><div class="footer-label">TOTAL SQM (m²)</div><div class="footer-val" id="tA">0.000</div></div>
     <div style="flex:1; display:flex; justify-content:center; gap:20px; align-items:center;">
         <div class="icon-btn" onclick="genPDF()" style="color:#fff">📄</div>
-        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro v1.3.8</div>
+        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro v1.3.9</div>
     </div>
     <div class="footer-item"><div class="footer-label">PARTS</div><div class="footer-val" id="tQ">0</div></div>
     <div class="icon-btn" onclick="handleLogout()" title="Logout" style="color:#ff3b30; font-size:24px; cursor:pointer; margin-right:15px;">🚪</div>
@@ -1481,11 +1481,38 @@
                 return;
             }
             
-            // Use global clients array + any new ones from history
+            // Build list of clients with proper deduplication
+            const seen = new Set();
+            const allClients = [];
+            
+            // 1. Get from client database (authoritative source)
+            const db = getClientDatabase();
+            Object.values(db).forEach(client => {
+                if (client.name && !seen.has(client.name.toLowerCase())) {
+                    allClients.push(client.name);
+                    seen.add(client.name.toLowerCase());
+                }
+            });
+            
+            // 2. Get from job history (catch any missing clients)
             const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
-            const historyClients = [...new Set(history.map(job => job.client).filter(Boolean))];
-            const allClients = [...new Set([...clients, ...historyClients])];
-            allClients.sort();
+            history.forEach(job => {
+                if (job.client && !seen.has(job.client.toLowerCase())) {
+                    allClients.push(job.client);
+                    seen.add(job.client.toLowerCase());
+                }
+            });
+            
+            // 3. Get from hardcoded clients array (legacy support)
+            clients.forEach(client => {
+                if (client && !seen.has(client.toLowerCase())) {
+                    allClients.push(client);
+                    seen.add(client.toLowerCase());
+                }
+            });
+            
+            // Sort alphabetically
+            allClients.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
             
             // Clear and rebuild dropdown
             clientSelect.innerHTML = '<option value="">-- Select or type client --</option>';
@@ -1496,7 +1523,7 @@
                 clientSelect.appendChild(option);
             });
             
-            console.log(`✓ Populated ${allClients.length} clients (${clients.length} from master + ${historyClients.length} from jobs)`);
+            console.log(`✓ Populated ${allClients.length} unique clients (deduped, no duplicates)`);
         } catch(e) {
             console.error('Error populating client dropdown:', e);
         }
@@ -1675,7 +1702,8 @@
                 history[currentEditingJobIndex] = jobData;
                 currentEditingJobIndex = null; // Reset for next job
                 notify('✓ Job Updated');
-                showGlobalNotification(`✏️ JOB UPDATED #${jobData.jobNum}\n${jobData.client} • ${jobData.totalParts} parts`, '#e3f2fd', '#2196f3');
+                showGlobalNotification(`✏️ JOB UPDATED #${jobData.jobNum}
+${jobData.client} • ${jobData.totalParts} parts`, '#fff8e1', '#ffc107');
             } else {
                 return; // Don't save if user cancels
             }
@@ -1688,7 +1716,8 @@
                 if (confirm(`Job #${jobData.jobNum} already exists. Replace it?`)) {
                     history[existingIdx] = jobData;
                     notify('✓ Job Updated (duplicate prevented)');
-                    showGlobalNotification(`✏️ JOB UPDATED #${jobData.jobNum}\n${jobData.client} • ${jobData.totalParts} parts`, '#e3f2fd', '#2196f3');
+                    showGlobalNotification(`✏️ JOB UPDATED #${jobData.jobNum}
+${jobData.client} • ${jobData.totalParts} parts`, '#fff8e1', '#ffc107');
                 } else {
                     return;
                 }
@@ -1702,8 +1731,22 @@
         
         // Keep only last 50 jobs
         history = history.slice(0, 50);
-        
         localStorage.setItem('jobHistory', JSON.stringify(history));
+        
+        // Send appropriate notification based on what happened
+        if (currentEditingJobIndex !== null) {
+            showGlobalNotification(`✏️ JOB UPDATED #${jobData.jobNum}
+${jobData.client} • ${jobData.totalParts} parts`, '#fff8e1', '#ffc107');
+        } else if (history.length > 0 && history[0].jobNum === jobData.jobNum) {
+            // Check if this was a duplicate update
+            const duplicateMatches = history.filter(j => j.jobNum === jobData.jobNum).length;
+            if (duplicateMatches > 1) {
+                showGlobalNotification(`✏️ JOB UPDATED #${jobData.jobNum}
+${jobData.client} • ${jobData.totalParts} parts`, '#fff8e1', '#ffc107');
+            } else {
+                showGlobalNotification(`✅ NEW JOB SAVED #${jobData.jobNum}\n${jobData.client} • ${jobData.totalParts} parts`, '#e8f5e9', '#34c759');
+            }
+        }
         
         // Sync to Firebase immediately
         if (window.syncJobsToFirebase) {
@@ -2179,6 +2222,9 @@
             localStorage.setItem('jobHistory', JSON.stringify(history));
             
             console.log(`📋 Job #${job.jobNum} unmarked as complete`);
+            
+            notify('🔄 Job reopened - now active again');
+            showGlobalNotification(`🔄 JOB REOPENED #${job.jobNum}\n${job.client} • ${job.totalParts} parts`, '#fff3cd', '#ff9800');
             
             // Sync to Firebase
             if (window.syncJobsToFirebase) {
@@ -2951,6 +2997,26 @@
         t.innerText = m; 
         t.style.display = 'block'; 
         setTimeout(()=>t.style.display='none', 1500); 
+    }
+    
+    // Update job history and send notification
+    function updateJobHistory(history, jobIndex, notificationMessage = null) {
+        if (!history || jobIndex === null || jobIndex < 0 || jobIndex >= history.length) return;
+        
+        const job = history[jobIndex];
+        localStorage.setItem('jobHistory', JSON.stringify(history));
+        
+        // Auto-generate notification if not provided
+        if (notificationMessage === null) {
+            notificationMessage = `✏️ JOB UPDATED #${job.jobNum}\n${job.client} • ${job.totalParts} parts`;
+        }
+        
+        // Send global notification
+        if (notificationMessage) {
+            showGlobalNotification(notificationMessage, '#e3f2fd', '#2196f3');
+        }
+        
+        console.log(`📝 Job #${job.jobNum} updated and saved to history`);
     }
     
     // Show global notification in the red alert area
@@ -5055,6 +5121,7 @@ function genPDF() {
             overlay.remove();
             notify(`✓ Client Updated: ${newName}\n(${jobsSynced} jobs synced)`);
             renderClientsList();
+            populateClientDropdown();  // Refresh dropdown to show updated names without duplicates
             renderHistory();  // Refresh history to show updated names
         });
         
