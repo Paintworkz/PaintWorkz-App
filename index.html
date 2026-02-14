@@ -548,6 +548,14 @@
             <button class="filter-btn" onclick="filterPanels('ss')" data-bg="#e0f2f1" data-color="#00695c" style="padding:6px 14px; border:none; background:#e0f2f1; color:#00695c; border-radius:20px; cursor:pointer; font-weight:900; box-shadow:0 1px 3px rgba(0,0,0,0.08); transition:all 0.2s;">S/S</button>
             <button class="filter-btn" onclick="filterPanels('ds')" data-bg="#ede7f6" data-color="#4527a0" style="padding:6px 14px; border:none; background:#ede7f6; color:#4527a0; border-radius:20px; cursor:pointer; font-weight:900; box-shadow:0 1px 3px rgba(0,0,0,0.08); transition:all 0.2s;">D/S</button>
             <button class="filter-btn" onclick="filterPanels('se')" style="padding:6px 12px; border:1px solid #ddd; background:#fff; border-radius:4px; cursor:pointer; font-weight:900;">S/E</button>
+            
+            <!-- Paint Colour Filter -->
+            <div style="display:flex; gap:8px; align-items:center; margin-top:12px;">
+                <label style="font-weight:bold; color:#666; font-size:13px;">Paint Colour:</label>
+                <select id="colourFilter" onchange="filterByColour(this.value)" style="padding:6px 12px; border:1px solid #ddd; border-radius:4px; background:#fff; cursor:pointer; font-weight:bold; color:#333; font-size:12px; min-width:180px;">
+                    <option value="">-- ALL --</option>
+                </select>
+            </div>
         </div>
         
         <div id="list"></div>
@@ -1022,7 +1030,7 @@
     }
 
     // ==================== END FIREBASE SETUP ====================
-    let items = [], mode = 'SS', pType = 'Panel', fmState = 'Flat', currentPanelFilter = 'all';
+    let items = [], mode = 'SS', pType = 'Panel', fmState = 'Flat', currentPanelFilter = 'all', currentColorFilter = '';
     
     // RESTORED MASTER LISTS
     let clients = ["ABM", "Absolute Kitchens", "Advanced Cabinetry", "AKC Kitchens", "Braw Creative", "Brian Moloney", "Cabinets & Stone", "Cabinets by Michael", "Chooka", "CKK", "Clover Doors", "Complete Style Joinery", "Concept 2 Reality", "Coronet Kitchens", "Create a Kitchen", "Creative Cabinetry", "Cutting Edge Joinery", "Driscolls Joinery", "Evolution Kitchens and Joinery", "Geoff Frost Builders", "GM Cabinets", "Grampians Joinery", "Grovedale Kitchens", "Gunning Concepts", "Hamilton Sheetmetal", "Harris Cabinets", "Howe Kitchens & Joinery", "Hy-Craft", "Jardines Cabinets", "Joinery by Jarrod", "Jonassons", "Kingston Kabinets", "Kitchens U Build", "Kyle Hendy", "Leighton Park", "Matthews Joinery", "Ocean Grove Joinery", "Onshore", "R J Walter", "Richardson Joinery", "Schier Cabinet Makers", "Snaauws Kitchens", "SRT Cabinetry", "Stawell Joinery", "Stephensons Kitchens", "T&J Kitchens", "Tony Lambert Kitchens", "Total Kitchen Solutions", "Trendset Kitchens", "Troy Turner", "Ultrabuild", "VG Cabinets", "VJS Geelong", "VJS Shepparton", "Walk in Client", "Westend Cabinetry"];
@@ -3030,6 +3038,44 @@
         
         render(); // Re-render with filter applied
     }
+    
+    // ===== COLOUR FILTER FUNCTIONS =====
+    function updateColourDropdown() {
+        const dropdown = document.getElementById('colourFilter');
+        if (!dropdown) return;
+        
+        // Get unique colours from all items (not just filtered ones)
+        const colours = [...new Set(items.map(it => it.color).filter(c => c && c.trim()))];
+        colours.sort(); // Sort alphabetically
+        
+        // Save current selection
+        const currentValue = dropdown.value;
+        
+        // Keep the "ALL" option
+        dropdown.innerHTML = '<option value="">-- ALL --</option>';
+        
+        // Add each unique colour
+        colours.forEach(colour => {
+            const option = document.createElement('option');
+            option.value = colour;
+            option.textContent = colour;
+            dropdown.appendChild(option);
+        });
+        
+        // Restore selection if it still exists
+        if (currentValue && colours.includes(currentValue)) {
+            dropdown.value = currentValue;
+        } else {
+            dropdown.value = '';
+        }
+    }
+    
+    function filterByColour(colour) {
+        currentColorFilter = colour;
+        render(); // Re-render with colour filter applied
+    }
+    
+    // ===== END COLOUR FILTER FUNCTIONS =====
 
     function render() {
         const l = document.getElementById('list');
@@ -3059,6 +3105,14 @@
                 return true;
             });
         }
+        
+        // Apply colour filter on top of existing filters
+        if (currentColorFilter) {
+            filteredItems = filteredItems.filter(it => (it.color || '') === currentColorFilter);
+        }
+        
+        // Update colour dropdown with available colours from ALL items (not just filtered)
+        updateColourDropdown();
         
         filteredItems.forEach((it, i) => {
             const originalIndex = items.indexOf(it);
