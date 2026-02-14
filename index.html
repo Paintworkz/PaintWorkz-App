@@ -10,7 +10,7 @@
 ║ 4. ✓ ADD: Panel list filters (type/color/config/ss/ds/se) TESTED: All functions now functional ║ 4. ✓ ADD: Panel list filters (type/color/config/ss/ds/se) IMPROVED: Console logs non-critical errors error-safe        ║
 ║ 5. ✓ VERIFIED: Job auto-increment +manual override working VERIFIED: JavaScript syntax passes validation   ║
 ╚════════════════════════════════════════════════════════════════╝
---> 
+-->
 <!DOCTYPE html>
 <html lang="en-AU">
 <head>
@@ -5012,12 +5012,12 @@ function genPDF() {
     // Apply colors on page load
     applyAppColors();
     const defaultMasterMatrix = {
-        "Tier 1": { 101: ["Plain", 125, 125, 125, 152, 152], 102: ["J-Mould", 125, 148, 148, 171, 171], 103: ["Sharknose", 125, 148, 148, 171, 171], 104: ["Bevelled Edge", 125, 148, 148, 171, 171] },
-        "Tier 2": { 201: ["Ashlee", 125, 148, 148, 171, 171], 202: ["Hamilton", 125, 148, 148, 171, 171], 203: ["Vertical Grooves", 125, 148, 148, 171, 171] },
-        "Tier 3": { 301: ["Tarrone", 125, 156, 156, 182, 182], 302: ["Bobby", 125, 156, 156, 182, 182], 303: ["Orford", 125, 156, 156, 182, 182] },
-        "Tier 4": { 401: ["Shaker", 125, 171, 171, 194, 194], 402: ["Shaker 45", 125, 171, 171, 194, 194], 403: ["Shaker w/Lines", 125, 180, 180, 203, 203], 404: ["Jack", 125, 180, 180, 203, 203] },
-        "Tier 5": { 501: ["Georgia", 125, 183, 183, 211, 211], 502: ["Branxholme", 125, 183, 183, 211, 211], 503: ["Rosebrook", 125, 183, 183, 211, 211] },
-        "Other": { 600: ["Benchtop", 125, 160, 160, 160, 160], 700: ["Molding", 125, 110, 110, 110, 110] }
+        "Tier 1": { 101: ["Plain", 125, 125, 152, 152], 102: ["J-Mould", 148, 148, 171, 171], 103: ["Sharknose", 148, 148, 171, 171], 104: ["Bevelled Edge", 148, 148, 171, 171] },
+        "Tier 2": { 201: ["Ashlee", 148, 148, 171, 171], 202: ["Hamilton", 148, 148, 171, 171], 203: ["Vertical Grooves", 148, 148, 171, 171] },
+        "Tier 3": { 301: ["Tarrone", 156, 156, 182, 182], 302: ["Bobby", 156, 156, 182, 182], 303: ["Orford", 156, 156, 182, 182] },
+        "Tier 4": { 401: ["Shaker", 171, 171, 194, 194], 402: ["Shaker 45", 171, 171, 194, 194], 403: ["Shaker w/Lines", 180, 180, 203, 203], 404: ["Jack", 180, 180, 203, 203] },
+        "Tier 5": { 501: ["Georgia", 183, 183, 211, 211], 502: ["Branxholme", 183, 183, 211, 211], 503: ["Rosebrook", 183, 183, 211, 211] },
+        "Other": { 600: ["Benchtop", 160, 160, 160, 160], 700: ["Molding", 110, 110, 110, 110] }
     };
     
     // Load from localStorage or use defaults
@@ -5103,8 +5103,9 @@ function genPDF() {
             const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
             history.forEach(job => {
                 if (job.client && !seen.has(job.client.toLowerCase())) {
+                    const clientId = 'client-' + btoa(job.client.toLowerCase()).replace(/[^a-zA-Z0-9]/g, '');
                     allClients.push({
-                        id: 'client-' + Date.now() + Math.random(),
+                        id: clientId,
                         name: job.client,
                         contactName: '',
                         landline: '',
@@ -5123,8 +5124,9 @@ function genPDF() {
             if (typeof clients !== 'undefined' && clients.length > 0) {
                 clients.forEach(clientName => {
                     if (clientName && !seen.has(clientName.toLowerCase())) {
+                        const clientId = 'client-' + btoa(clientName.toLowerCase()).replace(/[^a-zA-Z0-9]/g, '');
                         allClients.push({
-                            id: 'client-' + Date.now() + Math.random(),
+                            id: clientId,
                             name: clientName,
                             contactName: '',
                             landline: '',
@@ -5159,7 +5161,7 @@ function genPDF() {
                     </div>
                     <div style="display:flex; gap:8px;">
                         <button onclick="showEditClientForm('${client.id}')" style="background:#2196f3; color:#fff; border:none; padding:8px 14px; border-radius:4px; font-weight:900; font-size:11px; cursor:pointer;">✏️ EDIT</button>
-                        <button onclick="deleteClient('${client.id}')" style="background:#ff3b30; color:#fff; border:none; padding:8px 14px; border-radius:4px; font-weight:900; font-size:11px; cursor:pointer;">🗑️ DELETE</button>
+                        <button onclick="if(confirm('Delete ${client.name}?')) { deleteClient('${client.id}'); }" style="background:#ff3b30; color:#fff; border:none; padding:8px 14px; border-radius:4px; font-weight:900; font-size:11px; cursor:pointer;">🗑️ DELETE</button>
                     </div>
                 </div>`;
             });
@@ -5523,15 +5525,34 @@ function genPDF() {
 
     function deleteClient(clientId) {
         const db = getClientDatabase();
-        if (!db[clientId]) return;
-        const clientName = db[clientId].name;
         
-        if (!confirm('Delete ' + clientName + '?')) return;
+        // Try to find client by ID first
+        let client = db[clientId];
+        let clientName = client ? client.name : null;
         
-        // 1. Delete from database
-        delete db[clientId];
-        saveClientDatabase(db);
-        console.log(`✓ Deleted ${clientName} from database`);
+        // If not found by ID, try to extract name from the hash-based ID and search
+        if (!clientName) {
+            // Look through all clients to find matching ID
+            Object.values(db).forEach(c => {
+                const hashId = 'client-' + btoa(c.name.toLowerCase()).replace(/[^a-zA-Z0-9]/g, '');
+                if (hashId === clientId) {
+                    client = c;
+                    clientName = c.name;
+                }
+            });
+        }
+        
+        if (!clientName) {
+            console.error(`Client not found: ${clientId}`);
+            return;
+        }
+        
+        // 1. Delete from database if it exists
+        if (client && client.id) {
+            delete db[client.id];
+            saveClientDatabase(db);
+            console.log(`✓ Deleted ${clientName} from database`);
+        }
         
         // 2. Remove ALL jobs with this client from job history
         const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
@@ -5577,7 +5598,6 @@ function genPDF() {
             <table style="width:100%; border-collapse:collapse; font-size:10px; background:#fff;">
                 <tr style="background:#000; color:var(--gs); font-weight:900;">
                     <th style="padding:8px; text-align:left; width:150px;">Profile</th>
-                    <th style="padding:8px; text-align:center;">Clear</th>
                     <th style="padding:8px; text-align:center;">Matt</th>
                     <th style="padding:8px; text-align:center;">Satin</th>
                     <th style="padding:8px; text-align:center;">Semi-Gloss</th>
@@ -5620,9 +5640,6 @@ function genPDF() {
                     <td style="padding:8px; text-align:center;">
                         <input type="number" inputmode="numeric" value="${prices[3]}" onchange="updatePricingMatrix('${tierName}', ${code}, 3, this.value)" style="width:60px; padding:6px; border:1px solid #ddd; border-radius:4px; text-align:center;"> $
                     </td>
-                    <td style="padding:8px; text-align:center;">
-                        <input type="number" inputmode="numeric" value="${prices[4]}" onchange="updatePricingMatrix('${tierName}', ${code}, 4, this.value)" style="width:60px; padding:6px; border:1px solid #ddd; border-radius:4px; text-align:center;"> $
-                    </td>
                 </tr>`;
             });
         });
@@ -5631,8 +5648,8 @@ function genPDF() {
         const unallocatedDoors = getUnallocatedDoors();
         
         // Unallocated Doors Section
-        html += `<tr style="background:#fff3cd; border-top:3px solid #ffb300;"><td colspan="6" style="padding:12px; font-weight:900; color:#000; font-size:12px;">⚠️ UNALLOCATED DOORS (${unallocatedDoors.length} to assign)</td></tr>
-        <tr style="background:#ffe0b2;"><td colspan="6" style="padding:10px; font-size:10px; color:#000; border-bottom:2px solid #ff9800;">
+        html += `<tr style="background:#fff3cd; border-top:3px solid #ffb300;"><td colspan="5" style="padding:12px; font-weight:900; color:#000; font-size:12px;">⚠️ UNALLOCATED DOORS (${unallocatedDoors.length} to assign)</td></tr>
+        <tr style="background:#ffe0b2;"><td colspan="5" style="padding:10px; font-size:10px; color:#000; border-bottom:2px solid #ff9800;">
             <strong>📋 HOW TO ALLOCATE:</strong><br>
             1️⃣ Set prices for each finish (or use defaults)<br>
             2️⃣ Select a tier from the dropdown<br>
@@ -5649,7 +5666,6 @@ function genPDF() {
                     </td>
                     <td colspan="5" style="padding:8px; text-align:center;">
                         <div style="display:flex; gap:5px; margin-bottom:5px; flex-wrap:wrap; justify-content:center;">
-                            <input type="number" inputmode="numeric" id="unalloc_clear_${door.code}" value="125" placeholder="Clear" style="width:50px; padding:4px; border:1px solid #ddd; border-radius:4px; text-align:center; font-size:10px;">
                             <input type="number" inputmode="numeric" id="unalloc_matt_${door.code}" value="125" placeholder="Matt" style="width:50px; padding:4px; border:1px solid #ddd; border-radius:4px; text-align:center; font-size:10px;">
                             <input type="number" inputmode="numeric" id="unalloc_satin_${door.code}" value="125" placeholder="Satin" style="width:50px; padding:4px; border:1px solid #ddd; border-radius:4px; text-align:center; font-size:10px;">
                             <input type="number" inputmode="numeric" id="unalloc_semigloss_${door.code}" value="152" placeholder="Semi" style="width:50px; padding:4px; border:1px solid #ddd; border-radius:4px; text-align:center; font-size:10px;">
@@ -5667,7 +5683,7 @@ function genPDF() {
                 </tr>`;
             });
         } else {
-            html += `<tr style="background:#fffaf0;"><td colspan="6" style="padding:12px; text-align:center; color:#999; font-size:11px;">✓ All doors allocated!</td></tr>`;
+            html += `<tr style="background:#fffaf0;"><td colspan="5" style="padding:12px; text-align:center; color:#999; font-size:11px;">✓ All doors allocated!</td></tr>`;
         }
         
         html += `</table>`;
@@ -5718,7 +5734,6 @@ function genPDF() {
             return;
         }
         
-        const clear = parseFloat(document.getElementById(`unalloc_clear_${code}`).value) || 125;
         const matt = parseFloat(document.getElementById(`unalloc_matt_${code}`).value) || 125;
         const satin = parseFloat(document.getElementById(`unalloc_satin_${code}`).value) || 125;
         const semiGloss = parseFloat(document.getElementById(`unalloc_semigloss_${code}`).value) || 152;
@@ -5726,11 +5741,11 @@ function genPDF() {
         
         console.log(`✅ ASSIGNING: "${doorName}" → ${tier}`);
         console.log(`  Before: ${profiles.length} profiles in array`);
-        console.log(`  Prices: Clear=${clear}, Matt=${matt}, Satin=${satin}, Semi=${semiGloss}, Gloss=${gloss}`);
+        console.log(`  Prices: Matt=${matt}, Satin=${satin}, Semi=${semiGloss}, Gloss=${gloss}`);
         
         // Add to tier
         const newCode = parseInt(Object.keys(masterMatrix[tier]).sort().reverse()[0]) + 1;
-        masterMatrix[tier][newCode] = [doorName, clear, matt, satin, semiGloss, gloss];
+        masterMatrix[tier][newCode] = [doorName, matt, satin, semiGloss, gloss];
         console.log(`  ✓ Added to masterMatrix[${tier}][${newCode}]`);
         
         localStorage.setItem('masterMatrix', JSON.stringify(masterMatrix));
