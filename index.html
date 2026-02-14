@@ -776,7 +776,37 @@
                 </div>
                 <button onclick="saveDefaultSettings()" style="border:none; background:#34c759; color:#fff; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">✓ SAVE DEFAULTS</button>
                 
-                <h4 style="margin-top:20px; margin-bottom:10px; font-weight:900;">Default Timeline Settings</h4>
+                <hr style="margin:30px 0; border:none; border-top:1px solid #ddd;">
+                
+                <h4 style="margin-top:20px; margin-bottom:10px; font-weight:900;">Company Details (PDF Header)</h4>
+                <p style="font-size:11px; color:#666; margin-bottom:15px;">Update your company information displayed on all PDF forms (Estimates, Quotes, Invoices, Supply Dockets)</p>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-bottom:20px;">
+                    <div>
+                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Company Name</label>
+                        <input type="text" id="companyName" placeholder="Paintworkz" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
+                    </div>
+                    <div>
+                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Phone Number</label>
+                        <input type="text" id="companyPhone" placeholder="0438 803 032" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
+                    </div>
+                    <div style="grid-column:1 / -1;">
+                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Email Address</label>
+                        <input type="email" id="companyEmail" placeholder="paint_workz@outlook.com" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
+                    </div>
+                    <div style="grid-column:1 / -1;">
+                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Address</label>
+                        <input type="text" id="companyAddress" placeholder="17 West Boundary Road, Hamilton 3300 VIC" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
+                    </div>
+                    <div style="grid-column:1 / -1;">
+                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Company Logo (PNG - Circle Logo)</label>
+                        <input type="file" id="companyLogo" accept="image/png" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:6px; font-size:11px; box-sizing:border-box;">
+                        <p style="font-size:10px; color:#999; margin-top:5px; margin-bottom:0;">Upload a PNG file for your circle logo (recommended size: 150x150px)</p>
+                    </div>
+                </div>
+                <button onclick="saveCompanyDetails()" style="border:none; background:#d4af37; color:#000; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer; margin-right:10px;">💾 SAVE COMPANY DETAILS</button>
+                <button onclick="resetCompanyDetails()" style="border:none; background:#ff9500; color:#fff; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">↻ RESET TO DEFAULTS</button>
+                
+                <hr style="margin:30px 0; border:none; border-top:1px solid #ddd;">
                 <p style="font-size:11px; color:#666; margin-bottom:10px;">Edit the default timeline phases for all new jobs</p>
                 <button onclick="editDefaultTimeline()" style="border:none; background:#2196f3; color:#fff; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">⚙️ EDIT DEFAULT TIMELINE</button>
                 
@@ -1025,6 +1055,7 @@
         renderHistory();
         renderScheduleCalendar();
         initializeDefaultSettings();  // Load default thickness and SE return values
+        initializeCompanyDetailsForm();  // Load company details for PDF headers
       } catch (error) {
       }
     }
@@ -3581,76 +3612,106 @@ function genPDF() {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF('p', 'mm', 'a4');
         
+        // Get company settings from localStorage or use defaults
+        const companySettings = JSON.parse(localStorage.getItem('companySettings')) || {
+            name: 'Paintworkz',
+            address: '17 West Boundary Road, Hamilton 3300 VIC',
+            phone: '0438 803 032',
+            email: 'paint_workz@outlook.com'
+        };
+        
         // Get job info
         const jobClient = document.getElementById('cli')?.value || '';
         const jobNum = document.getElementById('jNum')?.value || document.getElementById('jN')?.value || '';
         const jobName = document.getElementById('jNm')?.value || '';
         const paintColor = document.getElementById('p-color')?.value || '';
+        const paintBrand = document.getElementById('p-brand')?.value || '';
         
-        // Get ONLY the profiles actually used in THIS job - EXCLUDE Plain completely
-        const allProfiles = items.map(it => it.prof).filter(p => p && p.trim());
-        const usedProfiles = [...new Set(allProfiles)].filter(p => {
-            const lower = p.toLowerCase();
-            // Exclude anything with "plain" in it
-            return !lower.includes('plain');
-        }).sort();
+        // Get ALL profiles including Plain
+        const allProfiles = [...new Set(items
+            .map(it => it.prof)
+            .filter(p => p && p.trim())
+        )].sort();
         
         // Count items
         const totalItems = items.reduce((sum, item) => sum + parseInt(item.qty || 1), 0);
         
-        // ===== COMPANY HEADER =====
+        // ===== HEADER WITH LOGO & COMPANY INFO =====
         let y = 10;
-        doc.setFontSize(16);
-        doc.setFont(undefined, 'bold');
-        doc.text('SUPPLY DOCKET', 15, y);
-        y += 7;
+        let x = 15;
         
-        doc.setFontSize(10);
+        // Try to load logo from localStorage
+        const logoBase64 = localStorage.getItem('companyLogo');
+        
+        // Add logo in top right if exists
+        if (logoBase64) {
+            try {
+                doc.addImage(logoBase64, 'PNG', 170, 8, 25, 25);
+            } catch(e) {}
+        }
+        
+        // DOUBLED header size
+        doc.setFontSize(32);
         doc.setFont(undefined, 'bold');
-        doc.text('Paintworkz', 15, y);
-        y += 4;
+        doc.text('SUPPLY DOCKET', x, y);
+        y += 14;
+        
+        // ===== COMPANY DETAILS (LARGER) =====
+        doc.setFontSize(13);
+        doc.setFont(undefined, 'bold');
+        doc.text(companySettings.name, x, y);
+        y += 6;
         
         doc.setFontSize(9);
         doc.setFont(undefined, 'normal');
-        doc.text('17 West Boundary Road, Hamilton 3300 VIC', 15, y);
-        y += 3;
-        doc.text('Phone: 0438 803 032 | Email: paint_workz@outlook.com', 15, y);
-        y += 8;
+        doc.text(companySettings.address, x, y);
+        y += 4;
+        
+        doc.text(`Email: ${companySettings.email}`, x, y);
+        y += 4;
+        
+        doc.text(`Phone: ${companySettings.phone}`, x, y);
+        y += 7;
         
         // ===== JOB DETAILS =====
-        doc.setFontSize(11);
+        doc.setFontSize(13);
         doc.setFont(undefined, 'bold');
-        doc.text(`${jobClient}`, 15, y);
+        doc.text(`${jobClient}`, x, y);
         y += 6;
         
         doc.setFontSize(10);
         doc.setFont(undefined, 'normal');
         const jobLabel = jobName ? `${jobName}  |  Job #${jobNum}` : `Job #${jobNum}`;
-        doc.text(jobLabel, 15, y);
+        doc.text(jobLabel, x, y);
         y += 5;
         
-        const doorStyleText = usedProfiles.length > 0 ? usedProfiles.join(' / ') : 'Flat';
-        doc.text(`Door Profiles: ${doorStyleText}`, 15, y);
+        const doorStyleText = allProfiles.length > 0 ? allProfiles.join(' / ') : 'Flat';
+        doc.text(`Door Profiles: ${doorStyleText}`, x, y);
         y += 5;
         
-        doc.text(`Paint: ${paintColor}  |  Total Parts: ${totalItems}`, 15, y);
+        const fullPaintColor = paintBrand && paintColor ? `${paintBrand} ${paintColor}` : paintColor;
+        doc.text(`Paint Colour: ${fullPaintColor}`, x, y);
+        y += 5;
+        
+        doc.setFont(undefined, 'bold');
+        doc.text(`Total Parts: ${totalItems}`, x, y);
         y += 8;
         
         // ===== TABLE - FULL WIDTH =====
         const margin = 10;
         const pageWidth = doc.internal.pageSize.getWidth();
         
-        // Column headers with Description column
-        const headers = ['Qty', 'H', 'W', 'Thick', 'Moulded', 'Edges', 'Mode', 'Panel', 'Profile', 'Description', 'Colour'];
+        // Column headers - Description moved to LAST column
+        const headers = ['Qty', 'H', 'W', 'Thick', 'Moulded', 'Edges', 'Mode', 'Panel', 'Profile', 'Colour', 'Description'];
         // Full page width = 210mm - 20mm margins = 190mm
-        const colWidths = [7, 16, 16, 12, 9, 13, 8, 14, 28, 48, 19];
+        const colWidths = [7, 16, 16, 12, 10, 13, 8, 14, 28, 22, 44];
         const cellHeight = 7;
         
         // Draw header row
         doc.setFont(undefined, 'bold');
         doc.setFontSize(8);
         
-        let x = margin;
+        let startX = margin;
         headers.forEach((header, i) => {
             // Set colors
             doc.setFillColor(0, 0, 0);
@@ -3658,15 +3719,15 @@ function genPDF() {
             doc.setTextColor(255, 255, 255);
             
             // Draw cell
-            doc.rect(x, y, colWidths[i], cellHeight, 'FD');
+            doc.rect(startX, y, colWidths[i], cellHeight, 'FD');
             
             // Draw text CENTERED
-            doc.text(header, x + colWidths[i]/2, y + cellHeight/2 + 0.8, { 
+            doc.text(header, startX + colWidths[i]/2, y + cellHeight/2 + 0.8, { 
                 align: 'center', 
                 valign: 'middle',
                 maxWidth: colWidths[i] - 0.5 
             });
-            x += colWidths[i];
+            startX += colWidths[i];
         });
         y += cellHeight;
         
@@ -3675,7 +3736,7 @@ function genPDF() {
         doc.setFontSize(8);
         
         items.forEach((item) => {
-            x = margin;
+            startX = margin;
             
             // Prepare data
             const qty = item.qty || 1;
@@ -3710,13 +3771,15 @@ function genPDF() {
             // Profile/Mould type
             const profile = item.prof || '';
             
-            // Description
+            // Paint colour WITH BRAND
+            const itemBrand = item.brand || '';
+            const itemColor = item.color || '';
+            const colourDisplay = itemBrand && itemColor ? `${itemBrand} ${itemColor}` : itemColor;
+            
+            // Description - only if filled out (not empty)
             const description = item.desc || '';
             
-            // Paint colour
-            const colour = item.color || '';
-            
-            const data = [qty, height, width, thickness, isMoulded, edgesDisplay, paintMode, panelType, profile, description, colour];
+            const data = [qty, height, width, thickness, isMoulded, edgesDisplay, paintMode, panelType, profile, colourDisplay, description];
             
             // Draw cells
             data.forEach((value, i) => {
@@ -3724,16 +3787,16 @@ function genPDF() {
                 doc.setTextColor(0, 0, 0);
                 
                 // Draw border
-                doc.rect(x, y, colWidths[i], cellHeight);
+                doc.rect(startX, y, colWidths[i], cellHeight);
                 
                 // Draw text CENTERED
                 const displayText = value.toString().substring(0, 40);
-                doc.text(displayText, x + colWidths[i]/2, y + cellHeight/2 + 0.8, { 
+                doc.text(displayText, startX + colWidths[i]/2, y + cellHeight/2 + 0.8, { 
                     align: 'center',
                     valign: 'middle',
                     maxWidth: colWidths[i] - 0.5
                 });
-                x += colWidths[i];
+                startX += colWidths[i];
             });
             y += cellHeight;
             
@@ -3753,18 +3816,18 @@ function genPDF() {
                 // Redraw header on new page
                 doc.setFont(undefined, 'bold');
                 doc.setFontSize(8);
-                x = margin;
+                startX = margin;
                 headers.forEach((header, i) => {
                     doc.setFillColor(0, 0, 0);
                     doc.setDrawColor(0, 0, 0);
                     doc.setTextColor(255, 255, 255);
-                    doc.rect(x, y, colWidths[i], cellHeight, 'FD');
-                    doc.text(header, x + colWidths[i]/2, y + cellHeight/2 + 0.8, { 
+                    doc.rect(startX, y, colWidths[i], cellHeight, 'FD');
+                    doc.text(header, startX + colWidths[i]/2, y + cellHeight/2 + 0.8, { 
                         align: 'center',
                         valign: 'middle',
                         maxWidth: colWidths[i] - 0.5
                     });
-                    x += colWidths[i];
+                    startX += colWidths[i];
                 });
                 y += cellHeight;
                 doc.setFont(undefined, 'normal');
@@ -6278,6 +6341,74 @@ function genPDF() {
         
         console.log('✓ Default settings loaded:', settings);
     }
+    
+    // ===== COMPANY DETAILS FUNCTIONS =====
+    function saveCompanyDetails() {
+        const name = document.getElementById('companyName')?.value || 'Paintworkz';
+        const phone = document.getElementById('companyPhone')?.value || '0438 803 032';
+        const email = document.getElementById('companyEmail')?.value || 'paint_workz@outlook.com';
+        const address = document.getElementById('companyAddress')?.value || '17 West Boundary Road, Hamilton 3300 VIC';
+        
+        const settings = {
+            name: name,
+            phone: phone,
+            email: email,
+            address: address
+        };
+        
+        localStorage.setItem('companySettings', JSON.stringify(settings));
+        
+        // Handle logo upload if provided
+        const logoInput = document.getElementById('companyLogo');
+        if (logoInput && logoInput.files && logoInput.files[0]) {
+            const file = logoInput.files[0];
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                localStorage.setItem('companyLogo', e.target.result);
+                showGlobalNotification(`✓ COMPANY DETAILS SAVED\\nName: ${name}\\nLogo uploaded`, '#e8f5e9', '#34c759');
+                console.log('✓ Company details and logo saved');
+            };
+            reader.readAsDataURL(file);
+        } else {
+            showGlobalNotification(`✓ COMPANY DETAILS SAVED\\nName: ${name}`, '#e8f5e9', '#34c759');
+            console.log('✓ Company details saved:', settings);
+        }
+    }
+    
+    function resetCompanyDetails() {
+        if (confirm('Reset company details to defaults?')) {
+            localStorage.removeItem('companySettings');
+            localStorage.removeItem('companyLogo');
+            initializeCompanyDetailsForm();
+            showGlobalNotification('✓ RESET TO DEFAULTS', '#fff3e0', '#ff9500');
+        }
+    }
+    
+    function initializeCompanyDetailsForm() {
+        const defaults = {
+            name: 'Paintworkz',
+            address: '17 West Boundary Road, Hamilton 3300 VIC',
+            phone: '0438 803 032',
+            email: 'paint_workz@outlook.com'
+        };
+        
+        const saved = JSON.parse(localStorage.getItem('companySettings')) || {};
+        const settings = { ...defaults, ...saved };
+        
+        const nameInput = document.getElementById('companyName');
+        const phoneInput = document.getElementById('companyPhone');
+        const emailInput = document.getElementById('companyEmail');
+        const addressInput = document.getElementById('companyAddress');
+        
+        if (nameInput) nameInput.value = settings.name;
+        if (phoneInput) phoneInput.value = settings.phone;
+        if (emailInput) emailInput.value = settings.email;
+        if (addressInput) addressInput.value = settings.address;
+        
+        console.log('✓ Company details form initialized');
+    }
+    
+    // ===== END COMPANY DETAILS FUNCTIONS =====
 
     function editJobTimeline(jobIdx) {
         const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
