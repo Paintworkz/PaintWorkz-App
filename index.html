@@ -379,8 +379,6 @@
     <div style="display:flex; gap:10px; align-items:center;">
         <div id="goBackBtn" class="icon-btn" onclick="goBackJob()" style="display:none;" title="Exit without saving if no changes made">← Back</div>
         <div class="icon-btn" onclick="saveJob()">💾</div>
-        <div class="icon-btn" onclick="PaintWorkzEngine.generatePDF('Estimate', items)" title="Generate PDF Estimate">📄 Est</div>
-        <div class="icon-btn" onclick="PaintWorkzEngine.generatePDF('Quote', items)" title="Generate PDF Quote">💰 Quote</div>
     </div>
 </header>
 
@@ -3285,33 +3283,24 @@
             }
             
             // Check if jsPDF is loaded
-            if (!window.jspdf) {
-                notify('⚠️ PDF library not loaded yet. Try again.');
+            if (!window.jspdf || typeof window.jspdf.jsPDF === 'undefined') {
+                notify('❌ PDF library not loaded. Please refresh the page.');
+                console.error('jsPDF not available');
                 return;
             }
             
-            // Check if jsPDF is loaded
-        if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) {
-            notify('❌ PDF library not loaded. Please refresh the page.');
-            console.error('jsPDF not available at window.jspdf');
-            return;
-        }
-        
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF();
-            
-            // Route to correct form generator
-            if (type === 'Supply Docket') {
+            // Use PaintWorkzEngine for PDF generation
+            if (type === 'Estimate' || type === 'Quote Form') {
+                PaintWorkzEngine.generatePDF(type, items);
+                notify(`✓ ${type} PDF generated`);
+            } else if (type === 'Supply Docket') {
                 genSupplyDocket();
             } else if (type === 'Mixing Card') {
                 genMixingCard();
             } else if (type === 'Invoice') {
                 genInvoice();
-            } else if (type === 'Quote Form') {
-                genQuoteForm();
             } else {
-                // Default to Estimate
-                genEstimate();
+                notify('Form type not yet implemented');
             }
         } catch(error) {
             console.error('❌ PDF Generation Error:', error);
@@ -3452,37 +3441,12 @@
 
     // ===== QUOTE FORM (stub) =====
     function genQuoteForm() {
-    try {
-        if (!window.jspdf || !window.jspdf.jsPDF) {
-            notify('❌ PDF library loading...');
+        if (items.length === 0) {
+            notify('❌ Add parts first');
             return;
         }
-        
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF();
-        
-        const job = window.currentJob || {};
-        const client = job.client || {};
-        
-        doc.setFontSize(16);
-        doc.text('QUOTE', 20, 20);
-        
-        doc.setFontSize(10);
-        doc.text('Client: ' + (client.name || 'Name TBD'), 20, 40);
-        doc.text('Date: ' + new Date().toLocaleDateString(), 20, 50);
-        doc.text('Valid for: 30 days', 20, 60);
-        
-        doc.text('Services: Painting works', 20, 80);
-        doc.text('Estimated Cost: $0.00', 20, 100);
-        
-        doc.save(`Quote_${job.jobId || 'Job'}.pdf`);
-        notify('✓ Quote downloaded');
-        
-    } catch(err) {
-        console.error('Quote error:', err);
-        notify('❌ Error: ' + err.message);
+        PaintWorkzEngine.generatePDF('Quote', items);
     }
-}
 
 // Main PDF export function - routes to estimate
 function genPDF() {
