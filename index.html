@@ -1716,159 +1716,59 @@
             totalParts: document.getElementById('tQ')?.innerText || '0',
             timestamp: new Date().toISOString(),
             savedDate: new Date().toLocaleString('en-AU'),
-            completed: false  // Always false when saving new
+            completed: false
         };
         
-        
-        // Get existing history
         let history = JSON.parse(localStorage.getItem('jobHistory')) || [];
+        let wasUpdate = false;
         
-        // Check if we're overwriting an existing job
+        // RECALLED JOB BEING UPDATED
         if (currentEditingJobIndex !== null) {
             if (confirm(`Overwrite existing job #${jobData.jobNum}?`)) {
                 history[currentEditingJobIndex] = jobData;
-                currentEditingJobIndex = null; // Reset for next job
                 notify('✓ Job Updated');
                 coloredToast(`✏️ JOB UPDATED #${jobData.jobNum} • ${jobData.client}`, '#ffc107');
+                wasUpdate = true;
+                currentEditingJobIndex = null;
             } else {
-                return; // Don't save if user cancels
+                return;
             }
-        } else {
-            // Add new job to history - CHECK FOR DUPLICATES FIRST
+        } 
+        else {
+            // Check for duplicates
             const existingIdx = history.findIndex(j => j.jobNum === jobData.jobNum && j.dateReceived === jobData.dateReceived && j.client === jobData.client);
             
             if (existingIdx !== -1) {
-                // Job with same number, date, and client already exists - update it instead
                 if (confirm(`Job #${jobData.jobNum} already exists. Replace it?`)) {
                     history[existingIdx] = jobData;
-                    notify('✓ Job Updated (duplicate prevented)');
+                    notify('✓ Job Updated');
                     coloredToast(`✏️ JOB UPDATED #${jobData.jobNum} • ${jobData.client}`, '#ffc107');
+                    wasUpdate = true;
                 } else {
                     return;
                 }
             } else {
-                // New unique job
+                // New job
                 history.unshift(jobData);
                 notify('✓ Job Saved');
                 coloredToast(`✅ NEW JOB SAVED #${jobData.jobNum} • ${jobData.client}`, '#34c759');
             }
         }
         
-        // Keep only last 50 jobs
         history = history.slice(0, 50);
         localStorage.setItem('jobHistory', JSON.stringify(history));
         
-        // Send appropriate notification based on what happened
-        if (currentEditingJobIndex !== null) {
-            coloredToast(`✏️ JOB UPDATED #${jobData.jobNum} • ${jobData.client}`, '#ffc107');
-        } else if (history.length > 0 && history[0].jobNum === jobData.jobNum) {
-            // Check if this was a duplicate update
-            const duplicateMatches = history.filter(j => j.jobNum === jobData.jobNum).length;
-            if (duplicateMatches > 1) {
-                coloredToast(`✏️ JOB UPDATED #${jobData.jobNum} • ${jobData.client}`, '#ffc107');
-            } else {
-                coloredToast(`✅ NEW JOB SAVED #${jobData.jobNum} • ${jobData.client}`, '#34c759');
-            }
-        }
-        
-        // Sync to Firebase immediately
         if (window.syncJobsToFirebase) {
             try {
                 window.syncJobsToFirebase();
-                console.log('🔄 Job saved and synced to Firebase');
             } catch(e) {
-                console.error('Firebase sync error on save:', e);
+                console.error('Firebase sync error:', e);
             }
         }
         
-        // CLEAR FIRST - before rendering
-        console.log('🧹 Starting measure sheet clear...');
-        items = [];
-        console.log('✓ Cleared items array');
-        
-        // Clear all form fields with element existence checks
-        try {
-            const cliEl = document.getElementById('cli');
-            if (cliEl) {
-                cliEl.value = '';
-                console.log('✓ Cleared client');
-            }
-            
-            const dRecEl = document.getElementById('dRec');
-            if (dRecEl) {
-                dRecEl.value = '';
-                console.log('✓ Cleared date received');
-            }
-            
-            const jNmEl = document.getElementById('jNm');
-            if (jNmEl) {
-                jNmEl.value = '';
-                console.log('✓ Cleared job name');
-            }
-            
-            const jNEl = document.getElementById('jN');
-            if (jNEl) {
-                jNEl.value = '';
-                console.log('✓ Cleared job number');
-            }
-            
-            const pBrandEl = document.getElementById('p-brand');
-            if (pBrandEl) {
-                pBrandEl.value = 'Wattyl';
-                console.log('✓ Reset paint brand to Wattyl');
-            }
-            
-            const pColorEl = document.getElementById('p-color');
-            if (pColorEl) {
-                pColorEl.value = '';
-                console.log('✓ Cleared paint colour');
-            }
-            
-            const pCodeEl = document.getElementById('p-code');
-            if (pCodeEl) {
-                pCodeEl.value = '';
-                console.log('✓ Cleared paint code');
-            }
-            
-            const pFinishEl = document.getElementById('p-finish');
-            if (pFinishEl) {
-                pFinishEl.value = 'Satin';
-                console.log('✓ Reset paint finish to Satin');
-            }
-            
-            // Clear totals
-            const totSqmEl = document.getElementById('tA');
-            if (totSqmEl) {
-                totSqmEl.innerText = '0.000';
-                console.log('✓ Cleared total SQM (m²)');
-            }
-            
-            const totPartsEl = document.getElementById('tQ');
-            if (totPartsEl) {
-                totPartsEl.innerText = '0';
-                console.log('✓ Cleared total parts');
-            }
-        } catch(e) {
-            console.error('Error clearing form fields:', e);
-        }
-        
-        console.log('✓ All form fields cleared');
-        
-        // Clear the items list from localStorage too
-        localStorage.removeItem('currentJob');
-        console.log('✓ Cleared currentJob from localStorage');
-        
-        // Now render the empty form
-        render();
-        console.log('✓ Measure sheet re-rendered (empty)');
-        
-        // Then update other views
         renderHistory();
         renderJobTasks();
         renderScheduleCalendar();
-        
-        notify('✓ Job Saved - Form ready for next entry');
-        console.log('📋 Ready for next job entry');
     }
 
     let historyFilter = 'all';
@@ -2883,24 +2783,40 @@
     function filterPanels(filterType) {
         currentPanelFilter = filterType;
         
-        // Update button styles - find the actual button element
-        const clickedBtn = event.target.tagName === 'BUTTON' ? event.target : event.target.closest('button');
+        // Define bubble colors
+        const bubbleColors = {
+            'all': { bg: '#d4af37', text: '#000' },
+            'panel': { bg: '#e8f4f8', text: '#0288d1' },
+            'door': { bg: '#f3e5f5', text: '#7b1fa2' },
+            'drawer': { bg: '#e3f2fd', text: '#1565c0' },
+            'custom': { bg: '#fce4ec', text: '#c2185b' },
+            'moulded': { bg: '#fff3e0', text: '#e65100' },
+            'flat': { bg: '#f1f8e9', text: '#558b2f' },
+            'ss': { bg: '#e0f2f1', text: '#00695c' },
+            'ds': { bg: '#ede7f6', text: '#4527a0' },
+            'se': { bg: '#fbe9e7', text: '#bf360c' }
+        };
         
+        // Update all buttons - keep their original colors, but show active state with border/shadow
         document.querySelectorAll('.filter-btn').forEach(btn => {
-            btn.style.background = '#fff';
-            btn.style.border = '1px solid #ddd';
-            btn.style.color = '#333';  // Reset text color
-            btn.style.fontWeight = '900';  // Keep bold
+            const btnType = btn.textContent.toLowerCase();
+            const color = bubbleColors[btnType] || { bg: '#f0f0f0', text: '#333' };
+            
+            btn.style.background = color.bg;
+            btn.style.color = color.text;
+            btn.style.border = 'none';
+            btn.style.boxShadow = '0 1px 3px rgba(0,0,0,0.08)';
+            
+            // Active state - add darker border and stronger shadow
+            if (btnType === filterType.toLowerCase()) {
+                btn.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15), inset 0 0 0 2px ' + color.text;
+                btn.style.transform = 'scale(1.05)';
+            } else {
+                btn.style.transform = 'scale(1)';
+            }
         });
         
-        if (clickedBtn) {
-            clickedBtn.style.background = '#2196f3';
-            clickedBtn.style.color = '#fff';
-            clickedBtn.style.border = '1px solid #2196f3';
-            clickedBtn.style.fontWeight = '900';
-        }
-        
-        render(); // Re-render with filter applied
+        render();
     }
 
     function render() {
