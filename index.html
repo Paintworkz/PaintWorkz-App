@@ -1646,8 +1646,8 @@
         if (currentEditingJobIndex !== null) {
             if (confirm(`Overwrite existing job #${jobData.jobNum}?`)) {
                 history[currentEditingJobIndex] = jobData;
-                currentEditingJobIndex = null; // Reset for next job
-                coloredToast(`✏️ JOB UPDATED #${jobData.jobNum} • ${jobData.client}`, '#ffc107');
+                currentEditingJobIndex = null;
+                addNotification('JOB_UPDATED', `✏️ JOB UPDATED #${jobData.jobNum} • ${jobData.client}`, { bgColor: '#ffc107', jobNum: jobData.jobNum, client: jobData.client });
             } else {
                 return; // Don't save if user cancels
             }
@@ -1659,14 +1659,14 @@
                 // Job with same number, date, and client already exists - update it instead
                 if (confirm(`Job #${jobData.jobNum} already exists. Replace it?`)) {
                     history[existingIdx] = jobData;
-                    coloredToast(`✏️ JOB UPDATED #${jobData.jobNum} • ${jobData.client}`, '#ffc107');
+                    addNotification('JOB_UPDATED', `✏️ JOB UPDATED #${jobData.jobNum} • ${jobData.client}`, { bgColor: '#ffc107', jobNum: jobData.jobNum, client: jobData.client });
                 } else {
                     return;
                 }
             } else {
                 // New unique job
                 history.unshift(jobData);
-                coloredToast(`✅ NEW JOB SAVED #${jobData.jobNum} • ${jobData.client}`, '#34c759');
+                addNotification('JOB_SAVED', `✅ NEW JOB SAVED #${jobData.jobNum} • ${jobData.client}`, { bgColor: '#34c759', jobNum: jobData.jobNum, client: jobData.client });
             }
         }
         
@@ -2601,7 +2601,7 @@
             
             document.getElementById('new-client').value=''; 
             refreshLists();
-            coloredToast(`✅ NEW CLIENT ADDED: "${v}" - Go to Admin to fill details!`, '#34c759');
+            addNotification('CLIENT_ADDED', `✅ NEW CLIENT ADDED: "${v}"`, { bgColor: '#34c759', clientName: v });
         } else if (clients.includes(v)) {
             notify('Client Already Exists');
         }
@@ -2843,49 +2843,38 @@
 
     function notify(m) { 
         const t = document.getElementById('toast');
-        if (!t) return; // Exit if toast doesn't exist
+        if (!t) return;
         t.innerText = m; 
         t.style.display = 'block'; 
         setTimeout(()=>t.style.display='none', 1500); 
     }
     
-    function coloredToast(message, bgColor = '#34c759') {
-        // Show toast at bottom
+    // WORKING notification system - adds to adminAlerts like job complete does
+    function addNotification(type, message, details) {
+        const alert = {
+            timestamp: new Date().toISOString(),
+            type: type,
+            message: message,
+            ...details
+        };
+        
+        let adminAlerts = JSON.parse(localStorage.getItem('adminAlerts')) || [];
+        adminAlerts.unshift(alert);
+        adminAlerts = adminAlerts.slice(0, 100);
+        localStorage.setItem('adminAlerts', JSON.stringify(adminAlerts));
+        
+        // Show toast
         const toast = document.getElementById('toast');
         if (toast) {
             toast.innerText = message;
-            toast.style.background = bgColor;
+            toast.style.background = details.bgColor || '#34c759';
             toast.style.display = 'block';
             setTimeout(() => toast.style.display = 'none', 3000);
         }
         
-        // Add to globalNotifications list (Schedule tab)
-        const globalNotif = document.getElementById('globalNotifications');
-        if (globalNotif) {
-            // Remove placeholder if it exists
-            const placeholder = globalNotif.querySelector('p');
-            if (placeholder && placeholder.innerText.includes('No notifications')) {
-                placeholder.remove();
-            }
-            
-            // Create notification item
-            const notifItem = document.createElement('div');
-            notifItem.style.cssText = `background:${bgColor}; color:#fff; padding:10px 12px; margin-bottom:8px; border-radius:4px; display:flex; justify-content:space-between; align-items:center; font-weight:900; font-size:11px;`;
-            
-            const textSpan = document.createElement('span');
-            textSpan.innerText = message;
-            textSpan.style.flex = '1';
-            
-            const dismissBtn = document.createElement('button');
-            dismissBtn.innerText = '✕';
-            dismissBtn.style.cssText = `background:transparent; color:#fff; border:none; cursor:pointer; font-weight:900; font-size:14px; margin-left:10px; padding:0;`;
-            dismissBtn.onclick = () => notifItem.remove();
-            
-            notifItem.appendChild(textSpan);
-            notifItem.appendChild(dismissBtn);
-            globalNotif.appendChild(notifItem);
-            
-            console.log('✓ Notification added to Schedule view:', message);
+        // Refresh notifications if on Schedule tab
+        if (document.getElementById('globalNotifications')) {
+            renderGlobalNotifications();
         }
     }
     
@@ -4065,11 +4054,9 @@
     
     function renderGlobalNotifications() {
         const notificationsDiv = document.getElementById('globalNotifications');
-        if (!notificationsDiv) return; // Exit if not on Schedule tab
+        if (!notificationsDiv) return;
         
         const adminAlerts = JSON.parse(localStorage.getItem('adminAlerts')) || [];
-        
-        // Update badge count
         updateNotificationBadge();
         
         if (adminAlerts.length === 0) {
@@ -4078,16 +4065,37 @@
         }
         
         let notificationsHTML = '';
-        adminAlerts.slice(0, 5).forEach((alert, i) => {
+        adminAlerts.slice(0, 10).forEach((alert, i) => {
             const alertDate = new Date(alert.timestamp);
+            let icon = '✓';
+            let color = '#34c759';
+            let title = 'Notification';
+            
+            if (alert.type === 'JOB_COMPLETED') {
+                icon = '✅';
+                color = '#34c759';
+                title = 'Job Completed';
+            } else if (alert.type === 'JOB_SAVED') {
+                icon = '✅';
+                color = '#34c759';
+                title = 'New Job Saved';
+            } else if (alert.type === 'JOB_UPDATED') {
+                icon = '✏️';
+                color = '#ffc107';
+                title = 'Job Updated';
+            } else if (alert.type === 'CLIENT_ADDED') {
+                icon = '👤';
+                color = '#34c759';
+                title = 'New Client';
+            }
+            
             notificationsHTML += `<div style="padding:10px; border-bottom:1px solid #ddd; background:#fff; display:flex; justify-content:space-between; align-items:start;">
                 <div style="flex:1;">
                     <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:4px;">
-                        <div style="font-weight:900; color:#34c759; font-size:11px;">✓ Job Completed</div>
-                        <button onclick="deleteAdminAlert(${i})" style="background:#ff3b30; color:#fff; border:none; padding:4px 8px; border-radius:4px; font-weight:900; font-size:9px; cursor:pointer; white-space:nowrap; margin-left:8px;">✕ DISMISS</button>
+                        <div style="font-weight:900; color:${color}; font-size:11px;">${icon} ${title}</div>
+                        <button onclick="deleteAdminAlert(${i})" style="background:#ff3b30; color:#fff; border:none; padding:4px 8px; border-radius:4px; font-weight:900; font-size:9px; cursor:pointer; white-space:nowrap; margin-left:8px;">✕</button>
                     </div>
-                    <div style="font-size:10px; color:#000; font-weight:700; margin:2px 0;">Job #${alert.jobNum}: ${alert.jobName}</div>
-                    <div style="font-size:9px; color:#666;">${alert.client} • ${alert.totalParts} parts • ${alert.totalSqm} SQM (m²)</div>
+                    <div style="font-size:10px; color:#000; font-weight:700; margin:2px 0;">${alert.message}</div>
                     <div style="font-size:9px; color:#999; margin-top:4px;">
                         ${alertDate.toLocaleDateString('en-AU')} ${alertDate.toLocaleTimeString('en-AU', {hour: '2-digit', minute: '2-digit'})}
                     </div>
@@ -4095,8 +4103,8 @@
             </div>`;
         });
         
-        if (adminAlerts.length > 5) {
-            notificationsHTML += `<div style="padding:10px; text-align:center; color:#999; font-size:10px;">+${adminAlerts.length - 5} more notifications</div>`;
+        if (adminAlerts.length > 10) {
+            notificationsHTML += `<div style="padding:10px; text-align:center; color:#999; font-size:10px;">+${adminAlerts.length - 10} more notifications</div>`;
         }
         
         notificationsDiv.innerHTML = notificationsHTML;
