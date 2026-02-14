@@ -327,11 +327,11 @@
 <div id="calendarModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:5000; align-items:center; justify-content:center;">
     <div style="background:#fff; border-radius:16px; padding:20px; width:90%; max-width:400px; box-shadow:0 10px 40px rgba(0,0,0,0.3);">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-            <button onclick="prevMonth()" style="border:none; background:#f0f0f0; width:40px; height:40px; border-radius:8px; font-weight:900; font-size:18px; cursor:pointer; opacity:0.3; pointer-events:none;" title="Continuous schedule view">←</button>
+            <button onclick="prevMonth()" style="border:none; background:#f0f0f0; width:40px; height:40px; border-radius:8px; font-weight:900; font-size:18px; cursor:pointer;" title="Previous month">←</button>
             <div style="text-align:center; flex:1;">
                 <div id="monthYear" style="font-weight:900; font-size:16px; color:#000;"></div>
             </div>
-            <button onclick="nextMonth()" style="border:none; background:#f0f0f0; width:40px; height:40px; border-radius:8px; font-weight:900; font-size:18px; cursor:pointer; opacity:0.3; pointer-events:none;" title="Continuous schedule view">→</button>
+            <button onclick="nextMonth()" style="border:none; background:#f0f0f0; width:40px; height:40px; border-radius:8px; font-weight:900; font-size:18px; cursor:pointer;" title="Next month">→</button>
         </div>
         
         <div style="display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin-bottom:15px;">
@@ -375,10 +375,12 @@
 
 <header>
     <div class="icon-btn" onclick="tab('history')">🔍</div>
-    <div class="logo-box"><span class="logo-text">PaintWorkz</span></div>
+    <div class=\"logo-box\"><span class=\"logo-text\">PaintWorkz</span></div>
     <div style="display:flex; gap:10px; align-items:center;">
         <div id="goBackBtn" class="icon-btn" onclick="goBackJob()" style="display:none;" title="Exit without saving if no changes made">← Back</div>
         <div class="icon-btn" onclick="saveJob()">💾</div>
+        <div class="icon-btn" onclick="PaintWorkzEngine.generatePDF('Estimate', items)" title="Generate PDF Estimate">📄 Est</div>
+        <div class="icon-btn" onclick="PaintWorkzEngine.generatePDF('Quote', items)" title="Generate PDF Quote">💰 Quote</div>
     </div>
 </header>
 
@@ -5032,6 +5034,143 @@ function genPDF() {
     
     // Always ensure defaults are saved
     localStorage.setItem('masterMatrix', JSON.stringify(masterMatrix));
+    
+    // ==================== PAINTWORKZ PDF ENGINE ====================
+    // Advanced PDF generation system for Estimates, Quotes, Invoices
+    const PaintWorkzEngine = {
+        // Data sanitization rules
+        rules: {
+            filterEdges: (text) => ['0S', '0L', '0SL', '0SR', '0l'].includes(text?.toUpperCase()) ? "" : text,
+            getSeries: (code) => code ? code.toString().charAt(0) + "00" : "100"
+        },
+
+        // Pricing calculator - integrates with masterMatrix
+        calculatePricing: function(part) {
+            let paintPrice = 125; // default
+            
+            // Search through tiers for door profile match
+            for (const tierName in masterMatrix) {
+                for (const code in masterMatrix[tierName]) {
+                    const door = masterMatrix[tierName][code];
+                    if (door[0].toLowerCase() === (part.doorProfile || '').toLowerCase()) {
+                        // Format: [name, clear, matt, satin, semi, gloss]
+                        const finishIndex = part.finish === 'Clear' ? 1 : 
+                                          part.finish === 'Matt' ? 2 :
+                                          part.finish === 'Satin' ? 3 :
+                                          part.finish === 'Semi-Gloss' ? 4 : 5; // Gloss
+                        paintPrice = door[finishIndex] || 125;
+                        break;
+                    }
+                }
+            }
+            
+            // SQM calculation
+            const sqm = (parseFloat(part.width || 0) / 1000) * (parseFloat(part.height || 0) / 1000) * parseInt(part.qty || 1);
+            
+            // Multipliers
+            let paintMult = 1.0;
+            if (part.paintMode === 'DS') paintMult = 2.0;
+            if (part.paintMode === 'SE') paintMult = 1.2;
+            
+            const paintTotal = sqm * paintPrice * paintMult;
+            
+            return {
+                sqm: sqm.toFixed(3),
+                paint: paintTotal.toFixed(2),
+                total: paintTotal.toFixed(2)
+            };
+        },
+
+        // Main PDF generator
+        generatePDF: function(formType, parts) {
+            const { jsPDF } = window.jspdf;
+            if (!jsPDF) {
+                alert("PDF library not loaded. Please refresh page.");
+                return;
+            }
+            
+            const doc = new jsPDF('p', 'mm', 'a4');
+            const clientName = document.getElementById('cli')?.value || "Client";
+            const jobName = document.getElementById('jNm')?.value || "Job";
+            
+            if (!parts || parts.length === 0) {
+                alert("No parts to generate PDF.");
+                return;
+            }
+            
+            // Header
+            doc.setFontSize(16).setFont(undefined, 'bold');
+            doc.text(`PAINTWORKZ ${formType.toUpperCase()}`, 14, 15);
+            
+            doc.setFontSize(10).setFont(undefined, 'normal');
+            doc.text(`Client: ${clientName}`, 14, 22);
+            doc.text(`Job: ${jobName}`, 14, 27);
+            doc.text(`Date: ${new Date().toLocaleDateString('en-AU')}`, 14, 32);
+            
+            // Table headers based on form type
+            let columns, body;
+            
+            if (formType === 'Quote') {
+                columns = ["Qty", "Description", "Profile", "Finish", "Price"];
+                body = parts.map(p => {
+                    const pricing = this.calculatePricing(p);
+                    return [
+                        p.qty,
+                        p.description || `${p.height}x${p.width}x${p.thickness}`,
+                        p.doorProfile || "N/A",
+                        p.finish || "Satin",
+                        `$${pricing.total}`
+                    ];
+                });
+            } else {
+                columns = ["Qty", "Description", "Dimensions (LxWxT)", "Specification", "Edges"];
+                body = parts.map(p => {
+                    const dimString = `${p.height} x ${p.width} x ${p.thickness}`;
+                    const specString = `${p.type || 'Panel'} - ${p.paintMode || 'SS'}`;
+                    const cleanEdges = this.rules.filterEdges(p.edgeText);
+                    return [
+                        p.qty,
+                        p.description || dimString,
+                        dimString,
+                        specString,
+                        cleanEdges || "—"
+                    ];
+                });
+            }
+            
+            // Render table
+            doc.autoTable({
+                startY: 38,
+                head: [columns],
+                body: body,
+                theme: 'grid',
+                styles: { fontSize: 9, cellPadding: 3, valign: 'middle' },
+                headStyles: { fillColor: [50, 50, 50], textColor: [212, 175, 55] },
+                columnStyles: { 0: { halign: 'center', fontStyle: 'bold' } },
+                didDrawPage: (data) => {
+                    doc.setFontSize(8);
+                    doc.text(`Page ${doc.internal.getNumberOfPages()}`, 14, doc.internal.pageSize.height - 10);
+                }
+            });
+            
+            // Totals
+            let finalY = doc.lastAutoTable.finalY + 10;
+            const totals = parts.reduce((acc, p) => {
+                const pr = this.calculatePricing(p);
+                acc.sqm += parseFloat(pr.sqm);
+                acc.total += parseFloat(pr.total);
+                return acc;
+            }, { sqm: 0, total: 0 });
+            
+            doc.setFontSize(10).setFont(undefined, 'bold');
+            doc.text(`Total SQM: ${totals.sqm.toFixed(3)} m²`, 14, finalY);
+            doc.text(`Total (ex GST): $${totals.total.toFixed(2)}`, 14, finalY + 6);
+            
+            doc.save(`${formType}_${jobName}.pdf`);
+            console.log(`✓ PDF generated: ${formType} for ${jobName}`);
+        }
+    };
+    // ==================== END PAINTWORKZ PDF ENGINE ====================
     
     function getSortedTierNames() {
         // Sort tier names: Tier 1, 2, 3, 4, 5, then Other
