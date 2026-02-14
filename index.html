@@ -3581,6 +3581,25 @@ function genPDF() {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF('p', 'mm', 'a4');
         
+        // Helper function to format edges properly
+        function formatEdges(edgeData) {
+            if (!edgeData) return '';
+            
+            // If it's an array, join with /
+            if (Array.isArray(edgeData)) {
+                return edgeData.filter(e => e).join('/');
+            }
+            
+            // If it's an object with boolean values, get the true keys
+            if (typeof edgeData === 'object' && !Array.isArray(edgeData)) {
+                const trueKeys = Object.keys(edgeData).filter(k => edgeData[k] === true);
+                return trueKeys.join('/');
+            }
+            
+            // Otherwise return as string
+            return String(edgeData || '');
+        }
+        
         // Get job info
         const jobClient = document.getElementById('cli')?.value || '';
         const jobNum = document.getElementById('jNum')?.value || document.getElementById('jN')?.value || '';
@@ -3595,42 +3614,44 @@ function genPDF() {
         let y = 12;
         doc.setFontSize(18);
         doc.setFont(undefined, 'bold');
-        doc.text('SUPPLY DOCKET', 20, y);
+        doc.text('SUPPLY DOCKET', 15, y);
         y += 8;
         
         doc.setFontSize(9);
         doc.setFont(undefined, 'normal');
-        doc.text('Paintworkz | 17 West Boundary Road, Hamilton 3300 VIC', 20, y);
+        doc.text('Paintworkz | 17 West Boundary Road, Hamilton 3300 VIC', 15, y);
         y += 3;
-        doc.text('Phone: 0438 803 032 | Email: paint_workz@outlook.com', 20, y);
+        doc.text('Phone: 0438 803 032 | Email: paint_workz@outlook.com', 15, y);
         y += 10;
         
         // ===== JOB DETAILS =====
         doc.setFont(undefined, 'bold');
         doc.setFontSize(10);
-        doc.text('JOB DETAILS', 20, y);
+        doc.text('JOB DETAILS', 15, y);
         y += 6;
         
         doc.setFont(undefined, 'normal');
         doc.setFontSize(9);
-        doc.text(`Customer: ${jobClient}     Job Number: ${jobNum}`, 20, y);
+        doc.text(`Customer: ${jobClient}     Job Number: ${jobNum}`, 15, y);
         y += 5;
-        doc.text(`Job Name: ${jobName}     Door Style: ${doorStyle}`, 20, y);
+        doc.text(`Job Name: ${jobName}     Door Style: ${doorStyle}`, 15, y);
         y += 5;
-        doc.text(`Total Items: ${totalItems}     Paint: ${paintColor}     Date: ${new Date().toLocaleDateString('en-AU')}`, 20, y);
+        doc.text(`Total Items: ${totalItems}     Paint: ${paintColor}     Date: ${new Date().toLocaleDateString('en-AU')}`, 15, y);
         y += 10;
         
-        // ===== TABLE WITH ALL COLUMNS =====
-        const margin = 12;
+        // ===== TABLE WITH FULL WIDTH =====
+        const margin = 8;
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const tableWidth = pageWidth - (margin * 2);
         
-        // Columns: Qty, Height, Width, Moulded, Edges, Paint Mode, Panel Type, Mould Type, Paint Colour
-        const headers = ['Qty', 'Height', 'Width', 'Moulded', 'Edges', 'P.Mode', 'Panel Type', 'Mould Type', 'Paint Colour'];
-        const colWidths = [9, 13, 13, 10, 13, 10, 16, 16, 19];
-        const cellHeight = 6;
+        // Columns: Qty, Height, Width, Thickness, Moulded, Edges, P.Mode, Panel Type, Mould Type, Paint Colour
+        const headers = ['Qty', 'Height', 'Width', 'Thick', 'Moulded', 'Edges', 'P.Mode', 'Panel Type', 'Mould Type', 'Paint Colour'];
+        const colWidths = [9, 14, 14, 11, 10, 14, 10, 14, 14, 19];
+        const cellHeight = 7;
         
         // Draw header row
         doc.setFont(undefined, 'bold');
-        doc.setFontSize(6);
+        doc.setFontSize(8);  // Bigger font
         
         let x = margin;
         headers.forEach((header, i) => {
@@ -3643,30 +3664,30 @@ function genPDF() {
             doc.rect(x, y, colWidths[i], cellHeight, 'FD');
             
             // Draw text
-            doc.text(header, x + colWidths[i]/2, y + 2.8, { align: 'center', maxWidth: colWidths[i] - 1 });
+            doc.text(header, x + colWidths[i]/2, y + 3.5, { align: 'center', maxWidth: colWidths[i] - 1 });
             x += colWidths[i];
         });
         y += cellHeight;
         
         // Draw data rows
         doc.setFont(undefined, 'normal');
-        doc.setFontSize(6);
+        doc.setFontSize(8);  // Bigger font
         
         items.forEach((item) => {
             x = margin;
             
-            // Prepare data using CORRECT field names
+            // Prepare data using correct field names
             const qty = item.qty || 1;
             const height = item.h || '';
             const width = item.w || '';
+            const thickness = item.thk || '';
             
             // Moulded: Y if has mould profile (prof), N if blank or 'Plain'
             const mouldType = item.prof || '';
             const isMoulded = (mouldType && mouldType.toLowerCase() !== 'plain' && mouldType !== '') ? 'Y' : 'N';
             
-            // Edges: item.e is an array like ['1s', 'r', '2s'], join with /
-            const edgesArray = item.e || [];
-            const edgesText = Array.isArray(edgesArray) ? edgesArray.join('/') : (edgesArray || '');
+            // Edges: properly format the edge codes
+            const edgesText = formatEdges(item.e);
             
             // Paint mode
             const paintMode = item.mode || 'SS';
@@ -3674,10 +3695,10 @@ function genPDF() {
             // Panel type
             const panelType = item.type || '';
             
-            // Paint colour (stored as 'color')
+            // Paint colour
             const itemPaintColor = item.color || '';
             
-            const data = [qty, height, width, isMoulded, edgesText, paintMode, panelType, mouldType, itemPaintColor];
+            const data = [qty, height, width, thickness, isMoulded, edgesText, paintMode, panelType, mouldType, itemPaintColor];
             
             // Draw cells
             data.forEach((value, i) => {
@@ -3689,7 +3710,7 @@ function genPDF() {
                 
                 // Draw text (centered, truncated if needed)
                 const displayText = value.toString().substring(0, 25);
-                doc.text(displayText, x + colWidths[i]/2, y + 3, { 
+                doc.text(displayText, x + colWidths[i]/2, y + 3.5, { 
                     align: 'center', 
                     maxWidth: colWidths[i] - 1 
                 });
@@ -3704,19 +3725,19 @@ function genPDF() {
                 
                 // Redraw header on new page
                 doc.setFont(undefined, 'bold');
-                doc.setFontSize(6);
+                doc.setFontSize(8);
                 x = margin;
                 headers.forEach((header, i) => {
                     doc.setFillColor(0, 0, 0);
                     doc.setDrawColor(0, 0, 0);
                     doc.setTextColor(255, 255, 255);
                     doc.rect(x, y, colWidths[i], cellHeight, 'FD');
-                    doc.text(header, x + colWidths[i]/2, y + 2.8, { align: 'center', maxWidth: colWidths[i] - 1 });
+                    doc.text(header, x + colWidths[i]/2, y + 3.5, { align: 'center', maxWidth: colWidths[i] - 1 });
                     x += colWidths[i];
                 });
                 y += cellHeight;
                 doc.setFont(undefined, 'normal');
-                doc.setFontSize(6);
+                doc.setFontSize(8);
             }
         });
         
