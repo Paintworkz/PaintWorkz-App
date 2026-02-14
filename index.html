@@ -5086,72 +5086,95 @@ function genPDF() {
         const clientsDiv = document.getElementById('clientsList');
         if (!clientsDiv) return;
         
-        // Get clients from database
-        const db = getClientDatabase();
-        let allClients = Object.values(db);
-        
-        // Also extract client names from job history
-        const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
-        
-        // Create a set of client names already in database
-        const dbClientNames = new Set(allClients.map(c => c.name.toLowerCase()));
-        
-        // Extract unique client names from job history
-        const jobClientNames = new Set();
-        history.forEach(job => {
-            if (job.client && job.client.trim()) {
-                jobClientNames.add(job.client.trim());
-            }
-        });
-        
-        // Add any clients from job history that aren't in database
-        jobClientNames.forEach(clientName => {
-            if (!dbClientNames.has(clientName.toLowerCase())) {
-                allClients.push({
-                    id: 'client-' + Date.now() + Math.random(),
-                    name: clientName,
-                    contactName: '',
-                    landline: '',
-                    mobile: '',
-                    email1: '',
-                    email2: '',
-                    address: '',
-                    town: '',
-                    postcode: ''
+        try {
+            const seen = new Set();
+            const allClients = [];
+            
+            // 1. Get from client database (authoritative source)
+            const db = getClientDatabase();
+            Object.values(db).forEach(client => {
+                if (client.name && !seen.has(client.name.toLowerCase())) {
+                    allClients.push(client);
+                    seen.add(client.name.toLowerCase());
+                }
+            });
+            
+            // 2. Get from job history (catch any missing clients)
+            const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
+            history.forEach(job => {
+                if (job.client && !seen.has(job.client.toLowerCase())) {
+                    allClients.push({
+                        id: 'client-' + Date.now() + Math.random(),
+                        name: job.client,
+                        contactName: '',
+                        landline: '',
+                        mobile: '',
+                        email1: '',
+                        email2: '',
+                        address: '',
+                        town: '',
+                        postcode: ''
+                    });
+                    seen.add(job.client.toLowerCase());
+                }
+            });
+            
+            // 3. Get from hardcoded clients array (legacy support)
+            if (typeof clients !== 'undefined' && clients.length > 0) {
+                clients.forEach(clientName => {
+                    if (clientName && !seen.has(clientName.toLowerCase())) {
+                        allClients.push({
+                            id: 'client-' + Date.now() + Math.random(),
+                            name: clientName,
+                            contactName: '',
+                            landline: '',
+                            mobile: '',
+                            email1: '',
+                            email2: '',
+                            address: '',
+                            town: '',
+                            postcode: ''
+                        });
+                        seen.add(clientName.toLowerCase());
+                    }
                 });
-                dbClientNames.add(clientName.toLowerCase());
             }
-        });
-        
-        // Sort alphabetically by name
-        allClients.sort((a, b) => a.name.localeCompare(b.name));
-        
-        // Save merged clients back to database for persistence
-        const updatedDb = {};
-        allClients.forEach(c => {
-            updatedDb[c.id] = c;
-        });
-        saveClientDatabase(updatedDb);
-        
-        if (allClients.length === 0) {
-            clientsDiv.innerHTML = '<p style="text-align:center; color:#999; font-size:12px; padding:20px;">No clients yet. Add one to get started!</p>';
-            return;
+            
+            // Sort alphabetically by name
+            allClients.sort((a, b) => a.name.localeCompare(b.name));
+            
+            // Save merged clients back to database for persistence
+            const updatedDb = {};
+            allClients.forEach(c => {
+                updatedDb[c.id] = c;
+            });
+            saveClientDatabase(updatedDb);
+            
+            console.log(`✓ Admin Clients: ${allClients.length} clients loaded`);
+            
+            if (allClients.length === 0) {
+                clientsDiv.innerHTML = '<p style="text-align:center; color:#999; font-size:12px; padding:20px;">No clients yet. Add one to get started!</p>';
+                return;
+            }
+            
+            let html = '';
+            allClients.forEach(client => {
+                html += `<div data-client-name="${client.name}" style="display:flex; justify-content:space-between; align-items:center; padding:12px 15px; background:#fff; border-bottom:1px solid #f0f0f0; flex-shrink:0;">
+                    <div style="flex:1;">
+                        <div style="font-weight:900; font-size:13px; color:#333;">${client.name}</div>
+                    </div>
+                    <div style="display:flex; gap:8px;">
+                        <button onclick="showEditClientForm('${client.id}')" style="background:#2196f3; color:#fff; border:none; padding:8px 14px; border-radius:4px; font-weight:900; font-size:11px; cursor:pointer;">✏️ EDIT</button>
+                        <button onclick="deleteClient('${client.id}')" style="background:#ff3b30; color:#fff; border:none; padding:8px 14px; border-radius:4px; font-weight:900; font-size:11px; cursor:pointer;">🗑️ DELETE</button>
+                    </div>
+                </div>`;
+            });
+            
+            clientsDiv.innerHTML = html;
+        } catch(e) {
+            console.error('Error rendering clients list:', e);
+            clientsDiv.innerHTML = '<p style="color:red; padding:20px;">Error loading clients</p>';
         }
-        
-        let html = '';
-        allClients.forEach(client => {
-            html += `<div data-client-name="${client.name}" style="display:flex; justify-content:space-between; align-items:center; padding:12px 15px; background:#fff; border-bottom:1px solid #f0f0f0; flex-shrink:0;">
-                <div style="flex:1;">
-                    <div style="font-weight:900; font-size:13px; color:#333;">${client.name}</div>
-                </div>
-                <div style="display:flex; gap:8px;">
-                    <button onclick="showEditClientForm('${client.id}')" style="background:#2196f3; color:#fff; border:none; padding:8px 14px; border-radius:4px; font-weight:900; font-size:11px; cursor:pointer;">✏️ EDIT</button>
-                    <button onclick="deleteClient('${client.id}')" style="background:#ff3b30; color:#fff; border:none; padding:8px 14px; border-radius:4px; font-weight:900; font-size:11px; cursor:pointer;">🗑️ DELETE</button>
-                </div>
-            </div>`;
-        });
-        
-        clientsDiv.innerHTML = html;
     }
     function showEditClientForm(clientId) {
         const db = getClientDatabase();
