@@ -3695,7 +3695,7 @@ function genPDF() {
         
         doc.setFont(undefined, 'bold');
         doc.text(`Total Parts: ${totalItems}`, x, y);
-        y += 8;
+        y += 12;  // Increased margin from 8 to 12 for top space above table
         
         // ===== TABLE - FULL WIDTH =====
         const margin = 10;
@@ -3703,8 +3703,8 @@ function genPDF() {
         
         // Column headers - Description moved to LAST column
         const headers = ['Qty', 'H', 'W', 'Thick', 'Moulded', 'Edges', 'Mode', 'Panel', 'Profile', 'Colour', 'Description'];
-        // Full page width = 210mm - 20mm margins = 190mm
-        const colWidths = [7, 16, 16, 12, 10, 13, 8, 14, 28, 22, 44];
+        // Full page width = 210mm - 20mm margins = 190mm (Moulded: 10→13, Colour: 22→19 to balance)
+        const colWidths = [7, 16, 16, 12, 13, 13, 8, 14, 28, 19, 44];
         const cellHeight = 7;
         
         // Draw header row
@@ -5586,7 +5586,10 @@ function genPDF() {
         const client = db[clientId];
         if (!client) return;
         
+        const modalId = 'editClientModal-' + Date.now();
+        const overlayId = 'editOverlay-' + Date.now();
         const modal = document.createElement('div');
+        modal.id = modalId;
         modal.innerHTML = `
             <div style="background:#fff; border-radius:12px; padding:20px; border:2px solid #2196f3; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); z-index:5000; max-width:90%; width:500px; max-height:85vh; overflow-y:auto; box-shadow:0 10px 40px rgba(0,0,0,0.3);">
                 <h3 style="margin-top:0; margin-bottom:20px; font-weight:900;">✏️ Edit Client</h3>
@@ -5630,13 +5633,14 @@ function genPDF() {
                 
                 <div style="display:flex; gap:10px; margin-top:20px;">
                     <button onclick="saveNewClient('${clientId}')" style="flex:1; background:#2196f3; color:#fff; border:none; padding:12px; border-radius:6px; font-weight:900; font-size:12px; cursor:pointer;">✓ Save</button>
-                    <button onclick="document.querySelector('div[style*=\"z-index:5000\"]').remove()" style="flex:1; background:#e0e0e0; color:#333; border:none; padding:12px; border-radius:6px; font-weight:900; font-size:12px; cursor:pointer;">Cancel</button>
+                    <button onclick="document.getElementById('${modalId}').remove(); document.getElementById('${overlayId}').remove();" style="flex:1; background:#e0e0e0; color:#333; border:none; padding:12px; border-radius:6px; font-weight:900; font-size:12px; cursor:pointer;">Cancel</button>
                 </div>
             </div>
         `;
         const overlay = document.createElement('div');
+        overlay.id = overlayId;
         overlay.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:4999;';
-        overlay.onclick = () => { overlay.remove(); modal.remove(); };
+        overlay.onclick = () => { document.getElementById(overlayId).remove(); document.getElementById(modalId).remove(); };
         document.body.appendChild(overlay);
         document.body.appendChild(modal);
         document.getElementById('modalClientName').focus();
@@ -5644,7 +5648,10 @@ function genPDF() {
     
     function showAddClientForm() {
         const newId = 'client-' + Date.now();
+        const modalId = 'addClientModal-' + Date.now();
+        const overlayId = 'addOverlay-' + Date.now();
         const modal = document.createElement('div');
+        modal.id = modalId;
         modal.innerHTML = `
             <div style="background:#fff; border-radius:12px; padding:20px; border:2px solid #34c759; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); z-index:5000; max-width:90%; width:500px; max-height:85vh; overflow-y:auto; box-shadow:0 10px 40px rgba(0,0,0,0.3);">
                 <h3 style="margin-top:0; margin-bottom:20px; font-weight:900;">➕ Add New Client</h3>
@@ -5687,12 +5694,19 @@ function genPDF() {
                 </div>
                 
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-                    <button onclick="document.querySelector('div[style*=z-index:5000]').parentNode.removeChild(document.querySelector('div[style*=z-index:5000]')); document.querySelector('div[style*=z-index:4999]').remove();" style="padding:12px; border:1px solid #ccc; background:#fff; border-radius:6px; font-weight:900; cursor:pointer;">CANCEL</button>
+                    <button onclick="document.getElementById('${modalId}').remove(); document.getElementById('${overlayId}').remove();" style="padding:12px; border:1px solid #ccc; background:#fff; border-radius:6px; font-weight:900; cursor:pointer;">CANCEL</button>
                     <button onclick="saveNewClient('${newId}')" style="padding:12px; border:none; background:#34c759; color:#fff; border-radius:6px; font-weight:900; cursor:pointer;">✅ ADD CLIENT</button>
                 </div>
             </div>
-            <div style="position:fixed; top:0; left:0; width:100%; height:100%; z-index:4999; background:rgba(0,0,0,0.3);"></div>
         `;
+        const overlay = document.createElement('div');
+        overlay.id = overlayId;
+        overlay.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; z-index:4999; background:rgba(0,0,0,0.3); cursor:pointer;';
+        overlay.onclick = () => {
+            document.getElementById(modalId).remove();
+            document.getElementById(overlayId).remove();
+        };
+        document.body.appendChild(overlay);
         document.body.appendChild(modal);
         document.getElementById('modalClientName').focus();
     }
