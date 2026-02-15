@@ -3648,7 +3648,7 @@ function genPDF() {
             
             // Table headers definitions
             const headers = ['Qty', 'H', 'W', 'Thick', 'Moulded', 'Edges', 'Mode', 'Panel', 'Profile', 'SQ/MTR', '$/sq/m', 'Total'];
-            const colWidths = [7, 16, 16, 12, 12, 13, 8, 14, 20, 14, 14, 18];
+            const colWidths = [6, 13, 13, 11, 11, 12, 8, 12, 18, 12, 12, 16];
             const cellHeight = 6;
             
             // Process each colour group
@@ -3670,17 +3670,17 @@ function genPDF() {
                     y += 8;
                 }
                 
-                // Table headers
+                // Table headers - ensure proper color order
                 doc.setFontSize(9);
                 doc.setFont(undefined, 'bold');
                 doc.setDrawColor(0, 0, 0);
-                doc.setFillColor(50, 50, 50);
-                doc.setTextColor(255, 255, 255);
+                doc.setFillColor(30, 30, 30);
                 
                 let startX = x;
                 headers.forEach((header, i) => {
                     doc.rect(startX, y, colWidths[i], cellHeight, 'FD');
-                    doc.text(header, startX + colWidths[i]/2, y + cellHeight/2 + 1.2, { align: 'center', valign: 'middle' });
+                    doc.setTextColor(255, 255, 55);  // Bright yellow for contrast
+                    doc.text(header, startX + colWidths[i]/2, y + cellHeight/2 + 1.2, { align: 'center', valign: 'middle', maxWidth: colWidths[i] - 1 });
                     startX += colWidths[i];
                 });
                 y += cellHeight;
@@ -3747,9 +3747,14 @@ function genPDF() {
                 });
                 
                 // Colour subtotal
+                y += 3;  // Extra spacing
                 doc.setFont(undefined, 'bold');
-                doc.text(`Subtotal (${colourName}): $${colourTotal.toFixed(2)}`, x + 100, y + 3);
-                y += 10;
+                doc.setFontSize(9);
+                // Calculate x position for Total column (sum of all column widths before it)
+                const totalColX = x + (6+13+13+11+11+12+8+12+18+12+12);
+                doc.text(`Subtotal (${colourName}):`, x, y);
+                doc.text(`$${colourTotal.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
+                y += 12;
             });
             
             // Grand total
@@ -3762,10 +3767,11 @@ function genPDF() {
             doc.setFont(undefined, 'normal');
             doc.text(`Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`, x, doc.internal.pageSize.height - 5);
             
-            // Save
+            // Show preview modal (like Supply Docket)
             const filename = `Estimate_${jobClient.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
-            doc.save(filename);
-            notify('✓ Estimate downloaded');
+            const pdfDataUri = doc.output('datauristring');
+            showPDFPreview(pdfDataUri, filename, '📋 Estimate Preview');
+            notify('✓ Estimate Ready - Review & Download');
             console.log('✓ Estimate PDF generated successfully');
             
         } catch(err) {
