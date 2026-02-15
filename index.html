@@ -3381,7 +3381,7 @@
                     <div class="pl-mode" style="color:${mC}; border-color:${mC}; background:${mC}15">${it.mode}</div>
                     <div style="font-size:11px; font-weight:900;">${rowSqm.toFixed(3)}</div>
                 </div>
-                <button class="del-btn" onclick="deleteItem(${originalIndex})">×</button>
+                <button class="edit-btn" onclick="editItem(${originalIndex})" style="background:#2196f3; color:#fff; border:none; padding:8px 10px; border-radius:4px 0 0 4px; font-weight:900; cursor:pointer; font-size:12px;">✎</button><button class="del-btn" onclick="deleteItem(${originalIndex})">×</button>
             </div>`;
         });
         
@@ -3405,6 +3405,128 @@
         }
     }
 
+    function editItem(index) {
+        try {
+            if (index < 0 || index >= items.length) {
+                console.error('Invalid item index:', index);
+                return;
+            }
+            
+            const item = items[index];
+            const allProfiles = profiles.map(p => p.name);
+            
+            let profOptions = allProfiles.map(p => `<option value="${p}" ${p === item.prof ? 'selected' : ''}>${p}</option>`).join('');
+            
+            const html = `
+                <div style="position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background:#fff; padding:25px; border-radius:8px; box-shadow:0 4px 20px rgba(0,0,0,0.3); z-index:10000; width:90%; max-width:500px; max-height:85vh; overflow-y:auto;">
+                    <h3 style="margin-top:0; margin-bottom:20px; color:#333;">✎ Edit Part</h3>
+                    
+                    <div style="margin-bottom:15px;">
+                        <label style="display:block; font-weight:900; margin-bottom:8px; font-size:12px; color:#666;">PART TYPE</label>
+                        <div style="display:flex; gap:6px;">
+                            <button onclick="setEditType(${index}, 'Door')" id="editType-Door" style="flex:1; padding:8px; background:${item.type === 'Door' ? '#2196f3' : '#f0f0f0'}; color:${item.type === 'Door' ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">DOOR</button>
+                            <button onclick="setEditType(${index}, 'Panel')" id="editType-Panel" style="flex:1; padding:8px; background:${item.type === 'Panel' ? '#34c759' : '#f0f0f0'}; color:${item.type === 'Panel' ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">PANEL</button>
+                            <button onclick="setEditType(${index}, 'Drawer')" id="editType-Drawer" style="flex:1; padding:8px; background:${item.type === 'Drawer' ? '#2196f3' : '#f0f0f0'}; color:${item.type === 'Drawer' ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">DRAWER</button>
+                            <button onclick="setEditType(${index}, 'Custom')" id="editType-Custom" style="flex:1; padding:8px; background:${item.type === 'Custom' ? '#af52de' : '#f0f0f0'}; color:${item.type === 'Custom' ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">CUSTOM</button>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom:15px;">
+                        <label style="display:block; font-weight:900; margin-bottom:8px; font-size:12px; color:#666;">DESCRIPTION</label>
+                        <input type="text" id="editDescInput" value="${item.desc}" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:4px; font-size:14px; box-sizing:border-box;">
+                    </div>
+                    
+                    <div style="margin-bottom:15px;">
+                        <label style="display:block; font-weight:900; margin-bottom:8px; font-size:12px; color:#666;">DOOR PROFILE</label>
+                        <select id="editProfSelect" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:4px; font-size:14px; box-sizing:border-box;">
+                            ${profOptions}
+                        </select>
+                    </div>
+                    
+                    <div style="display:flex; gap:10px; margin-top:25px;">
+                        <button onclick="confirmEditItem(${index})" style="flex:1; padding:12px; background:#34c759; color:#fff; border:none; border-radius:4px; font-weight:900; font-size:13px; cursor:pointer;">✓ SAVE CHANGES</button>
+                        <button onclick="closeEditModal()" style="flex:1; padding:12px; background:#ddd; color:#000; border:none; border-radius:4px; font-weight:900; font-size:13px; cursor:pointer;">✕ CANCEL</button>
+                    </div>
+                </div>
+                <div style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999;" onclick="closeEditModal()"></div>
+            `;
+            
+            // Remove any existing modal
+            const existing = document.getElementById('editItemModal');
+            if (existing) existing.remove();
+            
+            const modal = document.createElement('div');
+            modal.id = 'editItemModal';
+            modal.innerHTML = html;
+            document.body.appendChild(modal);
+            
+            // Auto-focus the description input
+            setTimeout(() => {
+                const input = document.getElementById('editDescInput');
+                if (input) {
+                    input.focus();
+                    input.select();
+                }
+            }, 100);
+            
+        } catch(e) {
+            console.error('Error editing item:', e);
+            notify('⚠️ Error opening edit dialog');
+        }
+    }
+    
+    function setEditType(index, type) {
+        items[index].type = type;
+        ['Door', 'Panel', 'Drawer', 'Custom'].forEach(t => {
+            const btn = document.getElementById(`editType-${t}`);
+            if (btn) {
+                const colors = { 'Door': '#2196f3', 'Panel': '#34c759', 'Drawer': '#2196f3', 'Custom': '#af52de' };
+                if (t === type) {
+                    btn.style.background = colors[t];
+                    btn.style.color = '#fff';
+                } else {
+                    btn.style.background = '#f0f0f0';
+                    btn.style.color = '#000';
+                }
+            }
+        });
+    }
+    
+    function confirmEditItem(index) {
+        try {
+            const select = document.getElementById('editProfSelect');
+            const descInput = document.getElementById('editDescInput');
+            
+            if (!select || !descInput) return;
+            
+            const newProf = select.value;
+            const newDesc = descInput.value.trim();
+            
+            if (!newDesc) {
+                notify('⚠️ Description cannot be empty');
+                return;
+            }
+            
+            items[index].prof = newProf;
+            items[index].desc = newDesc.toUpperCase();
+            
+            render();
+            saveData();
+            closeEditModal();
+            notify(`✓ Part updated: ${newDesc} (${items[index].type})`);
+            
+        } catch(e) {
+            console.error('Error confirming edit:', e);
+            notify('⚠️ Error updating part');
+        }
+    }
+    
+    function closeEditModal() {
+        const modal = document.getElementById('editItemModal');
+        if (modal) modal.remove();
+    }
+
+    
     function deleteItem(index) {
         try {
             if (index < 0 || index >= items.length) {
