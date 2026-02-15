@@ -875,7 +875,7 @@
                 
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                     <h4 style="margin:0; margin-top:20px; font-weight:900;">Additional Charges Configuration</h4>
-                    <button onclick="let container = document.getElementById('additional-charges-container'); container.style.display = container.style.display === 'none' ? 'block' : 'none';\" style="background:none; border:none; cursor:pointer; font-weight:900; font-size:18px; color:#999;">−</button>
+                    <button onclick="let container = document.getElementById('additional-charges-container'); container.style.display = container.style.display === 'none' ? 'block' : 'none';" style="background:none; border:none; cursor:pointer; font-weight:900; font-size:18px; color:#999;">−</button>
                 </div>
                 <div id="additional-charges-container" style="display:block;">
                 <p style="font-size:11px; color:#666; margin-bottom:15px;">Configure door colour multipliers and delivery region charges</p>
@@ -3739,17 +3739,32 @@ function genPDF() {
             // Count items
             const totalItems = items.reduce((sum, item) => sum + parseInt(item.qty || 1), 0);
             
+            // Header positioning
+            let y = 25;
+            let x = 15;
+            
             // Logo
             const logoBase64 = localStorage.getItem('companyLogo');
             if (logoBase64) {
                 try {
                     doc.addImage(logoBase64, 'PNG', 145, 5, 50, 50);
-                } catch(e) {}
+                } catch(e) {
+                    console.warn('Error rendering company logo:', e);
+                }
             }
             
-            // Header
-            let y = 25;
-            let x = 15;
+            // Header logo (wider branding)
+            const headerLogoBase64 = localStorage.getItem('headerLogo');
+            if (headerLogoBase64) {
+                try {
+                    // Position header logo at top center, full width minus margins
+                    doc.addImage(headerLogoBase64, 'PNG', 20, 2, 170, 20);
+                    // Add extra space after header logo
+                    y += 15;
+                } catch(e) {
+                    console.warn('Error rendering header logo:', e);
+                }
+            }
             
             doc.setFontSize(32);
             doc.text('ESTIMATE', x, y);
@@ -5880,10 +5895,15 @@ function genPDF() {
             modal.style.display = 'flex';
             modal.style.visibility = 'visible';
         }
-        // Reset dropdowns
+        // Reset dropdowns and fields
         document.getElementById('colourMultiplierSelect').value = '0';
         document.getElementById('deliveryRegionSelect').value = '0';
-        updateChargesSummary();
+        document.getElementById('courierCostInput').value = '0';
+        document.getElementById('otherChargeDesc').value = '';
+        document.getElementById('otherChargeAmount').value = '0';
+        
+        // Initialize summary on modal open
+        setTimeout(() => updateChargesSummary(), 100);
     }
     
     function closeChargesModal() {
@@ -5922,7 +5942,20 @@ function genPDF() {
         const courierCost = parseFloat(document.getElementById('courierCostInput').value) || 0;
         const otherChargeAmount = parseFloat(document.getElementById('otherChargeAmount').value) || 0;
         
-        const colourSurcharge = subtotal * colourMult;
+        // Special logic for Undercoat - 80% of paint cost only
+        let colourSurcharge = 0;
+        const colourSelect = document.getElementById('colourMultiplierSelect');
+        const selectedOption = colourSelect.options[colourSelect.selectedIndex];
+        
+        if (selectedOption && selectedOption.text && selectedOption.text.includes('Undercoat')) {
+            // Undercoat: 80% of paint cost only (estimated as 35% of total)
+            const paintCostEstimate = subtotal * 0.35;
+            colourSurcharge = paintCostEstimate * colourMult;
+        } else {
+            // All other colours: percentage of full subtotal
+            colourSurcharge = subtotal * colourMult;
+        }
+        
         const subtotalPlusCharges = subtotal + colourSurcharge + deliveryCharge + courierCost + otherChargeAmount;
         
         const chargesData = loadAdditionalCharges();
@@ -5966,15 +5999,48 @@ function genPDF() {
     });
     
     function applyChargesAndGenerate() {
-        closeChargesModal();
+        console.log('🔄 Applying charges, pendingFormType:', pendingFormType);
+        console.log('📊 Current appliedCharges:', appliedCharges);
         
-        // Now generate the PDF with applied charges
-        if (pendingFormType === 'Estimate') {
-            genEstimate();
-        } else if (pendingFormType === 'Quote') {
-            PaintWorkzEngine.generatePDF('Quote Form', items);
-        } else if (pendingFormType === 'Invoice') {
-            genInvoice();
+        try {
+            // Store charges before closing modal
+            const currentCharges = { ...appliedCharges };
+            console.log('✓ Charges stored:', currentCharges);
+            
+            // Close modal
+            closeChargesModal();
+            console.log('✓ Modal closed');
+            
+            // Small delay to ensure modal is fully closed before PDF generation
+            setTimeout(() => {
+                try {
+                    console.log('🎬 Starting PDF generation for:', pendingFormType);
+                    
+                    // Generate PDF based on form type
+                    if (pendingFormType === 'Estimate') {
+                        console.log('📋 Calling genEstimate()...');
+                        genEstimate();
+                    } else if (pendingFormType === 'Quote Form' || pendingFormType === 'Quote') {
+                        console.log('📄 Calling PaintWorkzEngine.generatePDF()...');
+                        PaintWorkzEngine.generatePDF('Quote Form', items);
+                    } else if (pendingFormType === 'Invoice') {
+                        console.log('🧾 Calling genInvoice()...');
+                        genInvoice();
+                    } else {
+                        console.error('❌ Unknown form type:', pendingFormType);
+                        notify('❌ Error: Unknown form type: ' + pendingFormType);
+                    }
+                    pendingFormType = null;
+                } catch(err) {
+                    console.error('❌ Error during PDF generation:', err);
+                    console.error('Stack:', err.stack);
+                    notify('❌ PDF Error: ' + err.message);
+                }
+            }, 150);
+            
+        } catch(err) {
+            console.error('❌ Error in applyChargesAndGenerate:', err);
+            notify('❌ Error: ' + err.message);
         }
     }
     // ==================== END CHARGES MODAL SYSTEM ====================
@@ -6979,27 +7045,74 @@ function genPDF() {
         
         localStorage.setItem('companySettings', JSON.stringify(settings));
         
-        // Handle logo upload if provided
         const logoInput = document.getElementById('companyLogo');
-        if (logoInput && logoInput.files && logoInput.files[0]) {
+        const headerLogoInput = document.getElementById('headerLogo');
+        
+        const hasCompanyLogo = logoInput && logoInput.files && logoInput.files[0];
+        const hasHeaderLogo = headerLogoInput && headerLogoInput.files && headerLogoInput.files[0];
+        
+        let pendingReads = 0;
+        
+        // Count how many file reads we need to do
+        if (hasCompanyLogo) pendingReads++;
+        if (hasHeaderLogo) pendingReads++;
+        
+        // Helper function to check if we're done and show notification
+        const checkComplete = () => {
+            pendingReads--;
+            if (pendingReads === 0) {
+                const message = (hasCompanyLogo || hasHeaderLogo) 
+                    ? `✓ COMPANY DETAILS SAVED\nLogos uploaded` 
+                    : `✓ COMPANY DETAILS SAVED\nName: ${name}`;
+                showGlobalNotification(message, '#e8f5e9', '#34c759');
+                console.log('✓ Company details saved:', settings);
+            }
+        };
+        
+        // Save company logo if provided
+        if (hasCompanyLogo) {
             const file = logoInput.files[0];
             const reader = new FileReader();
             reader.onload = (e) => {
                 localStorage.setItem('companyLogo', e.target.result);
-                showGlobalNotification(`✓ COMPANY DETAILS SAVED\\nName: ${name}\\nLogo uploaded`, '#e8f5e9', '#34c759');
-                console.log('✓ Company details and logo saved');
+                console.log('✓ Company logo saved');
+                checkComplete();
+            };
+            reader.onerror = (e) => {
+                console.error('❌ Error reading company logo:', e);
+                checkComplete();
             };
             reader.readAsDataURL(file);
-        } else {
-            showGlobalNotification(`✓ COMPANY DETAILS SAVED\\nName: ${name}`, '#e8f5e9', '#34c759');
-            console.log('✓ Company details saved:', settings);
+        }
+        
+        // Save header logo if provided
+        if (hasHeaderLogo) {
+            const file = headerLogoInput.files[0];
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                localStorage.setItem('headerLogo', e.target.result);
+                console.log('✓ Header logo saved');
+                checkComplete();
+            };
+            reader.onerror = (e) => {
+                console.error('❌ Error reading header logo:', e);
+                checkComplete();
+            };
+            reader.readAsDataURL(file);
+        }
+        
+        // If no logos, show notification immediately
+        if (pendingReads === 0) {
+            showGlobalNotification(`✓ COMPANY DETAILS SAVED\nName: ${name}`, '#e8f5e9', '#34c759');
+            console.log('✓ Company details saved (no logos):', settings);
         }
     }
     
-    function resetCompanyDetails() {
+        function resetCompanyDetails() {
         if (confirm('Reset company details to defaults?')) {
             localStorage.removeItem('companySettings');
             localStorage.removeItem('companyLogo');
+            localStorage.removeItem('headerLogo');
             initializeCompanyDetailsForm();
             showGlobalNotification('✓ RESET TO DEFAULTS', '#fff3e0', '#ff9500');
         }
