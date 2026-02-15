@@ -466,8 +466,8 @@
 
 <header>
     <div class="icon-btn" onclick="tab('history')">🔍</div>
-    <div class="logo-box" id="headerLogoBox" style="position:relative; height:70px; display:flex; align-items:center; justify-content:center;">
-        <img id="headerLogoImg" src="" style="max-height:70px; max-width:280px; display:none; object-fit:contain;" alt="Company Logo">
+    <div class="logo-box" id="headerLogoBox" style="position:relative; height:110px; display:flex; align-items:center; justify-content:center; padding:8px 0; box-sizing:border-box;">
+        <img id="headerLogoImg" src="" style="max-height:94px; max-width:380px; display:none; object-fit:contain;" alt="Company Logo">
         <span class="logo-text" id="headerLogoText">PaintWorkz</span>
     </div>
     <div style="display:flex; gap:10px; align-items:center;">
@@ -721,7 +721,10 @@
                 </div>
                 
                 <div>
-                    <h5 style="margin-bottom:10px; font-weight:900; font-size:12px;">Existing Formulas (${paintDatabase.length})</h5>
+                    <div style="margin-bottom:10px; font-weight:900; font-size:12px;">
+                        Existing Formulas (<span id="formulaCount">0</span>)
+                        <input type="text" id="formulaSearch" placeholder="Search formula..." style="width:100%; padding:6px; margin-top:8px; border:1px solid #ddd; border-radius:4px; font-size:11px;">
+                    </div>
                     <div id="paintFormulaList" style="background:#fff; border:1px solid #ddd; border-radius:8px; overflow:hidden; max-height:400px; overflow-y:auto;"></div>
                 </div>
             </div>
@@ -865,7 +868,7 @@
                     <div style="grid-column:1 / -1;">
                         <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Header Logo (PNG - Full Brand Header)</label>
                         <input type="file" id="headerLogo" accept="image/png" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:6px; font-size:11px; box-sizing:border-box;">
-                        <p style="font-size:40px; color:#999; margin-top:5px; margin-bottom:5px;">Upload a PNG file for your header/branding logo (recommended size: 1024x300px or similar aspect ratio)</p>
+                        <p style="font-size:10px; color:#999; margin-top:5px; margin-bottom:0;">Upload a PNG file for your header/branding logo (recommended size: 1024x300px or similar aspect ratio)</p>
                     </div>
                 </div>
                 <button onclick="saveCompanyDetails()" style="border:none; background:#d4af37; color:#000; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer; margin-right:10px;">💾 SAVE COMPANY DETAILS</button>
@@ -1516,25 +1519,24 @@
         }
         
         let html = '';
-        paintDatabase.forEach((f, idx) => {
-            html += `
-            <div style="padding:12px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                    <div style="font-weight:900; font-size:12px;">${f.color}</div>
-                    <div style="font-size:10px; color:#666; margin-top:3px;">
-                        <div>${f.code} - ${f.product}</div>
-                    </div>
-                </div>
-                <div style="display:flex; gap:6px;">
-                    <button onclick="editPaintFormula(${idx})" style="padding:4px 10px; background:#2196f3; color:#fff; border:none; border-radius:3px; font-size:9px; font-weight:900; cursor:pointer;">Edit</button>
-                    <button onclick="deletePaintFormula(${idx})" style="padding:4px 10px; background:#ff3b30; color:#fff; border:none; border-radius:3px; font-size:9px; font-weight:900; cursor:pointer;">Delete</button>
-                </div>
-            </div>
-            `;
-        });
+        for (let i = 0; i < paintDatabase.length; i++) {
+            const f = paintDatabase[i];
+            const baseTintCount = (f.baseTinters || []).length;
+            const colCount = (f.colourants || []).length;
+            
+            html += '<div style="padding:12px; border-bottom:1px solid #eee;">';
+            html += '<div style="font-weight:900; font-size:12px; margin-bottom:4px;">' + f.color + '</div>';
+            html += '<div style="font-size:10px; color:#666; margin-bottom:6px;">' + f.product + '</div>';
+            html += '<div style="font-size:9px; color:#999; margin-bottom:8px;">' + baseTintCount + ' base tinters • ' + colCount + ' colourants</div>';
+            html += '<div style="display:flex; gap:6px;">';
+            html += '<button onclick="editPaintFormula(' + i + ')" style="padding:4px 10px; background:#2196f3; color:#fff; border:none; border-radius:3px; font-size:9px; font-weight:900; cursor:pointer;">Edit</button>';
+            html += '<button onclick="deletePaintFormula(' + i + ')" style="padding:4px 10px; background:#ff3b30; color:#fff; border:none; border-radius:3px; font-size:9px; font-weight:900; cursor:pointer;">Delete</button>';
+            html += '</div></div>';
+        }
         
         list.innerHTML = html;
     }
+
 
     function addNewPaintFormulaUI() {
         const color = document.getElementById('newPaintColor').value.trim();
@@ -3539,40 +3541,6 @@
     }
 
     // ===== ESTIMATE COSTING CALCULATIONS =====
-    function calculateLinePrice(item) {
-        const qty = parseInt(item.qty) || 1;
-        const sqmPerPart = parseFloat(item.sqm) || 0;
-        const totalSqm = sqmPerPart * qty;
-        
-        let pricePerSqm = 125; // Default flat panel price
-        
-        // Check if moulded and get profile price from localStorage
-        if (item.fm === 'Moulded' && item.mld) {
-            try {
-                const pricingData = JSON.parse(localStorage.getItem('pricingMatrix')) || {};
-                const profileName = item.mld;
-                
-                // Look for the profile in pricing data
-                if (pricingData[profileName]) {
-                    // Use satin price as default (can be made dynamic based on gloss level)
-                    pricePerSqm = parseFloat(pricingData[profileName].satin) || 125;
-                }
-            } catch(e) {
-                console.warn('Error reading pricing data:', e);
-            }
-        } else {
-            // Flat panel = $125/sqm
-            pricePerSqm = 125;
-        }
-        
-        const lineCost = totalSqm * pricePerSqm;
-        
-        return {
-            pricePerSqm: pricePerSqm,
-            lineCost: lineCost,
-            totalSqm: totalSqm
-        };
-    }
 
     function genForm(type) {
         try {
@@ -4998,15 +4966,6 @@
             }
             
             const { jsPDF } = window.jspdf;
-            const doc = new jsPDF('p', 'mm', 'a4');
-            
-            // Get company settings
-            const companySettings = JSON.parse(localStorage.getItem('companySettings')) || {
-                name: 'Paintworkz',
-                address: '17 West Boundary Road, Hamilton 3300 VIC',
-                phone: '0438 803 032',
-                email: 'paint_workz@outlook.com'
-            };
             
             // Get job data
             const jobClient = document.getElementById('cli')?.value || 'Client Name';
@@ -5015,160 +4974,218 @@
             const dateReceived = document.getElementById('dat')?.value || new Date().toLocaleDateString('en-AU');
             const totalSQM = parseFloat(document.getElementById('tot')?.innerText || '0') || 0;
             
-            // Get paint data
+            // Get paint data - might be multiple colors
             const paintBrand = document.getElementById('bra')?.value || 'Wattyl';
-            const paintColor = document.getElementById('col')?.value || 'Color Name';
+            const paintColor = document.getElementById('col')?.value || 'Color TBD';
             const paintFinish = document.getElementById('fin')?.value || 'Satin';
             
-            // Calculate paint quantity (0.2L per m²)
-            const paintQty = Math.ceil((totalSQM * 0.2) * 2) / 2;
+            // Split by / or , to handle multiple colors
+            const colors = paintColor.split(/[,\/]/).map(c => c.trim()).filter(c => c);
             
-            // Supply date - add 10 days to received date
-            const supplyDate = new Date(dateReceived);
-            supplyDate.setDate(supplyDate.getDate() + 10);
-            const supplyDateStr = supplyDate.toLocaleDateString('en-AU');
+            if (colors.length === 0) {
+                notify('❌ Add paint color');
+                return;
+            }
             
-            let y = 20;
+            // Get logo
+            const headerLogo = localStorage.getItem('headerLogoBase64') || '';
             
-            // ===== TITLE =====
-            doc.setFontSize(24);
-            doc.setFont(undefined, 'bold');
-            doc.setTextColor(170, 132, 30);
-            doc.text('Mixing Card', 20, y);
-            y += 15;
+            // Generate one mixing card per color
+            colors.forEach((color, colorIndex) => {
+                const doc = new jsPDF('p', 'mm', 'a4');
+                
+                let y = 12;
+                
+                // ===== LOGO =====
+                if (headerLogo) {
+                    try {
+                        doc.addImage(headerLogo, 'PNG', 150, 5, 50, 25);
+                    } catch(e) {}
+                }
+                
+                y = 30;
+                
+                // ===== TITLE =====
+                doc.setFontSize(20);
+                doc.setFont(undefined, 'bold');
+                doc.setTextColor(170, 132, 30);
+                doc.text('MIXING CARD', 20, y);
+                y += 12;
+                
+                // ===== PAINT COLOR - PROMINENT =====
+                doc.setFontSize(16);
+                doc.setFont(undefined, 'bold');
+                doc.setTextColor(200, 30, 30);
+                doc.text(`${color}`, 20, y);
+                y += 8;
+                
+                doc.setFontSize(10);
+                doc.setFont(undefined, 'normal');
+                doc.setTextColor(0, 0, 0);
+                doc.text(`Brand: ${paintBrand}  |  Finish: ${paintFinish}`, 20, y);
+                y += 10;
+                
+                // ===== DIVIDER =====
+                doc.setDrawColor(170, 132, 30);
+                doc.setLineWidth(1.5);
+                doc.line(20, y, 190, y);
+                y += 8;
+                
+                // ===== JOB DETAILS - 2 COLUMN =====
+                const leftCol = 20;
+                const rightCol = 110;
+                
+                doc.setFontSize(10);
+                doc.setFont(undefined, 'bold');
+                doc.text('Job Name', leftCol, y);
+                doc.text('Job #', rightCol, y);
+                y += 5;
+                
+                doc.setFont(undefined, 'normal');
+                doc.setFontSize(11);
+                doc.text(jobName, leftCol, y);
+                doc.text(jobNum, rightCol, y);
+                y += 10;
+                
+                doc.setFontSize(10);
+                doc.setFont(undefined, 'bold');
+                doc.text('Client', leftCol, y);
+                doc.text('Date', rightCol, y);
+                y += 5;
+                
+                doc.setFont(undefined, 'normal');
+                doc.setFontSize(11);
+                doc.text(jobClient, leftCol, y);
+                doc.text(dateReceived, rightCol, y);
+                y += 10;
+                
+                doc.setFontSize(10);
+                doc.setFont(undefined, 'bold');
+                doc.text('SQ Metres', leftCol, y);
+                doc.text('Paint Required', rightCol, y);
+                y += 5;
+                
+                doc.setFont(undefined, 'normal');
+                doc.setFontSize(11);
+                doc.text(totalSQM.toFixed(2) + ' m²', leftCol, y);
+                
+                // Calculate paint qty: 0.2L per m²
+                const paintQty = (totalSQM * 0.2).toFixed(1);
+                doc.text(paintQty + ' L', rightCol, y);
+                y += 12;
+                
+                // ===== FORMULA LOOKUP =====
+                const formula = paintDatabase.find(f => 
+                    f.color && f.color.toLowerCase() === color.toLowerCase()
+                );
+                
+                let formulaText = '';
+                if (formula) {
+                    formulaText = formula.product || formula.color;
+                    
+                    // Show base
+                    doc.setFontSize(10);
+                    doc.setFont(undefined, 'bold');
+                    doc.text('Base Paint:', 20, y);
+                    
+                    doc.setFont(undefined, 'normal');
+                    doc.text(formulaText, 60, y);
+                    y += 8;
+                }
+                
+                // ===== TINTERS/COLOURANTS =====
+                doc.setFontSize(11);
+                doc.setFont(undefined, 'bold');
+                doc.text('TINT FORMULA (Grams per Litre)', 20, y);
+                y += 7;
+                
+                doc.setFontSize(9);
+                doc.setFont(undefined, 'normal');
+                
+                // Draw formula box
+                doc.setDrawColor(0, 0, 0);
+                doc.setLineWidth(0.5);
+                doc.rect(20, y, 170, 100);
+                
+                let boxY = y + 5;
+                
+                if (formula && formula.colourants) {
+                    // Show existing formula
+                    formula.colourants.forEach((tint, idx) => {
+                        const grams = tint.amount || 0;
+                        const code = tint.code || '';
+                        const name = tint.name || `Tint ${idx + 1}`;
+                        doc.text(`${code}: ${grams.toFixed(2)}g  (${name})`, 25, boxY);
+                        boxY += 6;
+                    });
+                    
+                    // Show base tinters
+                    if (formula.baseTinters) {
+                        doc.setFont(undefined, 'italic');
+                        doc.setFontSize(8);
+                        doc.text('Base Tinters:', 25, boxY);
+                        boxY += 5;
+                        formula.baseTinters.forEach(tint => {
+                            const grams = tint.amount || 0;
+                            const code = tint.code || '';
+                            const name = tint.name || '';
+                            doc.text(`${code}: ${grams.toFixed(2)}g ${name}`, 25, boxY);
+                            boxY += 5;
+                        });
+                    }
+                } else {
+                    // Blank template with grams
+                    doc.setFont(undefined, 'normal');
+                    for (let i = 0; i < 5; i++) {
+                        doc.text(`Tint \${i + 1}: _____________ g`, 25, boxY);
+                        boxY += 6;
+                    }
+                    boxY += 4;
+                    doc.text('Additional: _________________________________', 25, boxY);
+                }
+                
+                y += 105;
+                
+                // ===== FOOTER =====
+                doc.setFontSize(8);
+                doc.setFont(undefined, 'italic');
+                doc.setTextColor(100, 100, 100);
+                doc.text(`Generated: \${new Date().toLocaleDateString('en-AU')} | \${color} | Base: \${paintQty}L`, 20, 285);
+                
+                // Save PDF
+                if (colors.length > 1) {
+                    // Multiple colors - add color to filename
+                    const filename = `MixingCard_\${jobNum}_\${color.replace(/\s+/g, '_')}_\${colorIndex + 1}.pdf`;
+                    const pdfDataUri = doc.output('datauristring');
+                    
+                    if (colorIndex === 0) {
+                        // First one - show preview
+                        showPDFPreview(pdfDataUri, filename, '🎨 Mixing Card Preview');
+                    } else {
+                        // Download additional ones automatically
+                        const link = document.createElement('a');
+                        link.href = pdfDataUri;
+                        link.download = filename;
+                        link.click();
+                    }
+                } else {
+                    const filename = `MixingCard_\${jobNum}_\${jobName.replace(/\s+/g, '_')}.pdf`;
+                    const pdfDataUri = doc.output('datauristring');
+                    showPDFPreview(pdfDataUri, filename, '🎨 Mixing Card Preview');
+                }
+            });
             
-            // ===== COMPANY =====
-            doc.setFontSize(11);
-            doc.setFont(undefined, 'bold');
-            doc.setTextColor(0, 0, 0);
-            doc.text('Company', 20, y);
-            y += 5;
-            doc.setFont(undefined, 'normal');
-            doc.setFontSize(10);
-            doc.text(companySettings.name, 20, y);
-            y += 10;
-            
-            // ===== JOB DETAILS - TWO COLUMNS =====
-            const leftCol = 20;
-            const rightCol = 110;
-            
-            // Job Name
-            doc.setFontSize(11);
-            doc.setFont(undefined, 'bold');
-            doc.text('Job Name', leftCol, y);
-            doc.text('Job #', rightCol, y);
-            y += 5;
-            doc.setFontSize(10);
-            doc.setFont(undefined, 'normal');
-            doc.text(jobName, leftCol, y);
-            doc.text(jobNum, rightCol, y);
-            y += 10;
-            
-            // Colour Name
-            doc.setFontSize(11);
-            doc.setFont(undefined, 'bold');
-            doc.text('Colour Name', leftCol, y);
-            doc.text('Gloss Level', rightCol, y);
-            y += 5;
-            doc.setFontSize(10);
-            doc.setFont(undefined, 'normal');
-            doc.text(`${paintColor} - ${paintBrand}`, leftCol, y);
-            doc.text(paintFinish, rightCol, y);
-            y += 10;
-            
-            // Litres
-            doc.setFontSize(11);
-            doc.setFont(undefined, 'bold');
-            doc.text('Litres', leftCol, y);
-            doc.text('SQ/Mtrs', rightCol, y);
-            y += 5;
-            doc.setFontSize(10);
-            doc.setFont(undefined, 'normal');
-            doc.text(`${paintQty.toFixed(1)} L`, leftCol, y);
-            doc.text(`${totalSQM.toFixed(2)}`, rightCol, y);
-            y += 12;
-            
-            // ===== DATES =====
-            doc.setFontSize(11);
-            doc.setFont(undefined, 'bold');
-            doc.text('Date', leftCol, y);
-            doc.text('Supply Date', rightCol, y);
-            y += 5;
-            doc.setFontSize(10);
-            doc.setFont(undefined, 'normal');
-            doc.text(dateReceived, leftCol, y);
-            doc.text(supplyDateStr, rightCol, y);
-            y += 15;
-            
-            // ===== DIVIDER LINE =====
-            doc.setDrawColor(170, 132, 30);
-            doc.setLineWidth(1);
-            doc.line(20, y, 190, y);
-            y += 10;
-            
-            // ===== MIXING FORMULA SECTION =====
-            doc.setFontSize(12);
-            doc.setFont(undefined, 'bold');
-            doc.text('Mixing Formula (per 1 Litre)', 20, y);
-            y += 8;
-            
-            // Formula box
-            doc.setDrawColor(0, 0, 0);
-            doc.setLineWidth(0.5);
-            doc.rect(20, y, 170, 60);
-            
-            doc.setFontSize(9);
-            doc.setFont(undefined, 'normal');
-            let boxY = y + 5;
-            doc.text('Base: ________________ ml', 25, boxY);
-            boxY += 8;
-            doc.text('Tint 1: ________________ ml', 25, boxY);
-            boxY += 8;
-            doc.text('Tint 2: ________________ ml', 25, boxY);
-            boxY += 8;
-            doc.text('Tint 3: ________________ ml', 25, boxY);
-            boxY += 8;
-            doc.text('Additional: _____________________________________________', 25, boxY);
-            
-            y += 70;
-            
-            // ===== QUALITY CONTROL =====
-            doc.setFontSize(12);
-            doc.setFont(undefined, 'bold');
-            doc.text('Quality Control', 20, y);
-            y += 7;
-            
-            doc.setFontSize(9);
-            doc.setFont(undefined, 'normal');
-            doc.text('Date Mixed: ________________     Time: ________________', 20, y);
-            y += 6;
-            doc.text('Mixed By: ________________________     Approved: ________________', 20, y);
-            y += 6;
-            doc.text('Notes: _________________________________________________________________', 20, y);
-            y += 5;
-            doc.text('________________________________________________________________', 20, y);
-            
-            // Footer
-            doc.setFontSize(8);
-            doc.setFont(undefined, 'italic');
-            doc.setTextColor(100, 100, 100);
-            doc.text(`Generated: ${new Date().toLocaleDateString('en-AU')} | ${paintColor}`, 20, 285);
-            
-            const filename = `MixingCard_${jobNum}_${jobName.replace(/\s+/g, '_')}.pdf`;
-            const pdfDataUri = doc.output('datauristring');
-            showPDFPreview(pdfDataUri, filename, '🎨 Mixing Card Preview');
-            notify("✓ Mixing Card Ready");
+            if (colors.length > 1) {
+                notify(`✓ \${colors.length} Mixing Cards Ready`);
+            } else {
+                notify('✓ Mixing Card Ready');
+            }
             
         } catch(err) {
             console.error('❌ Mixing Card Error:', err);
             notify('❌ Error: ' + err.message);
         }
     }
-
-
-
-
-    // COVER SHEET - Professional job cover page
     function genCoverSheet() {
         try {
             if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) {
@@ -6398,14 +6415,6 @@
         }
     }
     
-    function checkForNewUnallocatedDoors() {
-        const unallocated = getUnallocatedDoors();
-        if (unallocated.length > 0) {
-            console.log(`⚠️ Found ${unallocated.length} unallocated door(s):`);
-            unallocated.forEach(door => console.log(`  - ${door.name}`));
-            showUnallocatedDoorsNotification(unallocated);
-        }
-    }
     
     // Show red notification for unallocated doors
     function showUnallocatedDoorsNotification(unallocated) {
@@ -6619,30 +6628,6 @@
     }
 
     // PAINT FORMULA MANAGER
-    function renderPaintFormulaList() {
-        const target = document.getElementById('paintFormulaList');
-        if (!target) return;
-        
-        const formulas = getPaintFormulas();
-        
-        let html = '';
-        
-        if (formulas.length === 0) {
-            html += `<div style="padding:20px; text-align:center; color:#999; font-size:11px;">No formulas yet. Add one above!</div>`;
-        } else {
-            formulas.forEach((f, idx) => {
-                html += `<div style="padding:12px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:start;">
-                    <div style="flex:1;">
-                        <div style="font-weight:900; font-size:12px; color:#000;">${f.brand} - ${f.color}</div>
-                        <div style="font-size:10px; color:#666; margin-top:3px;">${f.formula}</div>
-                    </div>
-                    <button onclick="deletePaintFormulaDB(${idx})" style="padding:4px 10px; background:#ff3b3015; color:#ff3b30; border:none; border-radius:4px; font-weight:900; font-size:10px; cursor:pointer;">DELETE</button>
-                </div>`;
-            });
-        }
-        
-        target.innerHTML = html;
-    }
     
     function addNewPaintFormula() {
         const brand = document.getElementById('newPaintBrand')?.value.trim();
@@ -8390,30 +8375,6 @@
         }
     }
     
-    function loadHeaderLogo() {
-        const headerLogoImg = document.getElementById('headerLogoImg');
-        const headerLogoText = document.getElementById('headerLogoText');
-        
-        if (!headerLogoImg || !headerLogoText) return;
-        
-        const headerLogo = localStorage.getItem('headerLogo');
-        if (headerLogo) {
-            try {
-                headerLogoImg.src = headerLogo;
-                headerLogoImg.style.display = 'block';
-                headerLogoText.style.display = 'none';
-                console.log('✓ Header logo loaded in app header');
-            } catch(e) {
-                console.error('❌ Error loading header logo:', e);
-                headerLogoImg.style.display = 'none';
-                headerLogoText.style.display = 'block';
-            }
-        } else {
-            // No logo, show text
-            headerLogoImg.style.display = 'none';
-            headerLogoText.style.display = 'block';
-        }
-    }
     
     function initializeCompanyDetailsForm() {
         const defaults = {
@@ -8902,38 +8863,12 @@
         return JSON.parse(localStorage.getItem('paintFormulaDB')) || [];
     }
 
-    function savePaintFormulas(formulas) {
-        localStorage.setItem('paintFormulaDB', JSON.stringify(formulas));
-    }
 
     function openPaintFormulaDatabase() {
         document.getElementById('paintFormulaModal').style.display = 'flex';
         renderPaintFormulaList();
     }
 
-    function renderPaintFormulaList() {
-        const formulas = getPaintFormulas();
-        const content = document.getElementById('formulaListContent');
-        
-        if (formulas.length === 0) {
-            content.innerHTML = '<div style="padding:20px; text-align:center; color:#999; font-size:11px;">No formulas in database yet</div>';
-            return;
-        }
-        
-        content.innerHTML = '';
-        formulas.forEach((formula, idx) => {
-            content.innerHTML += `<div style="padding:10px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:start;">
-                <div style="flex:1;">
-                    <div style="font-weight:900; font-size:11px; color:#000;">${formula.brand} - ${formula.color}</div>
-                    <div style="font-size:10px; color:#666; margin-top:3px;">${formula.formula}</div>
-                </div>
-                <div style="display:flex; gap:5px;">
-                    <button onclick="selectPaintFormula(${idx})" style="border:none; background:#2196f3; color:#fff; padding:4px 10px; border-radius:4px; font-weight:900; font-size:9px; cursor:pointer;">SELECT</button>
-                    <button onclick="deletePaintFormula(${idx})" style="border:none; background:#ff3b3015; color:#ff3b30; padding:4px 10px; border-radius:4px; font-weight:900; font-size:9px; cursor:pointer;">DELETE</button>
-                </div>
-            </div>`;
-        });
-    }
 
     function searchPaintFormulas() {
         const brand = document.getElementById('formulaSearchBrand').value.toLowerCase();
@@ -8967,27 +8902,6 @@
         });
     }
 
-    function addNewPaintFormula() {
-        const brand = document.getElementById('newFormulaBrand').value.trim();
-        const color = document.getElementById('newFormulaColor').value.trim();
-        const formula = document.getElementById('newFormulaText').value.trim();
-        
-        if (!brand || !color || !formula) {
-            alert('Please fill in all fields');
-            return;
-        }
-        
-        const formulas = getPaintFormulas();
-        formulas.push({ brand, color, formula });
-        savePaintFormulas(formulas);
-        
-        document.getElementById('newFormulaBrand').value = '';
-        document.getElementById('newFormulaColor').value = '';
-        document.getElementById('newFormulaText').value = '';
-        
-        renderPaintFormulaList();
-        notify('✓ Formula Added to Database');
-    }
 
     function selectPaintFormula(idx) {
         const formulas = getPaintFormulas();
@@ -9002,15 +8916,6 @@
         notify(`✓ Selected: ${formula.brand} - ${formula.color}`);
     }
 
-    function deletePaintFormula(idx) {
-        if (confirm('Delete this formula?')) {
-            const formulas = getPaintFormulas();
-            formulas.splice(idx, 1);
-            savePaintFormulas(formulas);
-            renderPaintFormulaList();
-            notify('✓ Formula Deleted');
-        }
-    }
 
     function autoSearchFormula() {
         const brand = document.getElementById('p-brand').value.trim();
@@ -9363,6 +9268,32 @@
     
     // Also attach on DOMContentLoaded in case script runs before DOM is ready
     document.addEventListener('DOMContentLoaded', attachTabListeners);
+
+    // Render paint formulas in database view
+    
+    function selectAndShowFormula(index) {
+        selectedFormula = paintDatabase[index];
+        displayPaintFormulaModal();
+    }
+    
+    // Search formulas
+    function searchFormulas() {
+        const query = document.getElementById('formulaSearch').value.toLowerCase();
+        
+        if (!query) {
+            renderPaintFormulaList(paintDatabase);
+            return;
+        }
+        
+        const filtered = paintDatabase.filter(f => 
+            f.color.toLowerCase().includes(query) ||
+            f.product.toLowerCase().includes(query) ||
+            f.code.toLowerCase().includes(query)
+        );
+        
+        renderPaintFormulaList(filtered);
+    }
+
 </script>
 
 </div> <!-- Close appContainer -->
