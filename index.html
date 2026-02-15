@@ -3542,66 +3542,231 @@ function genPDF() {
 }
 
     function genEstimate() {
-    try {
-        // Verify jsPDF is loaded
-        if (!window.jspdf || !window.jspdf.jsPDF) {
-            notify('❌ PDF library loading... Please wait and try again');
-            console.error('jsPDF not ready');
-            return;
+        try {
+            if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) {
+                notify('❌ PDF library not loaded');
+                return;
+            }
+            
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('p', 'mm', 'a4');
+            
+            // Get company settings
+            const companySettings = JSON.parse(localStorage.getItem('companySettings')) || {
+                name: 'Paintworkz',
+                address: '17 West Boundary Road, Hamilton 3300 VIC',
+                phone: '0438 803 032',
+                email: 'paint_workz@outlook.com'
+            };
+            
+            // Get job info
+            const jobClient = document.getElementById('cli')?.value || '';
+            const jobNum = document.getElementById('jNum')?.value || document.getElementById('jN')?.value || '';
+            const jobName = document.getElementById('jNm')?.value || '';
+            
+            // Collect all unique colours from items - group by colour AND finish
+            const colourGroups = {};
+            items.forEach(item => {
+                const brand = item.brand || '';
+                const color = item.color || '';
+                const finish = item.finish || 'Satin';
+                const colourKey = brand && color ? `${brand} ${color} ${finish}` : (color ? `${color} ${finish}` : 'No Colour');
+                if (!colourGroups[colourKey]) {
+                    colourGroups[colourKey] = [];
+                }
+                colourGroups[colourKey].push(item);
+            });
+            
+            // Pricing matrix
+            const pricingMatrix = {
+                'Plain': 125,
+                'Shaker 45': 171, 'Ashlee': 171, 'Bevelled Edge': 171,
+                'Branxholme': 171, 'Hamilton': 171, 'Tarrone': 171
+            };
+            
+            // Get ALL profiles
+            const allProfiles = [...new Set(items
+                .map(it => it.prof)
+                .filter(p => p && p.trim())
+            )].sort();
+            
+            // Count items
+            const totalItems = items.reduce((sum, item) => sum + parseInt(item.qty || 1), 0);
+            
+            // Logo
+            const logoBase64 = localStorage.getItem('companyLogo');
+            if (logoBase64) {
+                try {
+                    doc.addImage(logoBase64, 'PNG', 145, 5, 50, 50);
+                } catch(e) {}
+            }
+            
+            // Header
+            let y = 25;
+            let x = 15;
+            
+            doc.setFontSize(32);
+            doc.text('ESTIMATE', x, y);
+            y += 15;
+            
+            // Company details
+            doc.setFontSize(13);
+            doc.setFont(undefined, 'bold');
+            doc.text(companySettings.name, x, y);
+            y += 6;
+            
+            doc.setFontSize(9);
+            doc.setFont(undefined, 'normal');
+            doc.text(companySettings.address, x, y);
+            y += 4;
+            doc.text(`Email: ${companySettings.email}`, x, y);
+            y += 4;
+            doc.text(`Phone: ${companySettings.phone}`, x, y);
+            y += 10;
+            
+            // Job details
+            doc.setFontSize(13);
+            doc.setFont(undefined, 'bold');
+            doc.text(jobClient, x, y);
+            y += 6;
+            
+            doc.setFontSize(10);
+            doc.setFont(undefined, 'normal');
+            const jobLabel = jobName ? `${jobName}  |  Job #${jobNum}` : `Job #${jobNum}`;
+            doc.text(jobLabel, x, y);
+            y += 5;
+            
+            const doorStyleText = allProfiles.length > 0 ? allProfiles.join(' / ') : 'Flat';
+            doc.text(`Door Profiles: ${doorStyleText}`, x, y);
+            y += 5;
+            
+            doc.setFont(undefined, 'bold');
+            doc.text(`Total Parts: ${totalItems}`, x, y);
+            y += 12;
+            
+            // Table headers definitions
+            const headers = ['Qty', 'H', 'W', 'Thick', 'Moulded', 'Edges', 'Mode', 'Panel', 'Profile', '$/sq/m', 'Total'];
+            const colWidths = [7, 16, 16, 12, 15, 13, 8, 14, 28, 16, 20];
+            const cellHeight = 6;
+            
+            // Process each colour group
+            let grandTotal = 0;
+            Object.entries(colourGroups).forEach((colourEntry, colourIndex) => {
+                const [colourName, colourItems] = colourEntry;
+                
+                // Page break if needed
+                if (y > 240) {
+                    doc.addPage();
+                    y = 20;
+                }
+                
+                // Colour heading if multiple colours
+                if (Object.keys(colourGroups).length > 1) {
+                    doc.setFontSize(11);
+                    doc.setFont(undefined, 'bold');
+                    doc.text(`${colourName}`, x, y);
+                    y += 8;
+                }
+                
+                // Table headers
+                doc.setFontSize(9);
+                doc.setFont(undefined, 'bold');
+                doc.setTextColor(255, 255, 255);
+                
+                let startX = x;
+                doc.setDrawColor(0, 0, 0);
+                doc.setFillColor(50, 50, 50);
+                headers.forEach((header, i) => {
+                    doc.rect(startX, y, colWidths[i], cellHeight, 'FD');
+                    doc.text(header, startX + colWidths[i]/2, y + cellHeight/2 + 1.2, { align: 'center', valign: 'middle' });
+                    startX += colWidths[i];
+                });
+                y += cellHeight;
+                
+                // Data rows
+                doc.setFont(undefined, 'normal');
+                doc.setFontSize(8);
+                doc.setTextColor(0, 0, 0);
+                
+                let colourTotal = 0;
+                colourItems.forEach((item) => {
+                    startX = x;
+                    
+                    const qty = item.qty || 1;
+                    const height = item.h || '';
+                    const width = item.w || '';
+                    const thickness = item.thk || '';
+                    
+                    // Moulded: blank if not moulded
+                    const panelType = item.type || '';
+                    const mouldType = item.prof || '';
+                    const isMoulded = (panelType.toLowerCase() === 'flat' || mouldType.toLowerCase().includes('plain') || mouldType === '') ? '' : 'Y';
+                    
+                    // Edges
+                    let edgesDisplay = '';
+                    if (item.e && Array.isArray(item.e)) {
+                        const leftCount = (item.e[0]?1:0) + (item.e[1]?1:0);
+                        const sideCount = (item.e[2]?1:0) + (item.e[3]?1:0);
+                        const leftLabel = item.mode === 'SE' ? 'LR' : 'L';
+                        const sideLabel = item.mode === 'SE' ? 'SR' : 'S';
+                        let parts = [];
+                        if (leftCount > 0) parts.push(leftCount + leftLabel);
+                        if (sideCount > 0) parts.push(sideCount + sideLabel);
+                        edgesDisplay = parts.join('/');
+                    }
+                    
+                    const paintMode = item.mode || 'SS';
+                    const panel = item.type || '';
+                    const profile = item.prof || '';
+                    
+                    // Calculate sqm and pricing
+                    const sqm = (height * width) / 1000000;
+                    const pricePerSqm = pricingMatrix[profile] || 125;
+                    const rowTotal = sqm * pricePerSqm * qty;
+                    colourTotal += rowTotal;
+                    grandTotal += rowTotal;
+                    
+                    const data = [qty, height, width, thickness, isMoulded, edgesDisplay, paintMode, panel, profile, pricePerSqm.toFixed(0), rowTotal.toFixed(2)];
+                    
+                    // Draw cells
+                    data.forEach((value, i) => {
+                        doc.setDrawColor(150, 150, 150);
+                        doc.setTextColor(0, 0, 0);
+                        
+                        doc.rect(startX, y, colWidths[i], cellHeight);
+                        doc.text(value.toString(), startX + colWidths[i]/2, y + cellHeight/2 + 0.8, { align: 'center', valign: 'middle', maxWidth: colWidths[i] - 0.5 });
+                        startX += colWidths[i];
+                    });
+                    y += cellHeight;
+                });
+                
+                // Colour subtotal
+                doc.setFont(undefined, 'bold');
+                doc.text(`Subtotal (${colourName}): $${colourTotal.toFixed(2)}`, x + 100, y + 3);
+                y += 10;
+            });
+            
+            // Grand total
+            doc.setFont(undefined, 'bold');
+            doc.setFontSize(11);
+            doc.text(`TOTAL ESTIMATE: $${grandTotal.toFixed(2)}`, x, y);
+            
+            // Footer
+            doc.setFontSize(8);
+            doc.setFont(undefined, 'normal');
+            doc.text(`Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`, x, doc.internal.pageSize.height - 5);
+            
+            // Save
+            const filename = `Estimate_${jobClient.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+            doc.save(filename);
+            notify('✓ Estimate downloaded');
+            console.log('✓ Estimate PDF generated successfully');
+            
+        } catch(err) {
+            console.error('Estimate generation error:', err);
+            notify('❌ Error: ' + err.message);
         }
-        
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF();
-        
-        // Get job data
-        const job = window.currentJob || {};
-        const items = job.items || [];
-        const client = job.client || {};
-        
-        // Title
-        doc.setFontSize(20);
-        doc.text('ESTIMATE', 20, 20);
-        
-        // Company info
-        doc.setFontSize(10);
-        doc.text('Paintworkz Pro', 20, 35);
-        doc.text('17 West Boundary Road, Hamilton 3300 VIC', 20, 42);
-        doc.text('Phone: 0438 803 032', 20, 49);
-        
-        // Client info
-        doc.setFontSize(12);
-        doc.text('Bill To:', 20, 65);
-        doc.setFontSize(10);
-        doc.text(client.name || 'Client Name', 20, 73);
-        doc.text(client.address || 'Address', 20, 80);
-        doc.text(client.phone || 'Phone', 20, 87);
-        
-        // Items table
-        let y = 110;
-        doc.setFontSize(10);
-        doc.text('ITEMS TO PAINT:', 20, y);
-        y += 10;
-        
-        items.forEach((item, idx) => {
-            const text = `${idx + 1}. Qty ${item.qty} - ${item.h}×${item.w}×${item.thk || 18}mm (${item.fm === 'Moulded' ? item.mld : 'Flat'})`;
-            doc.text(text, 25, y);
-            y += 8;
-        });
-        
-        // Footer
-        doc.setFontSize(8);
-        doc.text('This is an estimate only. Final pricing may vary based on site conditions.', 20, doc.internal.pageSize.height - 10);
-        
-        // Save
-        doc.save(`Estimate_${job.jobId || 'Job'}.pdf`);
-        notify('✓ Estimate downloaded');
-        console.log('✓ Estimate PDF generated successfully');
-        
-    } catch(err) {
-        console.error('Estimate generation error:', err);
-        notify('❌ Error generating estimate: ' + err.message);
     }
-}
 
     function genSupplyDocket() {
         if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) {
@@ -3624,8 +3789,18 @@ function genPDF() {
         const jobClient = document.getElementById('cli')?.value || '';
         const jobNum = document.getElementById('jNum')?.value || document.getElementById('jN')?.value || '';
         const jobName = document.getElementById('jNm')?.value || '';
-        const paintColor = document.getElementById('p-color')?.value || '';
-        const paintBrand = document.getElementById('p-brand')?.value || '';
+        
+        // Collect ALL unique colours from items (not just from input field)
+        const allColours = [...new Set(items
+            .map(it => {
+                const brand = it.brand || '';
+                const color = it.color || '';
+                const finish = it.finish || 'Satin';
+                return brand && color ? `${brand} ${color} ${finish}` : (color ? `${color} ${finish}` : '');
+            })
+            .filter(c => c && c.trim())
+        )];
+        const paintColorDisplay = allColours.length > 0 ? allColours.join(' / ') : (document.getElementById('p-color')?.value || '');
         
         // Get ALL profiles including Plain
         const allProfiles = [...new Set(items
@@ -3689,8 +3864,7 @@ function genPDF() {
         doc.text(`Door Profiles: ${doorStyleText}`, x, y);
         y += 5;
         
-        const fullPaintColor = paintBrand && paintColor ? `${paintBrand} ${paintColor}` : paintColor;
-        doc.text(`Paint Colour: ${fullPaintColor}`, x, y);
+        doc.text(`Paint Colour: ${paintColorDisplay}`, x, y);
         y += 5;
         
         doc.setFont(undefined, 'bold');
@@ -3744,15 +3918,15 @@ function genPDF() {
             const width = item.w || '';
             const thickness = item.thk || '';
             
-            // Moulded: Y/N - based on panel type and profile
+            // Moulded: Y/N (but show blank for N) - based on panel type and profile
             // Flat panels = No Mould, Plain profiles = No Mould
             const panelType = item.type || '';
             const mouldType = item.prof || '';
-            const isMoulded = (
+            const isMouldedValue = (
                 panelType.toLowerCase() === 'flat' || 
                 mouldType.toLowerCase().includes('plain') ||
                 mouldType === ''
-            ) ? 'N' : 'Y';
+            ) ? '' : 'Y';
             
             // EDGES - properly calculate from array of booleans
             let edgesDisplay = '';
@@ -3782,7 +3956,7 @@ function genPDF() {
             // Description - only if filled out (not empty)
             const description = item.desc || '';
             
-            const data = [qty, height, width, thickness, isMoulded, edgesDisplay, paintMode, panelType, profile, colourDisplay, description];
+            const data = [qty, height, width, thickness, isMouldedValue, edgesDisplay, paintMode, panelType, profile, colourDisplay, description];
             
             // Draw cells
             data.forEach((value, i) => {
