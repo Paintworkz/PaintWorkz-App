@@ -808,7 +808,11 @@
         <div class="card">
             <!-- General Settings Tab -->
             <div id="admin-tab-general-content">
-                <h4 style="margin-top:20px; margin-bottom:10px; font-weight:900;">Measure Tab Defaults</h4>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <h4 style="margin:0; margin-top:20px; font-weight:900;">Measure Tab Defaults</h4>
+                    <button onclick="let container = document.getElementById('measure-defaults-container'); container.style.display = container.style.display === 'none' ? 'block' : 'none';" style="background:none; border:none; cursor:pointer; font-weight:900; font-size:18px; color:#999;">−</button>
+                </div>
+                <div id="measure-defaults-container" style="display:block;">
                 <p style="font-size:11px; color:#666; margin-bottom:15px;">Set default values for new parts in the Measure tab</p>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-bottom:20px;">
                     <div>
@@ -821,6 +825,7 @@
                     </div>
                 </div>
                 <button onclick="saveDefaultSettings()" style="border:none; background:#34c759; color:#fff; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">✓ SAVE DEFAULTS</button>
+                </div>
                 
                 <hr style="margin:30px 0; border:none; border-top:1px solid #ddd;">
                 
@@ -3825,15 +3830,20 @@ function genPDF() {
                 // Table headers - Black background with white text (proper contrast)
                 doc.setFontSize(9);
                 doc.setFont(undefined, 'bold');
-                doc.setDrawColor(0, 0, 0);
-                doc.setFillColor(0, 0, 0);  // Black background
                 
                 let startX = x;
                 headers.forEach((header, i) => {
-                    doc.rect(startX, y, colWidths[i], cellHeight, 'FD');
+                    // Set colors BEFORE drawing each cell
+                    doc.setDrawColor(0, 0, 0);
+                    doc.setFillColor(0, 0, 0);  // Black background
                     doc.setTextColor(255, 255, 255);  // White text
-                    // No maxWidth for headers - prevent wrapping
+                    
+                    // Draw filled rectangle with border
+                    doc.rect(startX, y, colWidths[i], cellHeight, 'FD');
+                    
+                    // Draw text on black background
                     doc.text(header, startX + colWidths[i]/2, y + cellHeight/2 + 1.2, { align: 'center', valign: 'middle' });
+                    
                     startX += colWidths[i];
                 });
                 y += cellHeight;
@@ -3936,38 +3946,45 @@ function genPDF() {
                 y += 4;
             });
             
-            // Add all other charges
+            // Add all other charges with better spacing
             const totalColX = x + (8+16+16+14+14+15+10+15+26+12+12);
             doc.setFont(undefined, 'normal');
             doc.setFontSize(8);
             
+            // Add separator line
+            y += 8;
+            doc.setDrawColor(200, 200, 200);
+            doc.line(x, y, totalColX + 15, y);
+            y += 6;
+            
+            // Show additional charges clearly
             if (appliedCharges && appliedCharges.deliveryCharge > 0) {
-                y += 5;
                 doc.text(`Delivery/Pickup (${appliedCharges.deliveryRegionLabel}):`, x, y);
                 doc.text(`$${appliedCharges.deliveryCharge.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
                 grandTotal += appliedCharges.deliveryCharge;
-                y += 7;
+                y += 6;
             }
             
             if (appliedCharges && appliedCharges.courierCost > 0) {
                 doc.text(`Courier Cost:`, x, y);
                 doc.text(`$${appliedCharges.courierCost.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
                 grandTotal += appliedCharges.courierCost;
-                y += 7;
+                y += 6;
             }
             
             if (appliedCharges && appliedCharges.otherChargeAmount > 0) {
                 doc.text(`${appliedCharges.otherChargeDesc || 'Other Charges'}:`, x, y);
                 doc.text(`$${appliedCharges.otherChargeAmount.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
                 grandTotal += appliedCharges.otherChargeAmount;
-                y += 7;
+                y += 6;
             }
             
             // Calculate and display GST
             const gstRate = appliedCharges && appliedCharges.gstRate ? appliedCharges.gstRate : 0.10;
             const gstAmount = grandTotal * gstRate;
             
-            y += 3;
+            // Final summary section
+            y += 5;
             doc.setFont(undefined, 'bold');
             doc.setFontSize(9);
             doc.text(`Subtotal (inc. charges):`, x, y);
