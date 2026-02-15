@@ -3646,7 +3646,7 @@ function genPDF() {
         // Add logo in top right if exists
         if (logoBase64) {
             try {
-                doc.addImage(logoBase64, 'PNG', 170, 8, 25, 25);
+                doc.addImage(logoBase64, 'PNG', 165, 5, 50, 50);
             } catch(e) {}
         }
         
@@ -5600,7 +5600,7 @@ function genPDF() {
                     const clientId = this.closest('[data-client-id]').getAttribute('data-client-id');
                     const clientName = this.closest('[data-client-name]').getAttribute('data-client-name');
                     console.log('Edit button clicked for:', clientName, 'ID:', clientId);
-                    showEditClientForm(clientId);
+                    showEditClientForm(clientId, clientName);
                 });
             });
             
@@ -5618,31 +5618,55 @@ function genPDF() {
             clientsDiv.innerHTML = '<p style="color:red; padding:20px;">Error loading clients</p>';
         }
     }
-    function showEditClientForm(clientId) {
-        console.log('Opening edit form for clientId:', clientId);
+    function showEditClientForm(clientId, clientName) {
+        console.log('Opening edit form for clientId:', clientId, 'clientName:', clientName);
         const db = getClientDatabase();
         console.log('Database keys:', Object.keys(db));
         
         let client = db[clientId];
         
-        // Fallback: search by ID if direct lookup fails
+        // Fallback 1: search by ID property
         if (!client) {
-            console.warn('Client not found with ID:', clientId, '- searching database...');
+            console.warn('Direct lookup failed - searching by id property...');
             for (let key in db) {
                 if (db[key] && db[key].id === clientId) {
                     client = db[key];
+                    console.log('Found by id property:', client.name);
                     break;
                 }
             }
         }
         
-        if (!client) {
-            console.error('Client not found:', clientId);
-            alert('Error: Client not found');
-            return;
+        // Fallback 2: search by name (for clients from job history or hardcoded list)
+        if (!client && clientName) {
+            console.warn('ID search failed - searching by client name:', clientName);
+            for (let key in db) {
+                if (db[key] && db[key].name && db[key].name.toLowerCase() === clientName.toLowerCase()) {
+                    client = db[key];
+                    console.log('Found by name:', client.name);
+                    break;
+                }
+            }
         }
         
-        console.log('Found client:', client.name);
+        // Fallback 3: create new client entry if not found
+        if (!client) {
+            console.warn('Client not in database - creating new entry for:', clientName);
+            client = {
+                id: clientId,
+                name: clientName || '',
+                contactName: '',
+                landline: '',
+                mobile: '',
+                email1: '',
+                email2: '',
+                address: '',
+                town: '',
+                postcode: ''
+            };
+        }
+        
+        console.log('Using client:', client.name);
         
         const modalId = 'editClientModal-' + Date.now();
         const overlayId = 'editOverlay-' + Date.now();
