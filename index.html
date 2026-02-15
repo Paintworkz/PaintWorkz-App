@@ -3661,56 +3661,6 @@
 
     // ===== INVOICE (stub) =====
     function genInvoice() {
-    try {
-        if (!window.jspdf || !window.jspdf.jsPDF) {
-            notify('❌ PDF library loading...');
-            return;
-        }
-        
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF();
-        
-        const job = window.currentJob || {};
-        
-        doc.setFontSize(16);
-        doc.text('INVOICE', 20, 20);
-        
-        doc.setFontSize(10);
-        doc.text('Invoice #: (Auto-generated)', 20, 40);
-        doc.text('Job ID: ' + (job.jobId || 'N/A'), 20, 50);
-        doc.text('Date: ' + new Date().toLocaleDateString(), 20, 60);
-        
-        doc.text('Services:', 20, 80);
-        doc.text('Painting services: TBD', 25, 90);
-        
-        doc.text('Total: $0.00', 20, 110);
-        
-        const filename = `Invoice_${job.jobId || 'Job'}.pdf`;
-        const pdfDataUri = doc.output('datauristring');
-        showPDFPreview(pdfDataUri, filename, '📄 Invoice Preview');
-        notify('✓ Invoice Ready - Review & Download');
-        
-    } catch(err) {
-        console.error('Invoice error:', err);
-        notify('❌ Error: ' + err.message);
-    }
-}
-
-    // ===== QUOTE FORM (stub) =====
-    function genQuoteForm() {
-        if (items.length === 0) {
-            notify('❌ Add parts first');
-            return;
-        }
-        PaintWorkzEngine.generatePDF('Quote', items);
-    }
-
-// Main PDF export function - routes to estimate
-function genPDF() {
-    genEstimate();
-}
-
-    function genEstimate() {
         try {
             if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) {
                 notify('❌ PDF library not loaded');
@@ -3778,7 +3728,7 @@ function genPDF() {
             
 
             doc.setFontSize(32);
-            doc.text('ESTIMATE', x, y);
+            doc.text('INVOICE', x, y);
             y += 15;
             
             // Company details
@@ -3827,7 +3777,7 @@ function genPDF() {
                 const [colourName, colourItems] = colourEntry;
                 
                 // Page break if needed
-                if (y > 240) {
+                if (y > 270) {
                     doc.addPage();
                     y = 20;
                 }
@@ -4021,13 +3971,13 @@ function genPDF() {
             // Footer
             doc.setFontSize(8);
             doc.setFont(undefined, 'normal');
-            doc.text(`Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`, x, doc.internal.pageSize.height - 5);
+            doc.text(`Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`, x, doc.internal.pageSize.height - 15);
             
             // Show preview modal (like Supply Docket)
-            const filename = `Estimate_${jobClient.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+            const filename = `Invoice_${jobClient.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
             const pdfDataUri = doc.output('datauristring');
-            showPDFPreview(pdfDataUri, filename, '📋 Estimate Preview');
-            notify('✓ Estimate Ready - Review & Download');
+            showPDFPreview(pdfDataUri, filename, '🧾 Invoice Preview');
+            notify('✓ Invoice Ready - Review & Download');
             // Reset charges for next PDF
             appliedCharges = { 
                 colourMultiplier: 0, 
@@ -4046,6 +3996,345 @@ function genPDF() {
             notify('❌ Error: ' + err.message);
         }
     }
+
+
+        function genQuoteForm() {
+        try {
+            if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) {
+                notify('❌ PDF library not loaded');
+                return;
+            }
+            
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('p', 'mm', 'a4');
+            
+            // Get company settings
+            const companySettings = JSON.parse(localStorage.getItem('companySettings')) || {
+                name: 'Paintworkz',
+                address: '17 West Boundary Road, Hamilton 3300 VIC',
+                phone: '0438 803 032',
+                email: 'paint_workz@outlook.com'
+            };
+            
+            // Get job info
+            const jobClient = document.getElementById('cli')?.value || '';
+            const jobNum = document.getElementById('jNum')?.value || document.getElementById('jN')?.value || '';
+            const jobName = document.getElementById('jNm')?.value || '';
+            
+            // Collect all unique colours from items - group by colour AND finish
+            const colourGroups = {};
+            items.forEach(item => {
+                const brand = item.brand || '';
+                const color = item.color || '';
+                const finish = item.finish || 'Satin';
+                const colourKey = brand && color ? `${brand} ${color} ${finish}` : (color ? `${color} ${finish}` : 'No Colour');
+                if (!colourGroups[colourKey]) {
+                    colourGroups[colourKey] = [];
+                }
+                colourGroups[colourKey].push(item);
+            });
+            
+            // Pricing matrix
+            const pricingMatrix = {
+                'Plain': 125,
+                'Shaker 45': 171, 'Ashlee': 171, 'Bevelled Edge': 171,
+                'Branxholme': 171, 'Hamilton': 171, 'Tarrone': 171
+            };
+            
+            // Get ALL profiles
+            const allProfiles = [...new Set(items
+                .map(it => it.prof)
+                .filter(p => p && p.trim())
+            )].sort();
+            
+            // Count items
+            const totalItems = items.reduce((sum, item) => sum + parseInt(item.qty || 1), 0);
+            
+            // Header positioning
+            let y = 25;
+            let x = 15;
+            
+            // Logo
+            const logoBase64 = localStorage.getItem('companyLogo');
+            if (logoBase64) {
+                try {
+                    doc.addImage(logoBase64, 'PNG', 145, 5, 50, 50);
+                } catch(e) {
+                    console.warn('Error rendering company logo:', e);
+                }
+            }
+            
+
+            doc.setFontSize(32);
+            doc.text('QUOTE', x, y);
+            y += 15;
+            
+            // Company details
+            doc.setFontSize(13);
+            doc.setFont(undefined, 'bold');
+            doc.text(companySettings.name, x, y);
+            y += 6;
+            
+            doc.setFontSize(9);
+            doc.setFont(undefined, 'normal');
+            doc.text(companySettings.address, x, y);
+            y += 4;
+            doc.text(`Email: ${companySettings.email}`, x, y);
+            y += 4;
+            doc.text(`Phone: ${companySettings.phone}`, x, y);
+            y += 10;
+            
+            // Job details
+            doc.setFontSize(13);
+            doc.setFont(undefined, 'bold');
+            doc.text(jobClient, x, y);
+            y += 6;
+            
+            doc.setFontSize(10);
+            doc.setFont(undefined, 'normal');
+            const jobLabel = jobName ? `${jobName}  |  Job #${jobNum}` : `Job #${jobNum}`;
+            doc.text(jobLabel, x, y);
+            y += 5;
+            
+            const doorStyleText = allProfiles.length > 0 ? allProfiles.join(' / ') : 'Flat';
+            doc.text(`Door Profiles: ${doorStyleText}`, x, y);
+            y += 5;
+            
+            doc.setFont(undefined, 'bold');
+            doc.text(`Total Parts: ${totalItems}`, x, y);
+            y += 12;
+            
+            // Table headers definitions - expanded to use full page width (15mm margins each side = 180mm available)
+            const headers = ['Qty', 'H', 'W', 'Thick', 'Moulded', 'Edges', 'Mode', 'Panel', 'Profile', 'SQ/MTR', '$/sq/m', 'Total'];
+            const colWidths = [8, 16, 16, 14, 14, 15, 10, 15, 26, 12, 12, 18];
+            const cellHeight = 6;
+            
+            // Process each colour group
+            let grandTotal = 0;
+            Object.entries(colourGroups).forEach((colourEntry, colourIndex) => {
+                const [colourName, colourItems] = colourEntry;
+                
+                // Page break if needed
+                if (y > 270) {
+                    doc.addPage();
+                    y = 20;
+                }
+                
+                // Colour heading - Always show with black background and white text
+                doc.setFontSize(11);
+                doc.setFont(undefined, 'bold');
+                doc.setFillColor(0, 0, 0);
+                doc.setDrawColor(0, 0, 0);
+                doc.rect(x, y, 180 - 2*x, 8, 'FD');
+                doc.setTextColor(255, 255, 255);
+                doc.text(`${colourName}`, x + 2, y + 5);
+                y += 10;
+                
+                // Table headers - Black background with white text (proper contrast)
+                doc.setFontSize(9);
+                doc.setFont(undefined, 'bold');
+                
+                let startX = x;
+                headers.forEach((header, i) => {
+                    // Set colors BEFORE drawing each cell
+                    doc.setDrawColor(0, 0, 0);
+                    doc.setFillColor(0, 0, 0);  // Black background
+                    doc.setTextColor(255, 255, 255);  // White text
+                    
+                    // Draw filled rectangle with border
+                    doc.rect(startX, y, colWidths[i], cellHeight, 'FD');
+                    
+                    // Draw text on black background
+                    doc.text(header, startX + colWidths[i]/2, y + cellHeight/2 + 1.2, { align: 'center', valign: 'middle' });
+                    
+                    startX += colWidths[i];
+                });
+                y += cellHeight;
+                
+                // Data rows
+                doc.setFont(undefined, 'normal');
+                doc.setFontSize(8);
+                doc.setTextColor(0, 0, 0);
+                
+                let colourTotal = 0;
+                colourItems.forEach((item) => {
+                    startX = x;
+                    
+                    const qty = item.qty || 1;
+                    const height = item.h || '';
+                    const width = item.w || '';
+                    const thickness = item.thk || '';
+                    
+                    // Moulded: blank if not moulded
+                    const panelType = item.type || '';
+                    const mouldType = item.prof || '';
+                    const isMoulded = (panelType.toLowerCase() === 'flat' || mouldType.toLowerCase().includes('plain') || mouldType === '') ? '' : 'Y';
+                    
+                    // Edges
+                    let edgesDisplay = '';
+                    if (item.e && Array.isArray(item.e)) {
+                        const leftCount = (item.e[0]?1:0) + (item.e[1]?1:0);
+                        const sideCount = (item.e[2]?1:0) + (item.e[3]?1:0);
+                        const leftLabel = item.mode === 'SE' ? 'LR' : 'L';
+                        const sideLabel = item.mode === 'SE' ? 'SR' : 'S';
+                        let parts = [];
+                        if (leftCount > 0) parts.push(leftCount + leftLabel);
+                        if (sideCount > 0) parts.push(sideCount + sideLabel);
+                        edgesDisplay = parts.join('/');
+                    }
+                    
+                    const paintMode = item.mode || 'SS';
+                    const panel = item.type || '';
+                    const profile = item.prof || '';
+                    
+                    // Calculate sqm and pricing
+                    const sqm = (height * width) / 1000000;
+                    
+                    // Extract profile name without the (###) suffix for pricing lookup
+                    const profileBase = profile.replace(/\s*\(\d+\)\s*$/, '').trim();
+                    const pricePerSqm = pricingMatrix[profileBase] || pricingMatrix[profile] || 125;
+                    const rowTotal = sqm * pricePerSqm * qty;
+                    colourTotal += rowTotal;
+                    grandTotal += rowTotal;
+                    
+                    // Data array now includes SQ/MTR column
+                    const data = [qty, height, width, thickness, isMoulded, edgesDisplay, paintMode, panel, profile, sqm.toFixed(3), pricePerSqm.toFixed(0), rowTotal.toFixed(2)];
+                    
+                    // Draw cells
+                    data.forEach((value, i) => {
+                        doc.setDrawColor(150, 150, 150);
+                        doc.setTextColor(0, 0, 0);
+                        
+                        doc.rect(startX, y, colWidths[i], cellHeight);
+                        doc.text(value.toString(), startX + colWidths[i]/2, y + cellHeight/2 + 0.8, { align: 'center', valign: 'middle', maxWidth: colWidths[i] - 0.5 });
+                        startX += colWidths[i];
+                    });
+                    y += cellHeight;
+                });
+                
+                // Colour subtotal
+                y += 3;  // Extra spacing
+                doc.setFont(undefined, 'bold');
+                doc.setFontSize(9);
+                // Calculate x position for Total column (sum of all column widths before it)
+                const totalColX = x + (8+16+16+14+14+15+10+15+26+12+12);
+                doc.text(`Subtotal (${colourName}):`, x, y);
+                doc.text(`$${colourTotal.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
+                y += 8;
+                
+                // Add colour-specific surcharge if applicable
+                if (appliedCharges && appliedCharges.colourSurcharges) {
+                    const multiplier = appliedCharges.colourSurcharges[colourName] || 0;
+                    if (multiplier > 0) {
+                        doc.setFont(undefined, 'normal');
+                        doc.setFontSize(8);
+                        let surcharge = colourTotal * multiplier;
+                        
+                        // Check if this colour has Undercoat selected
+                        // (This would require tracking which option was selected - using a simple check)
+                        // For now, apply directly
+                        
+                        const surchargeLabel = multiplier === 0.05 ? '(Standard/Light +5%)' : 
+                                             multiplier === 0.15 ? '(Dark +15%)' :
+                                             multiplier === 0.30 ? '(Extra Tint +30%)' :
+                                             multiplier === 0.80 ? '(Undercoat 80%)' :
+                                             multiplier === 1.30 ? '(Colour Match +130%)' : '';
+                        
+                        doc.text(`  Paint Colour Surcharge ${surchargeLabel}:`, x, y);
+                        doc.text(`$${surcharge.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
+                        y += 8;
+                        grandTotal += surcharge;
+                    }
+                }
+                y += 4;
+            });
+            
+            // Add all other charges with better spacing
+            const totalColX = x + (8+16+16+14+14+15+10+15+26+12+12);
+            doc.setFont(undefined, 'normal');
+            doc.setFontSize(8);
+            
+            // Add separator line
+            y += 8;
+            doc.setDrawColor(200, 200, 200);
+            doc.line(x, y, totalColX + 15, y);
+            y += 6;
+            
+            // Show additional charges clearly
+            if (appliedCharges && appliedCharges.deliveryCharge > 0) {
+                doc.text(`Delivery/Pickup (${appliedCharges.deliveryRegionLabel}):`, x, y);
+                doc.text(`$${appliedCharges.deliveryCharge.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
+                grandTotal += appliedCharges.deliveryCharge;
+                y += 6;
+            }
+            
+            if (appliedCharges && appliedCharges.courierCost > 0) {
+                doc.text(`Freight Charge:`, x, y);
+                doc.text(`$${appliedCharges.courierCost.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
+                grandTotal += appliedCharges.courierCost;
+                y += 6;
+            }
+            
+            if (appliedCharges && appliedCharges.otherChargeAmount > 0) {
+                doc.text(`${appliedCharges.otherChargeDesc || 'Other Charges'}:`, x, y);
+                doc.text(`$${appliedCharges.otherChargeAmount.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
+                grandTotal += appliedCharges.otherChargeAmount;
+                y += 6;
+            }
+            
+            // Calculate and display GST
+            const gstRate = appliedCharges && appliedCharges.gstRate ? appliedCharges.gstRate : 0.10;
+            const gstAmount = grandTotal * gstRate;
+            
+            // Final summary section
+            y += 5;
+            doc.setFont(undefined, 'bold');
+            doc.setFontSize(9);
+            doc.text(`Subtotal (inc. charges):`, x, y);
+            doc.text(`$${grandTotal.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
+            y += 7;
+            
+            doc.setFont(undefined, 'normal');
+            doc.setFontSize(8);
+            doc.text(`GST (${(gstRate*100).toFixed(1)}%):`, x, y);
+            doc.text(`$${gstAmount.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
+            y += 10;
+            
+            // Grand total with GST
+            doc.setFont(undefined, 'bold');
+            doc.setFontSize(11);
+            const totalWithGST = grandTotal + gstAmount;
+            doc.text(`TOTAL ESTIMATE (Inc GST): $${totalWithGST.toFixed(2)}`, x, y);
+            
+            // Footer
+            doc.setFontSize(8);
+            doc.setFont(undefined, 'normal');
+            doc.text(`Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`, x, doc.internal.pageSize.height - 15);
+            
+            // Show preview modal (like Supply Docket)
+            const filename = `Quote_${jobClient.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+            const pdfDataUri = doc.output('datauristring');
+            showPDFPreview(pdfDataUri, filename, '📋 Quote Preview');
+            notify('✓ Quote Ready - Review & Download');
+            // Reset charges for next PDF
+            appliedCharges = { 
+                colourMultiplier: 0, 
+                colourMultiplierLabel: 'NONE', 
+                deliveryCharge: 0, 
+                deliveryRegionLabel: 'None',
+                courierCost: 0,
+                otherChargeDesc: '',
+                otherChargeAmount: 0,
+                gstRate: 0.10
+            };
+            console.log('✓ Estimate PDF generated successfully');
+            
+        } catch(err) {
+            console.error('Estimate generation error:', err);
+            notify('❌ Error: ' + err.message);
+        }
+    }
+
 
     function genSupplyDocket() {
         if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) {
@@ -7515,13 +7804,23 @@ function genPDF() {
     }
 
     function prevScheduleMonth() {
+        console.log('◀ Previous month clicked');
+        console.log('Current date before:', scheduleCalendarDate);
         scheduleCalendarDate.setMonth(scheduleCalendarDate.getMonth() - 1);
+        console.log('Current date after:', scheduleCalendarDate);
+        console.log('Rendering calendar...');
         renderScheduleCalendar();
+        console.log('✓ Calendar rendered');
     }
 
     function nextScheduleMonth() {
+        console.log('▶ Next month clicked');
+        console.log('Current date before:', scheduleCalendarDate);
         scheduleCalendarDate.setMonth(scheduleCalendarDate.getMonth() + 1);
+        console.log('Current date after:', scheduleCalendarDate);
+        console.log('Rendering calendar...');
         renderScheduleCalendar();
+        console.log('✓ Calendar rendered');
     }
     
     function toggleJobsChart() {
