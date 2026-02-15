@@ -185,18 +185,9 @@
         <div style="background:#fff; border-radius:12px; width:100%; max-width:550px; padding:30px; box-shadow:0 10px 40px rgba(0,0,0,0.3); margin:20px auto;">
             <h2 style="margin:0 0 25px 0; color:#333; font-size:20px; font-weight:bold;">Additional Charges</h2>
             
-            <!-- Door Colour Multiplier Section -->
-            <div style="margin-bottom:20px; padding-bottom:20px; border-bottom:1px solid #ddd;">
-                <label style="display:block; font-weight:bold; color:#333; margin-bottom:12px; font-size:13px;">Door Colour Type:</label>
-                <select id="colourMultiplierSelect" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; font-size:12px; background:#fff; cursor:pointer;">
-                    <option value="0">NONE (No additional charge)</option>
-                    <option value="0.05">Standard (+5%)</option>
-                    <option value="0.05">Light (+5%)</option>
-                    <option value="0.15">Dark (+15%)</option>
-                    <option value="0.3">Extra Tint (+30%)</option>
-                    <option value="0.8">Undercoat (80% of paint only)</option>
-                    <option value="1.3">Colour Match (+130%)</option>
-                </select>
+            <!-- Paint Colour Surcharges - Dynamic per colour -->
+            <div id="colourSurchargesContainer" style="margin-bottom:20px; padding-bottom:20px; border-bottom:1px solid #ddd;">
+                <p style="color:#999; font-size:12px;">Loading colours...</p>
             </div>
             
             <!-- Delivery/Pickup Section -->
@@ -3918,15 +3909,29 @@ function genPDF() {
                 doc.text(`$${colourTotal.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
                 y += 8;
                 
-                // Add colour surcharge line if applicable
-                if (appliedCharges && appliedCharges.colourMultiplier > 0) {
-                    const colourSurcharge = colourTotal * appliedCharges.colourMultiplier;
-                    doc.setFont(undefined, 'normal');
-                    doc.setFontSize(8);
-                    doc.text(`Paint Colour Surcharge (${appliedCharges.colourMultiplierLabel}):`, x, y);
-                    doc.text(`$${colourSurcharge.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
-                    y += 8;
-                    grandTotal += colourSurcharge;
+                // Add colour-specific surcharge if applicable
+                if (appliedCharges && appliedCharges.colourSurcharges) {
+                    const multiplier = appliedCharges.colourSurcharges[colourName] || 0;
+                    if (multiplier > 0) {
+                        doc.setFont(undefined, 'normal');
+                        doc.setFontSize(8);
+                        let surcharge = colourTotal * multiplier;
+                        
+                        // Check if this colour has Undercoat selected
+                        // (This would require tracking which option was selected - using a simple check)
+                        // For now, apply directly
+                        
+                        const surchargeLabel = multiplier === 0.05 ? '(Standard/Light +5%)' : 
+                                             multiplier === 0.15 ? '(Dark +15%)' :
+                                             multiplier === 0.30 ? '(Extra Tint +30%)' :
+                                             multiplier === 0.80 ? '(Undercoat 80%)' :
+                                             multiplier === 1.30 ? '(Colour Match +130%)' : '';
+                        
+                        doc.text(`  Paint Colour Surcharge ${surchargeLabel}:`, x, y);
+                        doc.text(`$${surcharge.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
+                        y += 8;
+                        grandTotal += surcharge;
+                    }
                 }
                 y += 4;
             });
@@ -5895,12 +5900,59 @@ function genPDF() {
             modal.style.display = 'flex';
             modal.style.visibility = 'visible';
         }
-        // Reset dropdowns and fields
-        document.getElementById('colourMultiplierSelect').value = '0';
+        
+        // Get all unique colours from items
+        const uniqueColours = [...new Set(items
+            .map(it => {
+                const brand = it.brand || '';
+                const color = it.color || '';
+                const finish = it.finish || 'Satin';
+                return brand && color ? `${brand} ${color} ${finish}` : (color ? `${color} ${finish}` : '');
+            })
+            .filter(c => c && c.trim())
+        )];
+        
+        // Build colour surcharge selectors
+        let colourHTML = '';
+        if (uniqueColours.length > 0) {
+            colourHTML = '<div style="margin-bottom:20px; padding-bottom:20px; border-bottom:1px solid #ddd;"><label style="display:block; font-weight:bold; color:#333; margin-bottom:12px; font-size:13px;">Paint Colour Surcharges:</label>';
+            
+            uniqueColours.forEach((colour, idx) => {
+                const selectId = `colourMultiplier_${idx}`;
+                colourHTML += `<div style="margin-bottom:10px;"><label style="font-size:11px; color:#666; margin-bottom:4px; display:block;">${colour}</label>
+                <select id="${selectId}" class="colourSurchargeSelect" data-colour="${colour}" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:11px;">
+                    <option value="0">NONE</option>
+                    <option value="0.05">Standard (+5%)</option>
+                    <option value="0.05">Light (+5%)</option>
+                    <option value="0.15">Dark (+15%)</option>
+                    <option value="0.3">Extra Tint (+30%)</option>
+                    <option value="0.8">Undercoat (80%)</option>
+                    <option value="1.3">Colour Match (+130%)</option>
+                </select></div>`;
+            });
+            
+            colourHTML += '</div>';
+        } else {
+            colourHTML = '<div style="margin-bottom:20px; padding-bottom:20px; border-bottom:1px solid #ddd;"><p style="color:#999; font-size:12px;">No colours specified in job</p></div>';
+        }
+        
+        // Insert into modal
+        const colourContainer = document.getElementById('colourSurchargesContainer');
+        if (colourContainer) {
+            colourContainer.innerHTML = colourHTML;
+        }
+        
+        // Reset other fields
         document.getElementById('deliveryRegionSelect').value = '0';
         document.getElementById('courierCostInput').value = '0';
         document.getElementById('otherChargeDesc').value = '';
         document.getElementById('otherChargeAmount').value = '0';
+        
+        // Reinitialize colour surcharge tracking
+        window.colourSurcharges = {};
+        uniqueColours.forEach((colour, idx) => {
+            window.colourSurcharges[colour] = 0;
+        });
         
         // Initialize summary on modal open
         setTimeout(() => updateChargesSummary(), 100);
@@ -5916,8 +5968,20 @@ function genPDF() {
     }
     
     function updateChargesSummary() {
-        // Get current subtotal from items
+        // Get all colour surcharges from dynamic selectors
+        const colourSurchargeSelects = document.querySelectorAll('.colourSurchargeSelect');
+        const colourSurcharges = {}; // { 'Wattyl Lexicon Satin': 0.15, ... }
+        
+        colourSurchargeSelects.forEach(select => {
+            const colour = select.getAttribute('data-colour');
+            const multiplier = parseFloat(select.value) || 0;
+            colourSurcharges[colour] = multiplier;
+        });
+        
+        // Calculate subtotal grouped by colour
+        let colorSubtotals = {}; // { 'Wattyl Lexicon Satin': 1000, ... }
         let subtotal = 0;
+        
         items.forEach(item => {
             const qty = parseInt(item.qty) || 1;
             const height = parseInt(item.h) || 0;
@@ -5934,36 +5998,60 @@ function genPDF() {
                 'Branxholme': 171, 'Hamilton': 171, 'Tarrone': 171
             };
             pricePerSqm = pricingMatrix[profileBase] || pricingMatrix[profile] || 125;
-            subtotal += sqm * pricePerSqm * qty;
+            const itemTotal = sqm * pricePerSqm * qty;
+            
+            // Group by colour
+            const brand = item.brand || '';
+            const color = item.color || '';
+            const finish = item.finish || 'Satin';
+            const colourKey = brand && color ? `${brand} ${color} ${finish}` : (color ? `${color} ${finish}` : 'No Colour');
+            
+            if (!colorSubtotals[colourKey]) colorSubtotals[colourKey] = 0;
+            colorSubtotals[colourKey] += itemTotal;
+            subtotal += itemTotal;
         });
         
-        const colourMult = parseFloat(document.getElementById('colourMultiplierSelect').value) || 0;
+        // Calculate total colour surcharges
+        let totalColourSurcharge = 0;
+        Object.entries(colorSubtotals).forEach(([colour, colourSubtotal]) => {
+            const multiplier = colourSurcharges[colour] || 0;
+            
+            // Special handling for Undercoat
+            if (multiplier > 0) {
+                let surcharge = 0;
+                // Find the label for this multiplier
+                const selects = document.querySelectorAll('.colourSurchargeSelect');
+                let isUndercoat = false;
+                selects.forEach(sel => {
+                    if (sel.getAttribute('data-colour') === colour) {
+                        const option = sel.options[sel.selectedIndex];
+                        if (option && option.text.includes('Undercoat')) {
+                            isUndercoat = true;
+                        }
+                    }
+                });
+                
+                if (isUndercoat) {
+                    surcharge = (colourSubtotal * 0.35) * multiplier; // 35% is paint cost
+                } else {
+                    surcharge = colourSubtotal * multiplier;
+                }
+                totalColourSurcharge += surcharge;
+            }
+        });
+        
         const deliveryCharge = parseFloat(document.getElementById('deliveryRegionSelect').value) || 0;
         const courierCost = parseFloat(document.getElementById('courierCostInput').value) || 0;
         const otherChargeAmount = parseFloat(document.getElementById('otherChargeAmount').value) || 0;
         
-        // Special logic for Undercoat - 80% of paint cost only
-        let colourSurcharge = 0;
-        const colourSelect = document.getElementById('colourMultiplierSelect');
-        const selectedOption = colourSelect.options[colourSelect.selectedIndex];
-        
-        if (selectedOption && selectedOption.text && selectedOption.text.includes('Undercoat')) {
-            // Undercoat: 80% of paint cost only (estimated as 35% of total)
-            const paintCostEstimate = subtotal * 0.35;
-            colourSurcharge = paintCostEstimate * colourMult;
-        } else {
-            // All other colours: percentage of full subtotal
-            colourSurcharge = subtotal * colourMult;
-        }
-        
-        const subtotalPlusCharges = subtotal + colourSurcharge + deliveryCharge + courierCost + otherChargeAmount;
+        const subtotalPlusCharges = subtotal + totalColourSurcharge + deliveryCharge + courierCost + otherChargeAmount;
         
         const chargesData = loadAdditionalCharges();
         const gstRate = chargesData.gstRate || 0.10;
         const gstAmount = subtotalPlusCharges * gstRate;
         const totalWithGST = subtotalPlusCharges + gstAmount;
         
-        document.getElementById('summaryColourCharge').textContent = colourSurcharge.toFixed(2);
+        document.getElementById('summaryColourCharge').textContent = totalColourSurcharge.toFixed(2);
         document.getElementById('summaryDeliveryCharge').textContent = deliveryCharge.toFixed(2);
         document.getElementById('summaryCourierCharge').textContent = courierCost.toFixed(2);
         document.getElementById('summaryOtherCharge').textContent = otherChargeAmount.toFixed(2);
@@ -5971,8 +6059,9 @@ function genPDF() {
         document.getElementById('summaryGST').textContent = gstAmount.toFixed(2);
         document.getElementById('summaryTotalCharge').textContent = totalWithGST.toFixed(2);
         
-        // Update applied charges
-        appliedCharges.colourMultiplier = colourMult;
+        // Update applied charges with per-colour data
+        appliedCharges.colourSurcharges = colourSurcharges;
+        appliedCharges.totalColourSurcharge = totalColourSurcharge;
         appliedCharges.deliveryCharge = deliveryCharge;
         appliedCharges.courierCost = courierCost;
         appliedCharges.otherChargeDesc = document.getElementById('otherChargeDesc').value || '';
@@ -5980,14 +6069,12 @@ function genPDF() {
         appliedCharges.gstRate = gstRate;
         
         // Get labels for PDF
-        const colourOpt = document.getElementById('colourMultiplierSelect').options[document.getElementById('colourMultiplierSelect').selectedIndex];
         const deliveryOpt = document.getElementById('deliveryRegionSelect').options[document.getElementById('deliveryRegionSelect').selectedIndex];
-        appliedCharges.colourMultiplierLabel = colourOpt.text;
         appliedCharges.deliveryRegionLabel = deliveryOpt.text;
     }
     
     document.addEventListener('change', function(e) {
-        if (e.target.id === 'colourMultiplierSelect' || e.target.id === 'deliveryRegionSelect' || e.target.id === 'courierCostInput' || e.target.id === 'otherChargeAmount' || e.target.id === 'otherChargeDesc') {
+        if (e.target.id === 'deliveryRegionSelect' || e.target.id === 'courierCostInput' || e.target.id === 'otherChargeAmount' || e.target.id === 'otherChargeDesc' || e.target.classList.contains('colourSurchargeSelect')) {
             updateChargesSummary();
         }
     });
