@@ -3647,8 +3647,8 @@ function genPDF() {
             y += 12;
             
             // Table headers definitions
-            const headers = ['Qty', 'H', 'W', 'Thick', 'Moulded', 'Edges', 'Mode', 'Panel', 'Profile', '$/sq/m', 'Total'];
-            const colWidths = [7, 16, 16, 12, 15, 13, 8, 14, 28, 16, 20];
+            const headers = ['Qty', 'H', 'W', 'Thick', 'Moulded', 'Edges', 'Mode', 'Panel', 'Profile', 'SQ/MTR', '$/sq/m', 'Total'];
+            const colWidths = [7, 16, 16, 12, 12, 13, 8, 14, 20, 14, 14, 18];
             const cellHeight = 6;
             
             // Process each colour group
@@ -3673,11 +3673,11 @@ function genPDF() {
                 // Table headers
                 doc.setFontSize(9);
                 doc.setFont(undefined, 'bold');
+                doc.setDrawColor(0, 0, 0);
+                doc.setFillColor(50, 50, 50);
                 doc.setTextColor(255, 255, 255);
                 
                 let startX = x;
-                doc.setDrawColor(0, 0, 0);
-                doc.setFillColor(50, 50, 50);
                 headers.forEach((header, i) => {
                     doc.rect(startX, y, colWidths[i], cellHeight, 'FD');
                     doc.text(header, startX + colWidths[i]/2, y + cellHeight/2 + 1.2, { align: 'center', valign: 'middle' });
@@ -3723,12 +3723,16 @@ function genPDF() {
                     
                     // Calculate sqm and pricing
                     const sqm = (height * width) / 1000000;
-                    const pricePerSqm = pricingMatrix[profile] || 125;
+                    
+                    // Extract profile name without the (###) suffix for pricing lookup
+                    const profileBase = profile.replace(/\s*\(\d+\)\s*$/, '').trim();
+                    const pricePerSqm = pricingMatrix[profileBase] || pricingMatrix[profile] || 125;
                     const rowTotal = sqm * pricePerSqm * qty;
                     colourTotal += rowTotal;
                     grandTotal += rowTotal;
                     
-                    const data = [qty, height, width, thickness, isMoulded, edgesDisplay, paintMode, panel, profile, pricePerSqm.toFixed(0), rowTotal.toFixed(2)];
+                    // Data array now includes SQ/MTR column
+                    const data = [qty, height, width, thickness, isMoulded, edgesDisplay, paintMode, panel, profile, sqm.toFixed(3), pricePerSqm.toFixed(0), rowTotal.toFixed(2)];
                     
                     // Draw cells
                     data.forEach((value, i) => {
