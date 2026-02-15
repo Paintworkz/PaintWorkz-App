@@ -206,8 +206,8 @@
             
             <!-- Courier Section -->
             <div style="margin-bottom:20px; padding-bottom:20px; border-bottom:1px solid #ddd;">
-                <label style="display:block; font-weight:bold; color:#333; margin-bottom:12px; font-size:13px;">Courier Cost ($):</label>
-                <input type="number" id="courierCostInput" value="0" min="0" step="5" placeholder="0.00" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; font-size:12px;">
+                <label style="display:block; font-weight:bold; color:#333; margin-bottom:12px; font-size:13px;">Freight Charge ($):</label>
+                <input type="number" id="freightChargeInput" value="0" min="0" step="5" placeholder="0.00" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; font-size:12px;">
             </div>
             
             <!-- Other Charges Section -->
@@ -221,7 +221,7 @@
             <div style="background:#f5f5f5; padding:15px; border-radius:6px; margin-bottom:20px; font-size:12px;">
                 <div style="margin-bottom:8px;"><strong>Colour Surcharge:</strong> $<span id="summaryColourCharge">0.00</span></div>
                 <div style="margin-bottom:8px;"><strong>Delivery Charge:</strong> $<span id="summaryDeliveryCharge">0.00</span></div>
-                <div style="margin-bottom:8px;"><strong>Courier Cost:</strong> $<span id="summaryCourierCharge">0.00</span></div>
+                <div style="margin-bottom:8px;"><strong>Freight Charge:</strong> $<span id="summaryFreightCharge">0.00</span></div>
                 <div style="margin-bottom:8px;"><strong>Other Charges:</strong> $<span id="summaryOtherCharge">0.00</span></div>
                 <div style="border-top:1px solid #ddd; padding-top:8px; margin-top:8px; margin-bottom:8px;"><strong>Subtotal + Charges:</strong> $<span id="summarySubtotalPlusCharges">0.00</span></div>
                 <div style="border-top:1px solid #ddd; padding-top:8px; margin-top:8px;"><strong>GST (10%):</strong> $<span id="summaryGST">0.00</span></div>
@@ -466,7 +466,10 @@
 
 <header>
     <div class="icon-btn" onclick="tab('history')">🔍</div>
-    <div class=\"logo-box\"><span class=\"logo-text\">PaintWorkz</span></div>
+    <div class="logo-box" id="headerLogoBox" style="position:relative; height:50px; display:flex; align-items:center; justify-content:center;">
+        <img id="headerLogoImg" src="" style="max-height:50px; max-width:300px; display:none;" alt="Company Logo">
+        <span class="logo-text" id="headerLogoText">PaintWorkz</span>
+    </div>
     <div style="display:flex; gap:10px; align-items:center;">
         <div id="goBackBtn" class="icon-btn" onclick="goBackJob()" style="display:none;" title="Exit without saving if no changes made">← Back</div>
         <div class="icon-btn" onclick="saveJob()">💾</div>
@@ -1734,6 +1737,7 @@
         refreshLists();
         loadData();
         renderHistory();
+        loadHeaderLogo(); // Load and display header logo from localStorage
         // Ensure prof-select is populated after a slight delay for safety
         setTimeout(() => {
             const profSel = document.getElementById('prof-select');
@@ -1838,8 +1842,31 @@
         }
     }
     
-    function initializeApp() {
+    function loadHeaderLogo() {
+        const headerLogo = localStorage.getItem('headerLogo');
+        const logoImg = document.getElementById('headerLogoImg');
+        const logoText = document.getElementById('headerLogoText');
+        
+        if (headerLogo && logoImg) {
+            try {
+                logoImg.src = headerLogo;
+                logoImg.style.display = 'block';
+                if (logoText) logoText.style.display = 'none';
+                console.log('✓ Header logo loaded');
+            } catch(e) {
+                console.warn('Error loading header logo:', e);
+                if (logoText) logoText.style.display = 'block';
+                if (logoImg) logoImg.style.display = 'none';
+            }
+        } else {
+            if (logoText) logoText.style.display = 'block';
+            if (logoImg) logoImg.style.display = 'none';
+        }
+    }
+    
+        function initializeApp() {
         console.log('🚀 Initializing PaintWorkz...');
+        loadHeaderLogo();  // Load header logo on app init
         
         try {
             // Clear measure sheet on fresh load
@@ -3749,19 +3776,7 @@ function genPDF() {
                 }
             }
             
-            // Header logo (wider branding)
-            const headerLogoBase64 = localStorage.getItem('headerLogo');
-            if (headerLogoBase64) {
-                try {
-                    // Position header logo at top center, full width minus margins
-                    doc.addImage(headerLogoBase64, 'PNG', 20, 2, 170, 20);
-                    // Add extra space after header logo
-                    y += 15;
-                } catch(e) {
-                    console.warn('Error rendering header logo:', e);
-                }
-            }
-            
+
             doc.setFontSize(32);
             doc.text('ESTIMATE', x, y);
             y += 15;
@@ -3966,7 +3981,7 @@ function genPDF() {
             }
             
             if (appliedCharges && appliedCharges.courierCost > 0) {
-                doc.text(`Courier Cost:`, x, y);
+                doc.text(`Freight Charge:`, x, y);
                 doc.text(`$${appliedCharges.courierCost.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
                 grandTotal += appliedCharges.courierCost;
                 y += 6;
@@ -5938,13 +5953,13 @@ function genPDF() {
                 const selectId = `colourMultiplier_${idx}`;
                 colourHTML += `<div style="margin-bottom:10px;"><label style="font-size:11px; color:#666; margin-bottom:4px; display:block;">${colour}</label>
                 <select id="${selectId}" class="colourSurchargeSelect" data-colour="${colour}" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:11px;">
-                    <option value="0">NONE</option>
-                    <option value="0.05">Standard (+5%)</option>
-                    <option value="0.05">Light (+5%)</option>
-                    <option value="0.15">Dark (+15%)</option>
-                    <option value="0.3">Extra Tint (+30%)</option>
-                    <option value="0.8">Undercoat (80%)</option>
-                    <option value="1.3">Colour Match (+130%)</option>
+                    <option value="0">None</option>
+                    <option value="0.05">Standard</option>
+                    <option value="0.05">Light</option>
+                    <option value="0.15">Dark</option>
+                    <option value="0.3">Extra Tint</option>
+                    <option value="0.8">Undercoat</option>
+                    <option value="1.3">Colour Match</option>
                 </select></div>`;
             });
             
@@ -5961,7 +5976,7 @@ function genPDF() {
         
         // Reset other fields
         document.getElementById('deliveryRegionSelect').value = '0';
-        document.getElementById('courierCostInput').value = '0';
+        document.getElementById('freightChargeInput').value = '0';
         document.getElementById('otherChargeDesc').value = '';
         document.getElementById('otherChargeAmount').value = '0';
         
@@ -6058,7 +6073,7 @@ function genPDF() {
         });
         
         const deliveryCharge = parseFloat(document.getElementById('deliveryRegionSelect').value) || 0;
-        const courierCost = parseFloat(document.getElementById('courierCostInput').value) || 0;
+        const courierCost = parseFloat(document.getElementById('freightChargeInput').value) || 0;
         const otherChargeAmount = parseFloat(document.getElementById('otherChargeAmount').value) || 0;
         
         const subtotalPlusCharges = subtotal + totalColourSurcharge + deliveryCharge + courierCost + otherChargeAmount;
@@ -6070,7 +6085,7 @@ function genPDF() {
         
         document.getElementById('summaryColourCharge').textContent = totalColourSurcharge.toFixed(2);
         document.getElementById('summaryDeliveryCharge').textContent = deliveryCharge.toFixed(2);
-        document.getElementById('summaryCourierCharge').textContent = courierCost.toFixed(2);
+        document.getElementById('summaryFreightCharge').textContent = courierCost.toFixed(2);
         document.getElementById('summaryOtherCharge').textContent = otherChargeAmount.toFixed(2);
         document.getElementById('summarySubtotalPlusCharges').textContent = subtotalPlusCharges.toFixed(2);
         document.getElementById('summaryGST').textContent = gstAmount.toFixed(2);
@@ -7173,6 +7188,11 @@ function genPDF() {
                     : `✓ COMPANY DETAILS SAVED\nName: ${name}`;
                 showGlobalNotification(message, '#e8f5e9', '#34c759');
                 console.log('✓ Company details saved:', settings);
+                
+                // Reload header logo if it was updated
+                if (hasHeaderLogo) {
+                    setTimeout(() => loadHeaderLogo(), 100);
+                }
             }
         };
         
@@ -7225,6 +7245,31 @@ function genPDF() {
         }
     }
     
+    function loadHeaderLogo() {
+        const headerLogoImg = document.getElementById('headerLogoImg');
+        const headerLogoText = document.getElementById('headerLogoText');
+        
+        if (!headerLogoImg || !headerLogoText) return;
+        
+        const headerLogo = localStorage.getItem('headerLogo');
+        if (headerLogo) {
+            try {
+                headerLogoImg.src = headerLogo;
+                headerLogoImg.style.display = 'block';
+                headerLogoText.style.display = 'none';
+                console.log('✓ Header logo loaded in app header');
+            } catch(e) {
+                console.error('❌ Error loading header logo:', e);
+                headerLogoImg.style.display = 'none';
+                headerLogoText.style.display = 'block';
+            }
+        } else {
+            // No logo, show text
+            headerLogoImg.style.display = 'none';
+            headerLogoText.style.display = 'block';
+        }
+    }
+    
     function initializeCompanyDetailsForm() {
         const defaults = {
             name: 'Paintworkz',
@@ -7245,6 +7290,9 @@ function genPDF() {
         if (phoneInput) phoneInput.value = settings.phone;
         if (emailInput) emailInput.value = settings.email;
         if (addressInput) addressInput.value = settings.address;
+        
+        // Load and display header logo in app header
+        loadHeaderLogo();
         
         console.log('✓ Company details form initialized');
     }
