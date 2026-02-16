@@ -5834,10 +5834,20 @@
             // Get job data
             const cliSelect = document.getElementById('cli');
             let jobClient = 'CLIENT';
-            if (cliSelect && cliSelect.selectedIndex >= 0) {
-                jobClient = cliSelect.options[cliSelect.selectedIndex]?.text || cliSelect.value || 'CLIENT';
+            if (cliSelect) {
+                // Try to get text from selected option first
+                if (cliSelect.selectedIndex >= 0 && cliSelect.options[cliSelect.selectedIndex]) {
+                    jobClient = cliSelect.options[cliSelect.selectedIndex].text?.trim() || '';
+                }
+                // Fallback to value if text is empty
+                if (!jobClient) {
+                    jobClient = cliSelect.value?.trim() || '';
+                }
             }
-            jobClient = jobClient.trim() || 'CLIENT';
+            // Final fallback
+            jobClient = jobClient?.trim() || 'CLIENT';
+            
+            console.log('👤 Shop Label Client:', jobClient, 'Select:', cliSelect?.value);
             
             const jobNum = document.getElementById('jNum')?.value || document.getElementById('jN')?.value || 'XXX';
             const jobName = document.getElementById('jNm')?.value || 'Job Name';
@@ -5897,14 +5907,16 @@
                 
                 // ===== CALCULATIONS FOR THIS COLOR =====
                 let colorSQM = 0;
+                let colorPartCount = 0;
                 let colorProfiles = {};
                 
                 items.forEach(item => {
                     if (item.color && item.color.toLowerCase() === color.toLowerCase()) {
                         const sqm = parseFloat(item.sqm) || 0;
                         colorSQM += sqm;
-                        const profile = item.profile || 'Various';
-                        const qty = parseInt(item.doors) || 0;
+                        const profile = item.prof || item.profile || 'Various';
+                        const qty = parseInt(item.qty) || parseInt(item.doors) || 1;
+                        colorPartCount += qty;
                         colorProfiles[profile] = (colorProfiles[profile] || 0) + qty;
                     }
                 });
@@ -5922,6 +5934,8 @@
                 doc.setTextColor(200, 30, 30);
                 doc.text(`SQM: ${colorSQM.toFixed(2)} m²`, 20, y);
                 y += 8;
+                doc.text(`Total Parts: ${colorPartCount}`, 20, y);
+                y += 8;
                 doc.text(`PAINT: ${paintRequired} L`, 20, y);
                 y += 12;
                 
@@ -5935,7 +5949,7 @@
                 doc.setFontSize(11);
                 doc.setFont(undefined, 'bold');
                 doc.setTextColor(0, 0, 0);
-                doc.text(`${paintBrand} | ${color.toUpperCase()} | ${paintFinish}`, 20, y);
+                doc.text(`${paintBrand} - ${color.toUpperCase()} - ${paintFinish}`, 20, y);
                 y += 12;
                 
                 // ===== DOOR PROFILES - SEPARATE MOULDED, FLAT & CUSTOM =====
@@ -6054,16 +6068,22 @@
                 
                 y += 8;
                 
-                // ===== COLOR SWATCH BOX =====
+                // ===== COLOR SWATCH BOX - PAINT INFO =====
                 doc.setDrawColor(0, 0, 0);
                 doc.setLineWidth(2);
                 doc.setFillColor(100, 150, 200);
                 doc.rect(20, y, pageWidth - 40, 40, 'FD');
                 
-                doc.setFontSize(16);
+                doc.setFontSize(18);
                 doc.setFont(undefined, 'bold');
                 doc.setTextColor(255, 255, 255);
-                doc.text(color.toUpperCase(), 25, y + 25);
+                
+                // Format: Brand - Color - Finish centered in box
+                const shopLabelPaintInfo = `${paintBrand} - ${color.toUpperCase()} - ${paintFinish}`;
+                const paintInfoWidth = doc.getTextWidth(shopLabelPaintInfo);
+                const boxCenterX = 20 + ((pageWidth - 40) - paintInfoWidth) / 2;
+                const boxCenterY = y + 25;
+                doc.text(shopLabelPaintInfo, boxCenterX, boxCenterY);
                 
                 y += 45;
                 
