@@ -1796,20 +1796,28 @@ ${f.colourants ? f.colourants.map(c => `${c.code}: ${c.amount || c.grams}`).join
         </div>
         `;
         
-        // Show custom dialog
+        // Show custom dialog with unique ID
         const dialog = document.createElement('div');
+        dialog.id = 'paintFormulaEditDialog';
         dialog.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:10000;';
         dialog.innerHTML = `
             <div style="background:white; padding:20px; border-radius:8px; width:90%; max-width:600px; max-height:90vh; overflow-y:auto;">
                 <h3 style="margin-top:0; color:#333;">Edit Formula: ${f.color}</h3>
                 ${html}
                 <div style="display:flex; gap:10px; margin-top:20px;">
-                    <button onclick="this.closest('div').parentElement.remove()" style="flex:1; padding:10px; background:#ccc; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">Cancel</button>
+                    <button onclick="closeFormulaDialog()" style="flex:1; padding:10px; background:#ccc; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">Cancel</button>
                     <button onclick="saveFormulaEdit(${idx})" style="flex:1; padding:10px; background:#4CAF50; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">Save</button>
                 </div>
             </div>
         `;
         document.body.appendChild(dialog);
+    }
+    
+    function closeFormulaDialog() {
+        const dialog = document.getElementById('paintFormulaEditDialog');
+        if (dialog) {
+            dialog.remove();
+        }
     }
     
     function saveFormulaEdit(idx) {
@@ -1823,14 +1831,20 @@ ${f.colourants ? f.colourants.map(c => `${c.code}: ${c.amount || c.grams}`).join
         f.version = document.getElementById('editVersion').value;
         f.totalWeight = document.getElementById('editTotalWeight').value;
         
+        // Helper to parse numbers with comma or period as decimal
+        const parseNumber = (str) => {
+            if (!str) return 0;
+            return parseFloat(String(str).replace(',', '.'));
+        };
+        
         // Parse white base
         const whiteBaseText = document.getElementById('editWhiteBase').value.trim();
         f.whiteBase = [];
         if (whiteBaseText) {
             whiteBaseText.split('\n').forEach(line => {
-                const match = line.match(/^(\S+)\s*:\s*([\d.]+)/);
+                const match = line.match(/^(\S+)\s*:\s*([\d,.]+)/);
                 if (match) {
-                    f.whiteBase.push({ code: match[1], grams: parseFloat(match[2]) });
+                    f.whiteBase.push({ code: match[1], grams: parseNumber(match[2]) });
                 }
             });
         }
@@ -1840,15 +1854,15 @@ ${f.colourants ? f.colourants.map(c => `${c.code}: ${c.amount || c.grams}`).join
         f.colourants = [];
         if (colourantsText) {
             colourantsText.split('\n').forEach(line => {
-                const match = line.match(/^(\S+)\s*:\s*([\d.]+)/);
+                const match = line.match(/^(\S+)\s*:\s*([\d,.]+)/);
                 if (match) {
-                    f.colourants.push({ code: match[1], amount: parseFloat(match[2]) });
+                    f.colourants.push({ code: match[1], amount: parseNumber(match[2]) });
                 }
             });
         }
         
         // Close dialog
-        document.querySelector('[style*="position:fixed"][style*="background:rgba"]').remove();
+        closeFormulaDialog();
         
         savePaintFormulas();
         renderPaintFormulaList();
