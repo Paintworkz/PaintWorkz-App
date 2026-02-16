@@ -5834,12 +5834,30 @@
             const totalSQM = parseFloat(document.getElementById('tot')?.innerText || '0') || 0;
             
             // Paint data
-            const paintColor = document.getElementById('p-color')?.value || 'Color TBD';
             const paintBrand = document.getElementById('p-brand')?.value || 'Wattyl';
             const paintFinish = document.getElementById('p-finish')?.value || 'Satin';
             
-            // Split colors if multiple
-            const colors = paintColor.split(/[,\/]/).map(c => c.trim()).filter(c => c);
+            // Get unique colors from items in measure tab
+            const uniqueColors = new Set();
+            items.forEach(item => {
+                if (item.color && item.color.trim()) {
+                    uniqueColors.add(item.color.trim());
+                }
+            });
+            
+            // Convert to array and sort
+            const colors = Array.from(uniqueColors).sort();
+            
+            console.log('🎨 Shop Label Color Detection:', {
+                uniqueColors: Array.from(uniqueColors),
+                colorCount: colors.length,
+                itemCount: items.length
+            });
+            
+            if (colors.length === 0) {
+                notify('❌ No paint colors found in items. Assign colors to all parts in Measure tab.');
+                return;
+            }
             
             // Create one PDF with one page per color
             const doc = new jsPDF('p', 'mm', 'a4');
@@ -5896,19 +5914,26 @@
                 doc.line(20, y, pageWidth - 20, y);
                 y += 12;
                 
-                // ===== CUSTOMER NAME - VERY LARGE =====
+                // ===== CUSTOMER NAME - VERY LARGE - CENTERED =====
                 doc.setFontSize(24);
                 doc.setFont(undefined, 'bold');
                 doc.setTextColor(0, 0, 0);
-                doc.text(jobClient.toUpperCase(), 20, y);
+                const customerName = jobClient.toUpperCase();
+                const customerWidth = doc.getTextWidth(customerName);
+                doc.text(customerName, (pageWidth - customerWidth) / 2, y);
                 y += 12;
                 
-                // ===== JOB NAME - LARGE =====
+                // ===== JOB NAME & DATE - CENTERED =====
                 doc.setFontSize(16);
                 doc.setFont(undefined, 'normal');
-                doc.text(`Job: ${jobName}`, 20, y);
+                const jobText = `Job: ${jobName}`;
+                const jobWidth = doc.getTextWidth(jobText);
+                doc.text(jobText, (pageWidth - jobWidth) / 2, y);
                 y += 8;
-                doc.text(`Date: ${dateReceived}`, 20, y);
+                
+                const dateText = `Date: ${dateReceived}`;
+                const dateWidth = doc.getTextWidth(dateText);
+                doc.text(dateText, (pageWidth - dateWidth) / 2, y);
                 y += 12;
                 
                 // ===== CALCULATIONS FOR THIS COLOR =====
@@ -5941,13 +5966,24 @@
                     }
                 });
                 
-                // ===== KEY METRICS - LARGE AND RED - ONLY SQM AND PAINT =====
+                // ===== KEY METRICS - CENTERED - SQM, PART QTY, AND PAINT =====
                 doc.setFontSize(13);
                 doc.setFont(undefined, 'bold');
                 doc.setTextColor(200, 30, 30);
-                doc.text(`SQM: ${colorSQM.toFixed(2)} m²`, 20, y);
+                
+                const sqmText = `SQM: ${colorSQM.toFixed(2)} m²`;
+                const sqmWidth = doc.getTextWidth(sqmText);
+                doc.text(sqmText, (pageWidth - sqmWidth) / 2, y);
                 y += 8;
-                doc.text(`PAINT: ${paintRequired} L`, 20, y);
+                
+                const partText = `Part Qty: ${colorPartCount}`;
+                const partWidth = doc.getTextWidth(partText);
+                doc.text(partText, (pageWidth - partWidth) / 2, y);
+                y += 8;
+                
+                const paintText = `PAINT: ${paintRequired} L`;
+                const paintWidth = doc.getTextWidth(paintText);
+                doc.text(paintText, (pageWidth - paintWidth) / 2, y);
                 y += 12;
                 
                 // ===== DIVIDER =====
