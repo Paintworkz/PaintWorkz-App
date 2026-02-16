@@ -5176,9 +5176,17 @@
             // Get logo
             const headerLogo = localStorage.getItem('headerLogoBase64') || '';
             
-            // Generate one mixing card per color
+            // Create one PDF document for all colors
+            const doc = new jsPDF('p', 'mm', 'a4');
+            let colorPageCount = 0;
+            
+            // Generate one page per color
             colors.forEach((color, colorIndex) => {
-                const doc = new jsPDF('p', 'mm', 'a4');
+                
+                if (colorPageCount > 0) {
+                    // Add new page for each additional color
+                    doc.addPage();
+                }
                 
                 let y = 15;
                 const pageHeight = doc.internal.pageSize.getHeight();
@@ -5197,29 +5205,56 @@
                 doc.text('MIXING CARD', 20, y);
                 y += 12;
                 
-                // ===== PAINT INFO BOX - LARGE AND PROMINENT =====
-                doc.setFontSize(16);
-                doc.setFont(undefined, 'bold');
-                doc.setTextColor(255, 255, 255);
-                doc.setFillColor(200, 30, 30);
-                doc.rect(20, y - 8, 170, 28, 'F');
-                doc.text(`${color.toUpperCase()}`, 25, y + 12);
-                y += 32;
-                
                 // ===== PAINT INFO BOX - COMBINED BRAND/COLOUR/FINISH =====
-                doc.setFontSize(14);
+                doc.setFontSize(18);
                 doc.setFont(undefined, 'bold');
                 doc.setTextColor(255, 255, 255);
                 doc.setFillColor(170, 132, 30);
                 doc.setDrawColor(100, 100, 100);
-                doc.setLineWidth(1);
-                doc.rect(20, y - 2, 170, 22, 'FD');
+                doc.setLineWidth(1.5);
+                doc.rect(20, y, 170, 32, 'FD');
                 
-                // Format: Brand | Color | Finish
+                // Format: Brand | Color | Finish - fill the box with 5mm margins
                 const paintInfo = `${paintBrand} | ${color.toUpperCase()} | ${paintFinish}`;
-                doc.setTextColor(255, 255, 255);
-                doc.text(paintInfo, 25, y + 13);
-                y += 26;
+                doc.text(paintInfo, 25, y + 20);
+                y += 36;
+                
+                // ===== EVIC CODE & BASE PAINT INFO BOX =====
+                const formula = paintDatabase.find(f => 
+                    f.color && f.color.toLowerCase() === color.toLowerCase()
+                );
+                
+                let formulaText = '';
+                let evicCode = '';
+                let baseCode = '';
+                if (formula) {
+                    formulaText = formula.product || formula.color;
+                    evicCode = formula.evicCode || formula.code || '';
+                    baseCode = formula.baseCode || '';
+                    
+                    // Show evic and base paint info prominently
+                    doc.setFillColor(240, 240, 240);
+                    doc.setDrawColor(170, 132, 30);
+                    doc.setLineWidth(1);
+                    doc.rect(20, y, 170, 24, 'FD');
+                    
+                    doc.setFontSize(12);
+                    doc.setFont(undefined, 'bold');
+                    doc.setTextColor(0, 0, 0);
+                    
+                    // Show base paint
+                    let baseInfo = `Base: ${formulaText}`;
+                    if (baseCode) baseInfo += ` (${baseCode})`;
+                    doc.text(baseInfo, 25, y + 8);
+                    
+                    // Show Evic code
+                    if (evicCode) {
+                        doc.setFontSize(11);
+                        doc.text(`Evic Code: ${evicCode}`, 25, y + 16);
+                    }
+                    
+                    y += 28;
+                }
                 
                 // ===== CALCULATE SQM FOR THIS COLOR ONLY =====
                 let colorSQM = 0;
@@ -5288,44 +5323,6 @@
                 
                 doc.setTextColor(0, 0, 0);
                 
-                // ===== FORMULA LOOKUP =====
-                const formula = paintDatabase.find(f => 
-                    f.color && f.color.toLowerCase() === color.toLowerCase()
-                );
-                
-                let formulaText = '';
-                let evicCode = '';
-                let baseCode = '';
-                if (formula) {
-                    formulaText = formula.product || formula.color;
-                    evicCode = formula.evicCode || formula.code || '';
-                    baseCode = formula.baseCode || '';
-                    
-                    // Show base paint info box
-                    doc.setFillColor(240, 240, 240);
-                    doc.setDrawColor(170, 132, 30);
-                    doc.setLineWidth(0.5);
-                    doc.rect(20, y - 2, 170, 16, 'FD');
-                    
-                    doc.setFontSize(11);
-                    doc.setFont(undefined, 'bold');
-                    doc.setTextColor(0, 0, 0);
-                    
-                    // Show base paint and codes
-                    let baseInfo = `Base: ${formulaText}`;
-                    if (baseCode) baseInfo += ` (${baseCode})`;
-                    doc.text(baseInfo, 25, y + 6);
-                    
-                    // Show Evic code if available
-                    if (evicCode) {
-                        doc.setFontSize(10);
-                        doc.setFont(undefined, 'normal');
-                        doc.text(`Evic Code: ${evicCode}`, 25, y + 12);
-                    }
-                    
-                    y += 18;
-                }
-                
                 // ===== TINTERS/COLOURANTS - LARGER =====
                 doc.setFontSize(13);
                 doc.setFont(undefined, 'bold');
@@ -5389,16 +5386,19 @@
                 doc.setTextColor(100, 100, 100);
                 doc.text(`Generated: ${new Date().toLocaleDateString('en-AU')} | ${color} | Base: ${paintQty}L | SQM: ${colorSQM.toFixed(2)}`, 20, pageHeight - 8);
                 
-                // Save PDF
-                const pdfDataUri = doc.output('datauristring');
-                const filename = `MixingCard_${jobNum}_${color.replace(/\\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
-                
-                if (colorIndex === colors.length - 1) {
-                    // Show preview on last card
-                    showPDFPreview(pdfDataUri, filename, '🎨 Mixing Card Preview');
-                    notify('✓ Mixing Card Ready');
-                }
+                colorPageCount++;
             });
+            
+            // Save combined PDF with all colors
+            const pdfDataUri = doc.output('datauristring');
+            const filename = `MixingCard_${jobNum}_${new Date().toISOString().split('T')[0]}.pdf`;
+            
+            showPDFPreview(pdfDataUri, filename, '🎨 Mixing Card Preview');
+            if (colors.length > 1) {
+                notify(`✓ Mixing Card Ready - ${colors.length} pages (one per color)`);
+            } else {
+                notify('✓ Mixing Card Ready');
+            }
         } catch (err) {
             console.error('Mixing card error:', err);
             notify('❌ Error generating mixing card');
