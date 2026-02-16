@@ -516,8 +516,8 @@
 
 <header>
     <div class="icon-btn" onclick="tab('history')">🔍</div>
-    <div class="logo-box" id="headerLogoBox" style="position:relative; width:calc(33vw - 10px); height:60px; display:flex; align-items:center; justify-content:center; padding:0px; box-sizing:border-box; margin-left:10px;">
-        <img id="headerLogoImg" src="" style="max-height:55px; max-width:90%; display:none; object-fit:contain;" alt="Company Logo">
+    <div class="logo-box" id="headerLogoBox" style="position:relative; width:calc(33vw - 10px); height:60px; display:flex; align-items:center; justify-content:center; padding:6px; box-sizing:border-box; margin-left:10px; border:2px solid #DAA520; border-radius:2px; background:#000;">
+        <img id="headerLogoImg" src="" style="height:100%; max-width:95%; display:none; object-fit:contain;" alt="Company Logo">
         <span class="logo-text" id="headerLogoText">PaintWorkz</span>
     </div>
     <div style="display:flex; gap:10px; align-items:center;">
@@ -5850,212 +5850,101 @@
             const endDate = new Date(today);
             endDate.setDate(endDate.getDate() + days - 1);
             doc.text(`${today.toLocaleDateString('en-AU')} to ${endDate.toLocaleDateString('en-AU')} (${days} days)`, 20, y);
-            y += 12;
+            y += 15;
             
-            // Load jobs for Gantt and job list
+            // Load jobs
             let jobHistory = JSON.parse(localStorage.getItem('jobHistory')) || [];
-            const activeJobs = jobHistory.filter(job => !job.completed).slice(0, 40);
+            const activeJobs = jobHistory.filter(job => !job.completed).slice(0, 50);
             
-            // ===== GANTT TIMELINE =====
-            doc.setFontSize(11);
-            doc.setFont(undefined, 'bold');
-            doc.setTextColor(0, 0, 0);
-            doc.text('WORK SCHEDULE TIMELINE', 20, y);
-            y += 7;
-            
-            const timelineStartX = 30;
-            const dayWidth = (pageWidth - 50) / days;
-            const timelineWidth = pageWidth - 50;
-            
-            // ===== DATE HEADER ROW - Show every 7 days =====
-            doc.setFontSize(8);
+            // ===== SIMPLE TABLE =====
+            doc.setFontSize(10);
             doc.setFont(undefined, 'bold');
             doc.setTextColor(255, 255, 255);
-            doc.setFillColor(170, 132, 30);
-            doc.setLineWidth(0.5);
+            doc.setFillColor(50, 50, 50);
             
-            // Draw header cells for each week
-            for (let i = 0; i < days; i += 7) {
-                const cellX = timelineStartX + (i * dayWidth);
-                const cellWidth = Math.min(7 * dayWidth, timelineStartX + timelineWidth - cellX);
-                const weekDate = new Date(today);
-                weekDate.setDate(weekDate.getDate() + i);
-                
-                doc.rect(cellX, y, cellWidth, 7, 'F');
-                doc.setTextColor(255, 255, 255);
-                doc.setFontSize(8);
-                doc.text(weekDate.toLocaleDateString('en-AU'), cellX + 1, y + 5);
-            }
+            // Table headers
+            const colX = { jobId: 20, client: 80, details: 220, status: 320 };
+            const rowHeight = 8;
             
-            y += 8;
+            doc.rect(colX.jobId, y, 55, rowHeight, 'F');
+            doc.text('JOB #', colX.jobId + 2, y + 5);
             
-            // Draw vertical grid lines for every 7 days
-            doc.setDrawColor(150, 150, 150);
-            doc.setLineWidth(0.5);
-            const gridHeight = Math.min(35, activeJobs.length * 6) + 5;
-            for (let i = 0; i <= days; i += 7) {
-                const lineX = timelineStartX + (i * dayWidth);
-                doc.line(lineX, y - 1, lineX, y + gridHeight);
-            }
+            doc.rect(colX.client, y, 135, rowHeight, 'F');
+            doc.text('CLIENT', colX.client + 2, y + 5);
             
-            // ===== ACTIVITY PHASE COLORS =====
-            const phaseColors = {
-                'M': [100, 150, 255],   // Measuring - Blue
-                'S1': [255, 200, 100],  // Sand 1 - Orange
-                'U': [150, 150, 150],   // Undercoat - Gray
-                'S2': [255, 200, 100],  // Sand 2 - Orange
-                'T': [100, 200, 100],   // TopCoat - Green
-                'I': [200, 100, 255],   // Inspect - Purple
-                'C': [100, 200, 255]    // Complete - Light Blue
-            };
-            const phases = ['M', 'S1', 'U', 'S2', 'T', 'I', 'C'];
+            doc.rect(colX.details, y, 95, rowHeight, 'F');
+            doc.text('DETAILS', colX.details + 2, y + 5);
             
-            let barY = y + 1;
-            let jobCount = 0;
-            
-            for (let idx = 0; idx < activeJobs.length && jobCount < 25; idx++) {
-                const job = activeJobs[idx];
-                
-                // Parse job start date
-                let jobStartDate = new Date(today);
-                if (job.dateReceived) {
-                    if (job.dateReceived.includes('/')) {
-                        const [d, m, yr] = job.dateReceived.split('/');
-                        jobStartDate = new Date(parseInt('20' + yr), parseInt(m) - 1, parseInt(d));
-                    } else {
-                        jobStartDate = new Date(job.dateReceived);
-                    }
-                }
-                
-                // Calculate position
-                const daysFromStart = Math.max(0, Math.ceil((jobStartDate - today) / (1000 * 60 * 60 * 24)));
-                
-                if (daysFromStart < days) {
-                    // Job number on left
-                    doc.setFontSize(8);
-                    doc.setFont(undefined, 'bold');
-                    doc.setTextColor(0, 0, 0);
-                    doc.text(`#${job.jobNum}`, 20, barY + 3.5);
-                    
-                    // Draw activity phases as separate segments
-                    let phaseX = timelineStartX + (daysFromStart * dayWidth);
-                    const phaseDuration = 1; // Each phase takes 1 day
-                    
-                    phases.forEach((phase, phaseIdx) => {
-                        const phaseStartX = phaseX + (phaseIdx * phaseDuration * dayWidth);
-                        
-                        if (phaseStartX < timelineStartX + timelineWidth) {
-                            const phaseWidth = Math.min(phaseDuration * dayWidth, timelineStartX + timelineWidth - phaseStartX);
-                            
-                            // Draw phase box
-                            const color = phaseColors[phase];
-                            doc.setFillColor(color[0], color[1], color[2]);
-                            doc.setDrawColor(0, 0, 0);
-                            doc.setLineWidth(0.4);
-                            doc.rect(phaseStartX, barY, phaseWidth, 4, 'FD');
-                            
-                            // Phase label if space permits
-                            if (phaseWidth > 3) {
-                                doc.setFontSize(6);
-                                doc.setFont(undefined, 'bold');
-                                doc.setTextColor(255, 255, 255);
-                                doc.text(phase, phaseStartX + 0.5, barY + 2.8);
-                            }
-                        }
-                    });
-                    
-                    barY += 4.5;
-                    jobCount++;
-                }
-            }
-            
-            y = barY + 3;
-            // ===== SIMPLIFIED TABLE =====
-            const startX = 20;
-            const rowHeight = 7;
-            const colWidths = { jobId: 18, client: 40, dates: pageWidth - 80 };
-            
-            // TABLE HEADER
-            doc.setDrawColor(170, 132, 30);
-            doc.setFillColor(170, 132, 30);
-            doc.setFont(undefined, 'bold');
-            doc.setFontSize(9);
-            doc.setTextColor(255, 255, 255);
-            
-            doc.rect(startX, y, colWidths.jobId, rowHeight, 'F');
-            doc.text('JOB #', startX + 2, y + 4.5);
-            
-            doc.rect(startX + colWidths.jobId, y, colWidths.client, rowHeight, 'F');
-            doc.text('CLIENT', startX + colWidths.jobId + 2, y + 4.5);
-            
-            doc.rect(startX + colWidths.jobId + colWidths.client, y, colWidths.dates, rowHeight, 'F');
-            doc.text('STATUS / NOTES', startX + colWidths.jobId + colWidths.client + 2, y + 4.5);
+            doc.rect(colX.status, y, 55, rowHeight, 'F');
+            doc.text('STATUS', colX.status + 2, y + 5);
             
             y += rowHeight;
             
-            // ===== JOB ROWS =====
-            console.log('📅 A3 Schedule - Total jobs in history:', jobHistory.length);
-            console.log('📅 A3 Schedule - Jobs:', jobHistory);
-            
-            // Show all non-completed jobs, or all jobs if none are marked
-            console.log('📅 A3 Schedule - Active jobs after filter:', activeJobs.length);
-            
+            // Table rows
+            doc.setFontSize(9);
             doc.setFont(undefined, 'normal');
-            doc.setFontSize(8);
             doc.setTextColor(0, 0, 0);
             
-            activeJobs.forEach((job, idx) => {
-                // Page break check
-                if (y > pageHeight - 20) {
-                    doc.addPage();
-                    y = 20;
-                    
-                    // Redraw header on new page
-                    doc.setDrawColor(170, 132, 30);
-                    doc.setFillColor(170, 132, 30);
-                    doc.setFont(undefined, 'bold');
-                    doc.setFontSize(9);
-                    doc.setTextColor(255, 255, 255);
-                    
-                    doc.rect(startX, y, colWidths.jobId, rowHeight, 'F');
-                    doc.text('JOB #', startX + 2, y + 4.5);
-                    doc.rect(startX + colWidths.jobId, y, colWidths.client, rowHeight, 'F');
-                    doc.text('CLIENT', startX + colWidths.jobId + 2, y + 4.5);
-                    doc.rect(startX + colWidths.jobId + colWidths.client, y, colWidths.dates, rowHeight, 'F');
-                    doc.text('STATUS', startX + colWidths.jobId + colWidths.client + 2, y + 4.5);
-                    
-                    y += rowHeight;
-                    doc.setFont(undefined, 'normal');
-                    doc.setFontSize(8);
-                    doc.setTextColor(0, 0, 0);
+            let rowNum = 0;
+            for (let idx = 0; idx < activeJobs.length && rowNum < 40; idx++) {
+                const job = activeJobs[idx];
+                
+                // Parse date
+                let daysAgo = 0;
+                if (job.dateReceived) {
+                    if (job.dateReceived.includes('/')) {
+                        const [d, m, yr] = job.dateReceived.split('/');
+                        const jobDate = new Date(parseInt('20' + yr), parseInt(m) - 1, parseInt(d));
+                        daysAgo = Math.ceil((today - jobDate) / (1000 * 60 * 60 * 24));
+                    }
                 }
                 
-                // Alternate row color
-                const bgColor = idx % 2 === 0 ? 250 : 245;
-                doc.setFillColor(bgColor, bgColor, bgColor);
-                doc.rect(startX, y, colWidths.jobId + colWidths.client + colWidths.dates, rowHeight, 'F');
+                // Alternate row colors
+                if (rowNum % 2 === 0) {
+                    doc.setFillColor(245, 245, 245);
+                    doc.rect(colX.jobId, y, 335, rowHeight, 'F');
+                }
+                
+                // Draw borders
                 doc.setDrawColor(200, 200, 200);
-                doc.setLineWidth(0.3);
-                doc.line(startX, y + rowHeight, pageWidth - 20, y + rowHeight);
+                doc.setLineWidth(0.2);
+                doc.rect(colX.jobId, y, 55, rowHeight);
+                doc.rect(colX.client, y, 135, rowHeight);
+                doc.rect(colX.details, y, 95, rowHeight);
+                doc.rect(colX.status, y, 55, rowHeight);
                 
-                // JOB ID
-                doc.setFont(undefined, 'bold');
-                doc.text(`#${job.jobNum || '-'}`, startX + 2, y + 4.5);
+                // Job number
+                doc.setTextColor(0, 0, 0);
+                doc.text(`#${job.jobNum}`, colX.jobId + 2, y + 5);
                 
-                // CLIENT NAME
-                doc.setFont(undefined, 'normal');
-                const clientName = (job.client || job.clientName || 'Unknown').substring(0, 30);
-                doc.text(clientName, startX + colWidths.jobId + 2, y + 4.5);
+                // Client
+                const clientName = job.client || 'N/A';
+                doc.text(clientName.substring(0, 30), colX.client + 2, y + 5);
                 
-                // STATUS
-                const sqm = job.totalSqm ? parseFloat(job.totalSqm).toFixed(1) : '0';
-                const status = `${sqm}m² | Created ${job.dateReceived || 'N/A'}`;
-                doc.text(status.substring(0, 50), startX + colWidths.jobId + colWidths.client + 2, y + 4.5);
+                // Details (SQM, colours, paint qty)
+                let details = '';
+                if (job.totalSQM) details += `${job.totalSQM.toFixed(1)}m² `;
+                if (job.items && job.items.length > 0) {
+                    const colours = [...new Set(job.items.map(i => i.color))].filter(c => c);
+                    if (colours.length > 0) details += `| ${colours.join('/')}`;
+                }
+                doc.setFontSize(8);
+                doc.text(details.substring(0, 25), colX.details + 2, y + 5);
+                
+                // Status
+                doc.setFontSize(9);
+                const status = daysAgo <= 3 ? 'RECENT' : (daysAgo <= 14 ? 'ACTIVE' : 'PENDING');
+                doc.text(status, colX.status + 2, y + 5);
                 
                 y += rowHeight;
-            });
+                rowNum++;
+                
+                if (y > pageHeight - 15) {
+                    doc.addPage();
+                    y = 12;
+                }
+            }
             
-            // ===== FOOTER =====
             y += 5;
             doc.setFontSize(8);
             doc.setFont(undefined, 'italic');
