@@ -5157,8 +5157,13 @@
             
             // Get paint data - might be multiple colors
             const paintBrand = document.getElementById('bra')?.value || 'Wattyl';
-            const paintColor = document.getElementById('col')?.value || 'Color TBD';
+            const paintColor = document.getElementById('col')?.value || '';
             const paintFinish = document.getElementById('fin')?.value || 'Satin';
+            
+            if (!paintColor || paintColor.trim() === '') {
+                notify('❌ Add paint color');
+                return;
+            }
             
             // Split by / or , to handle multiple colors
             const colors = paintColor.split(/[,\/]/).map(c => c.trim()).filter(c => c);
@@ -5175,40 +5180,100 @@
             colors.forEach((color, colorIndex) => {
                 const doc = new jsPDF('p', 'mm', 'a4');
                 
-                let y = 12;
+                let y = 15;
+                const pageHeight = doc.internal.pageSize.getHeight();
                 
                 // ===== LOGO =====
                 if (headerLogo) {
                     try {
-                        doc.addImage(headerLogo, 'PNG', 150, 5, 50, 25);
+                        doc.addImage(headerLogo, 'PNG', 145, 5, 50, 20);
                     } catch(e) {}
                 }
                 
-                y = 30;
-                
                 // ===== TITLE =====
-                doc.setFontSize(20);
+                doc.setFontSize(28);
                 doc.setFont(undefined, 'bold');
                 doc.setTextColor(0, 0, 0);
                 doc.text('MIXING CARD', 20, y);
                 y += 12;
                 
-                // ===== PAINT COLOR - VERY PROMINENT =====
-                doc.setFontSize(24);
+                // ===== PAINT INFO BOX - LARGE AND PROMINENT =====
+                doc.setFontSize(16);
                 doc.setFont(undefined, 'bold');
-                doc.setTextColor(200, 30, 30);
-                doc.text(`${color}`, 20, y);
-                y += 10;
+                doc.setTextColor(255, 255, 255);
+                doc.setFillColor(200, 30, 30);
+                doc.rect(20, y - 8, 170, 28, 'F');
+                doc.text(`${color.toUpperCase()}`, 25, y + 12);
+                y += 32;
                 
-                // Paint details - larger and more visible
-                doc.setFontSize(12);
+                // Brand/Finish box
+                doc.setFontSize(14);
                 doc.setFont(undefined, 'bold');
                 doc.setTextColor(0, 0, 0);
                 doc.setDrawColor(170, 132, 30);
                 doc.setFillColor(255, 248, 220);
-                doc.rect(20, y-2, 170, 14, 'FD');
-                doc.text(`${paintBrand} • ${paintFinish}`, 25, y + 8);
-                y += 18;
+                doc.rect(20, y - 2, 170, 18, 'FD');
+                doc.text(`${paintBrand} • ${paintFinish}`, 25, y + 10);
+                y += 22;
+                
+                // ===== CALCULATE SQM FOR THIS COLOR ONLY =====
+                let colorSQM = 0;
+                items.forEach(item => {
+                    if (item.color && item.color.toLowerCase() === color.toLowerCase()) {
+                        const sqm = parseFloat(item.sqm) || 0;
+                        colorSQM += sqm;
+                    }
+                });
+                
+                // If no items matched this color, use proportional amount
+                if (colorSQM === 0 && totalSQM > 0) {
+                    colorSQM = totalSQM / colors.length;
+                }
+                
+                // ===== JOB DETAILS - LARGER FONTS =====
+                const leftCol = 20;
+                const rightCol = 110;
+                
+                doc.setFontSize(12);
+                doc.setFont(undefined, 'bold');
+                doc.setTextColor(0, 0, 0);
+                doc.text('Job Name', leftCol, y);
+                doc.text('Job #', rightCol, y);
+                y += 6;
+                
+                doc.setFont(undefined, 'normal');
+                doc.setFontSize(13);
+                doc.text(jobName.substring(0, 30), leftCol, y);
+                doc.text(jobNum, rightCol, y);
+                y += 10;
+                
+                doc.setFontSize(12);
+                doc.setFont(undefined, 'bold');
+                doc.text('Client', leftCol, y);
+                doc.text('Date', rightCol, y);
+                y += 6;
+                
+                doc.setFont(undefined, 'normal');
+                doc.setFontSize(13);
+                doc.text(jobClient.substring(0, 40), leftCol, y);
+                doc.text(dateReceived, rightCol, y);
+                y += 12;
+                
+                doc.setFontSize(12);
+                doc.setFont(undefined, 'bold');
+                doc.text('SQ Metres (This Color)', leftCol, y);
+                doc.text('Paint Required', rightCol, y);
+                y += 6;
+                
+                doc.setFont(undefined, 'normal');
+                doc.setFontSize(14);
+                doc.setTextColor(200, 30, 30);
+                doc.text(colorSQM.toFixed(2) + ' m²', leftCol, y);
+                
+                // Calculate paint qty: 0.2L per m²
+                const paintQty = (colorSQM * 0.2).toFixed(1);
+                doc.text(paintQty + ' L', rightCol, y);
+                y += 14;
                 
                 // ===== DIVIDER =====
                 doc.setDrawColor(170, 132, 30);
@@ -5216,48 +5281,7 @@
                 doc.line(20, y, 190, y);
                 y += 8;
                 
-                // ===== JOB DETAILS - 2 COLUMN =====
-                const leftCol = 20;
-                const rightCol = 110;
-                
-                doc.setFontSize(10);
-                doc.setFont(undefined, 'bold');
-                doc.text('Job Name', leftCol, y);
-                doc.text('Job #', rightCol, y);
-                y += 5;
-                
-                doc.setFont(undefined, 'normal');
-                doc.setFontSize(11);
-                doc.text(jobName, leftCol, y);
-                doc.text(jobNum, rightCol, y);
-                y += 10;
-                
-                doc.setFontSize(10);
-                doc.setFont(undefined, 'bold');
-                doc.text('Client', leftCol, y);
-                doc.text('Date', rightCol, y);
-                y += 5;
-                
-                doc.setFont(undefined, 'normal');
-                doc.setFontSize(11);
-                doc.text(jobClient, leftCol, y);
-                doc.text(dateReceived, rightCol, y);
-                y += 10;
-                
-                doc.setFontSize(10);
-                doc.setFont(undefined, 'bold');
-                doc.text('SQ Metres', leftCol, y);
-                doc.text('Paint Required', rightCol, y);
-                y += 5;
-                
-                doc.setFont(undefined, 'normal');
-                doc.setFontSize(11);
-                doc.text(totalSQM.toFixed(2) + ' m²', leftCol, y);
-                
-                // Calculate paint qty: 0.2L per m²
-                const paintQty = (totalSQM * 0.2).toFixed(1);
-                doc.text(paintQty + ' L', rightCol, y);
-                y += 12;
+                doc.setTextColor(0, 0, 0);
                 
                 // ===== FORMULA LOOKUP =====
                 const formula = paintDatabase.find(f => 
@@ -5269,28 +5293,30 @@
                     formulaText = formula.product || formula.color;
                     
                     // Show base
-                    doc.setFontSize(10);
+                    doc.setFontSize(12);
                     doc.setFont(undefined, 'bold');
                     doc.text('Base Paint:', 20, y);
                     
                     doc.setFont(undefined, 'normal');
-                    doc.text(formulaText, 60, y);
-                    y += 8;
+                    doc.setFontSize(13);
+                    doc.text(formulaText, 70, y);
+                    y += 10;
                 }
                 
-                // ===== TINTERS/COLOURANTS =====
-                doc.setFontSize(11);
+                // ===== TINTERS/COLOURANTS - LARGER =====
+                doc.setFontSize(13);
                 doc.setFont(undefined, 'bold');
                 doc.text('TINT FORMULA (Grams per Litre)', 20, y);
-                y += 7;
+                y += 8;
                 
-                doc.setFontSize(9);
+                doc.setFontSize(11);
                 doc.setFont(undefined, 'normal');
                 
                 // Draw formula box
+                const boxHeight = pageHeight - y - 25;
                 doc.setDrawColor(0, 0, 0);
                 doc.setLineWidth(0.5);
-                doc.rect(20, y, 170, 100);
+                doc.rect(20, y, 170, boxHeight);
                 
                 let boxY = y + 5;
                 
@@ -5300,77 +5326,62 @@
                         const grams = tint.amount || 0;
                         const code = tint.code || '';
                         const name = tint.name || `Tint ${idx + 1}`;
+                        doc.setFontSize(12);
                         doc.text(`${code}: ${grams.toFixed(2)}g  (${name})`, 25, boxY);
-                        boxY += 6;
+                        boxY += 7;
                     });
                     
                     // Show base tinters
                     if (formula.baseTinters) {
                         doc.setFont(undefined, 'italic');
-                        doc.setFontSize(8);
+                        doc.setFontSize(11);
+                        boxY += 2;
                         doc.text('Base Tinters:', 25, boxY);
-                        boxY += 5;
+                        boxY += 7;
                         formula.baseTinters.forEach(tint => {
                             const grams = tint.amount || 0;
                             const code = tint.code || '';
                             const name = tint.name || '';
+                            doc.setFontSize(11);
+                            doc.setFont(undefined, 'normal');
                             doc.text(`${code}: ${grams.toFixed(2)}g ${name}`, 25, boxY);
-                            boxY += 5;
+                            boxY += 6;
                         });
                     }
                 } else {
                     // Blank template with grams
                     doc.setFont(undefined, 'normal');
-                    for (let i = 0; i < 5; i++) {
-                        doc.text(`Tint \${i + 1}: _____________ g`, 25, boxY);
-                        boxY += 6;
+                    for (let i = 0; i < 8; i++) {
+                        doc.setFontSize(12);
+                        doc.text(`Tint ${i + 1}: _____________ g`, 25, boxY);
+                        boxY += 7;
                     }
-                    boxY += 4;
+                    boxY += 3;
                     doc.text('Additional: _________________________________', 25, boxY);
                 }
                 
-                y += 105;
-                
-                // ===== FOOTER =====
-                doc.setFontSize(8);
+                // ===== FOOTER AT BOTTOM =====
+                doc.setFontSize(9);
                 doc.setFont(undefined, 'italic');
                 doc.setTextColor(100, 100, 100);
-                doc.text(`Generated: \${new Date().toLocaleDateString('en-AU')} | \${color} | Base: \${paintQty}L`, 20, 285);
+                doc.text(`Generated: ${new Date().toLocaleDateString('en-AU')} | ${color} | Base: ${paintQty}L | SQM: ${colorSQM.toFixed(2)}`, 20, pageHeight - 8);
                 
                 // Save PDF
-                if (colors.length > 1) {
-                    // Multiple colors - add color to filename
-                    const filename = `MixingCard_\${jobNum}_\${color.replace(/\s+/g, '_')}_\${colorIndex + 1}.pdf`;
-                    const pdfDataUri = doc.output('datauristring');
-                    
-                    if (colorIndex === 0) {
-                        // First one - show preview
-                        showPDFPreview(pdfDataUri, filename, '🎨 Mixing Card Preview');
-                    } else {
-                        // Download additional ones automatically
-                        const link = document.createElement('a');
-                        link.href = pdfDataUri;
-                        link.download = filename;
-                        link.click();
-                    }
-                } else {
-                    const filename = `MixingCard_\${jobNum}_\${jobName.replace(/\s+/g, '_')}.pdf`;
-                    const pdfDataUri = doc.output('datauristring');
+                const pdfDataUri = doc.output('datauristring');
+                const filename = `MixingCard_${jobNum}_${color.replace(/\\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+                
+                if (colorIndex === colors.length - 1) {
+                    // Show preview on last card
                     showPDFPreview(pdfDataUri, filename, '🎨 Mixing Card Preview');
+                    notify('✓ Mixing Card Ready');
                 }
             });
-            
-            if (colors.length > 1) {
-                notify(`✓ \${colors.length} Mixing Cards Ready`);
-            } else {
-                notify('✓ Mixing Card Ready');
-            }
-            
-        } catch(err) {
-            console.error('❌ Mixing Card Error:', err);
-            notify('❌ Error: ' + err.message);
+        } catch (err) {
+            console.error('Mixing card error:', err);
+            notify('❌ Error generating mixing card');
         }
     }
+                
     function genCoverSheet() {
         try {
             if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) {
@@ -5829,6 +5840,82 @@
             doc.text(`${today.toLocaleDateString('en-AU')} to ${endDate.toLocaleDateString('en-AU')} (${days} days)`, 20, y);
             y += 12;
             
+            // Load jobs for Gantt and job list
+            let jobHistory = JSON.parse(localStorage.getItem('jobHistory')) || [];
+            const activeJobs = jobHistory.filter(job => !job.completed).slice(0, 40);
+            
+            // ===== GANTT TIMELINE =====
+            doc.setFontSize(8);
+            doc.setFont(undefined, 'bold');
+            doc.text('Timeline Overview:', 20, y);
+            y += 4;
+            
+            const timelineStartX = 20;
+            const timelineWidth = pageWidth - 40;
+            const timelineHeight = 60;
+            
+            // Draw timeline grid
+            doc.setDrawColor(200, 200, 200);
+            doc.setLineWidth(0.3);
+            doc.rect(timelineStartX, y, timelineWidth, timelineHeight);
+            
+            // Get active jobs - will be declared later, just reference it
+            // Using jobHistory from below
+            
+            // Draw job bars on timeline
+            const dayWidth = timelineWidth / days;
+            let barY = y + 5;
+            
+            activeJobs.slice(0, 8).forEach((job, idx) => {
+                // Parse job start date
+                let jobStartDate = new Date();
+                if (job.dateReceived) {
+                    if (job.dateReceived.includes('/')) {
+                        const [d, m, yr] = job.dateReceived.split('/');
+                        jobStartDate = new Date(parseInt('20' + yr), parseInt(m) - 1, parseInt(d));
+                    } else {
+                        jobStartDate = new Date(job.dateReceived);
+                    }
+                }
+                
+                // Calculate position
+                const daysFromStart = Math.max(0, Math.ceil((jobStartDate - today) / (1000 * 60 * 60 * 24)));
+                const jobDuration = job.expectedDays || 7;
+                
+                if (daysFromStart < days) {
+                    const barStartX = timelineStartX + (daysFromStart * dayWidth);
+                    const barWidth = Math.min(jobDuration * dayWidth, timelineWidth - (daysFromStart * dayWidth));
+                    
+                    // Draw job bar
+                    doc.setFillColor(100, 200, 255);
+                    doc.setDrawColor(50, 150, 255);
+                    doc.rect(barStartX, barY, barWidth, 6, 'FD');
+                    
+                    // Job label
+                    doc.setFontSize(7);
+                    doc.setTextColor(255, 255, 255);
+                    doc.text(`#${job.jobNum}`, barStartX + 1, barY + 4.5);
+                    
+                    barY += 7;
+                }
+            });
+            
+            // Timeline date markers (every 7 days)
+            doc.setFontSize(7);
+            doc.setTextColor(0, 0, 0);
+            for (let i = 0; i <= days; i += 7) {
+                const markerX = timelineStartX + (i * dayWidth);
+                const markerDate = new Date(today);
+                markerDate.setDate(markerDate.getDate() + i);
+                
+                doc.setLineWidth(0.3);
+                doc.setDrawColor(150, 150, 150);
+                doc.line(markerX, y + timelineHeight, markerX, y + timelineHeight + 2);
+                doc.text(markerDate.toLocaleDateString('en-AU'), markerX - 5, y + timelineHeight + 5);
+            }
+            
+            y += timelineHeight + 15;
+            
             // ===== SIMPLIFIED TABLE =====
             const startX = 20;
             const rowHeight = 7;
@@ -5853,16 +5940,10 @@
             y += rowHeight;
             
             // ===== JOB ROWS =====
-            const jobHistory = JSON.parse(localStorage.getItem('jobHistory')) || [];
             console.log('📅 A3 Schedule - Total jobs in history:', jobHistory.length);
             console.log('📅 A3 Schedule - Jobs:', jobHistory);
             
             // Show all non-completed jobs, or all jobs if none are marked
-            const activeJobs = jobHistory.filter(job => {
-                // Include jobs that aren't explicitly marked as completed
-                return !job.completed;
-            }).slice(0, 40);
-            
             console.log('📅 A3 Schedule - Active jobs after filter:', activeJobs.length);
             
             doc.setFont(undefined, 'normal');
