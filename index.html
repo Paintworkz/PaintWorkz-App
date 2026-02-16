@@ -62,7 +62,7 @@
         .logo-text { font-weight:900; font-size:20px; background:var(--gold); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
         .icon-btn { font-size: 28px; padding: 0 10px; cursor: pointer; }
 
-        .nav-tabs { display: flex; background: #000; position: sticky; top: 80px; z-index: 999; overflow-x: auto; border-bottom: 1px solid #333; }
+        .nav-tabs { display: flex; background: #000; position: sticky; top: 110px; z-index: 999; overflow-x: auto; border-bottom: 1px solid #333; }
         .nav-btn { flex:1; min-width:80px; padding:12px 0; color:#888; text-align:center; font-weight:900; font-size:10px; text-transform:uppercase; border:none; background:0 0; cursor:pointer; transition:all 0.2s; pointer-events:auto; z-index:100; position:relative; }
         .nav-btn.active { color:#fff; border-bottom:4px solid var(--gs); background:#111; }
 
@@ -5206,15 +5206,20 @@
                 doc.text(`${color.toUpperCase()}`, 25, y + 12);
                 y += 32;
                 
-                // Brand/Finish box
+                // ===== PAINT INFO BOX - COMBINED BRAND/COLOUR/FINISH =====
                 doc.setFontSize(14);
                 doc.setFont(undefined, 'bold');
-                doc.setTextColor(0, 0, 0);
-                doc.setDrawColor(170, 132, 30);
-                doc.setFillColor(255, 248, 220);
-                doc.rect(20, y - 2, 170, 18, 'FD');
-                doc.text(`${paintBrand} • ${paintFinish}`, 25, y + 10);
-                y += 22;
+                doc.setTextColor(255, 255, 255);
+                doc.setFillColor(170, 132, 30);
+                doc.setDrawColor(100, 100, 100);
+                doc.setLineWidth(1);
+                doc.rect(20, y - 2, 170, 22, 'FD');
+                
+                // Format: Brand | Color | Finish
+                const paintInfo = `${paintBrand} | ${color.toUpperCase()} | ${paintFinish}`;
+                doc.setTextColor(255, 255, 255);
+                doc.text(paintInfo, 25, y + 13);
+                y += 26;
                 
                 // ===== CALCULATE SQM FOR THIS COLOR ONLY =====
                 let colorSQM = 0;
@@ -5289,18 +5294,36 @@
                 );
                 
                 let formulaText = '';
+                let evicCode = '';
+                let baseCode = '';
                 if (formula) {
                     formulaText = formula.product || formula.color;
+                    evicCode = formula.evicCode || formula.code || '';
+                    baseCode = formula.baseCode || '';
                     
-                    // Show base
-                    doc.setFontSize(12);
+                    // Show base paint info box
+                    doc.setFillColor(240, 240, 240);
+                    doc.setDrawColor(170, 132, 30);
+                    doc.setLineWidth(0.5);
+                    doc.rect(20, y - 2, 170, 16, 'FD');
+                    
+                    doc.setFontSize(11);
                     doc.setFont(undefined, 'bold');
-                    doc.text('Base Paint:', 20, y);
+                    doc.setTextColor(0, 0, 0);
                     
-                    doc.setFont(undefined, 'normal');
-                    doc.setFontSize(13);
-                    doc.text(formulaText, 70, y);
-                    y += 10;
+                    // Show base paint and codes
+                    let baseInfo = `Base: ${formulaText}`;
+                    if (baseCode) baseInfo += ` (${baseCode})`;
+                    doc.text(baseInfo, 25, y + 6);
+                    
+                    // Show Evic code if available
+                    if (evicCode) {
+                        doc.setFontSize(10);
+                        doc.setFont(undefined, 'normal');
+                        doc.text(`Evic Code: ${evicCode}`, 25, y + 12);
+                    }
+                    
+                    y += 18;
                 }
                 
                 // ===== TINTERS/COLOURANTS - LARGER =====
@@ -5845,65 +5868,54 @@
             const activeJobs = jobHistory.filter(job => !job.completed).slice(0, 40);
             
             // ===== GANTT TIMELINE =====
-            doc.setFontSize(10);
+            doc.setFontSize(11);
             doc.setFont(undefined, 'bold');
             doc.setTextColor(0, 0, 0);
-            doc.text('WORK SCHEDULE TIMELINE', 20, y);
+            doc.text('WORK SCHEDULE TIMELINE - Job Status Bars', 20, y);
             y += 7;
             
-            const timelineStartX = 20;
-            const dayWidth = (pageWidth - 40) / days;
-            const timelineWidth = pageWidth - 40;
+            const timelineStartX = 35;
+            const dayWidth = (pageWidth - 55) / days;
+            const timelineWidth = pageWidth - 55;
             
             // ===== DATE HEADER ROW =====
             doc.setFontSize(7);
-            doc.setFont(undefined, 'bold');
-            doc.setTextColor(255, 255, 255);
-            doc.setDrawColor(170, 132, 30);
-            doc.setFillColor(170, 132, 30);
+            doc.setFont(undefined, 'normal');
+            doc.setTextColor(0, 0, 0);
             
-            // Draw date header cells (every 7 days)
-            for (let i = 0; i < days; i += 7) {
+            // Draw date labels every 14 days for readability
+            for (let i = 0; i < days; i += 14) {
                 const cellX = timelineStartX + (i * dayWidth);
-                const cellWidth = Math.min(7 * dayWidth, timelineStartX + timelineWidth - cellX);
                 const markerDate = new Date(today);
                 markerDate.setDate(markerDate.getDate() + i);
                 
-                doc.rect(cellX, y, cellWidth, 6, 'F');
-                doc.setTextColor(255, 255, 255);
-                doc.text(markerDate.toLocaleDateString('en-AU'), cellX + 1, y + 4);
+                doc.text(markerDate.toLocaleDateString('en-AU'), cellX, y);
             }
             
-            y += 6;
+            y += 5;
             
-            // ===== ACTIVITY LEGEND =====
-            doc.setFontSize(8);
-            doc.setFont(undefined, 'normal');
-            doc.setTextColor(0, 0, 0);
-            const activities = [
-                { code: 'M', label: 'Measuring', color: [100, 150, 255] },
-                { code: 'S1', label: 'Sand 1', color: [255, 200, 100] },
-                { code: 'U', label: 'Undercoat', color: [150, 150, 150] },
-                { code: 'S2', label: 'Sand 2', color: [255, 200, 100] },
-                { code: 'T', label: 'TopCoat', color: [100, 200, 100] },
-                { code: 'I', label: 'Inspect', color: [200, 100, 255] },
-                { code: 'C', label: 'Complete', color: [100, 200, 255] }
+            // Draw timeline grid
+            doc.setDrawColor(200, 200, 200);
+            doc.setLineWidth(0.2);
+            for (let i = 0; i <= days; i += 7) {
+                const lineX = timelineStartX + (i * dayWidth);
+                doc.line(lineX, y, lineX, y + (Math.min(30, activeJobs.length) * 5.5) + 10);
+            }
+            
+            // ===== JOB BARS WITH TIMELINE =====
+            const jobColors = [
+                [100, 150, 255], [255, 150, 100], [150, 255, 100], [255, 100, 150],
+                [100, 255, 150], [150, 100, 255], [255, 200, 100], [100, 200, 255],
+                [200, 100, 255], [100, 255, 200], [255, 100, 200], [200, 255, 100],
+                [255, 180, 100], [100, 180, 255], [180, 100, 255], [180, 255, 100]
             ];
             
-            let legX = 20;
-            activities.forEach(act => {
-                doc.setFillColor(act.color[0], act.color[1], act.color[2]);
-                doc.rect(legX, y, 3, 3, 'F');
-                doc.setTextColor(0, 0, 0);
-                doc.text(`${act.code}=${act.label}`, legX + 5, y + 2.5);
-                legX += 35;
-            });
+            let barY = y + 2;
+            let jobCount = 0;
             
-            y += 6;
-            
-            // ===== JOB TIMELINE BARS WITH ACTIVITIES =====
-            for (let idx = 0; idx < Math.min(10, activeJobs.length); idx++) {
+            for (let idx = 0; idx < activeJobs.length && jobCount < 30; idx++) {
                 const job = activeJobs[idx];
+                
                 // Parse job start date
                 let jobStartDate = new Date(today);
                 if (job.dateReceived) {
@@ -5915,60 +5927,41 @@
                     }
                 }
                 
-                // Calculate position
+                // Calculate position - estimate 7 days duration per job
                 const daysFromStart = Math.max(0, Math.ceil((jobStartDate - today) / (1000 * 60 * 60 * 24)));
+                const jobDuration = Math.min(7, days - daysFromStart); // 7 days or until end of period
                 
-                // Draw job number on left
-                doc.setFontSize(8);
-                doc.setFont(undefined, 'bold');
-                doc.text(`#${job.jobNum}`, 15, y + 4);
-                
-                // Draw activity phases as colored segments
-                const phases = ['M', 'S1', 'U', 'S2', 'T', 'I', 'C'];
-                const phaseColors = {
-                    'M': [100, 150, 255],
-                    'S1': [255, 200, 100],
-                    'U': [150, 150, 150],
-                    'S2': [255, 200, 100],
-                    'T': [100, 200, 100],
-                    'I': [200, 100, 255],
-                    'C': [100, 200, 255]
-                };
-                
-                let phaseX = timelineStartX + (daysFromStart * dayWidth);
-                const phaseDuration = 1; // 1 day per phase
-                
-                phases.forEach((phase, phIdx) => {
-                    const phaseStartX = phaseX + (phIdx * phaseDuration * dayWidth);
+                if (daysFromStart < days && jobDuration > 0) {
+                    const barStartX = timelineStartX + (daysFromStart * dayWidth);
+                    const barWidth = jobDuration * dayWidth;
                     
-                    if (phaseStartX < timelineStartX + timelineWidth) {
-                        const phaseWidth = Math.min(phaseDuration * dayWidth, timelineStartX + timelineWidth - phaseStartX);
-                        
-                        // Draw phase bar
-                        const color = phaseColors[phase];
-                        doc.setFillColor(color[0], color[1], color[2]);
-                        doc.setDrawColor(0, 0, 0);
-                        doc.setLineWidth(0.3);
-                        doc.rect(phaseStartX, y, phaseWidth, 5, 'FD');
-                        
-                        // Draw phase label if space permits
-                        if (phaseWidth > 4) {
-                            doc.setFontSize(6);
-                            doc.setTextColor(255, 255, 255);
-                            doc.setFont(undefined, 'bold');
-                            doc.text(phase, phaseStartX + 0.5, y + 3.5);
-                        }
+                    // Draw job bar with color
+                    const colorIdx = idx % jobColors.length;
+                    const barColor = jobColors[colorIdx];
+                    
+                    doc.setFillColor(barColor[0], barColor[1], barColor[2]);
+                    doc.setDrawColor(0, 0, 0);
+                    doc.setLineWidth(0.4);
+                    doc.rect(barStartX, barY, barWidth, 5, 'FD');
+                    
+                    // Job number label on left
+                    doc.setFontSize(7);
+                    doc.setFont(undefined, 'bold');
+                    doc.setTextColor(0, 0, 0);
+                    doc.text(`#${job.jobNum}`, 20, barY + 3.5);
+                    
+                    // Job duration label in bar if space permits
+                    if (barWidth > 15) {
+                        doc.setTextColor(255, 255, 255);
+                        doc.text(`${jobDuration}d`, barStartX + 2, barY + 3.5);
                     }
-                });
-                
-                y += 6;
-                
-                if (y > pageHeight - 40) {
-                    break; // Stop if we run out of space
+                    
+                    barY += 5.5;
+                    jobCount++;
                 }
             }
             
-            y += 4;
+            y = barY + 5;
             
             // ===== SIMPLIFIED TABLE =====
             const startX = 20;
