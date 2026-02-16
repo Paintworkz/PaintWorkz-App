@@ -1,6 +1,6 @@
 <!--
 ╔════════════════════════════════════════════════════════════════╗
-║                       PAINTWORKZ PRO 4.8                        ║
+║                       PAINTWORKZ PRO                            ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
 ║ 1.4.1 | 2026-02-14 | CREDIT NOTE added + Syntax error fixed + Defaults working            ║
@@ -16,7 +16,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-    <title>PaintWorkz Pro 4.8</title>
+    <title>PaintWorkz Pro</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
     <style>
         :root {
@@ -59,7 +59,7 @@
         
         header { background:var(--rainbow); padding:env(safe-area-inset-top) 15px 5px; display:flex; align-items:center; justify-content:space-between; border-bottom:4px solid #aa841e; position:sticky; top:0; z-index:1000; height:80px; box-sizing: border-box; }
         .logo-box { background:#000; padding:6px 18px; border-radius:8px; border:2px solid var(--gs); }
-        .logo-text { font-weight:900; font-size:20px; background:var(--gold); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+        .logo-text { font-weight:900; font-size:28px; background:var(--gold); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
         .icon-btn { font-size: 28px; padding: 0 10px; cursor: pointer; }
 
         .nav-tabs { display: flex; background: #000; position: sticky; top: 80px; z-index: 999; overflow-x: auto; border-bottom: 1px solid #333; }
@@ -516,7 +516,7 @@
 
 <header>
     <div class="icon-btn" onclick="tab('history')">🔍</div>
-    <div class="logo-box" id="headerLogoBox" style="position:relative; width:calc(33vw - 10px); height:60px; display:flex; align-items:center; justify-content:center; padding:6px; box-sizing:border-box; margin-left:10px; border:2px solid #DAA520; border-radius:2px; background:#000;">
+    <div class="logo-box" id="headerLogoBox" style="position:relative; width:calc(25vw); height:60px; display:flex; align-items:center; justify-content:center; padding:6px; box-sizing:border-box; margin-left:10px; border:2px solid #DAA520; border-radius:2px; background:#000;">
         <img id="headerLogoImg" src="" style="height:100%; max-width:95%; display:none; object-fit:contain;" alt="Company Logo">
         <span class="logo-text" id="headerLogoText">PaintWorkz</span>
     </div>
@@ -1033,8 +1033,8 @@
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;">Created by Colin Bedford</span><br>
                         <span style="color:#999;">Paintworkz PTY LTD</span><br>
-                        <span style="color:#999;">14 February 2026</span><br><br>
-                        <span id="versionDisplay" style="color:#d4af37; font-weight:900;">Current Version: v1.4.1</span>
+                        <span id="currentDate" style="color:#999;">14 February 2026</span><br><br>
+                        <span id="versionDisplay" style="color:#d4af37; font-weight:900;">v1.4.1 | </span><span id="versionDate" style="color:#d4af37; font-weight:900;"></span>
                     </p>
                 </div>
             </div>
@@ -1924,6 +1924,15 @@
     
         function initializeApp() {
         console.log('🚀 Initializing PaintWorkz...');
+        
+        // Update version display with current date
+        const today = new Date();
+        const dateStr = today.toLocaleDateString('en-AU', { day: '2-digit', month: 'long', year: 'numeric' });
+        const versionDateEl = document.getElementById('versionDate');
+        const currentDateEl = document.getElementById('currentDate');
+        if (versionDateEl) versionDateEl.textContent = dateStr;
+        if (currentDateEl) currentDateEl.textContent = dateStr;
+        
         loadHeaderLogo();  // Load header logo on app init
         
         try {
@@ -5611,7 +5620,6 @@
             }
             
             const { jsPDF } = window.jspdf;
-            const doc = new jsPDF('p', 'mm', 'a4');
             
             // Get job data
             const jobClient = document.getElementById('cli')?.value || 'CLIENT';
@@ -5621,145 +5629,155 @@
             const totalSQM = parseFloat(document.getElementById('tot')?.innerText || '0') || 0;
             
             // Paint data
-            const paintColor = document.getElementById('p-color')?.value || document.getElementById('col')?.value || 'Color TBD';
-            const paintBrand = document.getElementById('p-brand')?.value || document.getElementById('bra')?.value || 'Wattyl';
-            const paintFinish = document.getElementById('p-finish')?.value || document.getElementById('fin')?.value || 'Satin';
+            const paintColor = document.getElementById('p-color')?.value || 'Color TBD';
+            const paintBrand = document.getElementById('p-brand')?.value || 'Wattyl';
+            const paintFinish = document.getElementById('p-finish')?.value || 'Satin';
             
-            // Calculate paint required (0.2L per m²)
-            const paintRequired = (totalSQM * 0.2).toFixed(1);
+            // Split colors if multiple
+            const colors = paintColor.split(/[,\/]/).map(c => c.trim()).filter(c => c);
             
-            // Get profiles and quantities from items
-            let profileQty = {};
-            items.forEach(item => {
-                const profile = item.profile || 'Various';
-                const qty = parseInt(item.doors) || 0;
-                profileQty[profile] = (profileQty[profile] || 0) + qty;
-            });
-            
+            // Create one PDF with one page per color
+            const doc = new jsPDF('p', 'mm', 'a4');
             const pageWidth = doc.internal.pageSize.getWidth();
             const pageHeight = doc.internal.pageSize.getHeight();
+            let colorPageCount = 0;
             
-            let y = 10;
-            
-            // ===== JOB NUMBER - LARGE AND PROMINENT =====
-            doc.setFontSize(56);
-            doc.setFont(undefined, 'bold');
-            doc.setTextColor(200, 30, 30);
-            doc.text(`#${jobNum}`, 20, y + 18);
-            y += 25;
-            
-            // Gold separator line
-            doc.setDrawColor(170, 132, 30);
-            doc.setLineWidth(3);
-            doc.line(20, y, pageWidth - 20, y);
-            y += 8;
-            
-            // ===== CUSTOMER & JOB INFO - LARGE AND CLEAR =====
-            doc.setFontSize(14);
-            doc.setFont(undefined, 'bold');
-            doc.setTextColor(0, 0, 0);
-            doc.text(jobClient.toUpperCase(), 20, y);
-            y += 8;
-            
-            doc.setFontSize(11);
-            doc.setFont(undefined, 'normal');
-            doc.text(`Job: ${jobName}`, 20, y);
-            y += 6;
-            doc.text(`Date: ${dateReceived}`, 20, y);
-            y += 10;
-            
-            // ===== KEY INFO GRID =====
-            const colX1 = 20;
-            const colX2 = 120;
-            
-            doc.setFontSize(10);
-            doc.setFont(undefined, 'bold');
-            
-            // SQM and Paint Litres - LARGE AND VISIBLE
-            doc.setFontSize(13);
-            doc.setTextColor(200, 30, 30);
-            doc.text(`${totalSQM.toFixed(2)} m²`, colX1, y);
-            doc.text(`${paintRequired} L`, colX2, y);
-            y += 6;
-            
-            doc.setFontSize(9);
-            doc.setFont(undefined, 'normal');
-            doc.setTextColor(100, 100, 100);
-            doc.text('AREA', colX1, y);
-            doc.text('PAINT', colX2, y);
-            y += 10;
-            
-            // Divider
-            doc.setDrawColor(170, 132, 30);
-            doc.setLineWidth(1);
-            doc.line(20, y, pageWidth - 20, y);
-            y += 8;
-            
-            // ===== COLORS & PROFILES =====
-            doc.setFontSize(10);
-            doc.setFont(undefined, 'bold');
-            doc.setTextColor(0, 0, 0);
-            
-            doc.text('PAINT COLOURS:', 20, y);
-            y += 6;
-            
-            doc.setFontSize(11);
-            doc.setFont(undefined, 'normal');
-            const colors = paintColor.split(/[,\\/]/).map(c => c.trim());
-            colors.forEach((color, idx) => {
-                doc.text(`• ${color}`, 25, y);
-                y += 5;
+            colors.forEach((color, colorIndex) => {
+                
+                if (colorPageCount > 0) {
+                    doc.addPage();
+                }
+                
+                let y = 15;
+                
+                // ===== JOB NUMBER - LARGE AND PROMINENT =====
+                doc.setFontSize(56);
+                doc.setFont(undefined, 'bold');
+                doc.setTextColor(200, 30, 30);
+                doc.text(`#${jobNum}`, 20, y + 18);
+                y += 30;
+                
+                // Gold separator line
+                doc.setDrawColor(170, 132, 30);
+                doc.setLineWidth(3);
+                doc.line(20, y, pageWidth - 20, y);
+                y += 12;
+                
+                // ===== CUSTOMER & JOB INFO =====
+                doc.setFontSize(14);
+                doc.setFont(undefined, 'bold');
+                doc.setTextColor(0, 0, 0);
+                doc.text(jobClient.toUpperCase(), 20, y);
+                y += 10;
+                
+                doc.setFontSize(11);
+                doc.setFont(undefined, 'normal');
+                doc.text(`Job: ${jobName}`, 20, y);
+                y += 7;
+                doc.text(`Date: ${dateReceived}`, 20, y);
+                y += 12;
+                
+                // ===== CALCULATIONS FOR THIS COLOR =====
+                let colorSQM = 0;
+                let colorProfiles = {};
+                
+                items.forEach(item => {
+                    if (item.color && item.color.toLowerCase() === color.toLowerCase()) {
+                        const sqm = parseFloat(item.sqm) || 0;
+                        colorSQM += sqm;
+                        const profile = item.profile || 'Various';
+                        const qty = parseInt(item.doors) || 0;
+                        colorProfiles[profile] = (colorProfiles[profile] || 0) + qty;
+                    }
+                });
+                
+                // If no items matched, use proportional
+                if (colorSQM === 0 && totalSQM > 0) {
+                    colorSQM = totalSQM / colors.length;
+                }
+                
+                const paintRequired = (colorSQM * 0.2).toFixed(1);
+                
+                // ===== KEY METRICS - LARGE AND RED =====
+                doc.setFontSize(13);
+                doc.setFont(undefined, 'bold');
+                doc.setTextColor(200, 30, 30);
+                doc.text(`SQM: ${colorSQM.toFixed(2)} m²`, 20, y);
+                y += 8;
+                doc.text(`PAINT: ${paintRequired} L`, 20, y);
+                y += 12;
+                
+                // ===== DIVIDER =====
+                doc.setDrawColor(170, 132, 30);
+                doc.setLineWidth(1.5);
+                doc.line(20, y, pageWidth - 20, y);
+                y += 12;
+                
+                // ===== PAINT DETAILS =====
+                doc.setFontSize(10);
+                doc.setFont(undefined, 'bold');
+                doc.setTextColor(0, 0, 0);
+                doc.text(`COLOR: ${color.toUpperCase()}`, 20, y);
+                y += 8;
+                
+                doc.setFontSize(10);
+                doc.setFont(undefined, 'normal');
+                doc.text(`Brand: ${paintBrand}`, 20, y);
+                y += 6;
+                doc.text(`Finish: ${paintFinish}`, 20, y);
+                y += 12;
+                
+                // ===== PROFILES & QUANTITIES FOR THIS COLOR =====
+                doc.setFontSize(10);
+                doc.setFont(undefined, 'bold');
+                doc.text('DOOR PROFILES:', 20, y);
+                y += 8;
+                
+                doc.setFontSize(9);
+                doc.setFont(undefined, 'normal');
+                if (Object.keys(colorProfiles).length > 0) {
+                    Object.entries(colorProfiles).forEach(([profile, qty]) => {
+                        doc.text(`• ${profile}: ${qty} doors`, 25, y);
+                        y += 6;
+                    });
+                } else {
+                    doc.text('No specific profiles', 25, y);
+                    y += 6;
+                }
+                
+                y += 8;
+                
+                // ===== COLOR SWATCH BOX =====
+                doc.setDrawColor(0, 0, 0);
+                doc.setLineWidth(2);
+                doc.setFillColor(100, 150, 200);
+                doc.rect(20, y, pageWidth - 40, 40, 'FD');
+                
+                doc.setFontSize(16);
+                doc.setFont(undefined, 'bold');
+                doc.setTextColor(255, 255, 255);
+                doc.text(color.toUpperCase(), 25, y + 25);
+                
+                y += 45;
+                
+                // ===== FOOTER =====
+                doc.setFontSize(8);
+                doc.setFont(undefined, 'italic');
+                doc.setTextColor(100, 100, 100);
+                doc.text(`Generated: ${new Date().toLocaleDateString('en-AU')} | Paintworkz`, 20, pageHeight - 8);
+                
+                colorPageCount++;
             });
-            y += 2;
             
-            doc.setFontSize(10);
-            doc.setFont(undefined, 'bold');
-            doc.text('PROFILES & QTY:', 20, y);
-            y += 6;
-            
-            doc.setFontSize(10);
-            doc.setFont(undefined, 'normal');
-            Object.entries(profileQty).forEach(([profile, qty]) => {
-                doc.text(`• ${profile}: ${qty}`, 25, y);
-                y += 5;
-            });
-            y += 3;
-            
-            // ===== FINISH & BRAND =====
-            doc.setFontSize(10);
-            doc.setFont(undefined, 'bold');
-            doc.text('FINISH:', 20, y);
-            doc.setFont(undefined, 'normal');
-            doc.text(paintFinish, 70, y);
-            y += 6;
-            
-            doc.setFont(undefined, 'bold');
-            doc.text('BRAND:', 20, y);
-            doc.setFont(undefined, 'normal');
-            doc.text(paintBrand, 70, y);
-            y += 10;
-            
-            // ===== COLOR SWATCH =====
-            doc.setDrawColor(0, 0, 0);
-            doc.setLineWidth(1.5);
-            doc.setFillColor(100, 150, 200);
-            doc.rect(20, y, pageWidth - 40, 30, 'FD');
-            
-            doc.setFontSize(14);
-            doc.setFont(undefined, 'bold');
-            doc.setTextColor(255, 255, 255);
-            doc.text(paintColor.toUpperCase(), 25, y + 18);
-            
-            // Footer
-            doc.setFontSize(8);
-            doc.setFont(undefined, 'italic');
-            doc.setTextColor(100, 100, 100);
-            doc.text(`Generated: ${new Date().toLocaleDateString('en-AU')} | Paintworkz`, 20, pageHeight - 8);
-            
-            const filename = `ShopLabel_${jobNum}_${jobClient.replace(/\\s+/g, '_')}.pdf`;
+            const filename = `ShopLabel_${jobNum}_${jobClient.replace(/\\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
             const pdfDataUri = doc.output('datauristring');
             showPDFPreview(pdfDataUri, filename, '🏷️ Shop Label Preview');
-            notify('✓ Shop Label Ready - Print & Post on Trolley');
+            
+            if (colors.length > 1) {
+                notify(`✓ Shop Label Ready - ${colors.length} pages (one per color)`);
+            } else {
+                notify('✓ Shop Label Ready - Print & Post on Trolley');
+            }
             
         } catch(err) {
             console.error('❌ Shop Label Error:', err);
