@@ -5360,21 +5360,23 @@
             const dateReceived = document.getElementById('dat')?.value || new Date().toLocaleDateString('en-AU');
             const totalSQM = parseFloat(document.getElementById('tot')?.innerText || '0') || 0;
             
-            // Get paint data - might be multiple colors
+            // Get paint data - use UNIQUE COLORS FROM ITEMS
             const paintBrand = document.getElementById('bra')?.value || document.getElementById('p-brand')?.value || 'Wattyl';
-            const paintColor = document.getElementById('p-color')?.value || '';
             const paintFinish = document.getElementById('p-finish')?.value || document.getElementById('fin')?.value || 'Satin';
             
-            if (!paintColor || paintColor.trim() === '') {
-                notify('❌ Add paint color');
-                return;
-            }
+            // Get unique colors from items in measure tab (same logic as shop label)
+            const uniqueColors = new Set();
+            items.forEach(item => {
+                if (item.color && item.color.trim()) {
+                    uniqueColors.add(item.color.trim());
+                }
+            });
             
-            // Split by / or , to handle multiple colors
-            const colors = paintColor.split(/[,\/]/).map(c => c.trim()).filter(c => c);
+            // Convert to array and sort
+            const colors = Array.from(uniqueColors).sort();
             
             if (colors.length === 0) {
-                notify('❌ Add paint color');
+                notify('❌ Assign colors to all parts in Measure tab');
                 return;
             }
             
@@ -5410,19 +5412,19 @@
                 doc.text('MIXING CARD', 20, y);
                 y += 12;
                 
-                // ===== PAINT INFO BOX - COMBINED BRAND/COLOUR/FINISH =====
-                doc.setFontSize(20);
+                // ===== PAINT INFO BOX - SMALLER HEIGHT WITH GAP TO JOB NAME =====
+                doc.setFontSize(18);
                 doc.setFont(undefined, 'bold');
                 doc.setTextColor(255, 255, 255);
                 doc.setFillColor(170, 132, 30);
                 doc.setDrawColor(100, 100, 100);
                 doc.setLineWidth(1.5);
-                doc.rect(20, y, 170, 32, 'FD');
+                doc.rect(20, y, 170, 24, 'FD');  // Reduced from 32 to 24
                 
                 // Format: Brand | Color | Finish - fill the box with 5mm margins
                 const paintInfo = `${paintBrand} | ${color.toUpperCase()} | ${paintFinish}`;
-                doc.text(paintInfo, 25, y + 20);
-                y += 36;
+                doc.text(paintInfo, 25, y + 16);  // Adjusted y position for smaller box
+                y += 36;  // More gap before job name (was 36, now explicitly stated)
                 
                 // ===== EVIC CODE & BASE PAINT INFO BOX =====
                 const formula = paintDatabase.find(f => 
@@ -5540,61 +5542,116 @@
                 
                 doc.setTextColor(0, 0, 0);
                 
-                // ===== TINTERS/COLOURANTS - LARGER =====
+                // ===== TINTS/COLOURANTS - EXPANDED FOR FULL EVIC FORMULA =====
                 doc.setFontSize(13);
                 doc.setFont(undefined, 'bold');
-                doc.text('TINT FORMULA (Grams per Litre)', 20, y);
+                doc.text('TINT FORMULA - EVIC DETAILS', 20, y);
                 y += 8;
                 
-                doc.setFontSize(11);
+                doc.setFontSize(9);
                 doc.setFont(undefined, 'normal');
                 
                 // Draw formula box
-                const boxHeight = pageHeight - y - 25;
+                const boxHeight = pageHeight - y - 30;
                 doc.setDrawColor(0, 0, 0);
                 doc.setLineWidth(0.5);
                 doc.rect(20, y, 170, boxHeight);
                 
                 let boxY = y + 5;
                 
-                if (formula && formula.colourants) {
-                    // Show existing formula
-                    formula.colourants.forEach((tint, idx) => {
-                        const grams = tint.amount || 0;
-                        const code = tint.code || '';
-                        const name = tint.name || `Tint ${idx + 1}`;
-                        doc.setFontSize(12);
-                        doc.text(`${code}: ${grams.toFixed(2)}g  (${name})`, 25, boxY);
-                        boxY += 7;
-                    });
+                if (formula) {
+                    // Show Evic Code and Base Type at top
+                    doc.setFontSize(10);
+                    doc.setFont(undefined, 'bold');
                     
-                    // Show base tinters
-                    if (formula.baseTinters) {
-                        doc.setFont(undefined, 'italic');
-                        doc.setFontSize(11);
-                        boxY += 2;
-                        doc.text('Base Tinters:', 25, boxY);
-                        boxY += 7;
-                        formula.baseTinters.forEach(tint => {
-                            const grams = tint.amount || 0;
-                            const code = tint.code || '';
-                            const name = tint.name || '';
-                            doc.setFontSize(11);
-                            doc.setFont(undefined, 'normal');
-                            doc.text(`${code}: ${grams.toFixed(2)}g ${name}`, 25, boxY);
-                            boxY += 6;
+                    if (formula.evicCode) {
+                        doc.text(`Evic Code: ${formula.evicCode}`, 25, boxY);
+                        boxY += 6;
+                    }
+                    
+                    if (formula.baseType) {
+                        doc.text(`Base: ${formula.baseType}`, 25, boxY);
+                        boxY += 6;
+                    }
+                    
+                    if (formula.version) {
+                        doc.text(`Version: ${formula.version}`, 25, boxY);
+                        boxY += 6;
+                    }
+                    
+                    boxY += 3;
+                    doc.setLineWidth(0.2);
+                    doc.line(25, boxY, 185, boxY);
+                    boxY += 5;
+                    
+                    // WHITE BASE section
+                    if (formula.whiteBase && formula.whiteBase.length > 0) {
+                        doc.setFontSize(9);
+                        doc.setFont(undefined, 'bold');
+                        doc.text('WHITE BASE:', 25, boxY);
+                        boxY += 5;
+                        doc.setFontSize(9);
+                        doc.setFont(undefined, 'normal');
+                        
+                        formula.whiteBase.forEach(item => {
+                            const code = item.code || '';
+                            const grams = item.grams || 0;
+                            doc.text(`${code}: ${grams}g`, 30, boxY);
+                            boxY += 4;
                         });
+                        boxY += 2;
+                    }
+                    
+                    // TINTERS section
+                    if (formula.colourants && formula.colourants.length > 0) {
+                        doc.setFontSize(9);
+                        doc.setFont(undefined, 'bold');
+                        doc.text('TINTERS:', 25, boxY);
+                        boxY += 5;
+                        doc.setFontSize(9);
+                        doc.setFont(undefined, 'normal');
+                        
+                        for (let i = 0; i < formula.colourants.length; i++) {
+                            const tint = formula.colourants[i];
+                            const code = tint.code || '';
+                            const grams = tint.amount || tint.grams || 0;
+                            const name = tint.name || '';
+                            doc.text(`${code}: ${parseFloat(grams).toFixed(2)}g ${name}`, 30, boxY);
+                            boxY += 4;
+                            if (boxY > pageHeight - 35) break;  // Stop if running out of space
+                        }
+                    }
+                    
+                    // Total weight
+                    if (formula.totalWeight) {
+                        boxY += 3;
+                        doc.setFontSize(10);
+                        doc.setFont(undefined, 'bold');
+                        doc.text(`TOTAL WEIGHT: ${formula.totalWeight}g`, 25, boxY);
                     }
                 } else {
-                    // Blank template with grams
+                    // Blank template
                     doc.setFont(undefined, 'normal');
-                    for (let i = 0; i < 8; i++) {
-                        doc.setFontSize(12);
-                        doc.text(`Tint ${i + 1}: _____________ g`, 25, boxY);
-                        boxY += 7;
+                    doc.setFontSize(9);
+                    doc.text('Evic Code: _____________________________', 25, boxY);
+                    boxY += 6;
+                    doc.text('Base Type: ______________________________', 25, boxY);
+                    boxY += 8;
+                    doc.text('WHITE BASE:', 25, boxY);
+                    boxY += 5;
+                    for (let i = 0; i < 3; i++) {
+                        doc.text(`Item ${i + 1}: _____________ g`, 30, boxY);
+                        boxY += 5;
                     }
                     boxY += 3;
-                    doc.text('Additional: _________________________________', 25, boxY);
+                    doc.text('TINTERS:', 25, boxY);
+                    boxY += 5;
+                    for (let i = 0; i < 4; i++) {
+                        doc.text(`Tint ${i + 1}: _____________ g`, 30, boxY);
+                        boxY += 5;
+                    }
+                    boxY += 2;
+                    doc.text('TOTAL WEIGHT: _______________ g', 25, boxY);
                 }
                 
                 // ===== FOOTER AT BOTTOM =====
@@ -5901,18 +5958,28 @@
                 doc.setFillColor(245, 245, 245);
                 doc.rect(headerX, headerY, headerWidth, headerHeight, 'FD');
                 
-                // Enlarged PAINTWORKZ branding (18pt, gold)
+                // Enlarged PAINTWORKZ branding (18pt, gold) - CENTERED IN BOX
                 doc.setFontSize(18);
                 doc.setFont(undefined, 'bold');
                 doc.setTextColor(212, 175, 55);
-                doc.text('PAINTWORKZ', headerX + 50, headerY + 12);
+                const paintworkzText = 'PAINTWORKZ';
+                const paintworkzWidth = doc.getTextWidth(paintworkzText);
+                const headerCenterX = headerX + (headerWidth - paintworkzWidth) / 2;
+                doc.text(paintworkzText, headerCenterX, headerY + 12);
                 
-                // Subtitle & contact
+                // Subtitle & contact - CENTERED IN BOX
                 doc.setFontSize(7);
                 doc.setFont(undefined, 'normal');
                 doc.setTextColor(100, 100, 100);
-                doc.text('Premium Door & Panel Painting | Ph: 0438 803 032', headerX + 50, headerY + 19);
-                doc.text('17 West Boundary Rd, Hamilton 3300 VIC', headerX + 50, headerY + 25);
+                const subtitleText = 'Premium Door & Panel Painting | Ph: 0438 803 032';
+                const subtitleWidth = doc.getTextWidth(subtitleText);
+                const subtitleX = headerX + (headerWidth - subtitleWidth) / 2;
+                doc.text(subtitleText, subtitleX, headerY + 19);
+                
+                const addressText = '17 West Boundary Rd, Hamilton 3300 VIC';
+                const addressWidth = doc.getTextWidth(addressText);
+                const addressX = headerX + (headerWidth - addressWidth) / 2;
+                doc.text(addressText, addressX, headerY + 25);
                 
                 y += headerHeight + 10;
                 
