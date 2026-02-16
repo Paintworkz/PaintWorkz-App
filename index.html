@@ -1620,10 +1620,8 @@
         document.getElementById('p-color').value = selectedFormula.color;
         document.getElementById('p-code').value = `${selectedFormula.code} - ${selectedFormula.color} (${selectedFormula.product})`;
         
-        // ALSO update paint brand from formula product
-        if (selectedFormula.product) {
-            document.getElementById('p-brand').value = selectedFormula.product;
-        }
+        // Note: Brand is NOT updated from formula - user can select their own brand
+        // This allows using Wattyl, Dulux, or other brands with the same color
         
         // Save to job data
         const jobData = {
@@ -5838,9 +5836,9 @@
             const dateReceived = document.getElementById('dat')?.value || new Date().toLocaleDateString('en-AU');
             const totalSQM = parseFloat(document.getElementById('tot')?.innerText || '0') || 0;
             
-            // Paint data
-            const paintBrand = document.getElementById('p-brand')?.value || 'Wattyl';
-            const paintFinish = document.getElementById('p-finish')?.value || 'Satin';
+            // Paint data - get brand/finish from form fields as fallback
+            const defaultBrand = document.getElementById('p-brand')?.value || 'Wattyl';
+            const defaultFinish = document.getElementById('p-finish')?.value || 'Satin';
             
             // Get unique colors from items in measure tab
             const uniqueColors = new Set();
@@ -5877,6 +5875,19 @@
                 }
                 
                 let y = 8;
+                
+                // ===== GET BRAND AND FINISH FOR THIS COLOR FROM ITEMS =====
+                // Look for first item with this color to get brand/finish
+                let colorBrand = defaultBrand;
+                let colorFinish = defaultFinish;
+                
+                const colorItem = items.find(item => item.color && item.color.toLowerCase() === color.toLowerCase());
+                if (colorItem) {
+                    colorBrand = colorItem.brand || defaultBrand;
+                    colorFinish = colorItem.finish || defaultFinish;
+                }
+                
+                console.log(`🎨 Page ${colorPageCount + 1} - Color: ${color}, Brand: ${colorBrand}, Finish: ${colorFinish}`);
                 
                 // ===== HEADER BOX WITH ENLARGED LOGO & ROUNDED CORNERS =====
                 const headerX = 12;
@@ -5999,7 +6010,7 @@
                 y += 12;
                 
                 // ===== PAINT DETAILS - CENTERED =====
-                const paintDetailsText = `${paintBrand} | ${color.toUpperCase()} | ${paintFinish}`;
+                const paintDetailsText = `${colorBrand} | ${color.toUpperCase()} | ${colorFinish}`;
                 doc.setFontSize(11);
                 doc.setFont(undefined, 'bold');
                 doc.setTextColor(0, 0, 0);
@@ -6172,7 +6183,7 @@
                 doc.setFontSize(12);
                 doc.setFont(undefined, 'bold');
                 doc.setTextColor(255, 255, 255);
-                const swatchText = `${paintBrand} | ${color.toUpperCase()} | ${paintFinish}`;
+                const swatchText = `${colorBrand} | ${color.toUpperCase()} | ${colorFinish}`;
                 const swatchTextWidth = doc.getTextWidth(swatchText);
                 const swatchCenterX = swatchX + (swatchWidth - swatchTextWidth) / 2;
                 const swatchCenterY = swatchY + (swatchHeight / 2) + 2;  // Centered vertically in box
@@ -9707,13 +9718,13 @@
         const formulas = getPaintFormulas();
         const formula = formulas[idx];
         
-        // Populate measure page fields
-        document.getElementById('p-brand').value = formula.brand;
+        // Populate measure page fields - color and code only (brand is user's choice)
+        // document.getElementById('p-brand').value = formula.brand;  // User selects brand separately
         document.getElementById('p-color').value = formula.color;
         document.getElementById('p-code').value = formula.formula;
         
         closePaintFormulaModal();
-        notify(`✓ Selected: ${formula.brand} - ${formula.color}`);
+        notify(`✓ Selected: ${formula.color} - Code: ${formula.formula}`);
     }
 
 
