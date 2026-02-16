@@ -1712,19 +1712,24 @@
             });
         }
         
-        // Create new formula with structured format
+        // Create new formula with structured format INCLUDING EVIC FIELDS
         const newFormula = {
             id: 'formula-' + Date.now(),
             brand: 'Evic',
             color: color,
             product: product || 'Custom Product',
             code: code,
+            evicCode: code,  // Store the Evic code
+            baseType: product || 'Custom',  // Base paint type
+            version: '',  // Will be populated if available
             finishes: ['Satin'],
             baseSize: 1,
             baseTinters: [
                 { code: baseCode, amount: baseAmount }
             ],
+            whiteBase: baseCode ? [{ code: baseCode, grams: baseAmount }] : [],  // WHITE BASE as array
             colourants: colourants,
+            totalWeight: null,  // Will be calculated if needed
             notes: `${colourants.length} tinters`
         };
         
@@ -5432,6 +5437,11 @@
                     f.color && f.color.toLowerCase() === color.toLowerCase()
                 );
                 
+                console.log(`🔍 Mixing Card Formula Lookup - Color: ${color}`, {
+                    formulaFound: !!formula,
+                    formulaData: formula
+                });
+                
                 // ===== CALCULATE SQM FOR THIS COLOR ONLY =====
                 let colorSQM = 0;
                 items.forEach(item => {
@@ -5553,90 +5563,104 @@
                     doc.line(25, boxY, 185, boxY);
                     boxY += 5;
                     
-                    // WHITE BASE section
+                    // BASE section with RUNNING TOTAL
                     if (formula.whiteBase && formula.whiteBase.length > 0) {
-                        doc.setFontSize(12);  // INCREASED from 9
+                        doc.setFontSize(12);
                         doc.setFont(undefined, 'bold');
-                        doc.text('WHITE BASE:', 25, boxY);
-                        boxY += 7;  // More spacing
-                        doc.setFontSize(11);  // INCREASED from 9
+                        doc.text('Base:', 25, boxY);
+                        doc.text('RUNNING TOTAL', 155, boxY);  // Running total header on right
+                        boxY += 7;
+                        
+                        doc.setFontSize(11);
                         doc.setFont(undefined, 'normal');
                         
+                        let runningTotal = 0;
                         formula.whiteBase.forEach(item => {
                             const code = item.code || '';
-                            const grams = item.grams || 0;
+                            const grams = parseFloat(item.grams) || 0;
+                            runningTotal += grams;
                             doc.text(`${code}: ${grams}g`, 30, boxY);
-                            boxY += 5;  // More spacing
+                            doc.text(`${runningTotal.toFixed(2)}g`, 155, boxY);  // Running total on right
+                            boxY += 5;
                         });
                         boxY += 2;
                     }
                     
-                    // TINTERS section
+                    // TINTERS section with RUNNING TOTAL
                     if (formula.colourants && formula.colourants.length > 0) {
-                        doc.setFontSize(12);  // INCREASED from 9
+                        doc.setFontSize(12);
                         doc.setFont(undefined, 'bold');
                         doc.text('TINTERS:', 25, boxY);
-                        boxY += 7;  // More spacing
-                        doc.setFontSize(11);  // INCREASED from 9
+                        doc.text('RUNNING TOTAL', 155, boxY);  // Running total header on right
+                        boxY += 7;
+                        
+                        doc.setFontSize(11);
                         doc.setFont(undefined, 'normal');
                         
+                        let runningTotal = 0;
                         for (let i = 0; i < formula.colourants.length; i++) {
                             const tint = formula.colourants[i];
                             const code = tint.code || '';
-                            const grams = tint.amount || tint.grams || 0;
+                            const grams = parseFloat(tint.amount || tint.grams) || 0;
                             const name = tint.name || '';
-                            doc.text(`${code}: ${parseFloat(grams).toFixed(2)}g ${name}`, 30, boxY);
-                            boxY += 5;  // More spacing
-                            if (boxY > pageHeight - 35) break;  // Stop if running out of space
+                            runningTotal += grams;
+                            doc.text(`${code}: ${grams.toFixed(2)}g ${name}`, 30, boxY);
+                            doc.text(`${runningTotal.toFixed(2)}g`, 155, boxY);  // Running total on right
+                            boxY += 5;
+                            if (boxY > pageHeight - 35) break;
                         }
                     }
                     
-                    // Total weight
+                    // Total weight - make it BOLD and LARGER
                     if (formula.totalWeight) {
                         boxY += 3;
-                        doc.setFontSize(10);
+                        doc.setFontSize(12);  // INCREASED from 10
                         doc.setFont(undefined, 'bold');
                         doc.text(`TOTAL WEIGHT: ${formula.totalWeight}g`, 25, boxY);
                     }
                 } else {
                     // Blank template with LARGER fonts
                     doc.setFont(undefined, 'normal');
-                    doc.setFontSize(11);  // INCREASED from 9
+                    doc.setFontSize(11);
                     doc.text('Evic Code: _____________________________', 25, boxY);
-                    boxY += 7;  // More spacing
+                    boxY += 7;
                     
-                    doc.setFontSize(11);  // INCREASED from 9
+                    doc.setFontSize(11);
                     doc.setFont(undefined, 'bold');
                     doc.text('Base Type: ______________________________', 25, boxY);
                     boxY += 8;
                     
-                    doc.setFontSize(11);  // INCREASED from 9
+                    doc.setFontSize(11);
                     doc.setFont(undefined, 'bold');
-                    doc.text('WHITE BASE:', 25, boxY);
-                    boxY += 7;  // More spacing
+                    doc.text('Base:', 25, boxY);
+                    doc.text('RUNNING TOTAL', 155, boxY);
+                    boxY += 7;
                     
-                    doc.setFontSize(11);  // INCREASED from 9
+                    doc.setFontSize(11);
                     doc.setFont(undefined, 'normal');
                     for (let i = 0; i < 3; i++) {
                         doc.text(`Item ${i + 1}: _____________ g`, 30, boxY);
-                        boxY += 6;  // More spacing
+                        doc.text('_________ g', 155, boxY);  // Running total placeholder
+                        boxY += 6;
                     }
                     boxY += 3;
                     
-                    doc.setFontSize(11);  // INCREASED from 9
+                    doc.setFontSize(11);
                     doc.setFont(undefined, 'bold');
                     doc.text('TINTERS:', 25, boxY);
-                    boxY += 7;  // More spacing
+                    doc.text('RUNNING TOTAL', 155, boxY);
+                    boxY += 7;
                     
-                    doc.setFontSize(11);  // INCREASED from 9
+                    doc.setFontSize(11);
                     doc.setFont(undefined, 'normal');
                     for (let i = 0; i < 4; i++) {
                         doc.text(`Tint ${i + 1}: _____________ g`, 30, boxY);
-                        boxY += 6;  // More spacing
+                        doc.text('_________ g', 155, boxY);  // Running total placeholder
+                        boxY += 6;
                     }
                     boxY += 2;
                     
-                    doc.setFontSize(11);  // INCREASED from 9
+                    doc.setFontSize(11);
                     doc.setFont(undefined, 'bold');
                     doc.text('TOTAL WEIGHT: _______________ g', 25, boxY);
                 }
