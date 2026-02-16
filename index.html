@@ -5364,7 +5364,7 @@
                 y += 12;
                 
                 // ===== PAINT INFO BOX - COMBINED BRAND/COLOUR/FINISH =====
-                doc.setFontSize(18);
+                doc.setFontSize(20);
                 doc.setFont(undefined, 'bold');
                 doc.setTextColor(255, 255, 255);
                 doc.setFillColor(170, 132, 30);
@@ -5457,9 +5457,18 @@
                 doc.text(dateReceived, rightCol, y);
                 y += 12;
                 
+                // Count total parts for this color
+                let partCount = 0;
+                items.forEach(item => {
+                    if (item.color && item.color.toLowerCase() === color.toLowerCase()) {
+                        partCount += parseInt(item.doors) || 0;
+                    }
+                });
+                
                 doc.setFontSize(12);
                 doc.setFont(undefined, 'bold');
-                doc.text('SQ Metres (This Color)', leftCol, y);
+                doc.text('SQ Metres', leftCol, y);
+                doc.text('Parts', (leftCol + rightCol) / 2, y);
                 doc.text('Paint Required', rightCol, y);
                 y += 6;
                 
@@ -5467,6 +5476,7 @@
                 doc.setFontSize(14);
                 doc.setTextColor(200, 30, 30);
                 doc.text(colorSQM.toFixed(2) + ' m²', leftCol, y);
+                doc.text(partCount.toString(), (leftCol + rightCol) / 2, y);
                 
                 // Calculate paint qty: 0.2L per m²
                 const paintQty = (colorSQM * 0.2).toFixed(1);
@@ -5799,11 +5809,12 @@
                 
                 let y = 15;
                 
-                // ===== JOB NUMBER - LARGE AND PROMINENT =====
+                // ===== JOB NUMBER - CENTERED AND LARGE =====
                 doc.setFontSize(56);
                 doc.setFont(undefined, 'bold');
                 doc.setTextColor(200, 30, 30);
-                doc.text(`#${jobNum}`, 20, y + 18);
+                const jobNumWidth = doc.getTextWidth(`#${jobNum}`);
+                doc.text(`#${jobNum}`, (pageWidth - jobNumWidth) / 2, y + 18);
                 y += 30;
                 
                 // Gold separator line
@@ -5812,17 +5823,18 @@
                 doc.line(20, y, pageWidth - 20, y);
                 y += 12;
                 
-                // ===== CUSTOMER & JOB INFO =====
-                doc.setFontSize(14);
+                // ===== CUSTOMER NAME - VERY LARGE =====
+                doc.setFontSize(24);
                 doc.setFont(undefined, 'bold');
                 doc.setTextColor(0, 0, 0);
                 doc.text(jobClient.toUpperCase(), 20, y);
-                y += 10;
+                y += 12;
                 
-                doc.setFontSize(11);
+                // ===== JOB NAME - LARGE =====
+                doc.setFontSize(16);
                 doc.setFont(undefined, 'normal');
                 doc.text(`Job: ${jobName}`, 20, y);
-                y += 7;
+                y += 8;
                 doc.text(`Date: ${dateReceived}`, 20, y);
                 y += 12;
                 
@@ -5862,35 +5874,68 @@
                 doc.line(20, y, pageWidth - 20, y);
                 y += 12;
                 
-                // ===== PAINT DETAILS =====
-                doc.setFontSize(10);
+                // ===== PAINT DETAILS - ALL SAME FONT SIZE =====
+                doc.setFontSize(11);
                 doc.setFont(undefined, 'bold');
                 doc.setTextColor(0, 0, 0);
-                doc.text(`COLOR: ${color.toUpperCase()}`, 20, y);
-                y += 8;
-                
-                doc.setFontSize(10);
-                doc.setFont(undefined, 'normal');
-                doc.text(`Brand: ${paintBrand}`, 20, y);
-                y += 6;
-                doc.text(`Finish: ${paintFinish}`, 20, y);
+                doc.text(`${paintBrand} | ${color.toUpperCase()} | ${paintFinish}`, 20, y);
                 y += 12;
                 
-                // ===== PROFILES & QUANTITIES FOR THIS COLOR =====
+                // ===== DOOR PROFILES - SEPARATE MOULDED & FLAT =====
+                let mouldedParts = {};
+                let flatParts = {};
+                let mouldedCount = 0;
+                let flatCount = 0;
+                
+                items.forEach(item => {
+                    if (item.color && item.color.toLowerCase() === color.toLowerCase()) {
+                        const profile = item.profile || 'Various';
+                        const qty = parseInt(item.doors) || 0;
+                        const isMoulded = item.moulded === 'true' || item.moulded === true;
+                        
+                        if (isMoulded) {
+                            mouldedParts[profile] = (mouldedParts[profile] || 0) + qty;
+                            mouldedCount += qty;
+                        } else {
+                            flatParts[profile] = (flatParts[profile] || 0) + qty;
+                            flatCount += qty;
+                        }
+                    }
+                });
+                
                 doc.setFontSize(10);
                 doc.setFont(undefined, 'bold');
-                doc.text('DOOR PROFILES:', 20, y);
-                y += 8;
+                doc.text('MOULDED PARTS', 20, y);
+                y += 7;
                 
                 doc.setFontSize(9);
                 doc.setFont(undefined, 'normal');
-                if (Object.keys(colorProfiles).length > 0) {
-                    Object.entries(colorProfiles).forEach(([profile, qty]) => {
-                        doc.text(`• ${profile}: ${qty} doors`, 25, y);
+                if (mouldedCount > 0) {
+                    Object.entries(mouldedParts).forEach(([profile, qty]) => {
+                        doc.text(`• ${profile}: ${qty}`, 25, y);
+                        y += 6;
+                    });
+                    y += 2;
+                } else {
+                    doc.text('None', 25, y);
+                    y += 6;
+                    y += 2;
+                }
+                
+                doc.setFontSize(10);
+                doc.setFont(undefined, 'bold');
+                doc.text('FLAT PANEL PARTS', 20, y);
+                y += 7;
+                
+                doc.setFontSize(9);
+                doc.setFont(undefined, 'normal');
+                if (flatCount > 0) {
+                    Object.entries(flatParts).forEach(([profile, qty]) => {
+                        doc.text(`• ${profile}: ${qty}`, 25, y);
                         y += 6;
                     });
                 } else {
-                    doc.text('No specific profiles', 25, y);
+                    doc.text('None', 25, y);
                     y += 6;
                 }
                 
