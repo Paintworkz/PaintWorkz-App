@@ -410,6 +410,42 @@
 }
 </style>
 
+<!-- A3 SCHEDULE DATE RANGE MODAL -->
+<div id="a3ScheduleModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; justify-content:center; align-items:center;">
+    <div style="background:#fff; padding:25px; border-radius:12px; width:90%; max-width:450px; box-shadow:0 10px 40px rgba(0,0,0,0.3); z-index:1001;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <h3 style="margin:0; font-weight:bold; font-size:16px;">📅 A3 Work Schedule</h3>
+            <button onclick="closeA3ScheduleModal()" style="border:none; background:none; font-size:24px; cursor:pointer; padding:0; width:30px; height:30px;">✕</button>
+        </div>
+        
+        <div style="margin-bottom:20px;">
+            <p style="margin:0 0 15px 0; font-size:12px; color:#666;">Select time period for your work schedule:</p>
+            
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:20px;">
+                <button onclick="generateA3Schedule(7)" style="padding:12px; background:#2196f3; color:#fff; border:none; border-radius:6px; font-weight:bold; font-size:12px; cursor:pointer;">📅 1 WEEK</button>
+                <button onclick="generateA3Schedule(30)" style="padding:12px; background:#ff9500; color:#fff; border:none; border-radius:6px; font-weight:bold; font-size:12px; cursor:pointer;">📅 1 MONTH</button>
+                <button onclick="generateA3Schedule(90)" style="padding:12px; background:#4caf50; color:#fff; border:none; border-radius:6px; font-weight:bold; font-size:12px; cursor:pointer;">📅 3 MONTHS</button>
+                <button onclick="generateA3Schedule(365)" style="padding:12px; background:#9c27b0; color:#fff; border:none; border-radius:6px; font-weight:bold; font-size:12px; cursor:pointer;">📅 1 YEAR</button>
+            </div>
+            
+            <div style="border-top:1px solid #ddd; padding-top:15px;">
+                <p style="margin:0 0 10px 0; font-size:12px; font-weight:bold; color:#333;">Or select custom dates:</p>
+                <div style="display:flex; gap:10px; margin-bottom:10px;">
+                    <div style="flex:1;">
+                        <label style="display:block; font-size:11px; color:#666; margin-bottom:4px;">From</label>
+                        <input type="date" id="a3StartDate" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:11px;">
+                    </div>
+                    <div style="flex:1;">
+                        <label style="display:block; font-size:11px; color:#666; margin-bottom:4px;">To</label>
+                        <input type="date" id="a3EndDate" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:11px;">
+                    </div>
+                </div>
+                <button onclick="generateA3ScheduleCustom()" style="width:100%; padding:10px; background:#673ab7; color:#fff; border:none; border-radius:6px; font-weight:bold; font-size:12px; cursor:pointer;">📅 GENERATE</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- TIMELINE EDITOR MODAL -->
 <div id="timelineModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; justify-content:center; align-items:center; flex-wrap:wrap;">
     <div style="background:#fff; padding:25px; border-radius:12px; width:90%; max-width:500px; max-height:80vh; overflow-y:auto; box-shadow:0 10px 40px rgba(0,0,0,0.3); z-index:1001;">
@@ -756,7 +792,7 @@
                 <div id="form-quote" class="form-card" onclick="genForm('Quote Form')"><h4>Quote Form</h4><p>Raw vs Paint pricing</p></div>
                 <div id="form-cover" class="form-card" onclick="genForm('Cover Sheet')" style="background:#fff3e0; border-color:#ff9800;"><h4>📋 Cover Sheet</h4><p>Job info summary</p></div>
                 <div id="form-label" class="form-card" onclick="genForm('Shop Label')" style="background:#fce4ec; border-color:#e91e63;"><h4>🏷️ Shop Label</h4><p>Print & post on job</p></div>
-                <div class="form-card" onclick="printA3Schedule()" style="background:#e8f5e9; border-color:#4caf50;"><h4>📅 A3 Schedule</h4><p>90-day continuous view</p></div>
+                <div id="form-a3schedule" class="form-card" onclick="openA3ScheduleModal()" style="background:#e8f5e9; border-color:#4caf50;"><h4>📅 A3 Schedule</h4><p>Work schedule view</p></div>
             </div>
         </div>
     </div>
@@ -5708,7 +5744,51 @@
         }
     }
 
-    function printA3Schedule() {
+    function openA3ScheduleModal() {
+        const modal = document.getElementById('a3ScheduleModal');
+        if (modal) {
+            modal.style.display = 'flex';
+            // Set default dates
+            const today = new Date();
+            document.getElementById('a3StartDate').valueAsDate = today;
+            const endDate = new Date(today);
+            endDate.setDate(endDate.getDate() + 30);
+            document.getElementById('a3EndDate').valueAsDate = endDate;
+        }
+    }
+    
+    function closeA3ScheduleModal() {
+        const modal = document.getElementById('a3ScheduleModal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    }
+    
+    function generateA3Schedule(days) {
+        closeA3ScheduleModal();
+        printA3Schedule(days);
+    }
+    
+    function generateA3ScheduleCustom() {
+        const startDate = document.getElementById('a3StartDate').valueAsDate;
+        const endDate = document.getElementById('a3EndDate').valueAsDate;
+        
+        if (!startDate || !endDate) {
+            notify('❌ Please select both dates');
+            return;
+        }
+        
+        if (startDate > endDate) {
+            notify('❌ Start date must be before end date');
+            return;
+        }
+        
+        const days = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+        closeA3ScheduleModal();
+        printA3Schedule(days, startDate);
+    }
+    
+    function printA3Schedule(days = 90, startDateObj = null) {
         try {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('l', 'mm', 'a3');
@@ -5733,7 +5813,7 @@
             doc.setFontSize(24);
             doc.setFont(undefined, 'bold');
             doc.setTextColor(0, 0, 0);
-            doc.text('90-DAY WORK SCHEDULE', 20, y);
+            doc.text('WORK SCHEDULE', 20, y);
             y += 10;
             
             doc.setFontSize(9);
@@ -5742,10 +5822,11 @@
             doc.text(`${companySettings.name} | ${companySettings.phone}`, 20, y);
             y += 8;
             
-            const today = new Date();
+            const today = startDateObj || new Date();
+            if (!startDateObj) today.setHours(0, 0, 0, 0);
             const endDate = new Date(today);
-            endDate.setDate(endDate.getDate() + 90);
-            doc.text(`${today.toLocaleDateString('en-AU')} to ${endDate.toLocaleDateString('en-AU')}`, 20, y);
+            endDate.setDate(endDate.getDate() + days - 1);
+            doc.text(`${today.toLocaleDateString('en-AU')} to ${endDate.toLocaleDateString('en-AU')} (${days} days)`, 20, y);
             y += 12;
             
             // ===== SIMPLIFIED TABLE =====
@@ -7048,6 +7129,14 @@
             labelBtn.style.background = labelColor;
             labelBtn.style.borderColor = labelColor;
         }
+        
+        // A3 Schedule
+        const a3Btn = document.getElementById('form-a3schedule');
+        if (a3Btn) {
+            const a3Color = appColors['A3 Schedule Header'] || '#4caf50';
+            a3Btn.style.background = a3Color;
+            a3Btn.style.borderColor = a3Color;
+        }
     }
     
     function applyAppColors() {
@@ -7357,6 +7446,7 @@
                 colourHTML += `<div style="margin-bottom:10px;"><label style="font-size:11px; color:#666; margin-bottom:4px; display:block;">${colour}</label>
                 <select id="${selectId}" class="colourSurchargeSelect" data-colour="${colour}" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:11px;">
                     <option value="0">None</option>
+                    <option value="0">Clear</option>
                     <option value="0.05">Standard</option>
                     <option value="0.05">Light</option>
                     <option value="0.15">Dark</option>
