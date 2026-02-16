@@ -5461,7 +5461,7 @@
                 let partCount = 0;
                 items.forEach(item => {
                     if (item.color && item.color.toLowerCase() === color.toLowerCase()) {
-                        partCount += parseInt(item.doors) || 0;
+                        partCount += parseInt(item.qty) || 1;
                     }
                 });
                 
@@ -5881,19 +5881,26 @@
                 doc.text(`${paintBrand} | ${color.toUpperCase()} | ${paintFinish}`, 20, y);
                 y += 12;
                 
-                // ===== DOOR PROFILES - SEPARATE MOULDED & FLAT =====
+                // ===== DOOR PROFILES - SEPARATE MOULDED, FLAT & CUSTOM =====
                 let mouldedParts = {};
                 let flatParts = {};
+                let customParts = {};
                 let mouldedCount = 0;
                 let flatCount = 0;
+                let customCount = 0;
                 
                 items.forEach(item => {
                     if (item.color && item.color.toLowerCase() === color.toLowerCase()) {
-                        const profile = item.profile || 'Various';
-                        const qty = parseInt(item.doors) || 0;
-                        const isMoulded = item.moulded === 'true' || item.moulded === true;
+                        const profile = item.prof || item.profile || 'Various';
+                        const qty = parseInt(item.qty) || 1;
+                        const isMoulded = item.fm === 'Moulded';
+                        const isCustom = item.type === 'CUSTOM';
                         
-                        if (isMoulded) {
+                        if (isCustom) {
+                            const customDesc = item.desc || 'Custom';
+                            customParts[customDesc] = (customParts[customDesc] || 0) + qty;
+                            customCount += qty;
+                        } else if (isMoulded) {
                             mouldedParts[profile] = (mouldedParts[profile] || 0) + qty;
                             mouldedCount += qty;
                         } else {
@@ -5932,6 +5939,25 @@
                 if (flatCount > 0) {
                     Object.entries(flatParts).forEach(([profile, qty]) => {
                         doc.text(`• ${profile}: ${qty}`, 25, y);
+                        y += 6;
+                    });
+                    y += 2;
+                } else {
+                    doc.text('None', 25, y);
+                    y += 6;
+                    y += 2;
+                }
+                
+                doc.setFontSize(10);
+                doc.setFont(undefined, 'bold');
+                doc.text('CUSTOM PARTS', 20, y);
+                y += 7;
+                
+                doc.setFontSize(9);
+                doc.setFont(undefined, 'normal');
+                if (customCount > 0) {
+                    Object.entries(customParts).forEach(([desc, qty]) => {
+                        doc.text(`• ${desc}: ${qty}`, 25, y);
                         y += 6;
                     });
                 } else {
