@@ -934,6 +934,32 @@
                 <hr style="margin:30px 0; border:none; border-top:1px solid #ddd;">
                 
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <h4 style="margin:0; margin-top:20px; font-weight:900;">Default Job Timeline</h4>
+                    <button onclick="let container = document.getElementById('timeline-defaults-container'); container.style.display = container.style.display === 'none' ? 'block' : 'none';" style="background:none; border:none; cursor:pointer; font-weight:900; font-size:18px; color:#999;">−</button>
+                </div>
+                <div id="timeline-defaults-container" style="display:block;">
+                <p style="font-size:11px; color:#666; margin-bottom:15px;">Set default job timeline stages and duration for new jobs</p>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-bottom:20px;">
+                    <div>
+                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Number of Timeline Days</label>
+                        <input type="number" id="defaultTimelineDays" value="14" min="1" max="90" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
+                    </div>
+                    <div>
+                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Default Status</label>
+                        <select id="defaultTimelineStatus" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
+                            <option value="Pending">Pending</option>
+                            <option value="In Progress">In Progress</option>
+                            <option value="On Hold">On Hold</option>
+                            <option value="Completed">Completed</option>
+                        </select>
+                    </div>
+                </div>
+                <button onclick="saveTimelineDefaults()" style="border:none; background:#34c759; color:#fff; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">✓ SAVE TIMELINE</button>
+                </div>
+                
+                <hr style="margin:30px 0; border:none; border-top:1px solid #ddd;">
+                
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                     <h4 style="margin:0; margin-top:20px; font-weight:900;">Company Details (PDF Header)</h4>
                     <button onclick="let container = document.getElementById('company-details-container'); container.style.display = container.style.display === 'none' ? 'block' : 'none';" style="background:none; border:none; cursor:pointer; font-weight:900; font-size:18px; color:#999;">−</button>
                 </div>
@@ -1306,6 +1332,7 @@
         renderHistory();
         renderScheduleCalendar();
         initializeDefaultSettings();  // Load default thickness and SE return values
+        initializeTimelineDefaults();  // Load default timeline settings
         initializeCompanyDetailsForm();  // Load company details for PDF headers
       } catch (error) {
       }
@@ -5364,7 +5391,7 @@
                 y += 12;
                 
                 // ===== PAINT INFO BOX - COMBINED BRAND/COLOUR/FINISH =====
-                doc.setFontSize(20);
+                doc.setFontSize(24);
                 doc.setFont(undefined, 'bold');
                 doc.setTextColor(255, 255, 255);
                 doc.setFillColor(170, 132, 30);
@@ -5372,9 +5399,12 @@
                 doc.setLineWidth(1.5);
                 doc.rect(20, y, 170, 32, 'FD');
                 
-                // Format: Brand | Color | Finish - fill the box with 5mm margins
-                const paintInfo = `${paintBrand} | ${color.toUpperCase()} | ${paintFinish}`;
-                doc.text(paintInfo, 25, y + 20);
+                // Format: Brand-Color-Finish centered in box
+                const paintInfo = `${paintBrand} - ${color.toUpperCase()} - ${paintFinish}`;
+                const paintInfoWidth = doc.getTextWidth(paintInfo);
+                const boxCenterX = 20 + (170 - paintInfoWidth) / 2;
+                const boxCenterY = y + 20;
+                doc.text(paintInfo, boxCenterX, boxCenterY);
                 y += 36;
                 
                 // ===== EVIC CODE & BASE PAINT INFO BOX =====
@@ -5416,12 +5446,24 @@
                 
                 // ===== CALCULATE SQM FOR THIS COLOR ONLY =====
                 let colorSQM = 0;
+                let colorPartCount = 0;
+                
+                console.log('🎨 Mixing Card - Processing Color:', color.toLowerCase().trim());
+                
                 items.forEach(item => {
-                    if (item.color && item.color.toLowerCase() === color.toLowerCase()) {
+                    const itemColor = (item.color || '').toLowerCase().trim();
+                    const targetColor = color.toLowerCase().trim();
+                    
+                    if (itemColor === targetColor) {
                         const sqm = parseFloat(item.sqm) || 0;
+                        const qty = parseInt(item.qty) || 1;
                         colorSQM += sqm;
+                        colorPartCount += qty;
+                        console.log('  ✓ Match:', item.color, '| SQM:', sqm, '| Qty:', qty);
                     }
                 });
+                
+                console.log('📊 Color Total: SQM=' + colorSQM.toFixed(2) + ', Parts=' + colorPartCount);
                 
                 // If no items matched this color, use proportional amount
                 if (colorSQM === 0 && totalSQM > 0) {
@@ -8844,6 +8886,37 @@
         if (measureThk) measureThk.value = settings.thickness;
         
         console.log('✓ Default settings loaded:', settings);
+    }
+    
+    function saveTimelineDefaults() {
+        const days = parseInt(document.getElementById('defaultTimelineDays')?.value) || 14;
+        const status = document.getElementById('defaultTimelineStatus')?.value || 'Pending';
+        
+        const timelineDefaults = {
+            days: days,
+            status: status
+        };
+        
+        localStorage.setItem('paintworkz-timeline-defaults', JSON.stringify(timelineDefaults));
+        showGlobalNotification(`✓ TIMELINE SAVED\\n${days} days • ${status} status`, '#e8f5e9', '#34c759');
+        console.log('✓ Timeline defaults saved:', timelineDefaults);
+    }
+    
+    function loadTimelineDefaults() {
+        const defaults = JSON.parse(localStorage.getItem('paintworkz-timeline-defaults')) || {
+            days: 14,
+            status: 'Pending'
+        };
+        return defaults;
+    }
+    
+    function initializeTimelineDefaults() {
+        const defaults = loadTimelineDefaults();
+        const daysInput = document.getElementById('defaultTimelineDays');
+        const statusInput = document.getElementById('defaultTimelineStatus');
+        
+        if (daysInput) daysInput.value = defaults.days;
+        if (statusInput) statusInput.value = defaults.status;
     }
     
     // ===== COMPANY DETAILS FUNCTIONS =====
