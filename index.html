@@ -5571,22 +5571,37 @@
                     doc.text('RUNNING TOTAL', 155, boxY);  // Running total header on right
                     boxY += 7;
                     
-                    // Show base items if available
+                    // Show base items if available, otherwise show placeholders
+                    doc.setFontSize(11);
+                    doc.setFont(undefined, 'normal');
+                    
+                    let runningTotal = 0;
+                    const baseItemsToShow = 3;  // Always show 3 base item rows
+                    
                     if (formula.whiteBase && formula.whiteBase.length > 0) {
-                        doc.setFontSize(11);
-                        doc.setFont(undefined, 'normal');
-                        
-                        let runningTotal = 0;
-                        formula.whiteBase.forEach(item => {
+                        formula.whiteBase.forEach((item, idx) => {
                             const code = item.code || '';
                             const grams = parseFloat(item.grams) || 0;
                             runningTotal += grams;
                             doc.text(`${code}: ${grams}g`, 30, boxY);
-                            doc.text(`${runningTotal.toFixed(2)}g`, 155, boxY);  // Running total on right
+                            doc.text(`${runningTotal.toFixed(2)}g`, 155, boxY);
                             boxY += 5;
                         });
-                        boxY += 2;
+                        // Fill remaining rows with blanks
+                        for (let i = formula.whiteBase.length; i < baseItemsToShow; i++) {
+                            doc.text(`Item ${i + 1}: _____________ g`, 30, boxY);
+                            doc.text('_________ g', 155, boxY);
+                            boxY += 5;
+                        }
+                    } else {
+                        // No base items - show all placeholders
+                        for (let i = 0; i < baseItemsToShow; i++) {
+                            doc.text(`Item ${i + 1}: _____________ g`, 30, boxY);
+                            doc.text('_________ g', 155, boxY);
+                            boxY += 5;
+                        }
                     }
+                    boxY += 2;
                     
                     // TINTERS section - ALWAYS SHOW HEADER
                     doc.setFontSize(12);
@@ -5595,27 +5610,43 @@
                     doc.text('RUNNING TOTAL', 155, boxY);  // Running total header on right
                     boxY += 7;
                     
-                    // Show tinters if available
+                    // Show tinters - always show 4 rows (data or placeholders)
+                    doc.setFontSize(11);
+                    doc.setFont(undefined, 'normal');
+                    
+                    const tintersToShow = 4;  // Always show 4 tinter rows
+                    let tinterRunningTotal = 0;
+                    
                     if (formula.colourants && formula.colourants.length > 0) {
-                        doc.setFontSize(11);
-                        doc.setFont(undefined, 'normal');
-                        
-                        let runningTotal = 0;
-                        for (let i = 0; i < formula.colourants.length; i++) {
-                            const tint = formula.colourants[i];
-                            const code = tint.code || '';
-                            const grams = parseFloat(tint.amount || tint.grams) || 0;
-                            const name = tint.name || '';
-                            runningTotal += grams;
-                            doc.text(`${code}: ${grams.toFixed(2)}g ${name}`, 30, boxY);
-                            doc.text(`${runningTotal.toFixed(2)}g`, 155, boxY);  // Running total on right
+                        // Show actual tinter data
+                        for (let i = 0; i < tintersToShow; i++) {
+                            if (i < formula.colourants.length) {
+                                const tint = formula.colourants[i];
+                                const code = tint.code || '';
+                                const grams = parseFloat(tint.amount || tint.grams) || 0;
+                                const name = tint.name || '';
+                                tinterRunningTotal += grams;
+                                doc.text(`${code}: ${grams.toFixed(2)}g ${name}`, 30, boxY);
+                                doc.text(`${tinterRunningTotal.toFixed(2)}g`, 155, boxY);
+                            } else {
+                                // Show placeholder for remaining rows
+                                doc.text(`Tint ${i + 1}: _____________ g`, 30, boxY);
+                                doc.text('_________ g', 155, boxY);
+                            }
                             boxY += 5;
-                            if (boxY > pageHeight - 35) break;
+                        }
+                    } else {
+                        // No tinters - show all 4 placeholders
+                        for (let i = 0; i < tintersToShow; i++) {
+                            doc.text(`Tint ${i + 1}: _____________ g`, 30, boxY);
+                            doc.text('_________ g', 155, boxY);
+                            boxY += 5;
                         }
                     }
                     
-                    // Total weight - ALWAYS SHOW
                     boxY += 3;
+                    
+                    // Total weight - ALWAYS SHOW
                     doc.setFontSize(12);
                     doc.setFont(undefined, 'bold');
                     const totalWeightValue = formula.totalWeight || '_______________ g';
