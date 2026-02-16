@@ -5834,20 +5834,30 @@
             // Get job data
             const cliSelect = document.getElementById('cli');
             let jobClient = 'CLIENT';
-            if (cliSelect) {
-                // Try to get text from selected option first
-                if (cliSelect.selectedIndex >= 0 && cliSelect.options[cliSelect.selectedIndex]) {
-                    jobClient = cliSelect.options[cliSelect.selectedIndex].text?.trim() || '';
-                }
-                // Fallback to value if text is empty
-                if (!jobClient) {
-                    jobClient = cliSelect.value?.trim() || '';
+            
+            console.log('🔍 Client Select Debug:', {
+                element: cliSelect,
+                selectedIndex: cliSelect?.selectedIndex,
+                value: cliSelect?.value,
+                optionsLength: cliSelect?.options?.length,
+                selectedText: cliSelect?.options?.[cliSelect?.selectedIndex]?.text
+            });
+            
+            if (cliSelect && cliSelect.options && cliSelect.selectedIndex >= 0) {
+                const selectedOption = cliSelect.options[cliSelect.selectedIndex];
+                if (selectedOption && selectedOption.text) {
+                    jobClient = selectedOption.text.trim();
+                    console.log('✓ Client Name Found:', jobClient);
                 }
             }
-            // Final fallback
-            jobClient = jobClient?.trim() || 'CLIENT';
             
-            console.log('👤 Shop Label Client:', jobClient, 'Select:', cliSelect?.value);
+            // Final fallback
+            jobClient = jobClient.trim() || 'CLIENT';
+            if (jobClient === '' || jobClient === 'CLIENT') {
+                jobClient = 'CLIENT';
+            }
+            
+            console.log('👤 Shop Label Client (Final):', jobClient);
             
             const jobNum = document.getElementById('jNum')?.value || document.getElementById('jN')?.value || 'XXX';
             const jobName = document.getElementById('jNm')?.value || 'Job Name';
@@ -5876,6 +5886,16 @@
                 
                 let y = 15;
                 
+                // ===== PAGE INDICATOR (if multiple colours) =====
+                if (colors.length > 1) {
+                    doc.setFontSize(9);
+                    doc.setFont(undefined, 'italic');
+                    doc.setTextColor(150, 150, 150);
+                    doc.text(`Page ${colorIndex + 1} of ${colors.length} | ${color}`, 20, y);
+                    y += 8;
+                    doc.setTextColor(0, 0, 0);
+                }
+                
                 // ===== JOB NUMBER - CENTERED AND LARGE =====
                 doc.setFontSize(56);
                 doc.setFont(undefined, 'bold');
@@ -5896,6 +5916,16 @@
                 doc.setTextColor(0, 0, 0);
                 doc.text(jobClient.toUpperCase(), 20, y);
                 y += 12;
+                
+                // ===== PAINT COLOUR INDICATOR (if multiple colours) =====
+                if (colors.length > 1) {
+                    doc.setFontSize(14);
+                    doc.setFont(undefined, 'bold');
+                    doc.setTextColor(200, 30, 30);
+                    doc.text(`COLOUR: ${color.toUpperCase()}`, 20, y);
+                    y += 10;
+                    doc.setTextColor(0, 0, 0);
+                }
                 
                 // ===== JOB NAME - LARGE =====
                 doc.setFontSize(16);
@@ -5977,7 +6007,9 @@
                 items.forEach(item => {
                     const itemColor = (item.color || '').toLowerCase().trim();
                     const targetColor = (color || '').toLowerCase().trim();
-                    const colorMatch = itemColor === targetColor || items.length > 0; // Show all if it's the only color
+                    
+                    // ONLY match if colours are exactly the same
+                    const colorMatch = itemColor === targetColor;
                     
                     if (colorMatch) {
                         const profile = (item.prof || item.profile || 'Various').trim();
@@ -6001,7 +6033,7 @@
                     }
                 });
                 
-                console.log('📊 Profile Counts:', {
+                console.log('📊 Filter Results for Color: ' + color, {
                     mouldedCount,
                     flatCount,
                     customCount,
@@ -6068,21 +6100,22 @@
                 
                 y += 8;
                 
-                // ===== COLOR SWATCH BOX - PAINT INFO =====
+                // ===== COLOR SWATCH BOX - PAINT INFO CENTERED & LARGER =====
                 doc.setDrawColor(0, 0, 0);
                 doc.setLineWidth(2);
                 doc.setFillColor(100, 150, 200);
                 doc.rect(20, y, pageWidth - 40, 40, 'FD');
                 
-                doc.setFontSize(18);
+                doc.setFontSize(16);
                 doc.setFont(undefined, 'bold');
                 doc.setTextColor(255, 255, 255);
                 
-                // Format: Brand - Color - Finish centered in box
+                // Format: Brand - Color - Finish centered both horizontally and vertically in box
                 const shopLabelPaintInfo = `${paintBrand} - ${color.toUpperCase()} - ${paintFinish}`;
                 const paintInfoWidth = doc.getTextWidth(shopLabelPaintInfo);
-                const boxCenterX = 20 + ((pageWidth - 40) - paintInfoWidth) / 2;
-                const boxCenterY = y + 25;
+                const boxWidth = pageWidth - 40;
+                const boxCenterX = 20 + (boxWidth - paintInfoWidth) / 2;
+                const boxCenterY = y + 22;
                 doc.text(shopLabelPaintInfo, boxCenterX, boxCenterY);
                 
                 y += 45;
