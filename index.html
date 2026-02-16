@@ -974,6 +974,29 @@
                 <hr style="margin:30px 0; border:none; border-top:1px solid #ddd;">
                 
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <h4 style="margin:0; margin-top:20px; font-weight:900;">API Integration Keys</h4>
+                    <button onclick="let container = document.getElementById('api-keys-container'); container.style.display = container.style.display === 'none' ? 'block' : 'none';" style="background:none; border:none; cursor:pointer; font-weight:900; font-size:18px; color:#999;">−</button>
+                </div>
+                <div id="api-keys-container" style="display:block;">
+                <p style="font-size:11px; color:#666; margin-bottom:15px;">Store your external API keys for third-party integrations</p>
+                <div style="display:grid; grid-template-columns:1fr; gap:15px; margin-bottom:20px;">
+                    <div>
+                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Evic ExpressTint API Key</label>
+                        <input type="password" id="evicApiKey" placeholder="Enter your Evic API key" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
+                        <p style="font-size:10px; color:#999; margin-top:4px; margin-bottom:0;">Used to search and retrieve paint formulas from Evic's color database</p>
+                    </div>
+                    <div>
+                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Xero Integration API Key</label>
+                        <input type="password" id="xeroApiKey" placeholder="Enter your Xero API key" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
+                        <p style="font-size:10px; color:#999; margin-top:4px; margin-bottom:0;">Used to integrate with Xero accounting software for invoicing and reporting</p>
+                    </div>
+                </div>
+                <button onclick="saveApiKeys()" style="border:none; background:#2196f3; color:#fff; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">🔐 SAVE API KEYS</button>
+                </div>
+                
+                <hr style="margin:30px 0; border:none; border-top:1px solid #ddd;">
+                
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                     <h4 style="margin:0; margin-top:20px; font-weight:900;">Additional Charges Configuration</h4>
                     <button onclick="let container = document.getElementById('additional-charges-container'); container.style.display = container.style.display === 'none' ? 'block' : 'none';" style="background:none; border:none; cursor:pointer; font-weight:900; font-size:18px; color:#999;">−</button>
                 </div>
@@ -1349,6 +1372,7 @@
         renderScheduleCalendar();
         initializeDefaultSettings();  // Load default thickness and SE return values
         initializeCompanyDetailsForm();  // Load company details for PDF headers
+        initializeApiKeysForm();  // Load API keys from storage
         initializeTimelineSettings();  // Load Gantt chart timeline settings
         initializeAdditionalChargesForm();  // Load additional charges settings
       } catch (error) {
@@ -5686,10 +5710,14 @@ ${f.colourants ? f.colourants.map(c => `${c.code}: ${c.amount || c.grams}`).join
                     if (formula.whiteBase && formula.whiteBase.length > 0) {
                         formula.whiteBase.forEach((item, idx) => {
                             const code = item.code || '';
-                            const grams = parseFloat(item.grams) || 0;
+                            // Handle both comma and period as decimal separator
+                            let grams = parseFloat(item.grams);
+                            if (isNaN(grams)) {
+                                grams = parseFloat(String(item.grams).replace(',', '.')) || 0;
+                            }
                             runningTotal += grams;
-                            doc.text(`${code}: ${grams}g`, 30, boxY);
-                            doc.text(`${runningTotal.toFixed(2)}g`, 140, boxY);  // MOVED LEFT
+                            doc.text(`${code}: ${grams.toFixed(2)}g`, 30, boxY);  // Added toFixed(2)
+                            doc.text(`${runningTotal.toFixed(2)}g`, 140, boxY);
                             boxY += 5;
                         });
                         // Fill remaining rows with blanks
@@ -5727,7 +5755,11 @@ ${f.colourants ? f.colourants.map(c => `${c.code}: ${c.amount || c.grams}`).join
                         // Show ALL actual tinter data first
                         formula.colourants.forEach((tint, idx) => {
                             const code = tint.code || '';
-                            const grams = parseFloat(tint.amount || tint.grams) || 0;
+                            // Handle both comma and period as decimal separator
+                            let grams = parseFloat(tint.amount || tint.grams);
+                            if (isNaN(grams)) {
+                                grams = parseFloat(String(tint.amount || tint.grams).replace(',', '.')) || 0;
+                            }
                             const name = tint.name || '';
                             tinterRunningTotal += grams;
                             doc.text(`${code}: ${grams.toFixed(2)}g ${name}`, 30, boxY);
@@ -9429,6 +9461,34 @@ ${f.colourants ? f.colourants.map(c => `${c.code}: ${c.amount || c.grams}`).join
         loadHeaderLogo();
         
         console.log('✓ Company details form initialized');
+    }
+    
+    // ===== API KEY FUNCTIONS =====
+    function saveApiKeys() {
+        const evicKey = document.getElementById('evicApiKey')?.value || '';
+        const xeroKey = document.getElementById('xeroApiKey')?.value || '';
+        
+        const apiKeys = {
+            evic: evicKey,
+            xero: xeroKey,
+            savedAt: new Date().toLocaleString('en-AU')
+        };
+        
+        localStorage.setItem('apiKeys', JSON.stringify(apiKeys));
+        notify('🔐 API Keys saved successfully');
+        console.log('✓ API keys saved');
+    }
+    
+    function initializeApiKeysForm() {
+        const saved = JSON.parse(localStorage.getItem('apiKeys')) || {};
+        
+        const evicInput = document.getElementById('evicApiKey');
+        const xeroInput = document.getElementById('xeroApiKey');
+        
+        if (evicInput) evicInput.value = saved.evic || '';
+        if (xeroInput) xeroInput.value = saved.xero || '';
+        
+        console.log('✓ API keys form initialized');
     }
     
     // ===== ADDITIONAL CHARGES FUNCTIONS =====
