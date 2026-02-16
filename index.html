@@ -1853,12 +1853,31 @@ ${f.colourants ? f.colourants.map(c => `${c.code}: ${c.amount || c.grams}`).join
         f.evicCode = document.getElementById('editEvicCode').value;
         f.baseType = document.getElementById('editBaseType').value;
         f.version = document.getElementById('editVersion').value;
-        f.totalWeight = document.getElementById('editTotalWeight').value;
+        // totalWeight will be parsed below
         
-        // Helper to parse numbers with comma or period as decimal
+        // Helper to parse numbers with comma or period as decimal (robust)
         const parseNumber = (str) => {
             if (!str) return 0;
-            return parseFloat(String(str).replace(',', '.'));
+            let s = String(str).trim().replace(/\s/g, '');
+            
+            // If both comma and period exist, determine which is decimal
+            if (s.includes(',') && s.includes('.')) {
+                const lastCommaIdx = s.lastIndexOf(',');
+                const lastPeriodIdx = s.lastIndexOf('.');
+                if (lastCommaIdx > lastPeriodIdx) {
+                    // Comma is decimal: "1.234,56"
+                    return parseFloat(s.replace(/\./g, '').replace(',', '.'));
+                } else {
+                    // Period is decimal: "1,234.56"
+                    return parseFloat(s.replace(/,/g, ''));
+                }
+            } else if (s.includes(',')) {
+                // Only comma - treat as decimal
+                return parseFloat(s.replace(',', '.'));
+            } else {
+                // Only period or no separator
+                return parseFloat(s);
+            }
         };
         
         // Parse white base
@@ -1868,7 +1887,8 @@ ${f.colourants ? f.colourants.map(c => `${c.code}: ${c.amount || c.grams}`).join
             whiteBaseText.split('\n').forEach(line => {
                 const match = line.match(/^(\S+)\s*:\s*([\d,.]+)/);
                 if (match) {
-                    f.whiteBase.push({ code: match[1], grams: parseNumber(match[2]) });
+                    const grams = parseNumber(match[2]);
+                    f.whiteBase.push({ code: match[1], grams: grams });  // Store as number
                 }
             });
         }
@@ -1880,10 +1900,15 @@ ${f.colourants ? f.colourants.map(c => `${c.code}: ${c.amount || c.grams}`).join
             colourantsText.split('\n').forEach(line => {
                 const match = line.match(/^(\S+)\s*:\s*([\d,.]+)/);
                 if (match) {
-                    f.colourants.push({ code: match[1], amount: parseNumber(match[2]) });
+                    const amount = parseNumber(match[2]);
+                    f.colourants.push({ code: match[1], amount: amount });  // Store as number
                 }
             });
         }
+        
+        // Parse and store total weight as number
+        const totalWeightStr = document.getElementById('editTotalWeight').value.trim();
+        f.totalWeight = totalWeightStr ? parseNumber(totalWeightStr) : null;
         
         // Close dialog
         closeFormulaDialog();
@@ -5710,13 +5735,45 @@ ${f.colourants ? f.colourants.map(c => `${c.code}: ${c.amount || c.grams}`).join
                     if (formula.whiteBase && formula.whiteBase.length > 0) {
                         formula.whiteBase.forEach((item, idx) => {
                             const code = item.code || '';
-                            // Handle both comma and period as decimal separator
-                            let grams = parseFloat(item.grams);
-                            if (isNaN(grams)) {
-                                grams = parseFloat(String(item.grams).replace(',', '.')) || 0;
+                            // Robust parsing: handle "1,359.04", "1.359,04", "1359.04", etc.
+                            let gramStr = String(item.grams || '0').trim();
+                            let grams = 0;
+                            
+                            // Remove any spaces
+                            gramStr = gramStr.replace(/\s/g, '');
+                            
+                            // If it contains both comma and period, determine which is decimal
+                            if (gramStr.includes(',') && gramStr.includes('.')) {
+                                // Find which comes last (that's the decimal separator)
+                                const lastCommaIdx = gramStr.lastIndexOf(',');
+                                const lastPeriodIdx = gramStr.lastIndexOf('.');
+                                if (lastCommaIdx > lastPeriodIdx) {
+                                    // Comma is decimal: "1.234,56" → remove periods, replace comma with period
+                                    grams = parseFloat(gramStr.replace(/\./g, '').replace(',', '.'));
+                                } else {
+                                    // Period is decimal: "1,234.56" → remove commas
+                                    grams = parseFloat(gramStr.replace(/,/g, ''));
+                                }
+                            } else if (gramStr.includes(',')) {
+                                // Only comma: could be decimal or thousand separator
+                                if (gramStr.split(',')[1]?.length === 2) {
+                                    // Likely decimal: "1,234" or "5,88"
+                                    grams = parseFloat(gramStr.replace(',', '.'));
+                                } else {
+                                    // Likely thousand separator (European): "1,359.04" stored as "1,359"
+                                    grams = parseFloat(gramStr.replace(',', '.'));
+                                }
+                            } else if (gramStr.includes('.')) {
+                                // Only period: parseFloat directly
+                                grams = parseFloat(gramStr);
+                            } else {
+                                // No separator: just a number
+                                grams = parseFloat(gramStr);
                             }
+                            
+                            grams = isNaN(grams) ? 0 : grams;
                             runningTotal += grams;
-                            doc.text(`${code}: ${grams.toFixed(2)}g`, 30, boxY);  // Added toFixed(2)
+                            doc.text(`${code}: ${grams.toFixed(2)}g`, 30, boxY);
                             doc.text(`${runningTotal.toFixed(2)}g`, 140, boxY);
                             boxY += 5;
                         });
@@ -5755,11 +5812,29 @@ ${f.colourants ? f.colourants.map(c => `${c.code}: ${c.amount || c.grams}`).join
                         // Show ALL actual tinter data first
                         formula.colourants.forEach((tint, idx) => {
                             const code = tint.code || '';
-                            // Handle both comma and period as decimal separator
-                            let grams = parseFloat(tint.amount || tint.grams);
-                            if (isNaN(grams)) {
-                                grams = parseFloat(String(tint.amount || tint.grams).replace(',', '.')) || 0;
+                            // Robust parsing: handle all decimal formats
+                            let gramStr = String(tint.amount || tint.grams || '0').trim();
+                            let grams = 0;
+                            
+                            gramStr = gramStr.replace(/\s/g, '');
+                            
+                            if (gramStr.includes(',') && gramStr.includes('.')) {
+                                const lastCommaIdx = gramStr.lastIndexOf(',');
+                                const lastPeriodIdx = gramStr.lastIndexOf('.');
+                                if (lastCommaIdx > lastPeriodIdx) {
+                                    grams = parseFloat(gramStr.replace(/\./g, '').replace(',', '.'));
+                                } else {
+                                    grams = parseFloat(gramStr.replace(/,/g, ''));
+                                }
+                            } else if (gramStr.includes(',')) {
+                                grams = parseFloat(gramStr.replace(',', '.'));
+                            } else if (gramStr.includes('.')) {
+                                grams = parseFloat(gramStr);
+                            } else {
+                                grams = parseFloat(gramStr);
                             }
+                            
+                            grams = isNaN(grams) ? 0 : grams;
                             const name = tint.name || '';
                             tinterRunningTotal += grams;
                             doc.text(`${code}: ${grams.toFixed(2)}g ${name}`, 30, boxY);
@@ -5785,10 +5860,36 @@ ${f.colourants ? f.colourants.map(c => `${c.code}: ${c.amount || c.grams}`).join
                     
                     boxY += 3;
                     
-                    // Total weight - ALWAYS SHOW
+                    // Total weight - ALWAYS SHOW with robust parsing
                     doc.setFontSize(12);
                     doc.setFont(undefined, 'bold');
-                    const totalWeightValue = formula.totalWeight || '_______________ g';
+                    
+                    let totalWeightValue = '_______________ g';
+                    if (formula.totalWeight) {
+                        let twStr = String(formula.totalWeight).trim();
+                        let totalWeight = 0;
+                        
+                        twStr = twStr.replace(/\s/g, '').replace('g', '');
+                        
+                        if (twStr.includes(',') && twStr.includes('.')) {
+                            const lastCommaIdx = twStr.lastIndexOf(',');
+                            const lastPeriodIdx = twStr.lastIndexOf('.');
+                            if (lastCommaIdx > lastPeriodIdx) {
+                                totalWeight = parseFloat(twStr.replace(/\./g, '').replace(',', '.'));
+                            } else {
+                                totalWeight = parseFloat(twStr.replace(/,/g, ''));
+                            }
+                        } else if (twStr.includes(',')) {
+                            totalWeight = parseFloat(twStr.replace(',', '.'));
+                        } else if (twStr.includes('.')) {
+                            totalWeight = parseFloat(twStr);
+                        } else {
+                            totalWeight = parseFloat(twStr);
+                        }
+                        
+                        totalWeightValue = isNaN(totalWeight) ? '_______________ g' : `${totalWeight.toFixed(2)}g`;
+                    }
+                    
                     doc.text(`TOTAL WEIGHT: ${totalWeightValue}`, 25, boxY);
                 } else {
                     // Blank template with LARGER fonts - SAME FORMAT AS FILLED
