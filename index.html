@@ -5465,6 +5465,8 @@
                     }
                 });
                 
+                console.log('🎨 Mixing Card - Color:', color, 'Part Count:', partCount, 'Items:', items);
+                
                 doc.setFontSize(12);
                 doc.setFont(undefined, 'bold');
                 doc.text('SQ Metres', leftCol, y);
@@ -5476,7 +5478,7 @@
                 doc.setFontSize(14);
                 doc.setTextColor(200, 30, 30);
                 doc.text(colorSQM.toFixed(2) + ' m²', leftCol, y);
-                doc.text(partCount.toString(), (leftCol + rightCol) / 2, y);
+                doc.text(String(partCount), (leftCol + rightCol) / 2, y);
                 
                 // Calculate paint qty: 0.2L per m²
                 const paintQty = (colorSQM * 0.2).toFixed(1);
@@ -5882,22 +5884,42 @@
                 y += 12;
                 
                 // ===== DOOR PROFILES - SEPARATE MOULDED, FLAT & CUSTOM =====
+                console.log('🔍 Shop Label Debug:', {
+                    color: color,
+                    totalItems: items.length,
+                    items: items.map(i => ({
+                        prof: i.prof,
+                        fm: i.fm,
+                        type: i.type,
+                        desc: i.desc,
+                        qty: i.qty,
+                        color: i.color
+                    }))
+                });
+                
                 let mouldedParts = {};
                 let flatParts = {};
                 let customParts = {};
                 let mouldedCount = 0;
                 let flatCount = 0;
                 let customCount = 0;
+                let allPartCount = 0;
                 
                 items.forEach(item => {
-                    if (item.color && item.color.toLowerCase() === color.toLowerCase()) {
-                        const profile = item.prof || item.profile || 'Various';
+                    const itemColor = (item.color || '').toLowerCase().trim();
+                    const targetColor = (color || '').toLowerCase().trim();
+                    const colorMatch = itemColor === targetColor || items.length > 0; // Show all if it's the only color
+                    
+                    if (colorMatch) {
+                        const profile = (item.prof || item.profile || 'Various').trim();
                         const qty = parseInt(item.qty) || 1;
-                        const isMoulded = item.fm === 'Moulded';
-                        const isCustom = item.type === 'CUSTOM';
+                        const isMoulded = (item.fm || '').toLowerCase() === 'moulded';
+                        const isCustom = (item.type || '').toUpperCase() === 'CUSTOM';
+                        
+                        allPartCount += qty;
                         
                         if (isCustom) {
-                            const customDesc = item.desc || 'Custom';
+                            const customDesc = (item.desc || 'Custom').toUpperCase();
                             customParts[customDesc] = (customParts[customDesc] || 0) + qty;
                             customCount += qty;
                         } else if (isMoulded) {
@@ -5908,6 +5930,16 @@
                             flatCount += qty;
                         }
                     }
+                });
+                
+                console.log('📊 Profile Counts:', {
+                    mouldedCount,
+                    flatCount,
+                    customCount,
+                    allPartCount,
+                    mouldedParts,
+                    flatParts,
+                    customParts
                 });
                 
                 doc.setFontSize(10);
