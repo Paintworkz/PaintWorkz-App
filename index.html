@@ -57,12 +57,12 @@
         
         #globalNotificationsBanner { padding-top: env(safe-area-inset-top); }
         
-        header { background:var(--rainbow); padding:env(safe-area-inset-top) 15px 5px; display:flex; align-items:center; justify-content:space-between; border-bottom:4px solid #aa841e; position:sticky; top:0; z-index:1000; height:110px; box-sizing: border-box; }
-        .logo-box { background:#000; padding:6px 18px; border-radius:50px; border:2px solid var(--gs); }
+        header { background:var(--rainbow); padding:env(safe-area-inset-top) 15px 5px; display:flex; align-items:center; justify-content:space-between; border-bottom:4px solid #aa841e; position:sticky; top:0; z-index:1000; height:80px; box-sizing: border-box; }
+        .logo-box { background:#000; padding:6px 18px; border-radius:8px; border:2px solid var(--gs); }
         .logo-text { font-weight:900; font-size:20px; background:var(--gold); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
         .icon-btn { font-size: 28px; padding: 0 10px; cursor: pointer; }
 
-        .nav-tabs { display: flex; background: #000; position: sticky; top: 110px; z-index: 999; overflow-x: auto; border-bottom: 1px solid #333; }
+        .nav-tabs { display: flex; background: #000; position: sticky; top: 80px; z-index: 999; overflow-x: auto; border-bottom: 1px solid #333; }
         .nav-btn { flex:1; min-width:80px; padding:12px 0; color:#888; text-align:center; font-weight:900; font-size:10px; text-transform:uppercase; border:none; background:0 0; cursor:pointer; transition:all 0.2s; pointer-events:auto; z-index:100; position:relative; }
         .nav-btn.active { color:#fff; border-bottom:4px solid var(--gs); background:#111; }
 
@@ -516,8 +516,8 @@
 
 <header>
     <div class="icon-btn" onclick="tab('history')">🔍</div>
-    <div class="logo-box" id="headerLogoBox" style="position:relative; height:95px; display:flex; align-items:center; justify-content:center; padding:0px; box-sizing:border-box;">
-        <img id="headerLogoImg" src="" style="max-height:85px; max-width:380px; display:none; object-fit:contain;" alt="Company Logo">
+    <div class="logo-box" id="headerLogoBox" style="position:relative; width:calc(33vw - 10px); height:60px; display:flex; align-items:center; justify-content:center; padding:0px; box-sizing:border-box; margin-left:10px;">
+        <img id="headerLogoImg" src="" style="max-height:55px; max-width:90%; display:none; object-fit:contain;" alt="Company Logo">
         <span class="logo-text" id="headerLogoText">PaintWorkz</span>
     </div>
     <div style="display:flex; gap:10px; align-items:center;">
@@ -5613,164 +5613,153 @@
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('p', 'mm', 'a4');
             
-            // Get company settings
-            const companySettings = JSON.parse(localStorage.getItem('companySettings')) || {
-                name: 'Paintworkz',
-                address: '17 West Boundary Road, Hamilton 3300 VIC',
-                phone: '0438 803 032',
-                email: 'paint_workz@outlook.com'
-            };
-            
             // Get job data
-            const jobClient = document.getElementById('cli')?.value || 'CLIENT NAME';
+            const jobClient = document.getElementById('cli')?.value || 'CLIENT';
             const jobNum = document.getElementById('jNum')?.value || document.getElementById('jN')?.value || 'XXX';
             const jobName = document.getElementById('jNm')?.value || 'Job Name';
-            const dateReceived = document.getElementById('dat')?.value || new Date().toLocaleDateString();
+            const dateReceived = document.getElementById('dat')?.value || new Date().toLocaleDateString('en-AU');
             const totalSQM = parseFloat(document.getElementById('tot')?.innerText || '0') || 0;
-            const totalParts = document.getElementById('par')?.innerText || '0';
             
             // Paint data
-            const paintBrand = document.getElementById('bra')?.value || 'Wattyl';
-            const paintColor = document.getElementById('col')?.value || 'Color TBD';
-            const paintFinish = document.getElementById('fin')?.value || 'Satin';
+            const paintColor = document.getElementById('p-color')?.value || document.getElementById('col')?.value || 'Color TBD';
+            const paintBrand = document.getElementById('p-brand')?.value || document.getElementById('bra')?.value || 'Wattyl';
+            const paintFinish = document.getElementById('p-finish')?.value || document.getElementById('fin')?.value || 'Satin';
             
-            // Page setup
+            // Calculate paint required (0.2L per m²)
+            const paintRequired = (totalSQM * 0.2).toFixed(1);
+            
+            // Get profiles and quantities from items
+            let profileQty = {};
+            items.forEach(item => {
+                const profile = item.profile || 'Various';
+                const qty = parseInt(item.doors) || 0;
+                profileQty[profile] = (profileQty[profile] || 0) + qty;
+            });
+            
             const pageWidth = doc.internal.pageSize.getWidth();
-            const pageHeight = doc.internal.pageSize.height;
+            const pageHeight = doc.internal.pageSize.getHeight();
             
-            // ===== JOB NUMBER - LARGE, BOLD =====
-            doc.setFontSize(48);
+            let y = 10;
+            
+            // ===== JOB NUMBER - LARGE AND PROMINENT =====
+            doc.setFontSize(56);
             doc.setFont(undefined, 'bold');
-            doc.setTextColor(200, 30, 30);  // Red for visibility
-            doc.text(`JOB #${jobNum}`, 20, 35);
+            doc.setTextColor(200, 30, 30);
+            doc.text(`#${jobNum}`, 20, y + 18);
+            y += 25;
             
             // Gold separator line
             doc.setDrawColor(170, 132, 30);
             doc.setLineWidth(3);
-            doc.line(20, 42, pageWidth - 20, 42);
-            
-            let y = 55;
-            
-            // ===== COMPANY HEADER =====
-            doc.setFontSize(11);
-            doc.setFont(undefined, 'bold');
-            doc.setTextColor(0, 0, 0);
-            doc.text(companySettings.name, 20, y);
-            y += 5;
-            
-            doc.setFontSize(9);
-            doc.setFont(undefined, 'normal');
-            doc.text(companySettings.address, 20, y);
-            y += 4;
-            doc.text(`Ph: ${companySettings.phone}`, 20, y);
+            doc.line(20, y, pageWidth - 20, y);
             y += 8;
             
-            // ===== CLIENT SECTION =====
-            doc.setFontSize(12);
-            doc.setFont(undefined, 'bold');
-            doc.setTextColor(30, 100, 200);
-            doc.text('FOR:', 20, y);
-            y += 2;
-            
+            // ===== CUSTOMER & JOB INFO - LARGE AND CLEAR =====
             doc.setFontSize(14);
             doc.setFont(undefined, 'bold');
             doc.setTextColor(0, 0, 0);
             doc.text(jobClient.toUpperCase(), 20, y);
+            y += 8;
+            
+            doc.setFontSize(11);
+            doc.setFont(undefined, 'normal');
+            doc.text(`Job: ${jobName}`, 20, y);
+            y += 6;
+            doc.text(`Date: ${dateReceived}`, 20, y);
             y += 10;
             
-            // ===== JOB DETAILS BOX =====
-            doc.setDrawColor(100, 100, 100);
-            doc.setLineWidth(1);
-            doc.rect(20, y, pageWidth - 40, 55);
+            // ===== KEY INFO GRID =====
+            const colX1 = 20;
+            const colX2 = 120;
             
+            doc.setFontSize(10);
+            doc.setFont(undefined, 'bold');
+            
+            // SQM and Paint Litres - LARGE AND VISIBLE
+            doc.setFontSize(13);
+            doc.setTextColor(200, 30, 30);
+            doc.text(`${totalSQM.toFixed(2)} m²`, colX1, y);
+            doc.text(`${paintRequired} L`, colX2, y);
+            y += 6;
+            
+            doc.setFontSize(9);
+            doc.setFont(undefined, 'normal');
+            doc.setTextColor(100, 100, 100);
+            doc.text('AREA', colX1, y);
+            doc.text('PAINT', colX2, y);
+            y += 10;
+            
+            // Divider
+            doc.setDrawColor(170, 132, 30);
+            doc.setLineWidth(1);
+            doc.line(20, y, pageWidth - 20, y);
+            y += 8;
+            
+            // ===== COLORS & PROFILES =====
             doc.setFontSize(10);
             doc.setFont(undefined, 'bold');
             doc.setTextColor(0, 0, 0);
             
-            let boxY = y + 5;
-            doc.text('JOB DESCRIPTION:', 25, boxY);
-            boxY += 6;
+            doc.text('PAINT COLOURS:', 20, y);
+            y += 6;
             
+            doc.setFontSize(11);
             doc.setFont(undefined, 'normal');
-            doc.setFontSize(12);
-            doc.text(jobName, 25, boxY);
-            boxY += 10;
+            const colors = paintColor.split(/[,\\/]/).map(c => c.trim());
+            colors.forEach((color, idx) => {
+                doc.text(`• ${color}`, 25, y);
+                y += 5;
+            });
+            y += 2;
             
             doc.setFontSize(10);
             doc.setFont(undefined, 'bold');
-            doc.text(`DATE RECEIVED: ${dateReceived}  |  TOTAL AREA: ${totalSQM.toFixed(1)} m²  |  PARTS: ${totalParts}`, 25, boxY);
+            doc.text('PROFILES & QTY:', 20, y);
+            y += 6;
             
-            y += 60;
+            doc.setFontSize(10);
+            doc.setFont(undefined, 'normal');
+            Object.entries(profileQty).forEach(([profile, qty]) => {
+                doc.text(`• ${profile}: ${qty}`, 25, y);
+                y += 5;
+            });
+            y += 3;
             
-            // ===== PAINT SPECIFICATION =====
-            doc.setFontSize(11);
+            // ===== FINISH & BRAND =====
+            doc.setFontSize(10);
             doc.setFont(undefined, 'bold');
-            doc.setTextColor(30, 100, 200);
-            doc.text('PAINT SPECIFICATION:', 20, y);
-            y += 8;
+            doc.text('FINISH:', 20, y);
+            doc.setFont(undefined, 'normal');
+            doc.text(paintFinish, 70, y);
+            y += 6;
+            
+            doc.setFont(undefined, 'bold');
+            doc.text('BRAND:', 20, y);
+            doc.setFont(undefined, 'normal');
+            doc.text(paintBrand, 70, y);
+            y += 10;
+            
+            // ===== COLOR SWATCH =====
+            doc.setDrawColor(0, 0, 0);
+            doc.setLineWidth(1.5);
+            doc.setFillColor(100, 150, 200);
+            doc.rect(20, y, pageWidth - 40, 30, 'FD');
             
             doc.setFontSize(14);
             doc.setFont(undefined, 'bold');
-            doc.setTextColor(200, 30, 30);
-            doc.text(`${paintColor}`, 20, y);
-            y += 10;
+            doc.setTextColor(255, 255, 255);
+            doc.text(paintColor.toUpperCase(), 25, y + 18);
             
-            doc.setFontSize(10);
-            doc.setFont(undefined, 'normal');
-            doc.setTextColor(0, 0, 0);
-            doc.text(`Brand: ${paintBrand}  |  Finish: ${paintFinish}`, 20, y);
-            y += 12;
-            
-            // ===== QUALITY REMINDER BOX =====
-            doc.setDrawColor(200, 150, 0);
-            doc.setLineWidth(2);
-            doc.setFillColor(255, 250, 200);
-            doc.rect(20, y, pageWidth - 40, 35, 'F');
-            doc.rect(20, y, pageWidth - 40, 35);
-            
-            doc.setFontSize(10);
-            doc.setFont(undefined, 'bold');
-            doc.setTextColor(200, 100, 0);
-            doc.text('⚠️  QUALITY CHECKLIST:', 25, y + 5);
-            
-            doc.setFontSize(8);
-            doc.setFont(undefined, 'normal');
-            doc.setTextColor(0, 0, 0);
-            doc.text('✓ All surfaces prepared correctly', 25, y + 11);
-            doc.text('✓ Two coats minimum applied', 25, y + 16);
-            doc.text('✓ Proper drying time between coats', 25, y + 21);
-            doc.text('✓ Final inspection completed', 25, y + 26);
-            
-            y += 40;
-            
-            // ===== TEAM INFO SECTION =====
-            doc.setFontSize(10);
-            doc.setFont(undefined, 'bold');
-            doc.setTextColor(0, 0, 0);
-            doc.text('ASSIGNED TO:', 20, y);
-            y += 6;
-            
-            doc.setFont(undefined, 'normal');
-            doc.setFontSize(9);
-            doc.text('Supervisor: _______________________________     Date Started: ______________', 20, y);
-            y += 6;
-            doc.text('Technician: ________________________________     Date Completed: ____________', 20, y);
-            y += 8;
-            
-            doc.text('Notes: _________________________________________________________________', 20, y);
-            y += 5;
-            doc.text('________________________________________________________________', 20, y);
-            
-            // ===== FOOTER =====
+            // Footer
             doc.setFontSize(8);
             doc.setFont(undefined, 'italic');
             doc.setTextColor(100, 100, 100);
-            doc.text(`Generated: ${new Date().toLocaleDateString('en-AU')} | Paintworkz Professional Painting`, 20, pageHeight - 8);
+            doc.text(`Generated: ${new Date().toLocaleDateString('en-AU')} | Paintworkz`, 20, pageHeight - 8);
             
-            const filename = `ShopLabel_${jobNum}_${jobClient.replace(/\s+/g, '_')}.pdf`;
+            const filename = `ShopLabel_${jobNum}_${jobClient.replace(/\\s+/g, '_')}.pdf`;
             const pdfDataUri = doc.output('datauristring');
             showPDFPreview(pdfDataUri, filename, '🏷️ Shop Label Preview');
-            notify("✓ Shop Label Ready - Print & Post on Job");
+            notify('✓ Shop Label Ready - Print & Post on Trolley');
             
         } catch(err) {
             console.error('❌ Shop Label Error:', err);
@@ -5871,49 +5860,60 @@
             doc.setFontSize(11);
             doc.setFont(undefined, 'bold');
             doc.setTextColor(0, 0, 0);
-            doc.text('WORK SCHEDULE TIMELINE - Job Status Bars', 20, y);
+            doc.text('WORK SCHEDULE TIMELINE', 20, y);
             y += 7;
             
-            const timelineStartX = 35;
-            const dayWidth = (pageWidth - 55) / days;
-            const timelineWidth = pageWidth - 55;
+            const timelineStartX = 30;
+            const dayWidth = (pageWidth - 50) / days;
+            const timelineWidth = pageWidth - 50;
             
-            // ===== DATE HEADER ROW =====
-            doc.setFontSize(7);
-            doc.setFont(undefined, 'normal');
-            doc.setTextColor(0, 0, 0);
+            // ===== DATE HEADER ROW - Show every 7 days =====
+            doc.setFontSize(8);
+            doc.setFont(undefined, 'bold');
+            doc.setTextColor(255, 255, 255);
+            doc.setFillColor(170, 132, 30);
+            doc.setLineWidth(0.5);
             
-            // Draw date labels every 14 days for readability
-            for (let i = 0; i < days; i += 14) {
+            // Draw header cells for each week
+            for (let i = 0; i < days; i += 7) {
                 const cellX = timelineStartX + (i * dayWidth);
-                const markerDate = new Date(today);
-                markerDate.setDate(markerDate.getDate() + i);
+                const cellWidth = Math.min(7 * dayWidth, timelineStartX + timelineWidth - cellX);
+                const weekDate = new Date(today);
+                weekDate.setDate(weekDate.getDate() + i);
                 
-                doc.text(markerDate.toLocaleDateString('en-AU'), cellX, y);
+                doc.rect(cellX, y, cellWidth, 7, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(8);
+                doc.text(weekDate.toLocaleDateString('en-AU'), cellX + 1, y + 5);
             }
             
-            y += 5;
+            y += 8;
             
-            // Draw timeline grid
-            doc.setDrawColor(200, 200, 200);
-            doc.setLineWidth(0.2);
+            // Draw vertical grid lines for every 7 days
+            doc.setDrawColor(150, 150, 150);
+            doc.setLineWidth(0.5);
+            const gridHeight = Math.min(35, activeJobs.length * 6) + 5;
             for (let i = 0; i <= days; i += 7) {
                 const lineX = timelineStartX + (i * dayWidth);
-                doc.line(lineX, y, lineX, y + (Math.min(30, activeJobs.length) * 5.5) + 10);
+                doc.line(lineX, y - 1, lineX, y + gridHeight);
             }
             
-            // ===== JOB BARS WITH TIMELINE =====
-            const jobColors = [
-                [100, 150, 255], [255, 150, 100], [150, 255, 100], [255, 100, 150],
-                [100, 255, 150], [150, 100, 255], [255, 200, 100], [100, 200, 255],
-                [200, 100, 255], [100, 255, 200], [255, 100, 200], [200, 255, 100],
-                [255, 180, 100], [100, 180, 255], [180, 100, 255], [180, 255, 100]
-            ];
+            // ===== ACTIVITY PHASE COLORS =====
+            const phaseColors = {
+                'M': [100, 150, 255],   // Measuring - Blue
+                'S1': [255, 200, 100],  // Sand 1 - Orange
+                'U': [150, 150, 150],   // Undercoat - Gray
+                'S2': [255, 200, 100],  // Sand 2 - Orange
+                'T': [100, 200, 100],   // TopCoat - Green
+                'I': [200, 100, 255],   // Inspect - Purple
+                'C': [100, 200, 255]    // Complete - Light Blue
+            };
+            const phases = ['M', 'S1', 'U', 'S2', 'T', 'I', 'C'];
             
-            let barY = y + 2;
+            let barY = y + 1;
             let jobCount = 0;
             
-            for (let idx = 0; idx < activeJobs.length && jobCount < 30; idx++) {
+            for (let idx = 0; idx < activeJobs.length && jobCount < 25; idx++) {
                 const job = activeJobs[idx];
                 
                 // Parse job start date
@@ -5927,42 +5927,49 @@
                     }
                 }
                 
-                // Calculate position - estimate 7 days duration per job
+                // Calculate position
                 const daysFromStart = Math.max(0, Math.ceil((jobStartDate - today) / (1000 * 60 * 60 * 24)));
-                const jobDuration = Math.min(7, days - daysFromStart); // 7 days or until end of period
                 
-                if (daysFromStart < days && jobDuration > 0) {
-                    const barStartX = timelineStartX + (daysFromStart * dayWidth);
-                    const barWidth = jobDuration * dayWidth;
-                    
-                    // Draw job bar with color
-                    const colorIdx = idx % jobColors.length;
-                    const barColor = jobColors[colorIdx];
-                    
-                    doc.setFillColor(barColor[0], barColor[1], barColor[2]);
-                    doc.setDrawColor(0, 0, 0);
-                    doc.setLineWidth(0.4);
-                    doc.rect(barStartX, barY, barWidth, 5, 'FD');
-                    
-                    // Job number label on left
-                    doc.setFontSize(7);
+                if (daysFromStart < days) {
+                    // Job number on left
+                    doc.setFontSize(8);
                     doc.setFont(undefined, 'bold');
                     doc.setTextColor(0, 0, 0);
                     doc.text(`#${job.jobNum}`, 20, barY + 3.5);
                     
-                    // Job duration label in bar if space permits
-                    if (barWidth > 15) {
-                        doc.setTextColor(255, 255, 255);
-                        doc.text(`${jobDuration}d`, barStartX + 2, barY + 3.5);
-                    }
+                    // Draw activity phases as separate segments
+                    let phaseX = timelineStartX + (daysFromStart * dayWidth);
+                    const phaseDuration = 1; // Each phase takes 1 day
                     
-                    barY += 5.5;
+                    phases.forEach((phase, phaseIdx) => {
+                        const phaseStartX = phaseX + (phaseIdx * phaseDuration * dayWidth);
+                        
+                        if (phaseStartX < timelineStartX + timelineWidth) {
+                            const phaseWidth = Math.min(phaseDuration * dayWidth, timelineStartX + timelineWidth - phaseStartX);
+                            
+                            // Draw phase box
+                            const color = phaseColors[phase];
+                            doc.setFillColor(color[0], color[1], color[2]);
+                            doc.setDrawColor(0, 0, 0);
+                            doc.setLineWidth(0.4);
+                            doc.rect(phaseStartX, barY, phaseWidth, 4, 'FD');
+                            
+                            // Phase label if space permits
+                            if (phaseWidth > 3) {
+                                doc.setFontSize(6);
+                                doc.setFont(undefined, 'bold');
+                                doc.setTextColor(255, 255, 255);
+                                doc.text(phase, phaseStartX + 0.5, barY + 2.8);
+                            }
+                        }
+                    });
+                    
+                    barY += 4.5;
                     jobCount++;
                 }
             }
             
-            y = barY + 5;
-            
+            y = barY + 3;
             // ===== SIMPLIFIED TABLE =====
             const startX = 20;
             const rowHeight = 7;
