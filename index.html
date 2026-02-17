@@ -1513,18 +1513,74 @@
         const saved = localStorage.getItem('paintFormulas');
         if (saved) {
             try {
-                const loaded = JSON.parse(saved);
+                let loaded = JSON.parse(saved);
                 if (Array.isArray(loaded) && loaded.length > 0) {
                     console.log(`📚 LOADED ${loaded.length} paint formulas from localStorage:`);
-                    loaded.forEach((f, idx) => {
-                        const tinterCount = (f.colourants || []).length;
-                        console.log(`  [${idx}] ${f.color}: ${tinterCount} tinters`);
-                        if (tinterCount > 0) {
-                            f.colourants.forEach((t, ti) => {
-                                console.log(`        ${ti}: ${t.code} = ${t.amount || t.grams}`);
-                            });
+                    
+                    // Migrate/fix old formulas that are missing new fields
+                    loaded = loaded.map((f, idx) => {
+                        const updated = { ...f };
+                        let migrated = false;
+                        
+                        // Add missing evicCode
+                        if (!updated.evicCode && updated.code) {
+                            updated.evicCode = updated.code;
+                            migrated = true;
                         }
+                        
+                        // Add missing baseType
+                        if (!updated.baseType && updated.product) {
+                            updated.baseType = updated.product;
+                            migrated = true;
+                        }
+                        
+                        // Add missing baseColor
+                        if (!updated.baseColor) {
+                            updated.baseColor = 'White';
+                            migrated = true;
+                        }
+                        
+                        // Fix whiteBase - ensure it has grams not amount
+                        if (updated.baseTinters && !updated.whiteBase) {
+                            updated.whiteBase = updated.baseTinters.map(item => ({
+                                code: item.code,
+                                grams: item.grams || item.amount || 0
+                            }));
+                            migrated = true;
+                        }
+                        
+                        // Fix/calculate totalWeight if missing or wrong
+                        if (!updated.totalWeight) {
+                            let calculated = 0;
+                            if (updated.whiteBase && Array.isArray(updated.whiteBase)) {
+                                updated.whiteBase.forEach(item => {
+                                    calculated += (item.grams || 0);
+                                });
+                            }
+                            if (updated.colourants && Array.isArray(updated.colourants)) {
+                                updated.colourants.forEach(item => {
+                                    calculated += (item.amount || 0);
+                                });
+                            }
+                            if (calculated > 0) {
+                                updated.totalWeight = calculated;
+                                migrated = true;
+                                console.log(`  [${idx}] ${updated.color}: Auto-calculated totalWeight = ${calculated.toFixed(2)}g`);
+                            }
+                        }
+                        
+                        if (migrated) {
+                            console.log(`  [${idx}] ${updated.color}: Formula migrated to v1.5.0 format`);
+                        }
+                        
+                        const tinterCount = (updated.colourants || []).length;
+                        console.log(`  [${idx}] ${updated.color}: ${tinterCount} tinters, totalWeight: ${updated.totalWeight}g`);
+                        
+                        return updated;
                     });
+                    
+                    // Save the migrated formulas back to localStorage
+                    localStorage.setItem('paintFormulas', JSON.stringify(loaded));
                     return loaded;
                 }
             } catch(e) {
@@ -1540,18 +1596,27 @@
                 color: 'Lexicon',
                 product: '690 30% XTint Poly',
                 code: 'XTSW1E3',
+                evicCode: 'XTSW1E3',
+                baseType: '690 30% XTint Poly',
+                baseColor: 'White',
+                version: 'SW1E3 DULUX WOC Series II (2018)',
                 finishes: ['Satin', 'Gloss', 'Matt'],
                 baseSize: 1,
                 baseTinters: [
-                    { code: 'ITE003', amount: 7.47 },
-                    { code: 'XB6930', amount: 1359.04, name: 'White Base' }
+                    { code: 'ITE003', grams: 7.47 },
+                    { code: 'XB6930', grams: 1359.04 }
+                ],
+                whiteBase: [
+                    { code: 'ITE003', grams: 7.47 },
+                    { code: 'XB6930', grams: 1359.04 }
                 ],
                 colourants: [
                     { code: 'ITE303', amount: 5.88 },
                     { code: 'ITE306', amount: 5.95 },
                     { code: 'ITE310', amount: 5.75 }
                 ],
-                notes: 'DULUX WOC Series II 2018'
+                totalWeight: 1384.09,
+                notes: '3 tinters'
             }
         ];
         
@@ -5799,6 +5864,12 @@
                 console.log(`  Color searched: "${color}"`);
                 console.log(`  Formula found: ${!!formula}`);
                 if (formula) {
+                    console.log(`  📊 FULL FORMULA OBJECT:`, formula);
+                    console.log(`  totalWeight field:`, {
+                        value: formula.totalWeight,
+                        type: typeof formula.totalWeight,
+                        stringified: String(formula.totalWeight)
+                    });
                     console.log(`  Formula data:`, {
                         color: formula.color,
                         evicCode: formula.evicCode || 'MISSING',
