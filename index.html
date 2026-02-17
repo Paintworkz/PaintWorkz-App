@@ -825,9 +825,9 @@
                         
                         <!-- Tinters Section -->
                         <div style="background:#fff; padding:10px; border-radius:6px; border:1px solid #eee; margin-bottom:10px;">
-                            <div style="font-size:10px; font-weight:900; margin-bottom:8px; color:#666;">TINTERS (each line: code @ grams)</div>
-                            <textarea id="tintersList" placeholder="ITE303 @ 5.88&#10;ITE306 @ 5.95&#10;ITE310 @ 5.75" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:11px; min-height:60px; box-sizing:border-box; font-family:monospace;"></textarea>
-                            <div style="font-size:9px; color:#999; margin-top:5px;">One tinter per line. Format: CODE @ GRAMS</div>
+                            <div style="font-size:10px; font-weight:900; margin-bottom:8px; color:#666;">TINTERS (code space grams per line)</div>
+                            <textarea id="tintersList" placeholder="ITE303 5.88&#10;ITE306 5.95&#10;ITE310 5.75" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:11px; min-height:60px; box-sizing:border-box; font-family:monospace;"></textarea>
+                            <div style="font-size:9px; color:#999; margin-top:5px;">One tinter per line. Format: CODE GRAMS (just a space between them)</div>
                         </div>
                         
                         <button onclick="addNewPaintFormulaUI()" style="width:100%; padding:10px; background:#34c759; color:#fff; border:none; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">+ ADD FORMULA</button>
@@ -1796,18 +1796,18 @@
                 const trimmed = line.trim();
                 console.log(`    Line ${idx}: "${line}" (trimmed: "${trimmed}")`);
                 
-                const match = trimmed.match(/^(\S+)\s*@\s*([\d.]+)$/);
+                const match = trimmed.match(/^(\S+)\s+([\d,.]+)$/);  // Simple: CODE GRAMS (space-separated)
                 console.log(`      Regex match:`, match ? 'SUCCESS' : 'FAILED');
                 
                 if (match) {
-                    const amount = parseFloat(match[2]);
+                    const amount = parseFloat(match[2].replace(',', '.'));  // Handle both , and . decimals
                     console.log(`      → Code="${match[1]}", Amount=${amount}`);
                     colourants.push({
                         code: match[1],
                         amount: amount
                     });
                 } else {
-                    console.log(`      → NO MATCH (expected format: CODE @ GRAMS)`);
+                    console.log(`      → NO MATCH (expected format: CODE GRAMS - just a space between)`);
                 }
             });
         } else {
@@ -1922,8 +1922,8 @@
             </div>
             
             <div style="margin-bottom:12px;">
-                <label style="font-weight:bold; display:block; margin-bottom:4px;">Tinters (Format: CODE: GRAMS per line):</label>
-                <p style="font-size:10px; color:#666; margin:0 0 6px 0;">Example:<br>ITE303: 5.88<br>ITE306: 5.95</p>
+                <label style="font-weight:bold; display:block; margin-bottom:4px;">Tinters (Format: CODE GRAMS per line):</label>
+                <p style="font-size:10px; color:#666; margin:0 0 6px 0;">Example:<br>ITE303 5.88<br>ITE306 5.95</p>
                 <textarea id="editColourants" style="width:100%; height:80px; padding:6px; border:1px solid #ccc; border-radius:4px; font-family:monospace; font-size:11px; box-sizing:border-box;"></textarea>
             </div>
             
@@ -1958,7 +1958,7 @@
             const whiteBaseText = (f.whiteBase && Array.isArray(f.whiteBase)) ? 
                 f.whiteBase.map(item => `${item.code}: ${item.grams}`).join('\n') : '';
             const colourantsText = (f.colourants && Array.isArray(f.colourants)) ? 
-                f.colourants.map(c => `${c.code}: ${c.amount || c.grams}`).join('\n') : '';
+                f.colourants.map(c => `${c.code} ${c.amount || c.grams}`).join('\n') : '';  // CHANGED: Space-separated instead of colon
             
             console.log('  colourants array:', f.colourants);
             console.log('  colourantsText result:', JSON.stringify(colourantsText));
@@ -2034,13 +2034,13 @@
             }
         };
         
-        // Parse white base
+        // Parse white base (accept both "CODE: GRAMS" and "CODE GRAMS" formats)
         const whiteBaseText = document.getElementById('editWhiteBase').value.trim();
         f.whiteBase = [];
         if (whiteBaseText) {
             console.log('📝 WHITE BASE TEXT:\n' + whiteBaseText);
             whiteBaseText.split('\n').forEach((line, idx) => {
-                const match = line.match(/^(\S+)\s*:\s*([\d,.]+)/);
+                const match = line.match(/^(\S+)\s+[\s:]*\s*([\d,.]+)/);  // Accept both space and colon
                 console.log(`  Line ${idx}: "${line}" → Match: ${match ? 'YES' : 'NO'}`, match);
                 if (match) {
                     const grams = parseNumber(match[2]);
@@ -2050,13 +2050,14 @@
             });
         }
         
-        // Parse colourants
+        // Parse colourants (tinters)
         const colourantsText = document.getElementById('editColourants').value.trim();
         f.colourants = [];
         if (colourantsText) {
             console.log('📝 TINTERS TEXT:\n' + colourantsText);
             colourantsText.split('\n').forEach((line, idx) => {
-                const match = line.match(/^(\S+)\s*:\s*([\d,.]+)/);
+                // Accept both: "CODE GRAMS" (space) or "CODE: GRAMS" (colon)
+                const match = line.match(/^(\S+)\s+[\s:]*\s*([\d,.]+)/);
                 console.log(`  Line ${idx}: "${line}" → Match: ${match ? 'YES' : 'NO'}`, match);
                 if (match) {
                     const amount = parseNumber(match[2]);
