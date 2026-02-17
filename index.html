@@ -1112,23 +1112,23 @@
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-bottom:20px;">
                     <div>
                         <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Measure (m)</label>
-                        <input type="number" id="timelineMeasure" value="2" min="1" max="30" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
+                        <input type="number" id="timelineMeasure" value="1" min="1" max="30" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
                     </div>
                     <div>
                         <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Sand 1st Coat (s1)</label>
-                        <input type="number" id="timelineSand1" value="3" min="1" max="30" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
+                        <input type="number" id="timelineSand1" value="4" min="1" max="30" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
                     </div>
                     <div>
                         <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Undercoat (u)</label>
-                        <input type="number" id="timelineUndercoat" value="3" min="1" max="30" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
+                        <input type="number" id="timelineUndercoat" value="2" min="1" max="30" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
                     </div>
                     <div>
                         <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Sand 2nd Coat (s2)</label>
-                        <input type="number" id="timelineSand2" value="2" min="1" max="30" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
+                        <input type="number" id="timelineSand2" value="3" min="1" max="30" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
                     </div>
                     <div>
                         <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Top Coat (t)</label>
-                        <input type="number" id="timelineTopcoat" value="4" min="1" max="30" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
+                        <input type="number" id="timelineTopcoat" value="2" min="1" max="30" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
                     </div>
                     <div>
                         <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Inspection (i)</label>
@@ -1235,8 +1235,32 @@
 </div>
 
 <script>
-    // ===== PAINTWORKZ REVISION INFO =====
-    console.log('%c 🎨 PaintWorkz Pro v1.5.0 STABLE WORKING BUILD (2026-02-17) ', 'background:#34c759;color:#fff;font-weight:900;padding:8px;border-radius:4px;');
+    ////////////////////////////////////////////////////////////////////////////////
+    // 🎨 PAINTWORKZ PRO v1.5.1 STABLE (17 Feb 2026)
+    ////////////////////////////////////////////////////////////////////////////////
+    // LAST UPDATED: 17 Feb 2026
+    // CHANGES: Filtered PDF generation, Job Filing Sheet, Inspection timeline fix
+    // 
+    // ⚠️ HARDCODED GANTT CHART DEFAULTS (Admin → General Settings → Gantt Chart):
+    //    M (Measure) = 1 day
+    //    S1 (Sand 1st Coat) = 4 days
+    //    U (Undercoat) = 2 days
+    //    S2 (Sand 2nd Coat) = 3 days
+    //    T (Top Coat) = 2 days
+    //    I (Inspection) = 2 days
+    //    C (Completion/Delivery) = 1 day
+    //
+    // ⚠️ IMPORTANT: Keep this header updated with every code change!
+    ////////////////////////////////////////////////////////////////////////////////
+    
+    console.log('%c 🎨 PaintWorkz Pro v1.5.1 STABLE (2026-02-17) ', 'background:#34c759;color:#fff;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('✅ UPDATES IN v1.5.1:');
+    console.log('✓ Gantt Chart defaults corrected (M:1, S1:4, U:2, S2:3, T:2, I:2, C:1)');
+    console.log('✓ Job Filing Sheet data population fixed');
+    console.log('✓ Filtered PDF generation - respects Measure sheet filters');
+    console.log('✓ Inspection (i) label corrected in Gantt chart');
+    console.log('✓ Lexicon formula totalWeight fixed (1384.09g)');
+    console.log('✓ Cover Sheet redesigned as simple filing reference');
     console.log('✅ CRITICAL FIXES:');
     console.log('✓ PDF button now shows form selection modal (not navigate to forms tab)');
     console.log('✓ Disabled Firebase real-time sync (memory crashes fixed)');
@@ -6350,24 +6374,31 @@
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('p', 'mm', 'a4');
             
-            // Get job data
-            const jobNum = document.getElementById('jNum')?.value || document.getElementById('jN')?.value || '---';
-            const jobName = document.getElementById('jNm')?.value || 'Job Name TBD';
-            const jobClient = document.getElementById('cli')?.value || 'Client TBD';
-            const dateStarted = document.getElementById('dts')?.value || document.getElementById('dat')?.value || '';
-            const dateCompleted = document.getElementById('dtc')?.value || '';
+            // Get job data from measure tab - using EXACT field IDs
+            const jobNum = (document.getElementById('jN')?.value || '---').trim();
+            const jobName = (document.getElementById('jNm')?.value || 'Job Name TBD').trim();
+            const jobClient = (document.getElementById('cli')?.value || 'Client TBD').trim();
+            const dateReceived = (document.getElementById('dRec')?.value || '').trim();
             
-            // Count total panels
+            // Count total panels from current items
             const itemsForPDF = window.pdfItemsToUse || items;
             const totalParts = itemsForPDF.length;
             
-            // Paint data
-            const paintBrand = document.getElementById('bra')?.value || 'Wattyl';
-            const paintColor = document.getElementById('col')?.value || 'Color TBD';
-            const paintFinish = document.getElementById('fin')?.value || 'Satin';
+            // Paint data - get directly from measure tab fields
+            const paintBrandEl = document.getElementById('p-brand');
+            const paintColorEl = document.getElementById('p-color');
+            const paintFinishEl = document.getElementById('p-finish');
+            
+            const paintBrand = (paintBrandEl?.value || 'Wattyl').trim();
+            const paintColor = (paintColorEl?.value || 'TBD').trim();
+            const paintFinish = (paintFinishEl?.value || 'Satin').trim();
+            
+            console.log(`📋 JOB FILING SHEET GENERATED:`);
+            console.log(`  Job #${jobNum}: ${jobClient}`);
+            console.log(`  Paint: ${paintBrand} ${paintColor} ${paintFinish}`);
+            console.log(`  Total Panels: ${totalParts}, Date Received: ${dateReceived}`);
             
             const x = 20;
-            const margin = 15;
             let y = 25;
             
             // ===== TITLE =====
@@ -6405,7 +6436,6 @@
             doc.setFontSize(10);
             doc.setFont(undefined, 'bold');
             doc.setTextColor(0, 0, 0);
-            
             doc.text('Customer Name:', x, y);
             doc.setFont(undefined, 'normal');
             doc.text(jobClient, x + 50, y);
@@ -6429,15 +6459,9 @@
             y += 8;
             
             doc.setFont(undefined, 'bold');
-            doc.text('Date Started:', x, y);
+            doc.text('Date Received:', x, y);
             doc.setFont(undefined, 'normal');
-            doc.text(dateStarted || '---', x + 50, y);
-            y += 8;
-            
-            doc.setFont(undefined, 'bold');
-            doc.text('Date Completed:', x, y);
-            doc.setFont(undefined, 'normal');
-            doc.text(dateCompleted || '---', x + 50, y);
+            doc.text(dateReceived || '---', x + 50, y);
             y += 10;
             
             // ===== PROJECT SCOPE =====
@@ -6485,7 +6509,7 @@
             doc.setFontSize(8);
             doc.setFont(undefined, 'italic');
             doc.setTextColor(150, 150, 150);
-            doc.text(`Generated: ${new Date().toLocaleDateString('en-AU')} | Job #${jobNum}`, x, pageHeight - 10);
+            doc.text(`Generated: ${new Date().toLocaleDateString('en-AU')} | Job #${jobNum} | ${jobClient}`, x, pageHeight - 10);
             
             const filename = `CoverSheet_${jobClient.replace(/\s+/g, '_')}_${jobNum}_${new Date().toISOString().split('T')[0]}.pdf`;
             const pdfDataUri = doc.output('datauristring');
