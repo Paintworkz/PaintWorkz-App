@@ -1131,7 +1131,7 @@
                         <input type="number" id="timelineTopcoat" value="4" min="1" max="30" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
                     </div>
                     <div>
-                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Install/Assemble (i)</label>
+                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Inspection (i)</label>
                         <input type="number" id="timelineInstall" value="2" min="1" max="30" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
                     </div>
                     <div>
@@ -6350,21 +6350,16 @@
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('p', 'mm', 'a4');
             
-            // Company settings
-            const companySettings = JSON.parse(localStorage.getItem('companySettings')) || {
-                name: 'Paintworkz',
-                address: '17 West Boundary Road, Hamilton 3300 VIC',
-                phone: '0438 803 032',
-                email: 'paint_workz@outlook.com'
-            };
-            
             // Get job data
-            const jobClient = document.getElementById('cli')?.value || 'Client TBD';
             const jobNum = document.getElementById('jNum')?.value || document.getElementById('jN')?.value || '---';
             const jobName = document.getElementById('jNm')?.value || 'Job Name TBD';
-            const dateReceived = document.getElementById('dat')?.value || new Date().toLocaleDateString();
-            const totalSQM = parseFloat(document.getElementById('tot')?.innerText || '0') || 0;
-            const totalParts = document.getElementById('par')?.innerText || '0';
+            const jobClient = document.getElementById('cli')?.value || 'Client TBD';
+            const dateStarted = document.getElementById('dts')?.value || document.getElementById('dat')?.value || '';
+            const dateCompleted = document.getElementById('dtc')?.value || '';
+            
+            // Count total panels
+            const itemsForPDF = window.pdfItemsToUse || items;
+            const totalParts = itemsForPDF.length;
             
             // Paint data
             const paintBrand = document.getElementById('bra')?.value || 'Wattyl';
@@ -6372,88 +6367,94 @@
             const paintFinish = document.getElementById('fin')?.value || 'Satin';
             
             const x = 20;
-            const pageHeight = doc.internal.pageSize.height;
-            let y = 20;
+            const margin = 15;
+            let y = 25;
             
-            // Title
+            // ===== TITLE =====
+            doc.setFontSize(28);
+            doc.setFont(undefined, 'bold');
+            doc.setTextColor(0, 0, 0);
+            doc.text('JOB FILING SHEET', x, y);
+            y += 20;
+            
+            // ===== JOB NUMBER BOX (LARGE & PROMINENT) =====
+            doc.setFontSize(11);
+            doc.setFont(undefined, 'normal');
+            doc.setTextColor(100, 100, 100);
+            doc.text('JOB NUMBER:', x, y);
+            
             doc.setFontSize(24);
             doc.setFont(undefined, 'bold');
             doc.setTextColor(0, 0, 0);
-            doc.text('JOB COVER SHEET', x, y);
-            y += 15;
+            doc.text(`#${jobNum}`, x, y + 8);
+            y += 25;
             
-            // Company Info Box
+            // ===== DIVIDER =====
             doc.setDrawColor(170, 132, 30);
-            doc.setLineWidth(2);
-            doc.rect(x, y, 170, 35);
+            doc.setLineWidth(1);
+            doc.line(x, y, 190, y);
+            y += 10;
             
+            // ===== CUSTOMER DETAILS =====
             doc.setFontSize(12);
             doc.setFont(undefined, 'bold');
-            doc.text(companySettings.name, x + 5, y + 8);
+            doc.setTextColor(50, 50, 50);
+            doc.text('CUSTOMER DETAILS', x, y);
+            y += 8;
             
-            doc.setFontSize(9);
+            doc.setFontSize(10);
+            doc.setFont(undefined, 'bold');
+            doc.setTextColor(0, 0, 0);
+            
+            doc.text('Customer Name:', x, y);
             doc.setFont(undefined, 'normal');
-            doc.text(companySettings.address, x + 5, y + 14);
-            doc.text(`📞 ${companySettings.phone} | 📧 ${companySettings.email}`, x + 5, y + 20);
-            doc.text(`Website: paintworkz.com.au`, x + 5, y + 26);
+            doc.text(jobClient, x + 50, y);
+            y += 8;
             
-            y += 42;
-            
-            // Job Header
-            doc.setFontSize(14);
+            // ===== JOB INFORMATION =====
+            y += 5;
+            doc.setFontSize(12);
             doc.setFont(undefined, 'bold');
             doc.setTextColor(50, 50, 50);
             doc.text('JOB INFORMATION', x, y);
             y += 8;
             
-            // Job Details Table
-            const col1X = x;
-            const col2X = x + 90;
             doc.setFontSize(10);
             doc.setFont(undefined, 'bold');
+            doc.setTextColor(0, 0, 0);
             
-            doc.text('Job Number:', col1X, y);
+            doc.text('Job Name:', x, y);
             doc.setFont(undefined, 'normal');
-            doc.text(`#${jobNum}`, col2X, y);
-            y += 7;
+            doc.text(jobName, x + 50, y);
+            y += 8;
             
             doc.setFont(undefined, 'bold');
-            doc.text('Client Name:', col1X, y);
+            doc.text('Date Started:', x, y);
             doc.setFont(undefined, 'normal');
-            doc.text(jobClient, col2X, y);
-            y += 7;
+            doc.text(dateStarted || '---', x + 50, y);
+            y += 8;
             
             doc.setFont(undefined, 'bold');
-            doc.text('Job Description:', col1X, y);
+            doc.text('Date Completed:', x, y);
             doc.setFont(undefined, 'normal');
-            doc.text(jobName, col2X, y);
-            y += 7;
+            doc.text(dateCompleted || '---', x + 50, y);
+            y += 10;
             
-            doc.setFont(undefined, 'bold');
-            doc.text('Date Received:', col1X, y);
-            doc.setFont(undefined, 'normal');
-            doc.text(dateReceived, col2X, y);
-            y += 12;
-            
-            // Project Scope
-            doc.setFontSize(14);
+            // ===== PROJECT SCOPE =====
+            doc.setFontSize(12);
             doc.setFont(undefined, 'bold');
             doc.setTextColor(50, 50, 50);
             doc.text('PROJECT SCOPE', x, y);
             y += 8;
             
-            doc.setFontSize(10);
-            doc.setFont(undefined, 'normal');
-            doc.text(`Total Parts:`, x, y);
-            doc.text(`${totalParts} items`, x + 50, y);
-            y += 6;
+            doc.setFontSize(11);
+            doc.setFont(undefined, 'bold');
+            doc.setTextColor(0, 0, 0);
+            doc.text(`Total Panels: ${totalParts}`, x, y);
+            y += 10;
             
-            doc.text(`Total Area:`, x, y);
-            doc.text(`${totalSQM.toFixed(2)} m²`, x + 50, y);
-            y += 12;
-            
-            // Paint Specification
-            doc.setFontSize(14);
+            // ===== PAINT SPECIFICATION =====
+            doc.setFontSize(12);
             doc.setFont(undefined, 'bold');
             doc.setTextColor(50, 50, 50);
             doc.text('PAINT SPECIFICATION', x, y);
@@ -6461,76 +6462,38 @@
             
             doc.setFontSize(10);
             doc.setFont(undefined, 'bold');
-            doc.text('Brand:', col1X, y);
+            doc.setTextColor(0, 0, 0);
+            
+            doc.text('Brand:', x, y);
             doc.setFont(undefined, 'normal');
-            doc.text(paintBrand, col2X, y);
+            doc.text(paintBrand, x + 50, y);
             y += 7;
             
             doc.setFont(undefined, 'bold');
-            doc.text('Colour:', col1X, y);
+            doc.text('Colour:', x, y);
             doc.setFont(undefined, 'normal');
-            doc.text(paintColor, col2X, y);
+            doc.text(paintColor, x + 50, y);
             y += 7;
             
             doc.setFont(undefined, 'bold');
-            doc.text('Finish:', col1X, y);
+            doc.text('Finish:', x, y);
             doc.setFont(undefined, 'normal');
-            doc.text(paintFinish, col2X, y);
-            y += 12;
+            doc.text(paintFinish, x + 50, y);
             
-            // Quality Standards
-            doc.setFontSize(14);
-            doc.setFont(undefined, 'bold');
-            doc.setTextColor(50, 50, 50);
-            doc.text('QUALITY CHECKLIST', x, y);
-            y += 8;
-            
-            doc.setFontSize(9);
-            doc.setFont(undefined, 'normal');
-            const checkItems = [
-                '☐ All surfaces prepared and clean',
-                '☐ Paint mixed to specification',
-                '☐ Application per manufacturer instructions',
-                '☐ Two coats minimum applied',
-                '☐ Quality inspection passed',
-                '☐ Final cleanup completed'
-            ];
-            
-            checkItems.forEach(item => {
-                doc.text(item, x, y);
-                y += 6;
-            });
-            
-            y += 5;
-            
-            // Sign-off section
-            doc.setFontSize(10);
-            doc.setFont(undefined, 'bold');
-            doc.text('SIGN-OFF', x, y);
-            y += 8;
-            
-            doc.setFont(undefined, 'normal');
-            doc.setFontSize(9);
-            doc.text(`Prepared By: ________________________     Date: ______________`, x, y);
-            y += 7;
-            doc.text(`Supervisor: ___________________________     Date: ______________`, x, y);
-            y += 7;
-            doc.text(`Client Approval: _______________________     Date: ______________`, x, y);
-            
-            // Footer
-            y = pageHeight - 12;
+            // ===== FOOTER =====
+            const pageHeight = doc.internal.pageSize.height;
             doc.setFontSize(8);
             doc.setFont(undefined, 'italic');
-            doc.setTextColor(100, 100, 100);
-            doc.text(`Cover Sheet Generated: ${new Date().toLocaleDateString('en-AU')} | Job #${jobNum} | ${jobClient}`, x, y);
+            doc.setTextColor(150, 150, 150);
+            doc.text(`Generated: ${new Date().toLocaleDateString('en-AU')} | Job #${jobNum}`, x, pageHeight - 10);
             
             const filename = `CoverSheet_${jobClient.replace(/\s+/g, '_')}_${jobNum}_${new Date().toISOString().split('T')[0]}.pdf`;
             const pdfDataUri = doc.output('datauristring');
-            showPDFPreview(pdfDataUri, filename, '📋 Cover Sheet Preview');
-            notify("✓ Cover Sheet Ready");
+            showPDFPreview(pdfDataUri, filename, '📋 Job Filing Sheet');
+            notify("✓ Filing Sheet Ready");
             
         } catch(err) {
-            console.error('❌ Cover Sheet Error:', err);
+            console.error('❌ Filing Sheet Error:', err);
             notify('❌ Error: ' + err.message);
         }
     }
