@@ -4372,14 +4372,46 @@
             lineCost: sqm * qty * pricePerSqm
         };
     }
+    
+    function getFilteredItems() {
+        // Returns items matching current panel and color filters
+        let filtered = items;
+        
+        if (currentPanelFilter !== 'all') {
+            filtered = items.filter(it => {
+                const filter = currentPanelFilter.toLowerCase();
+                if (filter === 'panel' || filter === 'door' || filter === 'drawer' || filter === 'custom') {
+                    return it.type.toLowerCase() === filter;
+                } else if (filter === 'moulded' || filter === 'flat') {
+                    return it.fm.toLowerCase() === filter;
+                } else if (filter === 'ss' || filter === 'ds' || filter === 'se') {
+                    return it.mode === filter.toUpperCase();
+                }
+                return true;
+            });
+        }
+        
+        if (currentColorFilter) {
+            filtered = filtered.filter(it => (it.color || '') === currentColorFilter);
+        }
+        
+        console.log(`📊 Using filtered items: ${filtered.length}/${items.length}`);
+        return filtered;
+    }
 
     // ===== ESTIMATE COSTING CALCULATIONS =====
 
     function genForm(type) {
         try {
+            // Check if we have active filters and get filtered items
+            const hasFilters = currentPanelFilter !== 'all' || currentColorFilter !== '';
+            const itemsToUse = hasFilters ? getFilteredItems() : items;
+            
+            console.log(`📄 Generating ${type}: hasFilters=${hasFilters}, items=${itemsToUse.length}/${items.length}`);
+            
             // Cover Sheet, Shop Label, and Mixing Card don't require parts/items
-            if (items.length === 0 && type !== 'Cover Sheet' && type !== 'Shop Label' && type !== 'Mixing Card') {
-                notify('❌ Add parts first');
+            if (itemsToUse.length === 0 && type !== 'Cover Sheet' && type !== 'Shop Label' && type !== 'Mixing Card') {
+                notify('❌ No items match the current filter');
                 return;
             }
             
@@ -4389,6 +4421,9 @@
                 console.error('jsPDF not available');
                 return;
             }
+            
+            // Store items to use globally for PDF functions
+            window.pdfItemsToUse = itemsToUse;
             
             // Show charges modal for forms that need additional charges
             if (type === 'Estimate' || type === 'Quote Form' || type === 'Invoice') {
@@ -4404,6 +4439,11 @@
             } else {
                 notify('Form type not yet implemented');
             }
+            
+            // Clear the override after a brief delay to allow PDF functions to execute
+            setTimeout(() => {
+                window.pdfItemsToUse = null;
+            }, 500);
         } catch(error) {
             console.error('❌ PDF Generation Error:', error);
             notify('PDF Error: ' + error.message);
@@ -4448,6 +4488,7 @@
             
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('p', 'mm', 'a4');
+            const itemsForPDF = window.pdfItemsToUse || items;
             
             // Get company settings
             const companySettings = JSON.parse(localStorage.getItem('companySettings')) || {
@@ -4809,6 +4850,7 @@
             
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('p', 'mm', 'a4');
+            const itemsForPDF = window.pdfItemsToUse || items;
             
             // Get company settings
             const companySettings = JSON.parse(localStorage.getItem('companySettings')) || {
@@ -5170,6 +5212,7 @@
             
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('p', 'mm', 'a4');
+            const itemsForPDF = window.pdfItemsToUse || items;
             
             // Get company settings
             const companySettings = JSON.parse(localStorage.getItem('companySettings')) || {
@@ -5529,6 +5572,10 @@
             return;
         }
         
+        // Use filtered items if available, otherwise use all items
+        const itemsForPDF = window.pdfItemsToUse || items;
+        console.log(`📋 Supply Docket: using ${itemsForPDF.length} items`);
+        
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF('p', 'mm', 'a4');
         
@@ -5545,8 +5592,8 @@
         const jobNum = document.getElementById('jNum')?.value || document.getElementById('jN')?.value || '';
         const jobName = document.getElementById('jNm')?.value || '';
         
-        // Collect ALL unique colours from items (not just from input field)
-        const allColours = [...new Set(items
+        // Collect ALL unique colours from filtered items
+        const allColours = [...new Set(itemsForPDF
             .map(it => {
                 const brand = it.brand || '';
                 const color = it.color || '';
@@ -5564,7 +5611,7 @@
         )].sort();
         
         // Count items
-        const totalItems = items.reduce((sum, item) => sum + parseInt(item.qty || 1), 0);
+        const totalItems = itemsForPDF.reduce((sum, item) => sum + parseInt(item.qty || 1), 0);
         
         // ===== HEADER WITH LOGO & COMPANY INFO =====
         let y = 25;  // Increased to 25 to ensure 15mm+ blank space at top, then content starts
@@ -5665,7 +5712,7 @@
         doc.setFont(undefined, 'normal');
         doc.setFontSize(8);
         
-        items.forEach((item) => {
+        itemsForPDF.forEach((item) => {
             startX = margin;
             
             // Prepare data
