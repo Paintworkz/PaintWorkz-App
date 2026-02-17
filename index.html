@@ -796,12 +796,29 @@
                         </div>
                         <input type="text" id="newPaintProduct" placeholder="Product (e.g., 690 30% XTint Poly)" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; margin-bottom:10px; box-sizing:border-box; font-size:12px;">
                         
-                        <!-- 1L Base Section -->
+                        <!-- Base Color & Multiple Base Codes -->
                         <div style="background:#fff; padding:10px; border-radius:6px; border:1px solid #eee; margin-bottom:10px;">
-                            <div style="font-size:10px; font-weight:900; margin-bottom:8px; color:#666;">1L BASE (code @ grams)</div>
+                            <div style="font-size:10px; font-weight:900; margin-bottom:8px; color:#666;">BASE COLOR (e.g., White, Clear, Green)</div>
+                            <input type="text" id="baseColor" placeholder="Base Color" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:11px; margin-bottom:10px; box-sizing:border-box;">
+                            
+                            <div style="font-size:10px; font-weight:900; margin-bottom:8px; color:#666;">BASE CODES (up to 3 codes @ grams)</div>
+                            
+                            <!-- Base Code 1 -->
+                            <div style="display:flex; gap:8px; margin-bottom:6px;">
+                                <input type="text" id="baseCode1" placeholder="Code 1" style="flex:0.6; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:11px; box-sizing:border-box;">
+                                <input type="number" id="baseAmount1" placeholder="grams" step="0.01" style="flex:0.4; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:11px; box-sizing:border-box;">
+                            </div>
+                            
+                            <!-- Base Code 2 -->
+                            <div style="display:flex; gap:8px; margin-bottom:6px;">
+                                <input type="text" id="baseCode2" placeholder="Code 2 (optional)" style="flex:0.6; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:11px; box-sizing:border-box;">
+                                <input type="number" id="baseAmount2" placeholder="grams" step="0.01" style="flex:0.4; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:11px; box-sizing:border-box;">
+                            </div>
+                            
+                            <!-- Base Code 3 -->
                             <div style="display:flex; gap:8px;">
-                                <input type="text" id="baseCode" placeholder="Base Code" style="flex:0.6; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:11px; box-sizing:border-box;">
-                                <input type="number" id="baseAmount" placeholder="grams" step="0.01" style="flex:0.4; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:11px; box-sizing:border-box;">
+                                <input type="text" id="baseCode3" placeholder="Code 3 (optional)" style="flex:0.6; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:11px; box-sizing:border-box;">
+                                <input type="number" id="baseAmount3" placeholder="grams" step="0.01" style="flex:0.4; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:11px; box-sizing:border-box;">
                             </div>
                         </div>
                         
@@ -1713,12 +1730,28 @@
         const color = document.getElementById('newPaintColor').value.trim();
         const code = document.getElementById('newPaintCode').value.trim();
         const product = document.getElementById('newPaintProduct').value.trim();
-        const baseCode = document.getElementById('baseCode').value.trim();
-        const baseAmount = parseFloat(document.getElementById('baseAmount').value) || 0;
+        const baseColor = document.getElementById('baseColor').value.trim();
+        
+        // Collect all base codes (1-3)
+        const baseCodes = [];
+        for (let i = 1; i <= 3; i++) {
+            const codeInput = document.getElementById(`baseCode${i}`).value.trim();
+            const amountInput = parseFloat(document.getElementById(`baseAmount${i}`).value) || 0;
+            
+            if (codeInput && amountInput > 0) {
+                baseCodes.push({ code: codeInput, grams: amountInput });
+            }
+        }
+        
         const tintersList = document.getElementById('tintersList').value.trim();
         
-        if (!color || !code || !baseCode || !baseAmount) {
-            notify('Please enter Colour, Code, Base Code, and Base Amount');
+        // Validation
+        if (!color || !code) {
+            notify('Please enter Colour and Code');
+            return;
+        }
+        if (baseCodes.length === 0) {
+            notify('Please enter at least one Base Code with amount');
             return;
         }
         
@@ -1745,13 +1778,12 @@
             code: code,
             evicCode: code,  // Store the Evic code
             baseType: product || 'Custom',  // Base paint type
+            baseColor: baseColor || 'White',  // NEW: Base paint color
             version: '',  // Will be populated if available
             finishes: ['Satin'],
             baseSize: 1,
-            baseTinters: [
-                { code: baseCode, amount: baseAmount }
-            ],
-            whiteBase: baseCode ? [{ code: baseCode, grams: baseAmount }] : [],  // WHITE BASE as array
+            baseTinters: baseCodes,
+            whiteBase: baseCodes,  // WHITE BASE as array (now can have 1-3 items)
             colourants: colourants,
             totalWeight: null,  // Will be calculated if needed
             notes: `${colourants.length} tinters`
@@ -1764,12 +1796,17 @@
         document.getElementById('newPaintColor').value = '';
         document.getElementById('newPaintCode').value = '';
         document.getElementById('newPaintProduct').value = '';
-        document.getElementById('baseCode').value = '';
-        document.getElementById('baseAmount').value = '';
+        document.getElementById('baseColor').value = '';
+        document.getElementById('baseCode1').value = '';
+        document.getElementById('baseAmount1').value = '';
+        document.getElementById('baseCode2').value = '';
+        document.getElementById('baseAmount2').value = '';
+        document.getElementById('baseCode3').value = '';
+        document.getElementById('baseAmount3').value = '';
         document.getElementById('tintersList').value = '';
         
         renderPaintFormulaList();
-        notify(`✓ Formula added: ${color} (${colourants.length} tinters)`);
+        notify(`✓ Formula added: ${color} (${baseCodes.length} base codes, ${colourants.length} tinters)`);
     }
 
     function editPaintFormula(idx) {
@@ -1792,6 +1829,11 @@
             <div style="margin-bottom:12px;">
                 <label style="font-weight:bold; display:block; margin-bottom:4px;">Base Type:</label>
                 <input type="text" id="editBaseType" value="${f.baseType || ''}" style="width:100%; padding:6px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box;">
+            </div>
+            
+            <div style="margin-bottom:12px;">
+                <label style="font-weight:bold; display:block; margin-bottom:4px;">Base Color:</label>
+                <input type="text" id="editBaseColor" value="${f.baseColor || ''}" style="width:100%; padding:6px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box;" placeholder="e.g., White, Clear, Green">
             </div>
             
             <div style="margin-bottom:12px;">
@@ -1854,6 +1896,7 @@ ${f.colourants ? f.colourants.map(c => `${c.code}: ${c.amount || c.grams}`).join
         f.color = document.getElementById('editColorName').value;
         f.evicCode = document.getElementById('editEvicCode').value;
         f.baseType = document.getElementById('editBaseType').value;
+        f.baseColor = document.getElementById('editBaseColor').value || 'White';  // Default to White
         f.version = document.getElementById('editVersion').value;
         // totalWeight will be parsed below
         
@@ -5719,6 +5762,11 @@ ${f.colourants ? f.colourants.map(c => `${c.code}: ${c.amount || c.grams}`).join
                     doc.text(`Base Type: ${baseTypeValue}`, 25, boxY);
                     boxY += 7;
                     
+                    // Show Base Color
+                    const baseColorValue = formula.baseColor || 'White';
+                    doc.text(`Base Color: ${baseColorValue}`, 25, boxY);
+                    boxY += 7;
+                    
                     // Show version if available
                     if (formula.version) {
                         doc.text(`Version: ${formula.version}`, 25, boxY);
@@ -5915,6 +5963,11 @@ ${f.colourants ? f.colourants.map(c => `${c.code}: ${c.amount || c.grams}`).join
                     doc.setFontSize(12);
                     doc.setFont(undefined, 'bold');
                     doc.text('Base Type: ______________________________', 25, blankBoxY);
+                    blankBoxY += 7;
+                    
+                    doc.setFontSize(12);
+                    doc.setFont(undefined, 'bold');
+                    doc.text('Base Color: ______________________________', 25, blankBoxY);
                     blankBoxY += 7;
                     
                     doc.setFontSize(11);
