@@ -1163,7 +1163,7 @@
                         <span style="color:#999;">Created by Colin Bedford</span><br>
                         <span style="color:#999;">Paintworkz PTY LTD</span><br>
                         <span id="currentDate" style="color:#999;">14 February 2026</span><br><br>
-                        <span id="versionDisplay" style="color:#d4af37; font-weight:900;">v1.5.1 | </span><span id="versionDate" style="color:#d4af37; font-weight:900;"></span>
+                        <span id="versionDisplay" style="color:#d4af37; font-weight:900;">v1.5.2 | </span><span id="versionDate" style="color:#d4af37; font-weight:900;"></span>
                     </p>
                 </div>
             </div>
@@ -1236,7 +1236,7 @@
 
 <script>
     ////////////////////////////////////////////////////////////////////////////////
-    // 🎨 PAINTWORKZ PRO v1.5.1 STABLE (17 Feb 2026)
+    // 🎨 PAINTWORKZ PRO v1.5.2 STABLE (17 Feb 2026)
     ////////////////////////////////////////////////////////////////////////////////
     // LAST UPDATED: 17 Feb 2026
     // CHANGES: Filtered PDF generation, Job Filing Sheet, Inspection timeline fix
@@ -1253,14 +1253,14 @@
     // ⚠️ IMPORTANT: Keep this header updated with every code change!
     ////////////////////////////////////////////////////////////////////////////////
     
-    console.log('%c 🎨 PaintWorkz Pro v1.5.1 STABLE (2026-02-17) ', 'background:#34c759;color:#fff;font-weight:900;padding:8px;border-radius:4px;');
-    console.log('✅ UPDATES IN v1.5.1:');
-    console.log('✓ Gantt Chart defaults corrected (M:1, S1:4, U:2, S2:3, T:2, I:2, C:1)');
-    console.log('✓ Job Filing Sheet data population fixed');
-    console.log('✓ Filtered PDF generation - respects Measure sheet filters');
-    console.log('✓ Inspection (i) label corrected in Gantt chart');
-    console.log('✓ Lexicon formula totalWeight fixed (1384.09g)');
-    console.log('✓ Cover Sheet redesigned as simple filing reference');
+    console.log('%c 🎨 PaintWorkz Pro v1.5.2 STABLE (2026-02-17) ', 'background:#34c759;color:#fff;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('✅ UPDATES IN v1.5.2:');
+    console.log('✓ Cover Sheet redesigned with full client details');
+    console.log('✓ Paint colour breakdown table with panel counts & sq metres');
+    console.log('✓ Date Completed field added');
+    console.log('✓ Job No format changed (no # symbol)');
+    console.log('✓ Gantt Chart defaults corrected');
+    console.log('✓ Filtered PDF generation complete');
     console.log('✅ CRITICAL FIXES:');
     console.log('✓ PDF button now shows form selection modal (not navigate to forms tab)');
     console.log('✓ Disabled Firebase real-time sync (memory crashes fixed)');
@@ -6374,150 +6374,211 @@
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('p', 'mm', 'a4');
             
-            // Get job data from measure tab - using EXACT field IDs
+            // Get job data from measure tab
             const jobNum = (document.getElementById('jN')?.value || '---').trim();
-            const jobName = (document.getElementById('jNm')?.value || 'Job Name TBD').trim();
-            const jobClient = (document.getElementById('cli')?.value || 'Client TBD').trim();
+            const jobName = (document.getElementById('jNm')?.value || '---').trim();
+            const jobClient = (document.getElementById('cli')?.value || '---').trim();
             const dateReceived = (document.getElementById('dRec')?.value || '').trim();
             
-            // Count total panels from current items
+            // Try to get date completed (if available in job history)
+            let dateCompleted = '';
+            const jobHistory = JSON.parse(localStorage.getItem('jobHistory')) || [];
+            const currentJob = jobHistory.find(j => j.jobNum === jobNum);
+            if (currentJob?.dateCompleted) {
+                dateCompleted = currentJob.dateCompleted;
+            }
+            
+            // Get client full details from database
+            const clientDB = getClientDatabase();
+            let clientDetails = null;
+            Object.entries(clientDB).forEach(([id, client]) => {
+                if (client.name && client.name.toLowerCase() === jobClient.toLowerCase()) {
+                    clientDetails = client;
+                }
+            });
+            
+            // Items to use (respects filters)
             const itemsForPDF = window.pdfItemsToUse || items;
-            const totalParts = itemsForPDF.length;
             
-            // Paint data - get directly from measure tab fields
-            const paintBrandEl = document.getElementById('p-brand');
-            const paintColorEl = document.getElementById('p-color');
-            const paintFinishEl = document.getElementById('p-finish');
+            // Build color breakdown table
+            const colorBreakdown = {};
+            let totalPanels = 0;
+            let totalSQM = 0;
             
-            const paintBrand = (paintBrandEl?.value || 'Wattyl').trim();
-            const paintColor = (paintColorEl?.value || 'TBD').trim();
-            const paintFinish = (paintFinishEl?.value || 'Satin').trim();
+            itemsForPDF.forEach(item => {
+                const color = (item.color || 'Unspecified').trim();
+                const qty = parseInt(item.qty || 1);
+                const sqm = parseFloat(item.sqm || 0);
+                const lineSQM = sqm * qty;
+                
+                if (!colorBreakdown[color]) {
+                    colorBreakdown[color] = { count: 0, sqm: 0 };
+                }
+                colorBreakdown[color].count += qty;
+                colorBreakdown[color].sqm += lineSQM;
+                totalPanels += qty;
+                totalSQM += lineSQM;
+            });
             
-            console.log(`📋 JOB FILING SHEET GENERATED:`);
-            console.log(`  Job #${jobNum}: ${jobClient}`);
-            console.log(`  Paint: ${paintBrand} ${paintColor} ${paintFinish}`);
-            console.log(`  Total Panels: ${totalParts}, Date Received: ${dateReceived}`);
-            
-            const x = 20;
-            let y = 25;
+            const x = 15;
+            const pageHeight = doc.internal.pageSize.height;
+            let y = 20;
             
             // ===== TITLE =====
-            doc.setFontSize(28);
-            doc.setFont(undefined, 'bold');
-            doc.setTextColor(0, 0, 0);
-            doc.text('JOB FILING SHEET', x, y);
-            y += 20;
-            
-            // ===== JOB NUMBER BOX (LARGE & PROMINENT) =====
-            doc.setFontSize(11);
-            doc.setFont(undefined, 'normal');
-            doc.setTextColor(100, 100, 100);
-            doc.text('JOB NUMBER:', x, y);
-            
             doc.setFontSize(24);
             doc.setFont(undefined, 'bold');
             doc.setTextColor(0, 0, 0);
-            doc.text(`#${jobNum}`, x, y + 8);
-            y += 25;
+            doc.text('COVER SHEET', x, y);
+            y += 12;
             
-            // ===== DIVIDER =====
-            doc.setDrawColor(170, 132, 30);
-            doc.setLineWidth(1);
-            doc.line(x, y, 190, y);
-            y += 10;
+            // ===== JOB NUMBER =====
+            doc.setFontSize(11);
+            doc.setFont(undefined, 'bold');
+            doc.setTextColor(100, 100, 100);
+            doc.text('Job No:', x, y);
+            doc.setFontSize(18);
+            doc.setFont(undefined, 'bold');
+            doc.setTextColor(0, 0, 0);
+            doc.text(jobNum, x + 25, y);
+            y += 15;
             
-            // ===== CUSTOMER DETAILS =====
-            doc.setFontSize(12);
+            // ===== CUSTOMER DETAILS SECTION =====
+            doc.setFontSize(11);
             doc.setFont(undefined, 'bold');
             doc.setTextColor(50, 50, 50);
             doc.text('CUSTOMER DETAILS', x, y);
-            y += 8;
+            y += 7;
             
-            doc.setFontSize(10);
+            doc.setFontSize(9);
             doc.setFont(undefined, 'bold');
             doc.setTextColor(0, 0, 0);
-            doc.text('Customer Name:', x, y);
+            doc.text('Company:', x, y);
             doc.setFont(undefined, 'normal');
-            doc.text(jobClient, x + 50, y);
-            y += 8;
+            doc.text(jobClient, x + 35, y);
+            y += 6;
+            
+            if (clientDetails?.contactName) {
+                doc.setFont(undefined, 'bold');
+                doc.text('Contact:', x, y);
+                doc.setFont(undefined, 'normal');
+                doc.text(clientDetails.contactName, x + 35, y);
+                y += 6;
+            }
+            
+            if (clientDetails?.address) {
+                doc.setFont(undefined, 'bold');
+                doc.text('Address:', x, y);
+                doc.setFont(undefined, 'normal');
+                let addressText = clientDetails.address;
+                if (clientDetails.town) addressText += ', ' + clientDetails.town;
+                if (clientDetails.postcode) addressText += ' ' + clientDetails.postcode;
+                doc.text(addressText, x + 35, y);
+                y += 6;
+            }
+            
+            if (clientDetails?.landline) {
+                doc.setFont(undefined, 'bold');
+                doc.text('Phone:', x, y);
+                doc.setFont(undefined, 'normal');
+                doc.text(clientDetails.landline, x + 35, y);
+                y += 6;
+            }
+            
+            if (clientDetails?.email1) {
+                doc.setFont(undefined, 'bold');
+                doc.text('Email:', x, y);
+                doc.setFont(undefined, 'normal');
+                doc.text(clientDetails.email1, x + 35, y);
+                y += 8;
+            }
             
             // ===== JOB INFORMATION =====
-            y += 5;
-            doc.setFontSize(12);
+            doc.setFontSize(11);
             doc.setFont(undefined, 'bold');
             doc.setTextColor(50, 50, 50);
             doc.text('JOB INFORMATION', x, y);
-            y += 8;
+            y += 7;
             
-            doc.setFontSize(10);
+            doc.setFontSize(9);
             doc.setFont(undefined, 'bold');
             doc.setTextColor(0, 0, 0);
-            
             doc.text('Job Name:', x, y);
             doc.setFont(undefined, 'normal');
-            doc.text(jobName, x + 50, y);
-            y += 8;
+            doc.text(jobName, x + 35, y);
+            y += 6;
             
             doc.setFont(undefined, 'bold');
-            doc.text('Date Received:', x, y);
+            doc.text('Date Started:', x, y);
             doc.setFont(undefined, 'normal');
-            doc.text(dateReceived || '---', x + 50, y);
+            doc.text(dateReceived || '---', x + 35, y);
+            y += 6;
+            
+            doc.setFont(undefined, 'bold');
+            doc.text('Date Completed:', x, y);
+            doc.setFont(undefined, 'normal');
+            doc.text(dateCompleted || '---', x + 35, y);
             y += 10;
             
-            // ===== PROJECT SCOPE =====
-            doc.setFontSize(12);
-            doc.setFont(undefined, 'bold');
-            doc.setTextColor(50, 50, 50);
-            doc.text('PROJECT SCOPE', x, y);
-            y += 8;
-            
+            // ===== PAINT COLOUR BREAKDOWN TABLE =====
             doc.setFontSize(11);
             doc.setFont(undefined, 'bold');
-            doc.setTextColor(0, 0, 0);
-            doc.text(`Total Panels: ${totalParts}`, x, y);
-            y += 10;
-            
-            // ===== PAINT SPECIFICATION =====
-            doc.setFontSize(12);
-            doc.setFont(undefined, 'bold');
             doc.setTextColor(50, 50, 50);
-            doc.text('PAINT SPECIFICATION', x, y);
+            doc.text('PAINT COLOUR BREAKDOWN', x, y);
             y += 8;
             
-            doc.setFontSize(10);
+            // Table headers
+            doc.setFontSize(8);
             doc.setFont(undefined, 'bold');
+            doc.setTextColor(255, 255, 255);
+            doc.setFillColor(100, 100, 100);
+            doc.rect(x, y - 4, 50, 5, 'F');
+            doc.text('Colour', x + 2, y);
+            doc.rect(x + 50, y - 4, 30, 5, 'F');
+            doc.text('Panels', x + 58, y);
+            doc.rect(x + 80, y - 4, 35, 5, 'F');
+            doc.text('Sq Metres', x + 88, y);
+            y += 7;
+            
+            // Table data
+            doc.setFont(undefined, 'normal');
             doc.setTextColor(0, 0, 0);
+            let colorCount = 0;
+            Object.entries(colorBreakdown).forEach(([color, data]) => {
+                colorCount++;
+                const rowBg = colorCount % 2 === 0 ? 240 : 255;
+                doc.setFillColor(rowBg, rowBg, rowBg);
+                doc.rect(x, y - 4, 115, 5, 'F');
+                
+                doc.text(color, x + 2, y);
+                doc.text(data.count.toString(), x + 58, y);
+                doc.text(data.sqm.toFixed(2), x + 88, y);
+                y += 5;
+            });
             
-            doc.text('Brand:', x, y);
-            doc.setFont(undefined, 'normal');
-            doc.text(paintBrand, x + 50, y);
-            y += 7;
-            
+            // Total row
             doc.setFont(undefined, 'bold');
-            doc.text('Colour:', x, y);
-            doc.setFont(undefined, 'normal');
-            doc.text(paintColor, x + 50, y);
-            y += 7;
-            
-            doc.setFont(undefined, 'bold');
-            doc.text('Finish:', x, y);
-            doc.setFont(undefined, 'normal');
-            doc.text(paintFinish, x + 50, y);
+            doc.setFillColor(220, 220, 220);
+            doc.rect(x, y - 4, 115, 5, 'F');
+            doc.text('TOTAL', x + 2, y);
+            doc.text(totalPanels.toString(), x + 58, y);
+            doc.text(totalSQM.toFixed(2), x + 88, y);
+            y += 12;
             
             // ===== FOOTER =====
-            const pageHeight = doc.internal.pageSize.height;
             doc.setFontSize(8);
             doc.setFont(undefined, 'italic');
             doc.setTextColor(150, 150, 150);
-            doc.text(`Generated: ${new Date().toLocaleDateString('en-AU')} | Job #${jobNum} | ${jobClient}`, x, pageHeight - 10);
+            doc.text(`Generated: ${new Date().toLocaleDateString('en-AU')} | Job ${jobNum} | ${jobClient}`, x, pageHeight - 8);
             
             const filename = `CoverSheet_${jobClient.replace(/\s+/g, '_')}_${jobNum}_${new Date().toISOString().split('T')[0]}.pdf`;
             const pdfDataUri = doc.output('datauristring');
-            showPDFPreview(pdfDataUri, filename, '📋 Job Filing Sheet');
-            notify("✓ Filing Sheet Ready");
+            showPDFPreview(pdfDataUri, filename, '📋 Cover Sheet');
+            notify("✓ Cover Sheet Ready");
+            
+            console.log(`📋 COVER SHEET: Job ${jobNum}, ${jobClient}, ${colorCount} colours, ${totalPanels} panels, ${totalSQM.toFixed(2)}m²`);
             
         } catch(err) {
-            console.error('❌ Filing Sheet Error:', err);
+            console.error('❌ Cover Sheet Error:', err);
             notify('❌ Error: ' + err.message);
         }
     }
