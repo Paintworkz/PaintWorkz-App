@@ -6380,6 +6380,10 @@
             const jobClient = (document.getElementById('cli')?.value || '---').trim();
             const dateReceived = (document.getElementById('dRec')?.value || '').trim();
             
+            // Get paint spec from measure tab
+            const paintBrand = (document.getElementById('p-brand')?.value || 'Wattyl').trim();
+            const paintFinish = (document.getElementById('p-finish')?.value || 'Satin').trim();
+            
             // Try to get date completed (if available in job history)
             let dateCompleted = '';
             const jobHistory = JSON.parse(localStorage.getItem('jobHistory')) || [];
@@ -6391,78 +6395,88 @@
             // Get client full details from database
             const clientDB = getClientDatabase();
             let clientDetails = null;
+            
+            console.log(`📋 COVER SHEET: Looking up client "${jobClient}" in database`);
+            console.log(`📋 Database contains ${Object.keys(clientDB).length} clients`);
+            
             Object.entries(clientDB).forEach(([id, client]) => {
                 if (client.name && client.name.toLowerCase() === jobClient.toLowerCase()) {
                     clientDetails = client;
+                    console.log(`📋 CLIENT FOUND: ${client.name}`);
                 }
             });
+            
+            if (!clientDetails) {
+                console.log(`⚠️ Client not found in database, will show name only`);
+            }
             
             // Items to use (respects filters)
             const itemsForPDF = window.pdfItemsToUse || items;
             
-            // Build color breakdown table
+            // Build color breakdown table with full paint spec
             const colorBreakdown = {};
             let totalPanels = 0;
             let totalSQM = 0;
             
             itemsForPDF.forEach(item => {
                 const color = (item.color || 'Unspecified').trim();
+                const fullPaintSpec = `${paintBrand} ${color} ${paintFinish}`;
                 const qty = parseInt(item.qty || 1);
                 const sqm = parseFloat(item.sqm || 0);
                 const lineSQM = sqm * qty;
                 
-                if (!colorBreakdown[color]) {
-                    colorBreakdown[color] = { count: 0, sqm: 0 };
+                if (!colorBreakdown[fullPaintSpec]) {
+                    colorBreakdown[fullPaintSpec] = { count: 0, sqm: 0 };
                 }
-                colorBreakdown[color].count += qty;
-                colorBreakdown[color].sqm += lineSQM;
+                colorBreakdown[fullPaintSpec].count += qty;
+                colorBreakdown[fullPaintSpec].sqm += lineSQM;
                 totalPanels += qty;
                 totalSQM += lineSQM;
             });
             
             const x = 15;
             const pageHeight = doc.internal.pageSize.height;
-            let y = 20;
+            let y = 15;
             
             // ===== TITLE =====
-            doc.setFontSize(24);
+            doc.setFontSize(28);
             doc.setFont(undefined, 'bold');
             doc.setTextColor(0, 0, 0);
             doc.text('COVER SHEET', x, y);
-            y += 12;
+            y += 16;
             
             // ===== JOB NUMBER =====
-            doc.setFontSize(11);
+            doc.setFontSize(12);
             doc.setFont(undefined, 'bold');
             doc.setTextColor(100, 100, 100);
             doc.text('Job No:', x, y);
-            doc.setFontSize(18);
+            doc.setFontSize(26);
             doc.setFont(undefined, 'bold');
             doc.setTextColor(0, 0, 0);
-            doc.text(jobNum, x + 25, y);
-            y += 15;
+            doc.text(jobNum, x + 28, y);
+            y += 18;
             
             // ===== CUSTOMER DETAILS SECTION =====
-            doc.setFontSize(11);
+            doc.setFontSize(13);
             doc.setFont(undefined, 'bold');
             doc.setTextColor(50, 50, 50);
             doc.text('CUSTOMER DETAILS', x, y);
-            y += 7;
+            y += 9;
             
-            doc.setFontSize(9);
+            doc.setFontSize(11);
             doc.setFont(undefined, 'bold');
             doc.setTextColor(0, 0, 0);
             doc.text('Company:', x, y);
             doc.setFont(undefined, 'normal');
-            doc.text(jobClient, x + 35, y);
-            y += 6;
+            doc.text(jobClient, x + 40, y);
+            y += 8;
             
             if (clientDetails?.contactName) {
                 doc.setFont(undefined, 'bold');
                 doc.text('Contact:', x, y);
                 doc.setFont(undefined, 'normal');
-                doc.text(clientDetails.contactName, x + 35, y);
-                y += 6;
+                doc.text(clientDetails.contactName, x + 40, y);
+                y += 8;
             }
             
             if (clientDetails?.address) {
@@ -6472,97 +6486,120 @@
                 let addressText = clientDetails.address;
                 if (clientDetails.town) addressText += ', ' + clientDetails.town;
                 if (clientDetails.postcode) addressText += ' ' + clientDetails.postcode;
-                doc.text(addressText, x + 35, y);
-                y += 6;
+                doc.text(addressText, x + 40, y);
+                y += 8;
             }
             
             if (clientDetails?.landline) {
                 doc.setFont(undefined, 'bold');
                 doc.text('Phone:', x, y);
                 doc.setFont(undefined, 'normal');
-                doc.text(clientDetails.landline, x + 35, y);
-                y += 6;
+                doc.text(clientDetails.landline, x + 40, y);
+                y += 8;
             }
             
             if (clientDetails?.email1) {
                 doc.setFont(undefined, 'bold');
                 doc.text('Email:', x, y);
                 doc.setFont(undefined, 'normal');
-                doc.text(clientDetails.email1, x + 35, y);
-                y += 8;
+                doc.text(clientDetails.email1, x + 40, y);
+                y += 10;
             }
             
             // ===== JOB INFORMATION =====
-            doc.setFontSize(11);
+            doc.setFontSize(13);
             doc.setFont(undefined, 'bold');
             doc.setTextColor(50, 50, 50);
             doc.text('JOB INFORMATION', x, y);
-            y += 7;
+            y += 9;
             
-            doc.setFontSize(9);
+            doc.setFontSize(11);
             doc.setFont(undefined, 'bold');
             doc.setTextColor(0, 0, 0);
+            
             doc.text('Job Name:', x, y);
             doc.setFont(undefined, 'normal');
-            doc.text(jobName, x + 35, y);
-            y += 6;
+            doc.text(jobName, x + 40, y);
+            y += 8;
             
             doc.setFont(undefined, 'bold');
             doc.text('Date Started:', x, y);
             doc.setFont(undefined, 'normal');
-            doc.text(dateReceived || '---', x + 35, y);
-            y += 6;
+            doc.text(dateReceived || '---', x + 40, y);
+            y += 8;
             
             doc.setFont(undefined, 'bold');
             doc.text('Date Completed:', x, y);
             doc.setFont(undefined, 'normal');
-            doc.text(dateCompleted || '---', x + 35, y);
-            y += 10;
+            doc.text(dateCompleted || '---', x + 40, y);
+            y += 12;
             
             // ===== PAINT COLOUR BREAKDOWN TABLE =====
-            doc.setFontSize(11);
+            doc.setFontSize(13);
             doc.setFont(undefined, 'bold');
             doc.setTextColor(50, 50, 50);
             doc.text('PAINT COLOUR BREAKDOWN', x, y);
-            y += 8;
+            y += 10;
             
             // Table headers
-            doc.setFontSize(8);
+            doc.setFontSize(10);
             doc.setFont(undefined, 'bold');
             doc.setTextColor(255, 255, 255);
-            doc.setFillColor(100, 100, 100);
-            doc.rect(x, y - 4, 50, 5, 'F');
-            doc.text('Colour', x + 2, y);
-            doc.rect(x + 50, y - 4, 30, 5, 'F');
-            doc.text('Panels', x + 58, y);
-            doc.rect(x + 80, y - 4, 35, 5, 'F');
-            doc.text('Sq Metres', x + 88, y);
-            y += 7;
+            doc.setFillColor(80, 80, 80);
+            doc.rect(x, y - 5, 75, 6, 'F');
+            doc.text('Paint Specification', x + 3, y);
+            doc.rect(x + 75, y - 5, 30, 6, 'F');
+            doc.text('Panels', x + 80, y);
+            doc.rect(x + 105, y - 5, 35, 6, 'F');
+            doc.text('Sq Metres', x + 113, y);
+            y += 8;
             
             // Table data
             doc.setFont(undefined, 'normal');
             doc.setTextColor(0, 0, 0);
             let colorCount = 0;
-            Object.entries(colorBreakdown).forEach(([color, data]) => {
+            Object.entries(colorBreakdown).forEach(([paintSpec, data]) => {
                 colorCount++;
-                const rowBg = colorCount % 2 === 0 ? 240 : 255;
+                const rowBg = colorCount % 2 === 0 ? 245 : 255;
                 doc.setFillColor(rowBg, rowBg, rowBg);
-                doc.rect(x, y - 4, 115, 5, 'F');
+                doc.rect(x, y - 5, 110, 6, 'F');
                 
-                doc.text(color, x + 2, y);
-                doc.text(data.count.toString(), x + 58, y);
-                doc.text(data.sqm.toFixed(2), x + 88, y);
-                y += 5;
+                doc.setFontSize(10);
+                doc.text(paintSpec, x + 3, y);
+                doc.text(data.count.toString(), x + 80, y);
+                doc.text(data.sqm.toFixed(2), x + 113, y);
+                y += 6;
             });
             
             // Total row
             doc.setFont(undefined, 'bold');
-            doc.setFillColor(220, 220, 220);
-            doc.rect(x, y - 4, 115, 5, 'F');
-            doc.text('TOTAL', x + 2, y);
-            doc.text(totalPanels.toString(), x + 58, y);
-            doc.text(totalSQM.toFixed(2), x + 88, y);
+            doc.setFontSize(11);
+            doc.setFillColor(200, 200, 200);
+            doc.rect(x, y - 5, 110, 6, 'F');
+            doc.text('TOTAL', x + 3, y);
+            doc.text(totalPanels.toString(), x + 80, y);
+            doc.text(totalSQM.toFixed(2), x + 113, y);
             y += 12;
+            
+            // ===== TOTALS SECTION =====
+            doc.setFontSize(12);
+            doc.setFont(undefined, 'bold');
+            doc.setTextColor(50, 50, 50);
+            doc.text('PROJECT TOTALS', x, y);
+            y += 8;
+            
+            doc.setFontSize(11);
+            doc.setFont(undefined, 'bold');
+            doc.setTextColor(0, 0, 0);
+            doc.text('Total Panels:', x, y);
+            doc.setFont(undefined, 'normal');
+            doc.text(totalPanels.toString(), x + 45, y);
+            y += 8;
+            
+            doc.setFont(undefined, 'bold');
+            doc.text('Total Square Metres:', x, y);
+            doc.setFont(undefined, 'normal');
+            doc.text(totalSQM.toFixed(2), x + 45, y);
             
             // ===== FOOTER =====
             doc.setFontSize(8);
