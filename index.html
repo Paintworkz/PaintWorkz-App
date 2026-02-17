@@ -837,7 +837,7 @@
                 <div>
                     <div style="margin-bottom:10px; font-weight:900; font-size:12px;">
                         Existing Formulas (<span id="formulaCount">0</span>)
-                        <input type="text" id="formulaSearch" placeholder="Search formula..." style="width:100%; padding:6px; margin-top:8px; border:1px solid #ddd; border-radius:4px; font-size:11px;">
+                        <input type="text" id="formulaSearch" placeholder="Search formula..." style="width:100%; padding:6px; margin-top:8px; border:1px solid #ddd; border-radius:4px; font-size:11px;" oninput="searchFormulas()">
                     </div>
                     <div id="paintFormulaList" style="background:#fff; border:1px solid #ddd; border-radius:8px; overflow:hidden; max-height:400px; overflow-y:auto;"></div>
                 </div>
@@ -1717,25 +1717,31 @@
     }
 
     // ===== PAINT FORMULA DATABASE MANAGEMENT =====
-    function renderPaintFormulaList() {
+    function renderPaintFormulaList(formulasToDisplay = null) {
         const list = document.getElementById('paintFormulaList');
         const countSpan = document.getElementById('formulaCount');
         
         if (!list) return;
         
+        // Use provided array or default to paintDatabase
+        const displayFormulas = formulasToDisplay || paintDatabase;
+        
         // Update the count
         if (countSpan) {
-            countSpan.innerText = paintDatabase.length;
+            countSpan.innerText = displayFormulas.length;
         }
         
-        if (paintDatabase.length === 0) {
-            list.innerHTML = '<div style="padding:15px; text-align:center; color:#999; font-size:11px;">No formulas yet. Add one above.</div>';
+        if (displayFormulas.length === 0) {
+            list.innerHTML = '<div style="padding:15px; text-align:center; color:#999; font-size:11px;">No formulas found.</div>';
             return;
         }
         
         let html = '';
-        for (let i = 0; i < paintDatabase.length; i++) {
-            const f = paintDatabase[i];
+        for (let i = 0; i < displayFormulas.length; i++) {
+            const f = displayFormulas[i];
+            // Find the actual index in paintDatabase for the edit/delete buttons
+            const actualIndex = paintDatabase.findIndex(formula => formula.id === f.id);
+            
             const baseTintCount = (f.baseTinters || []).length;
             const colCount = (f.colourants || []).length;
             
@@ -1744,8 +1750,8 @@
             html += '<div style="font-size:10px; color:#666; margin-bottom:6px;">' + f.product + '</div>';
             html += '<div style="font-size:9px; color:#999; margin-bottom:8px;">' + baseTintCount + ' base codes • ' + colCount + ' colourants</div>';
             html += '<div style="display:flex; gap:6px;">';
-            html += '<button onclick="editPaintFormula(' + i + ')" style="padding:4px 10px; background:#2196f3; color:#fff; border:none; border-radius:3px; font-size:9px; font-weight:900; cursor:pointer;">Edit</button>';
-            html += '<button onclick="deletePaintFormula(' + i + ')" style="padding:4px 10px; background:#ff3b30; color:#fff; border:none; border-radius:3px; font-size:9px; font-weight:900; cursor:pointer;">Delete</button>';
+            html += '<button onclick="editPaintFormula(' + actualIndex + ')" style="padding:4px 10px; background:#2196f3; color:#fff; border:none; border-radius:3px; font-size:9px; font-weight:900; cursor:pointer;">Edit</button>';
+            html += '<button onclick="deletePaintFormula(' + actualIndex + ')" style="padding:4px 10px; background:#ff3b30; color:#fff; border:none; border-radius:3px; font-size:9px; font-weight:900; cursor:pointer;">Delete</button>';
             html += '</div></div>';
         }
         
@@ -1815,6 +1821,19 @@
         }
         
         console.log('✅ FINAL: Captured', colourants.length, 'tinters:', colourants);
+        console.log('📊 TOTAL WEIGHT CALCULATION:');
+        console.log('  Base codes total:', baseCodes.reduce((sum, b) => sum + (b.grams || 0), 0).toFixed(2) + 'g');
+        console.log('  Tinters total:', colourants.reduce((sum, c) => sum + (c.amount || 0), 0).toFixed(2) + 'g');
+        console.log('  Grand total:', totalWeight.toFixed(2) + 'g');
+        
+        // Calculate total weight from base codes + tinters
+        let totalWeight = 0;
+        baseCodes.forEach(item => {
+            totalWeight += (item.grams || 0);
+        });
+        colourants.forEach(item => {
+            totalWeight += (item.amount || 0);
+        });
         
         // Create new formula with structured format INCLUDING EVIC FIELDS
         const newFormula = {
@@ -1832,7 +1851,7 @@
             baseTinters: baseCodes,
             whiteBase: baseCodes,  // WHITE BASE as array (now can have 1-3 items)
             colourants: colourants,
-            totalWeight: null,  // Will be calculated if needed
+            totalWeight: totalWeight > 0 ? totalWeight : null,  // Auto-calculated
             notes: `${colourants.length} tinters`
         };
         
@@ -2070,7 +2089,26 @@
         // Parse and store total weight as number
         const totalWeightStr = document.getElementById('editTotalWeight').value.trim();
         console.log(`📝 TOTAL WEIGHT RAW: "${totalWeightStr}" → Parsed: ${totalWeightStr ? parseNumber(totalWeightStr) : 'null'}`);
-        f.totalWeight = totalWeightStr ? parseNumber(totalWeightStr) : null;
+        
+        // If total weight is empty, auto-calculate from white base + tinters
+        if (!totalWeightStr) {
+            let calculated = 0;
+            if (f.whiteBase && Array.isArray(f.whiteBase)) {
+                f.whiteBase.forEach(item => {
+                    calculated += (item.grams || 0);
+                });
+            }
+            if (f.colourants && Array.isArray(f.colourants)) {
+                f.colourants.forEach(item => {
+                    calculated += (item.amount || 0);
+                });
+            }
+            f.totalWeight = calculated > 0 ? calculated : null;
+            console.log(`  📊 Auto-calculated total weight: ${calculated.toFixed(2)}g`);
+        } else {
+            f.totalWeight = parseNumber(totalWeightStr);
+            console.log(`  ✓ Using manual total weight: ${f.totalWeight}g`);
+        }
         
         // Close dialog
         closeFormulaDialog();
