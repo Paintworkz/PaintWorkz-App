@@ -795,6 +795,7 @@
                             <input type="text" id="newPaintCode" placeholder="Code (e.g., XTSW1E3)" style="flex:1; padding:10px; border:1px solid #ddd; border-radius:6px; box-sizing:border-box; font-size:12px;">
                         </div>
                         <input type="text" id="newPaintProduct" placeholder="Product (e.g., 690 30% XTint Poly)" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; margin-bottom:10px; box-sizing:border-box; font-size:12px;">
+                        <input type="text" id="newPaintVersion" placeholder="Version (e.g., DULUX WOC Series II (2018))" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; margin-bottom:10px; box-sizing:border-box; font-size:12px;">
                         
                         <!-- Base Color & Multiple Base Codes -->
                         <div style="background:#fff; padding:10px; border-radius:6px; border:1px solid #eee; margin-bottom:10px;">
@@ -1514,7 +1515,16 @@
             try {
                 const loaded = JSON.parse(saved);
                 if (Array.isArray(loaded) && loaded.length > 0) {
-                    console.log(`✓ Loaded ${loaded.length} paint formulas from localStorage`);
+                    console.log(`📚 LOADED ${loaded.length} paint formulas from localStorage:`);
+                    loaded.forEach((f, idx) => {
+                        const tinterCount = (f.colourants || []).length;
+                        console.log(`  [${idx}] ${f.color}: ${tinterCount} tinters`);
+                        if (tinterCount > 0) {
+                            f.colourants.forEach((t, ti) => {
+                                console.log(`        ${ti}: ${t.code} = ${t.amount || t.grams}`);
+                            });
+                        }
+                    });
                     return loaded;
                 }
             } catch(e) {
@@ -1545,14 +1555,24 @@
             }
         ];
         
-        console.log(`✓ Using ${defaults.length} default paint formulas`);
+        console.log(`📚 USING ${defaults.length} DEFAULT paint formulas (localStorage was empty)`);
+        defaults.forEach((f, idx) => {
+            const tinterCount = (f.colourants || []).length;
+            console.log(`  [${idx}] ${f.color}: ${tinterCount} tinters`);
+        });
         localStorage.setItem('paintFormulas', JSON.stringify(defaults));
         return defaults;
     })();
 
     function savePaintFormulas() {
+        console.log('💾 SAVING FORMULAS TO LOCALSTORAGE:');
+        console.log('  Database has', paintDatabase.length, 'formulas');
+        paintDatabase.forEach((f, idx) => {
+            console.log(`    [${idx}] ${f.color}: ${(f.colourants || []).length} tinters`);
+        });
+        
         localStorage.setItem('paintFormulas', JSON.stringify(paintDatabase));
-        console.log(`✓ Saved ${paintDatabase.length} paint formulas to localStorage`);
+        console.log(`  ✓ Saved to localStorage`);
     }
 
     function getPaintFormula(colorName) {
@@ -1737,6 +1757,7 @@
         const color = document.getElementById('newPaintColor').value.trim();
         const code = document.getElementById('newPaintCode').value.trim();
         const product = document.getElementById('newPaintProduct').value.trim();
+        const version = document.getElementById('newPaintVersion').value.trim();
         const baseColor = document.getElementById('baseColor').value.trim();
         
         // Collect all base codes (1-3)
@@ -1764,22 +1785,36 @@
         
         // Parse tinters (format: CODE @ GRAMS, one per line)
         const colourants = [];
-        if (tintersList) {
-            console.log('📝 ADDING FORMULA - TINTERS TEXT:\n' + tintersList);
-            tintersList.split('\n').forEach((line, idx) => {
-                const match = line.trim().match(/^(\S+)\s*@\s*([\d.]+)$/);
-                console.log(`  Line ${idx}: "${line}" → Match: ${match ? 'YES' : 'NO'}`, match);
+        console.log('📝 TINTERS INPUT TEXT:\n' + tintersList);
+        console.log('  Length of tintersList:', tintersList.length);
+        
+        if (tintersList && tintersList.trim().length > 0) {
+            const lines = tintersList.split('\n');
+            console.log('  Split into', lines.length, 'lines');
+            
+            lines.forEach((line, idx) => {
+                const trimmed = line.trim();
+                console.log(`    Line ${idx}: "${line}" (trimmed: "${trimmed}")`);
+                
+                const match = trimmed.match(/^(\S+)\s*@\s*([\d.]+)$/);
+                console.log(`      Regex match:`, match ? 'SUCCESS' : 'FAILED');
+                
                 if (match) {
                     const amount = parseFloat(match[2]);
-                    console.log(`    Parsed: Code=${match[1]}, Amount=${amount}`);
+                    console.log(`      → Code="${match[1]}", Amount=${amount}`);
                     colourants.push({
                         code: match[1],
                         amount: amount
                     });
+                } else {
+                    console.log(`      → NO MATCH (expected format: CODE @ GRAMS)`);
                 }
             });
+        } else {
+            console.log('  ⚠️ tintersList is empty or whitespace only');
         }
-        console.log('✓ Total tinters captured:', colourants.length, colourants);
+        
+        console.log('✅ FINAL: Captured', colourants.length, 'tinters:', colourants);
         
         // Create new formula with structured format INCLUDING EVIC FIELDS
         const newFormula = {
@@ -1791,7 +1826,7 @@
             evicCode: code,  // Store the Evic code
             baseType: product || 'Custom',  // Base paint type
             baseColor: baseColor || 'White',  // NEW: Base paint color
-            version: '',  // Will be populated if available
+            version: version || '',  // Version from user input
             finishes: ['Satin'],
             baseSize: 1,
             baseTinters: baseCodes,
@@ -1802,15 +1837,20 @@
         };
         
         paintDatabase.push(newFormula);
-        console.log('✅ FORMULA SAVED TO DATABASE:');
-        console.log('  Formula:', newFormula);
-        console.log('  Database size:', paintDatabase.length);
+        console.log('✅ FORMULA ADDED TO DATABASE:');
+        console.log('  ID:', newFormula.id);
+        console.log('  Color:', newFormula.color);
+        console.log('  Colourants in formula:', newFormula.colourants);
+        console.log('  Total formulas in DB:', paintDatabase.length);
+        console.log('  Formula object:', newFormula);
+        
         savePaintFormulas();
         
         // Clear form
         document.getElementById('newPaintColor').value = '';
         document.getElementById('newPaintCode').value = '';
         document.getElementById('newPaintProduct').value = '';
+        document.getElementById('newPaintVersion').value = '';
         document.getElementById('baseColor').value = '';
         document.getElementById('baseCode1').value = '';
         document.getElementById('baseAmount1').value = '';
@@ -1826,17 +1866,25 @@
 
     function editPaintFormula(idx) {
         const f = paintDatabase[idx];
-        if (!f) return;
+        if (!f) {
+            console.error('🔴 EDIT ERROR: No formula at index', idx);
+            console.log('  paintDatabase.length:', paintDatabase.length);
+            return;
+        }
         
-        console.log('🔍 EDITING FORMULA INDEX:', idx);
-        console.log('📊 FORMULA OBJECT:', f);
-        console.log('  - Color:', f.color);
-        console.log('  - colourants array:', f.colourants);
-        console.log('  - colourants length:', f.colourants ? f.colourants.length : 'undefined');
+        console.log('🔍 EDITING FORMULA AT INDEX:', idx);
+        console.log('  Color:', f.color);
+        console.log('  colourants array exists:', !!f.colourants);
+        console.log('  colourants is array:', Array.isArray(f.colourants));
+        console.log('  colourants length:', f.colourants ? f.colourants.length : 'null/undefined');
+        
         if (f.colourants && f.colourants.length > 0) {
+            console.log('  Tinters:');
             f.colourants.forEach((c, i) => {
-                console.log(`    [${i}] code="${c.code}", amount=${c.amount}, grams=${c.grams}`);
+                console.log(`    [${i}] ${c.code}: ${c.amount || c.grams}`);
             });
+        } else {
+            console.log('  ⚠️ NO TINTERS FOUND IN FORMULA');
         }
         
         // Build HTML for edit dialog
@@ -1902,33 +1950,44 @@
         `;
         document.body.appendChild(dialog);
         
-        // Use setTimeout to ensure DOM is ready
+        // Use longer timeout and better DOM targeting to populate textareas
         setTimeout(() => {
-            // NOW populate the textareas with actual data (must be done AFTER appendChild)
-            const whiteBaseText = f.whiteBase ? f.whiteBase.map(item => `${item.code}: ${item.grams}`).join('\n') : '';
-            const colourantsText = f.colourants ? f.colourants.map(c => `${c.code}: ${c.amount || c.grams}`).join('\n') : '';
+            console.log('🔧 ATTEMPTING TO POPULATE TEXTAREAS (500ms timeout)');
             
-            console.log('🔧 POPULATING TEXTAREAS (after timeout):');
-            console.log('  whiteBaseText:', JSON.stringify(whiteBaseText));
-            console.log('  colourantsText:', JSON.stringify(colourantsText));
+            // Build the text content
+            const whiteBaseText = (f.whiteBase && Array.isArray(f.whiteBase)) ? 
+                f.whiteBase.map(item => `${item.code}: ${item.grams}`).join('\n') : '';
+            const colourantsText = (f.colourants && Array.isArray(f.colourants)) ? 
+                f.colourants.map(c => `${c.code}: ${c.amount || c.grams}`).join('\n') : '';
             
-            const whiteBaseTA = document.getElementById('editWhiteBase');
-            const colourantsTA = document.getElementById('editColourants');
+            console.log('  colourants array:', f.colourants);
+            console.log('  colourantsText result:', JSON.stringify(colourantsText));
             
-            console.log('  Found textareas:', whiteBaseTA ? 'YES' : 'NO', colourantsTA ? 'YES' : 'NO');
+            // Find the elements inside the dialog (most recent one)
+            const dialog = document.getElementById('paintFormulaEditDialog');
+            if (!dialog) {
+                console.error('  ❌ Dialog not found!');
+                return;
+            }
             
-            if (whiteBaseTA) {
+            const whiteBaseTA = dialog.querySelector('#editWhiteBase');
+            const colourantsTA = dialog.querySelector('#editColourants');
+            
+            console.log('  Found whiteBaseTA:', !!whiteBaseTA);
+            console.log('  Found colourantsTA:', !!colourantsTA);
+            
+            if (whiteBaseTA && whiteBaseText) {
                 whiteBaseTA.value = whiteBaseText;
-                whiteBaseTA.textContent = whiteBaseText;  // Try both value and textContent
-                console.log('  ✓ Set whiteBase.value, current value:', JSON.stringify(whiteBaseTA.value));
+                console.log('  ✓ Set whiteBase, value is now:', JSON.stringify(whiteBaseTA.value.substring(0, 50)));
             }
             
-            if (colourantsTA) {
+            if (colourantsTA && colourantsText) {
                 colourantsTA.value = colourantsText;
-                colourantsTA.textContent = colourantsText;  // Try both value and textContent
-                console.log('  ✓ Set colourants.value, current value:', JSON.stringify(colourantsTA.value));
+                console.log('  ✓ Set colourants, value is now:', JSON.stringify(colourantsTA.value.substring(0, 50)));
+            } else if (colourantsTA) {
+                console.log('  ⚠️  colourantsTA found but colourantsText is empty!');
             }
-        }, 0);
+        }, 500);  // Longer timeout for safety
     }
     
     function closeFormulaDialog() {
