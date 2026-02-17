@@ -1699,7 +1699,14 @@
     // ===== PAINT FORMULA DATABASE MANAGEMENT =====
     function renderPaintFormulaList() {
         const list = document.getElementById('paintFormulaList');
+        const countSpan = document.getElementById('formulaCount');
+        
         if (!list) return;
+        
+        // Update the count
+        if (countSpan) {
+            countSpan.innerText = paintDatabase.length;
+        }
         
         if (paintDatabase.length === 0) {
             list.innerHTML = '<div style="padding:15px; text-align:center; color:#999; font-size:11px;">No formulas yet. Add one above.</div>';
@@ -1715,7 +1722,7 @@
             html += '<div style="padding:12px; border-bottom:1px solid #eee;">';
             html += '<div style="font-weight:900; font-size:12px; margin-bottom:4px;">' + f.color + '</div>';
             html += '<div style="font-size:10px; color:#666; margin-bottom:6px;">' + f.product + '</div>';
-            html += '<div style="font-size:9px; color:#999; margin-bottom:8px;">' + baseTintCount + ' base tinters • ' + colCount + ' colourants</div>';
+            html += '<div style="font-size:9px; color:#999; margin-bottom:8px;">' + baseTintCount + ' base codes • ' + colCount + ' colourants</div>';
             html += '<div style="display:flex; gap:6px;">';
             html += '<button onclick="editPaintFormula(' + i + ')" style="padding:4px 10px; background:#2196f3; color:#fff; border:none; border-radius:3px; font-size:9px; font-weight:900; cursor:pointer;">Edit</button>';
             html += '<button onclick="deletePaintFormula(' + i + ')" style="padding:4px 10px; background:#ff3b30; color:#fff; border:none; border-radius:3px; font-size:9px; font-weight:900; cursor:pointer;">Delete</button>';
@@ -1795,6 +1802,9 @@
         };
         
         paintDatabase.push(newFormula);
+        console.log('✅ FORMULA SAVED TO DATABASE:');
+        console.log('  Formula:', newFormula);
+        console.log('  Database size:', paintDatabase.length);
         savePaintFormulas();
         
         // Clear form
@@ -1817,6 +1827,17 @@
     function editPaintFormula(idx) {
         const f = paintDatabase[idx];
         if (!f) return;
+        
+        console.log('🔍 EDITING FORMULA INDEX:', idx);
+        console.log('📊 FORMULA OBJECT:', f);
+        console.log('  - Color:', f.color);
+        console.log('  - colourants array:', f.colourants);
+        console.log('  - colourants length:', f.colourants ? f.colourants.length : 'undefined');
+        if (f.colourants && f.colourants.length > 0) {
+            f.colourants.forEach((c, i) => {
+                console.log(`    [${i}] code="${c.code}", amount=${c.amount}, grams=${c.grams}`);
+            });
+        }
         
         // Build HTML for edit dialog
         let html = `
@@ -1881,17 +1902,33 @@
         `;
         document.body.appendChild(dialog);
         
-        // NOW populate the textareas with actual data (must be done AFTER appendChild)
-        const whiteBaseText = f.whiteBase ? f.whiteBase.map(item => `${item.code}: ${item.grams}`).join('\n') : '';
-        const colourantsText = f.colourants ? f.colourants.map(c => `${c.code}: ${c.amount || c.grams}`).join('\n') : '';
-        
-        document.getElementById('editWhiteBase').value = whiteBaseText;
-        document.getElementById('editColourants').value = colourantsText;
-        
-        console.log('📝 EDIT DIALOG POPULATED:', {
-            whiteBase: whiteBaseText,
-            colourants: colourantsText
-        });
+        // Use setTimeout to ensure DOM is ready
+        setTimeout(() => {
+            // NOW populate the textareas with actual data (must be done AFTER appendChild)
+            const whiteBaseText = f.whiteBase ? f.whiteBase.map(item => `${item.code}: ${item.grams}`).join('\n') : '';
+            const colourantsText = f.colourants ? f.colourants.map(c => `${c.code}: ${c.amount || c.grams}`).join('\n') : '';
+            
+            console.log('🔧 POPULATING TEXTAREAS (after timeout):');
+            console.log('  whiteBaseText:', JSON.stringify(whiteBaseText));
+            console.log('  colourantsText:', JSON.stringify(colourantsText));
+            
+            const whiteBaseTA = document.getElementById('editWhiteBase');
+            const colourantsTA = document.getElementById('editColourants');
+            
+            console.log('  Found textareas:', whiteBaseTA ? 'YES' : 'NO', colourantsTA ? 'YES' : 'NO');
+            
+            if (whiteBaseTA) {
+                whiteBaseTA.value = whiteBaseText;
+                whiteBaseTA.textContent = whiteBaseText;  // Try both value and textContent
+                console.log('  ✓ Set whiteBase.value, current value:', JSON.stringify(whiteBaseTA.value));
+            }
+            
+            if (colourantsTA) {
+                colourantsTA.value = colourantsText;
+                colourantsTA.textContent = colourantsText;  // Try both value and textContent
+                console.log('  ✓ Set colourants.value, current value:', JSON.stringify(colourantsTA.value));
+            }
+        }, 0);
     }
     
     function closeFormulaDialog() {
@@ -2115,6 +2152,7 @@
         refreshLists();
         loadData();
         renderHistory();
+        renderPaintFormulaList();  // Render paint formula list on load
         loadHeaderLogo(); // Load and display header logo from localStorage
         // Ensure prof-select is populated after a slight delay for safety
         setTimeout(() => {
