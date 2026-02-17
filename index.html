@@ -1207,7 +1207,7 @@
                         <span style="color:#999;">Created by Colin Bedford</span><br>
                         <span style="color:#999;">Paintworkz PTY LTD</span><br>
                         <span id="currentDate" style="color:#999;">14 February 2026</span><br><br>
-                        <span id="versionDisplay" style="color:#d4af37; font-weight:900;">v1.5.4 | </span><span id="versionDate" style="color:#d4af37; font-weight:900;"></span>
+                        <span id="versionDisplay" style="color:#d4af37; font-weight:900;">v1.5.5 | </span><span id="versionDate" style="color:#d4af37; font-weight:900;"></span>
                     </p>
                 </div>
             </div>
@@ -1280,7 +1280,7 @@
 
 <script>
     ////////////////////////////////////////////////////////////////////////////////
-    // 🎨 PAINTWORKZ PRO v1.5.4 GLOBAL (17 Feb 2026)
+    // 🎨 PAINTWORKZ PRO v1.5.5 HOTFIX (17 Feb 2026)
     ////////////////////////////////////////////////////////////////////////////////
     // LAST UPDATED: 17 Feb 2026
     // CHANGES: Filtered PDF generation, Job Filing Sheet, Inspection timeline fix
@@ -1297,16 +1297,14 @@
     // ⚠️ IMPORTANT: Keep this header updated with every code change!
     ////////////////////////////////////////////////////////////////////////////////
     
-    console.log('%c 🎨 PaintWorkz Pro v1.5.4 GLOBAL (2026-02-17) ', 'background:#34c759;color:#fff;font-weight:900;padding:8px;border-radius:4px;');
-    console.log('✅ UPDATES IN v1.5.4:');
-    console.log('🌍 GLOBAL SETTINGS MODULE - Non-intrusive, modular configuration');
-    console.log('✓ Measurement Units: METRIC (mm) / IMPERIAL (inches)');
-    console.log('✓ Measurement Precision: 0.1, 0.01, 0.001');
-    console.log('✓ Predictive Measurement Memory: Auto-save common measurements');
-    console.log('✓ AI Helper Bot: Optional trade-focused guidance');
-    console.log('✓ All settings auto-save to localStorage');
-    console.log('✓ Client Editor - State field (NSW/VIC/QLD/etc)');
-    console.log('✓ Client Editor - Fixed accidental data loss on overlay click');
+    console.log('%c 🎨 PaintWorkz Pro v1.5.5 HOTFIX (2026-02-17) ', 'background:#ff6b6b;color:#fff;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('✅ HOTFIX IN v1.5.5:');
+    console.log('🔧 FIXED: Grey screen lockup after saving client details');
+    console.log('✓ Modal/Overlay properly close after save');
+    console.log('✓ Added error handling with emergency cleanup');
+    console.log('✓ Fallback cleanup method for edge cases');
+    console.log('✓ Global Settings Module (v1.5.4) fully functional');
+    console.log('✓ Client Editor improvements (v1.5.3) stable');
     console.log('✓ Client Editor - Fixed accidental data loss (removed overlay click-to-close)');
     console.log('✓ Client Editor - Added STATE field (NSW/VIC/QLD/WA/SA/TAS/NT/ACT)');
     console.log('✓ New Client Form - Added STATE field');
@@ -9289,7 +9287,7 @@
                 </select>
                 
                 <div style="display:flex; gap:10px; margin-top:20px;">
-                    <button onclick="saveNewClient('${clientId}')" style="flex:1; background:#2196f3; color:#fff; border:none; padding:12px; border-radius:6px; font-weight:900; font-size:12px; cursor:pointer;">✓ Save</button>
+                    <button onclick="saveNewClient('${clientId}', '${modalId}', '${overlayId}')" style="flex:1; background:#2196f3; color:#fff; border:none; padding:12px; border-radius:6px; font-weight:900; font-size:12px; cursor:pointer;">✓ Save</button>
                     <button onclick="document.getElementById('${modalId}').remove(); document.getElementById('${overlayId}').remove();" style="flex:1; background:#e0e0e0; color:#333; border:none; padding:12px; border-radius:6px; font-weight:900; font-size:12px; cursor:pointer;">Cancel</button>
                 </div>
             </div>
@@ -9588,43 +9586,64 @@
         document.getElementById('editClientName').focus();
     }
     
-    function saveNewClient(clientId) {
-        const name = document.getElementById('modalClientName').value.trim();
-        const contactName = document.getElementById('modalClientContactName').value.trim();
-        const landline = document.getElementById('modalClientLandline').value.trim();
-        const mobile = document.getElementById('modalClientMobile').value.trim();
-        const email1 = document.getElementById('modalClientEmail1').value.trim();
-        const email2 = document.getElementById('modalClientEmail2').value.trim();
-        const address = document.getElementById('modalClientAddress').value.trim();
-        const town = document.getElementById('modalClientTown').value.trim();
-        const postcode = document.getElementById('modalClientPostcode').value.trim();
-        const state = document.getElementById('modalClientState').value.trim();
-        
-        if (!name) {
-            alert('Client name is required!');
-            return;
+    function saveNewClient(clientId, modalId, overlayId) {
+        try {
+            const name = document.getElementById('modalClientName').value.trim();
+            const contactName = document.getElementById('modalClientContactName').value.trim();
+            const landline = document.getElementById('modalClientLandline').value.trim();
+            const mobile = document.getElementById('modalClientMobile').value.trim();
+            const email1 = document.getElementById('modalClientEmail1').value.trim();
+            const email2 = document.getElementById('modalClientEmail2').value.trim();
+            const address = document.getElementById('modalClientAddress').value.trim();
+            const town = document.getElementById('modalClientTown').value.trim();
+            const postcode = document.getElementById('modalClientPostcode').value.trim();
+            const state = document.getElementById('modalClientState').value.trim();
+            
+            if (!name) {
+                alert('Client name is required!');
+                return;
+            }
+            
+            const db = getClientDatabase();
+            db[clientId] = { 
+                id: clientId, 
+                name, 
+                contactName, 
+                landline, 
+                mobile, 
+                email1, 
+                email2, 
+                address, 
+                town, 
+                postcode,
+                state,
+                createdDate: new Date().toISOString()
+            };
+            saveClientDatabase(db);
+            
+            // Close modal and overlay using passed IDs
+            if (modalId) {
+                const modal = document.getElementById(modalId);
+                if (modal) modal.remove();
+            }
+            if (overlayId) {
+                const overlay = document.getElementById(overlayId);
+                if (overlay) overlay.remove();
+            }
+            
+            // Fallback cleanup if IDs didn't work
+            document.querySelectorAll('div[style*="z-index:5000"], div[style*="z-index:4999"]').forEach(el => el.remove());
+            
+            addAdminAlert('NEW_CLIENT', `✅ NEW CLIENT ADDED: "${name}"`, {clientName: name});
+            renderClientsList();
+            notify(`✓ Client Saved: ${name}`);
+            
+        } catch(err) {
+            console.error('❌ Error saving client:', err);
+            notify('❌ Error saving client: ' + err.message);
+            // Emergency cleanup on error
+            document.querySelectorAll('div[style*="z-index:5000"], div[style*="z-index:4999"]').forEach(el => el.remove());
         }
-        
-        const db = getClientDatabase();
-        db[clientId] = { 
-            id: clientId, 
-            name, 
-            contactName, 
-            landline, 
-            mobile, 
-            email1, 
-            email2, 
-            address, 
-            town, 
-            postcode,
-            state,
-            createdDate: new Date().toISOString()
-        };
-        saveClientDatabase(db);
-        
-        document.querySelectorAll('div[style*="z-index:5000"], div[style*="z-index:4999"]').forEach(el => el.remove());
-        addAdminAlert('NEW_CLIENT', `✅ NEW CLIENT ADDED: "${name}"`, {clientName: name});
-        renderClientsList();
     }
     
     
