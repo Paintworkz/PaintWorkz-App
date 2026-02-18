@@ -254,7 +254,1724 @@
 <body>
 
     <!-- PDF Preview Modal -->
-    `;
+    <div id="pdfPreviewModal" style="display:none !important; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:99999; justify-content:center; align-items:center; padding:0; margin:0;">
+        <div style="background:#fff; border-radius:8px; width:95vw; height:95vh; max-width:1400px; display:flex; flex-direction:column; box-shadow:0 20px 60px rgba(0,0,0,0.6); margin:0; padding:0;">
+            <!-- Header -->
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:20px 25px; border-bottom:2px solid #ddd; background:#f9f9f9; flex-shrink:0;">
+                <h3 id="pdfPreviewTitle" style="margin:0; color:#333; font-size:18px;">📄 PDF Preview</h3>
+                <button onclick="closePDFPreview()" style="border:none; background:none; font-size:28px; cursor:pointer; color:#666;">✕</button>
+            </div>
+            
+            <!-- Loading Indicator -->
+            <div id="pdfLoadingSpinner" style="display:none; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); text-align:center; z-index:100000; background:#fff; padding:40px; border-radius:8px; box-shadow:0 4px 20px rgba(0,0,0,0.2);">
+                <div style="width:60px; height:60px; border:4px solid #f3f3f3; border-top:4px solid #d4af37; border-radius:50%; animation:spin 1s linear infinite;"></div>
+                <p style="margin-top:15px; margin-bottom:0; color:#666; font-weight:bold;">Generating PDF...</p>
+            </div>
+            
+            <!-- Preview Container -->
+            <div id="pdfPreviewContainer" style="flex:1; overflow:auto; padding:15px; background:#e8e8e8; display:flex; justify-content:center; align-items:center; margin:0;">
+                <iframe id="pdfPreviewIframe" style="width:100%; height:100%; border:none; background:#fff; border-radius:4px; box-shadow:0 2px 8px rgba(0,0,0,0.1);"></iframe>
+            </div>
+            
+            <!-- Footer Buttons -->
+            <div style="display:flex; gap:12px; padding:20px 25px; border-top:2px solid #ddd; background:#f9f9f9; flex-shrink:0;">
+                <button onclick="closePDFPreview()" style="flex:1; border:none; background:#e0e0e0; color:#333; padding:14px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:14px;">← CANCEL</button>
+                <button id="downloadPDFBtn" onclick="downloadCurrentPDF()" style="flex:1; border:none; background:#d4af37; color:#000; padding:14px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:14px;">↓ DOWNLOAD PDF</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- CHARGES MODAL - Appears before PDF generation -->
+    <div id="chargesModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:99998; justify-content:center; align-items:center; padding:20px;overflow-y:auto;">
+        <div style="background:#fff; border-radius:12px; width:100%; max-width:550px; padding:30px; box-shadow:0 10px 40px rgba(0,0,0,0.3); margin:20px auto;">
+            <h2 style="margin:0 0 25px 0; color:#333; font-size:20px; font-weight:bold;">Additional Charges</h2>
+            
+            <!-- Paint Colour Surcharges - Dynamic per colour -->
+            <div id="colourSurchargesContainer" style="margin-bottom:20px; padding-bottom:20px; border-bottom:1px solid #ddd;">
+                <p style="color:#999; font-size:12px;">Loading colours...</p>
+            </div>
+            
+            <!-- Delivery/Pickup Section -->
+            <div style="margin-bottom:20px; padding-bottom:20px; border-bottom:1px solid #ddd;">
+                <label style="display:block; font-weight:bold; color:#333; margin-bottom:12px; font-size:13px;">Delivery/Pickup Region:</label>
+                <select id="deliveryRegionSelect" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; font-size:12px; background:#fff; cursor:pointer;">
+                    <option value="0">None (No charge)</option>
+                    <option value="90">Warrnambool Region ($90)</option>
+                    <option value="110">Geelong Region ($110)</option>
+                    <option value="110">Mt Gambier Region ($110)</option>
+                    <option value="250">Adelaide ($250)</option>
+                    <option value="110">Horsham Region ($110)</option>
+                    <option value="160">Ballarat Region ($160)</option>
+                </select>
+            </div>
+            
+            <!-- Courier Section -->
+            <div style="margin-bottom:20px; padding-bottom:20px; border-bottom:1px solid #ddd;">
+                <label style="display:block; font-weight:bold; color:#333; margin-bottom:12px; font-size:13px;">Freight Charge ($):</label>
+                <input type="number" id="freightChargeInput" value="0" min="0" step="5" placeholder="0.00" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; font-size:12px;">
+            </div>
+            
+            <!-- Other Charges Section -->
+            <div style="margin-bottom:20px; padding-bottom:20px; border-bottom:1px solid #ddd;">
+                <label style="display:block; font-weight:bold; color:#333; margin-bottom:12px; font-size:13px;">Other Charges (Description & Amount):</label>
+                <input type="text" id="otherChargeDesc" placeholder="e.g. Rush Delivery, Site Visit" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; font-size:12px; margin-bottom:8px; box-sizing:border-box;">
+                <input type="number" id="otherChargeAmount" value="0" min="0" step="5" placeholder="Amount ($)" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; font-size:12px;">
+            </div>
+            
+            <!-- Summary -->
+            <div style="background:#f5f5f5; padding:15px; border-radius:6px; margin-bottom:20px; font-size:12px;">
+                <div style="margin-bottom:8px;"><strong>Colour Surcharge:</strong> $<span id="summaryColourCharge">0.00</span></div>
+                <div style="margin-bottom:8px;"><strong>Delivery Charge:</strong> $<span id="summaryDeliveryCharge">0.00</span></div>
+                <div style="margin-bottom:8px;"><strong>Freight Charge:</strong> $<span id="summaryFreightCharge">0.00</span></div>
+                <div style="margin-bottom:8px;"><strong>Other Charges:</strong> $<span id="summaryOtherCharge">0.00</span></div>
+                <div style="border-top:1px solid #ddd; padding-top:8px; margin-top:8px; margin-bottom:8px;"><strong>Subtotal + Charges:</strong> $<span id="summarySubtotalPlusCharges">0.00</span></div>
+                <div style="border-top:1px solid #ddd; padding-top:8px; margin-top:8px;"><strong>GST (10%):</strong> $<span id="summaryGST">0.00</span></div>
+                <div style="border-top:2px solid #999; padding-top:10px; margin-top:10px; font-size:13px;"><strong>TOTAL (inc GST):</strong> $<span id="summaryTotalCharge">0.00</span></div>
+            </div>
+            
+            <!-- Buttons -->
+            <div style="display:flex; gap:10px;">
+                <button onclick="closeChargesModal()" style="flex:1; border:none; background:#e0e0e0; color:#333; padding:12px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:12px;">CANCEL</button>
+                <button id="applyChargesBtn" onclick="applyChargesAndGenerate()" style="flex:1; border:none; background:#4caf50; color:#fff; padding:12px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:12px;">APPLY & GENERATE</button>
+            </div>
+        </div>
+    </div>
+    
+    <style>
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+    <!-- Firebase SDK - Modern Modular Approach -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, addDoc, getDoc, onSnapshot, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
+        
+        const firebaseConfig = {
+            apiKey: "AIzaSyCddhnoWoJczM2yXemz2evZc-W2x7OnP00",
+            authDomain: "paintworkz-42bc0.firebaseapp.com",
+            projectId: "paintworkz-42bc0",
+            storageBucket: "paintworkz-42bc0.firebasestorage.app",
+            messagingSenderId: "298786193879",
+            appId: "1:298786193879:web:8fd63ca63c109f8cd14b92"
+        };
+        
+        let app, auth, db;
+        try {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+            console.log('✓ Firebase initialized successfully');
+        } catch(fbError) {
+            console.log('ℹ️ Firebase note (non-critical):', fbError.message);
+            // Firebase will still work with explicit config - this error is from hosting environment check
+        }
+        
+        // Export to window for global access - with proper function wrappers
+        window.firebaseDb = db;
+        window.firebaseAuth = auth;
+        
+        // Export Firestore functions as window methods
+        window.doc = doc;
+        window.setDoc = setDoc;
+        window.collection = collection;
+        window.addDoc = addDoc;
+        window.getDoc = getDoc;
+        window.deleteDoc = deleteDoc;
+        window.onSnapshot = onSnapshot;
+        window.getDocs = getDocs;
+        
+        // Auth functions
+        window.createUserWithEmailAndPassword = (email, password) => createUserWithEmailAndPassword(auth, email, password);
+        window.signInWithEmailAndPassword = (email, password) => signInWithEmailAndPassword(auth, email, password);
+        window.signOut = () => signOut(auth);
+        
+        window.currentUser = null;
+        window.realtimeSyncActive = false; // Guard against multiple listeners
+        window.realtimeSyncUnsubscribe = null; // Store unsubscribe function
+        
+        // Set up auth listener
+        onAuthStateChanged(auth, user => {
+            window.currentUser = user;
+            if (user) {
+                const loginScreen = document.getElementById('loginScreen');
+                const appContainer = document.getElementById('appContainer');
+                if (loginScreen) loginScreen.style.display = 'none';
+                if (appContainer) appContainer.style.display = 'block';
+                
+                // Initialize app (clear form, populate clients)
+                setTimeout(() => {
+                    if (typeof initializeApp === 'function') {
+                        try {
+                            initializeApp();
+                        } catch(e) {
+                            console.error('initializeApp error:', e);
+                        }
+                    }
+                }, 100);
+                
+                // Load jobs from Firebase ONLY after document is fully loaded
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', () => {
+                        setTimeout(() => {
+                            if (window.loadAllDataFromFirebase) {
+                                try {
+                                    window.loadAllDataFromFirebase();
+                                } catch (e) {
+                                    console.error('loadAllDataFromFirebase error:', e);
+                                }
+                            }
+                        }, 500);
+                    });
+                } else {
+                    // DOM already loaded
+                    setTimeout(() => {
+                        if (window.loadAllDataFromFirebase) {
+                            try {
+                                window.loadAllDataFromFirebase();
+                            } catch (e) {
+                                console.error('loadAllDataFromFirebase error:', e);
+                            }
+                        }
+                    }, 500);
+                }
+                
+                // Only set up real-time sync ONCE per session (DISABLED by default due to memory issues)
+                if (!window.realtimeSyncActive) {
+                    // Real-time sync disabled to prevent memory leaks
+                    // Users should manually refresh to get latest data from Firebase
+                    console.log('ℹ️ Real-time sync disabled (manual refresh recommended)');
+                    window.realtimeSyncActive = true;
+                }
+            } else {
+                // Clean up listener when logging out
+                if (window.realtimeSyncUnsubscribe) {
+                    try {
+                        window.realtimeSyncUnsubscribe();
+                    } catch (e) {
+                        console.warn('Error unsubscribing:', e);
+                    }
+                    window.realtimeSyncUnsubscribe = null;
+                }
+                window.realtimeSyncActive = false;
+                
+                const loginScreen = document.getElementById('loginScreen');
+                const appContainer = document.getElementById('appContainer');
+                if (loginScreen) loginScreen.style.display = 'block';
+                if (appContainer) appContainer.style.display = 'none';
+            }
+        });
+        
+        // Set firebaseReady LAST - only after everything is initialized
+        window.firebaseReady = true;
+    </script>
+    <!-- USER INFO -->
+    <div id="userInfo"></div>
+
+<!-- TOAST NOTIFICATION -->
+<div id="toast" style="display:none; position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#34c759; color:#fff; padding:12px 25px; border-radius:25px; font-weight:900; z-index:5000; font-size:11px; box-shadow:0 4px 12px rgba(52, 199, 89, 0.3); animation: slideUp 0.4s ease-out, slideDown 0.4s ease-in 2.6s forwards; white-space:nowrap;"></div>
+
+<style>
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(100px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateX(-50%) translateY(100px);
+    }
+}
+</style>
+
+<!-- A3 SCHEDULE DATE RANGE MODAL -->
+<div id="a3ScheduleModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; justify-content:center; align-items:center;">
+    <div style="background:#fff; padding:25px; border-radius:12px; width:90%; max-width:450px; box-shadow:0 10px 40px rgba(0,0,0,0.3); z-index:1001;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <h3 style="margin:0; font-weight:bold; font-size:16px;">📅 A3 Work Schedule</h3>
+            <button onclick="closeA3ScheduleModal()" style="border:none; background:none; font-size:24px; cursor:pointer; padding:0; width:30px; height:30px;">✕</button>
+        </div>
+        
+        <div style="margin-bottom:20px;">
+            <p style="margin:0 0 15px 0; font-size:12px; color:#666;">Select time period for your work schedule:</p>
+            
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:20px;">
+                <button onclick="generateA3Schedule(7)" style="padding:12px; background:#2196f3; color:#fff; border:none; border-radius:6px; font-weight:bold; font-size:12px; cursor:pointer;">📅 1 WEEK</button>
+                <button onclick="generateA3Schedule(30)" style="padding:12px; background:#ff9500; color:#fff; border:none; border-radius:6px; font-weight:bold; font-size:12px; cursor:pointer;">📅 1 MONTH</button>
+                <button onclick="generateA3Schedule(90)" style="padding:12px; background:#4caf50; color:#fff; border:none; border-radius:6px; font-weight:bold; font-size:12px; cursor:pointer;">📅 3 MONTHS</button>
+                <button onclick="generateA3Schedule(365)" style="padding:12px; background:#9c27b0; color:#fff; border:none; border-radius:6px; font-weight:bold; font-size:12px; cursor:pointer;">📅 1 YEAR</button>
+            </div>
+            
+            <div style="border-top:1px solid #ddd; padding-top:15px;">
+                <p style="margin:0 0 10px 0; font-size:12px; font-weight:bold; color:#333;">Or select custom dates:</p>
+                <div style="display:flex; gap:10px; margin-bottom:10px;">
+                    <div style="flex:1;">
+                        <label style="display:block; font-size:11px; color:#666; margin-bottom:4px;">From</label>
+                        <input type="date" id="a3StartDate" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:11px;">
+                    </div>
+                    <div style="flex:1;">
+                        <label style="display:block; font-size:11px; color:#666; margin-bottom:4px;">To</label>
+                        <input type="date" id="a3EndDate" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:11px;">
+                    </div>
+                </div>
+                <button onclick="generateA3ScheduleCustom()" style="width:100%; padding:10px; background:#673ab7; color:#fff; border:none; border-radius:6px; font-weight:bold; font-size:12px; cursor:pointer;">📅 GENERATE</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- TIMELINE EDITOR MODAL -->
+<div id="timelineModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; justify-content:center; align-items:center; flex-wrap:wrap;">
+    <div style="background:#fff; padding:25px; border-radius:12px; width:90%; max-width:500px; max-height:80vh; overflow-y:auto; box-shadow:0 10px 40px rgba(0,0,0,0.3); z-index:1001;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <h3 style="margin:0;">Edit Timeline</h3>
+            <button onclick="closeTimelineModal()" style="border:none; background:none; font-size:24px; cursor:pointer; padding:0; width:30px; height:30px;">✕</button>
+        </div>
+        
+        <div id="timelineEditorContent"></div>
+        
+        <div style="display:flex; gap:10px; margin-top:20px;">
+            <button onclick="saveTimelineEdit()" style="flex:1; border:none; background:#34c759; color:#fff; padding:10px; border-radius:6px; font-weight:900; cursor:pointer;">SAVE</button>
+            <button onclick="closeTimelineModal()" style="flex:1; border:none; background:#f0f0f0; color:#000; padding:10px; border-radius:6px; font-weight:900; cursor:pointer;">CANCEL</button>
+        </div>
+    </div>
+</div>
+
+<!-- PAINT FORMULA DATABASE MODAL -->
+<!-- CALENDAR MODAL -->
+<div id="calendarModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:5000; align-items:center; justify-content:center;">
+    <div style="background:#fff; border-radius:16px; padding:20px; width:90%; max-width:400px; box-shadow:0 10px 40px rgba(0,0,0,0.3);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+            <button onclick="prevMonth()" style="border:none; background:#f0f0f0; width:40px; height:40px; border-radius:8px; font-weight:900; font-size:18px; cursor:pointer;" title="Previous month">←</button>
+            <div style="text-align:center; flex:1;">
+                <div id="monthYear" style="font-weight:900; font-size:16px; color:#000;"></div>
+            </div>
+            <button onclick="nextMonth()" style="border:none; background:#f0f0f0; width:40px; height:40px; border-radius:8px; font-weight:900; font-size:18px; cursor:pointer;" title="Next month">→</button>
+        </div>
+        
+        <div style="display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin-bottom:15px;">
+            <div style="text-align:center; font-weight:900; font-size:10px; color:#999;">SU</div>
+            <div style="text-align:center; font-weight:900; font-size:10px; color:#999;">MO</div>
+            <div style="text-align:center; font-weight:900; font-size:10px; color:#999;">TU</div>
+            <div style="text-align:center; font-weight:900; font-size:10px; color:#999;">WE</div>
+            <div style="text-align:center; font-weight:900; font-size:10px; color:#999;">TH</div>
+            <div style="text-align:center; font-weight:900; font-size:10px; color:#999;">FR</div>
+            <div style="text-align:center; font-weight:900; font-size:10px; color:#999;">SA</div>
+            <div id="calendarDays" style="grid-column:1/-1; display:grid; grid-template-columns:repeat(7,1fr); gap:4px;"></div>
+        </div>
+        
+        <div style="display:flex; gap:8px;">
+            <button onclick="closeCalendar()" style="flex:1; border:none; background:#f0f0f0; padding:12px; border-radius:8px; font-weight:900; cursor:pointer;">CANCEL</button>
+            <button onclick="selectToday()" style="flex:1; border:none; background:var(--gs); padding:12px; border-radius:8px; font-weight:900; cursor:pointer;">TODAY</button>
+        </div>
+    </div>
+</div>
+
+<!-- LOGIN SCREEN -->
+<div id="loginScreen" style="position:fixed; top:0; left:0; right:0; bottom:0; background:linear-gradient(135deg, #d4af37, #f9f1b0); z-index:10000; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px;">
+    <div style="background:#fff; border-radius:20px; padding:30px; width:100%; max-width:400px; box-shadow:0 10px 40px rgba(0,0,0,0.3);">
+        <div style="text-align:center; margin-bottom:30px;">
+            <h1 style="margin:0; color:#d4af37; font-size:32px;">🎨 PaintWorkz</h1>
+            <p style="color:#666; margin:10px 0 0; font-size:14px;">Live Sync • All Devices</p>
+        </div>
+        
+        <input type="email" id="loginEmail" placeholder="Email" style="margin-bottom:12px; padding:15px;">
+        <input type="password" id="loginPassword" placeholder="Password" style="margin-bottom:20px; padding:15px;">
+        
+        <button onclick="handleLogin()" style="width:100%; background:#d4af37; border:none; padding:15px; border-radius:10px; font-weight:900; font-size:16px; cursor:pointer; margin-bottom:10px;">SIGN IN</button>
+        <button onclick="trySignup()" style="width:100%; background:#333; color:#d4af37; border:2px solid #d4af37; padding:15px; border-radius:10px; font-weight:900; font-size:16px; cursor:pointer; font-size:14px;">CREATE ACCOUNT</button>
+        
+        <div id="loginError" style="color:red; font-weight:900; margin-top:15px; text-align:center; display:none;"></div>
+    </div>
+</div>
+
+<!-- APP CONTAINER -->
+<div id="appContainer" style="display:none;">
+
+<header>
+    <div class="icon-btn" onclick="tab('history')">🔍</div>
+    <div class="logo-box" id="headerLogoBox" style="position:relative; width:calc(25vw); height:60px; display:flex; align-items:center; justify-content:center; padding:6px; box-sizing:border-box; margin-left:10px; border:2px solid #d4af37; border-radius:12px; background:linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); box-shadow:0 4px 12px rgba(0,0,0,0.3); transition:all 0.3s ease;">
+        <img id="headerLogoImg" src="" style="height:100%; max-width:95%; display:none; object-fit:contain;" alt="Company Logo">
+        <span class="logo-text" id="headerLogoText" style="font-size:20px; font-weight:900; color:#d4af37; text-shadow:0 2px 4px rgba(0,0,0,0.5); letter-spacing:1px;">PaintWorkz</span>
+    </div>
+    <div style="display:flex; gap:10px; align-items:center;">
+        <div id="goBackBtn" class="icon-btn" onclick="goBackJob()" style="display:none;" title="Exit without saving if no changes made">← Back</div>
+        <div class="icon-btn" onclick="saveJob()">💾</div>
+    </div>
+</header>
+
+<div class="nav-tabs">
+    <div class="nav-btn active" id="btn-measure" data-tab="measure">Measure</div>
+    <div class="nav-btn" id="btn-history" data-tab="history">History</div>
+    <div class="nav-btn" id="btn-db" data-tab="db">Database</div>
+    <div class="nav-btn" id="btn-forms" data-tab="forms">Forms</div>
+    <div class="nav-btn" id="btn-schedule" data-tab="schedule">Schedule</div>
+    <div class="nav-btn" id="btn-admin" data-tab="admin">Admin</div>
+</div>
+
+<div class="container">
+    
+    <div id="measure" class="view-section active">
+        <div class="card">
+            <div style="display:flex; gap:8px; margin-bottom: 8px;">
+                <div style="flex:2">
+                    <label>Client</label>
+                    <select id="cli"></select>
+                </div>
+                <div style="flex:1">
+                    <label>Date Received</label>
+                    <input type="text" id="dRec" placeholder="DD/MM/YY" inputmode="numeric" style="text-align:center;" onclick="openCalendar()">
+                </div>
+            </div>
+
+            <div style="display:flex; gap:8px; margin-bottom: 8px;">
+                <div style="flex:2">
+                    <label>Job Name / Reference</label>
+                    <input type="text" id="jNm" placeholder="e.g. Smith Residence">
+                </div>
+                <div style="flex:1">
+                    <label>Job #</label>
+                    <input type="text" id="jN" placeholder="####" style="text-align:center;">
+                </div>
+            </div>
+
+            <div style="background:#f9f9f9; padding:10px; border-radius:8px; border:1px solid #eee; margin-bottom:10px;">
+                <div style="display:flex; gap:8px; margin-bottom:8px;">
+                    <div style="flex:1">
+                        <label>Brand</label>
+                        <select id="p-brand" style="height:35px; font-size:12px;">
+                            <option>Wattyl</option>
+                        </select>
+                    </div>
+                    <div style="flex:1">
+                        <label>Color Name</label>
+                        <input type="text" id="p-color" placeholder="e.g. Lexicon" style="height:35px; font-size:12px;" oninput="openPaintFormulaSearch()">
+                    </div>
+                </div>
+                <div style="display:flex; gap:8px;">
+                    <div style="flex:1">
+                        <label>Code / Formula</label>
+                        <input type="text" id="p-code" placeholder="Formula (auto-search when typing)" style="height:35px; font-size:12px;" oninput="autoSearchFormulaOnType()">
+                    </div>
+                    <div style="flex:1">
+                        <label>Finish</label>
+                        <select id="p-finish" style="height:35px; font-size:12px;">
+                            <option>Satin</option><option>Gloss</option><option>Matt</option><option>20% Gloss</option><option>30% Gloss</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <label>Part Type</label>
+            <div class="bubble-row">
+                <div id="pP" class="p-card active" onclick="setP('Panel')"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"></rect></svg>PANEL</div>
+                <div id="pD" class="p-card" onclick="setP('Door')"><svg viewBox="0 0 24 24"><path d="M5 3h14v18H5V3zm10 9v1"></path></svg>DOOR</div>
+                <div id="pDr" class="p-card" onclick="setP('Drawer')"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="6" rx="1"></rect><rect x="3" y="13" width="18" height="6" rx="1"></rect></svg>DRAWER</div>
+                <div id="pC" class="p-card" onclick="setP('Custom')"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>CUSTOM</div>
+            </div>
+
+            <label>Description of Part</label>
+            <input type="text" id="desc" placeholder="e.g. Pantry Door Left" style="text-transform: uppercase;">
+
+            <div class="fm-row">
+                <div id="fm-flat" class="fm-opt active" onclick="setFM('Flat')">FLAT</div>
+                <div id="fm-mould" class="fm-opt" onclick="setFM('Moulded')">MOULDED</div>
+            </div>
+
+            <div class="bubble-row">
+                <div class="bubble-unit" style="flex:0.8"><input type="number" id="thk" value="18" inputmode="decimal" oninput="up()"><div style="font-size:9px;color:#888;">THICK</div></div>
+                <div style="flex:2"><select id="prof-select" oninput="up()"></select></div>
+                <div class="bubble-unit" style="flex:0.8"><input type="number" id="qty" value="1" inputmode="numeric"><div style="font-size:9px;color:#888;">QTY</div></div>
+            </div>
+
+            <div class="bubble-row">
+                <input type="number" id="h" placeholder="Length" inputmode="decimal" oninput="up()" style="height:55px; font-size:22px; text-align:center;">
+                <input type="number" id="w" placeholder="Width" inputmode="decimal" oninput="up()" style="height:55px; font-size:22px; text-align:center;">
+            </div>
+
+            <label>Paint Mode</label>
+            <div class="edge-row" style="margin-top:5px;">
+                <div id="mSS" class="edge-box mode-sel active" onclick="setM('SS')">SS</div>
+                <div id="mDS" class="edge-box mode-sel" onclick="setM('DS')">DS</div>
+                <div id="mSE" class="edge-box mode-sel" onclick="setM('SE')">SE</div>
+            </div>
+
+            <label>Edge Treatment</label>
+            <div class="edge-row">
+                <div class="edge-box" id="E1" onclick="tE(this)">L</div>
+                <div class="edge-box" id="E2" onclick="tE(this)">L</div>
+                <div class="cam-btn" onclick="snap()">📸</div>
+                <div class="edge-box" id="E3" onclick="tE(this)">S</div>
+                <div class="edge-box" id="E4" onclick="tE(this)">S</div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; align-items: center; padding: 15px 0; border-top: 1px solid #eee;">
+                <div id="liveSq" style="font-size: 50px; font-weight: 900; color: var(--gs); line-height: 1;">0.000</div>
+                <div style="font-size: 10px; font-weight: 900; color: #aaa;">CURRENT PART SQM (m²)</div>
+            </div>
+
+            <button class="add-main-btn" onclick="addPart()">ADD PART +</button>
+            
+            <!-- JOB PHOTOS GALLERY -->
+            <div id="jobPhotosContainer" style="margin-top:20px; padding:15px; background:#f5f5f5; border-radius:8px; border:1px solid #e0e0e0;">
+                <p style="text-align:center; color:#999; font-size:11px; padding:10px;">No photos yet</p>
+            </div>
+        </div>
+        
+        <!-- FILTER BAR FOR PANEL LIST -->
+        <div id="panelFilterBar" style="padding:12px 10px; background:#f9f9f9; border-bottom:1px solid #ddd; display:flex; gap:6px; flex-wrap:wrap; font-size:10px;">
+            <button class="filter-btn active" onclick="filterPanels('all')" data-bg="#d4af37" data-color="#000" style="padding:6px 14px; border:none; background:#d4af37; color:#000; border-radius:20px; cursor:pointer; font-weight:900; box-shadow:0 2px 4px rgba(0,0,0,0.1); transition:all 0.2s;">ALL</button>
+            <button class="filter-btn" onclick="filterPanels('panel')" data-bg="#e8f4f8" data-color="#0288d1" style="padding:6px 14px; border:none; background:#e8f4f8; color:#0288d1; border-radius:20px; cursor:pointer; font-weight:900; box-shadow:0 1px 3px rgba(0,0,0,0.08); transition:all 0.2s;">PANEL</button>
+            <button class="filter-btn" onclick="filterPanels('door')" data-bg="#f3e5f5" data-color="#7b1fa2" style="padding:6px 14px; border:none; background:#f3e5f5; color:#7b1fa2; border-radius:20px; cursor:pointer; font-weight:900; box-shadow:0 1px 3px rgba(0,0,0,0.08); transition:all 0.2s;">DOOR</button>
+            <button class="filter-btn" onclick="filterPanels('drawer')" data-bg="#e3f2fd" data-color="#1565c0" style="padding:6px 14px; border:none; background:#e3f2fd; color:#1565c0; border-radius:20px; cursor:pointer; font-weight:900; box-shadow:0 1px 3px rgba(0,0,0,0.08); transition:all 0.2s;">DRAWER</button>
+            <button class="filter-btn" onclick="filterPanels('custom')" data-bg="#fce4ec" data-color="#c2185b" style="padding:6px 14px; border:none; background:#fce4ec; color:#c2185b; border-radius:20px; cursor:pointer; font-weight:900; box-shadow:0 1px 3px rgba(0,0,0,0.08); transition:all 0.2s;">CUSTOM</button>
+            <button class="filter-btn" onclick="filterPanels('moulded')" data-bg="#fff3e0" data-color="#e65100" style="padding:6px 14px; border:none; background:#fff3e0; color:#e65100; border-radius:20px; cursor:pointer; font-weight:900; box-shadow:0 1px 3px rgba(0,0,0,0.08); transition:all 0.2s;">MOULDED</button>
+            <button class="filter-btn" onclick="filterPanels('flat')" data-bg="#f1f8e9" data-color="#558b2f" style="padding:6px 14px; border:none; background:#f1f8e9; color:#558b2f; border-radius:20px; cursor:pointer; font-weight:900; box-shadow:0 1px 3px rgba(0,0,0,0.08); transition:all 0.2s;">FLAT</button>
+            <button class="filter-btn" onclick="filterPanels('ss')" data-bg="#e0f2f1" data-color="#00695c" style="padding:6px 14px; border:none; background:#e0f2f1; color:#00695c; border-radius:20px; cursor:pointer; font-weight:900; box-shadow:0 1px 3px rgba(0,0,0,0.08); transition:all 0.2s;">S/S</button>
+            <button class="filter-btn" onclick="filterPanels('ds')" data-bg="#ede7f6" data-color="#4527a0" style="padding:6px 14px; border:none; background:#ede7f6; color:#4527a0; border-radius:20px; cursor:pointer; font-weight:900; box-shadow:0 1px 3px rgba(0,0,0,0.08); transition:all 0.2s;">D/S</button>
+            <button class="filter-btn" onclick="filterPanels('se')" style="padding:6px 12px; border:1px solid #ddd; background:#fff; border-radius:4px; cursor:pointer; font-weight:900;">S/E</button>
+            
+            <!-- Paint Colour Filter -->
+            <div style="display:flex; gap:8px; align-items:center; margin-top:12px;">
+                <label style="font-weight:bold; color:#666; font-size:13px;">Paint Colour:</label>
+                <select id="colourFilter" onchange="filterByColour(this.value)" style="padding:6px 12px; border:1px solid #ddd; border-radius:4px; background:#fff; cursor:pointer; font-weight:bold; color:#333; font-size:12px; min-width:180px;">
+                    <option value="">-- ALL --</option>
+                </select>
+            </div>
+        </div>
+        
+        <div id="list"></div>
+    </div>
+
+    <!-- Paint Formula Popup Modal -->
+    <div id="paintFormulaModal" style="display:none !important; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.6); z-index:9999; justify-content:center; align-items:center;" onclick="if(event.target.id==='paintFormulaModal') closePaintFormulaModal();">
+        <div style="position:relative; background:#fff; border-radius:12px; padding:20px; max-width:500px; width:90vw; max-height:80vh; overflow-y:auto; box-shadow:0 8px 32px rgba(0,0,0,0.3); z-index:10000;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; padding-bottom:10px; border-bottom:2px solid #eee;">
+                <h3 style="margin:0; font-size:13px; font-weight:900;" id="formulaTitle">Paint Formula</h3>
+                <button onclick="closePaintFormulaModal()" style="background:none; border:none; font-size:20px; cursor:pointer; padding:0; width:24px; height:24px; line-height:1;">×</button>
+            </div>
+            
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;">
+                <div>
+                    <div style="font-size:9px; font-weight:900; color:#666; margin-bottom:3px;">COLOUR</div>
+                    <div id="formulaColor" style="font-size:12px; font-weight:900;">-</div>
+                </div>
+                <div>
+                    <div style="font-size:9px; font-weight:900; color:#666; margin-bottom:3px;">CODE</div>
+                    <div id="formulaCode" style="font-size:12px; font-weight:900;">-</div>
+                </div>
+            </div>
+            
+            <div style="background:#f0f0f0; padding:8px; border-radius:4px; margin-bottom:10px;">
+                <label style="font-size:9px; font-weight:900; display:block; margin-bottom:4px;">Litres to Mix</label>
+                <input type="number" id="mixLitres" value="1" min="0.1" step="0.1" style="width:100%; padding:6px; border:1px solid #ddd; border-radius:3px; font-size:12px; box-sizing:border-box; font-weight:900;" oninput="updateFormulaScaling()">
+            </div>
+            
+            <div id="scaledFormula" style="background:#fafafa; padding:10px; border-radius:4px; margin-bottom:12px; font-size:10px; max-height:220px; overflow-y:auto; line-height:1.8;">
+                <!-- Scaled formula will appear here -->
+            </div>
+            
+            <div style="display:flex; gap:8px;">
+                <button onclick="savePaintFormulaToJob()" style="flex:1; background:#34c759; color:#fff; border:none; padding:10px; border-radius:6px; font-weight:900; font-size:12px; cursor:pointer;">✓ Save</button>
+                <button onclick="closePaintFormulaModal()" style="flex:1; background:#e0e0e0; color:#333; border:none; padding:10px; border-radius:6px; font-weight:900; font-size:12px; cursor:pointer;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="db" class="view-section">
+        <div class="sub-nav">
+            <button class="sub-btn active" id="sub-btn-clients" onclick="subTab('clients')">CLIENTS</button>
+            <button class="sub-btn" id="sub-btn-profiles" onclick="subTab('profiles')">DOOR PROFILES</button>
+            <button class="sub-btn" id="sub-btn-paint" onclick="subTab('paint')">PAINT</button>
+        </div>
+
+        <div id="sub-clients" class="sub-section active">
+            <div class="card">
+                <div class="add-row">
+                    <input type="text" id="new-client" placeholder="New Client Name" style="margin-bottom:0;">
+                    <button class="btn-small" onclick="addClient()">ADD</button>
+                </div>
+                <div class="db-list" id="list-clients"></div>
+            </div>
+        </div>
+
+        <div id="sub-profiles" class="sub-section" style="display:none;">
+            <div class="card">
+                <h4 style="margin-bottom:15px; font-weight:900;">Door Profiles</h4>
+                <p style="font-size:11px; color:#666; margin-bottom:15px;">Add new profiles or edit existing names. Profiles are used in your pricing matrix tiers.</p>
+                
+                
+                <div class="add-row">
+                    <input type="text" id="new-profile" placeholder="New Profile Name (e.g., Shaker, Ashlee)" style="margin-bottom:0;">
+                    <button class="btn-small" onclick="addProfile()">ADD</button>
+                </div>
+                <div class="db-list" id="list-profiles" style="margin-top:15px;"></div>
+            </div>
+        </div>
+
+        <div id="sub-paint" class="sub-section" style="display:none;">
+            <div class="card">
+                <h4 style="margin-bottom:15px; font-weight:900;">Paint Formula Database</h4>
+                <p style="font-size:11px; color:#666; margin-bottom:15px;">Manage your paint formulas. When you type a colour in the Measure tab, matching formulas will appear automatically.</p>
+                
+                <div style="margin-bottom:20px;">
+                    <h5 style="margin-bottom:10px; font-weight:900; font-size:12px;">Add New Formula</h5>
+                    <div style="background:#f9f9f9; padding:15px; border-radius:8px; border:1px solid #ddd;">
+                        <div style="display:flex; gap:10px; margin-bottom:10px;">
+                            <input type="text" id="newPaintColor" placeholder="Colour Name (e.g., Lexicon)" style="flex:1.5; padding:10px; border:1px solid #ddd; border-radius:6px; box-sizing:border-box; font-size:12px;">
+                            <input type="text" id="newPaintCode" placeholder="Code (e.g., XTSW1E3)" style="flex:1; padding:10px; border:1px solid #ddd; border-radius:6px; box-sizing:border-box; font-size:12px;">
+                        </div>
+                        <input type="text" id="newPaintProduct" placeholder="Product (e.g., 690 30% XTint Poly)" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; margin-bottom:10px; box-sizing:border-box; font-size:12px;">
+                        <input type="text" id="newPaintVersion" placeholder="Version (e.g., DULUX WOC Series II (2018))" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; margin-bottom:10px; box-sizing:border-box; font-size:12px;">
+                        
+                        <!-- Base Color & Multiple Base Codes -->
+                        <div style="background:#fff; padding:10px; border-radius:6px; border:1px solid #eee; margin-bottom:10px;">
+                            <div style="font-size:10px; font-weight:900; margin-bottom:8px; color:#666;">BASE COLOR (e.g., White, Clear, Green)</div>
+                            <input type="text" id="baseColor" placeholder="Base Color" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:11px; margin-bottom:10px; box-sizing:border-box;">
+                            
+                            <div style="font-size:10px; font-weight:900; margin-bottom:8px; color:#666;">BASE CODES (up to 3 codes @ grams)</div>
+                            
+                            <!-- Base Code 1 -->
+                            <div style="display:flex; gap:8px; margin-bottom:6px;">
+                                <input type="text" id="baseCode1" placeholder="Code 1" style="flex:0.6; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:11px; box-sizing:border-box;">
+                                <input type="number" id="baseAmount1" placeholder="grams" step="0.01" style="flex:0.4; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:11px; box-sizing:border-box;">
+                            </div>
+                            
+                            <!-- Base Code 2 -->
+                            <div style="display:flex; gap:8px; margin-bottom:6px;">
+                                <input type="text" id="baseCode2" placeholder="Code 2 (optional)" style="flex:0.6; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:11px; box-sizing:border-box;">
+                                <input type="number" id="baseAmount2" placeholder="grams" step="0.01" style="flex:0.4; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:11px; box-sizing:border-box;">
+                            </div>
+                            
+                            <!-- Base Code 3 -->
+                            <div style="display:flex; gap:8px;">
+                                <input type="text" id="baseCode3" placeholder="Code 3 (optional)" style="flex:0.6; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:11px; box-sizing:border-box;">
+                                <input type="number" id="baseAmount3" placeholder="grams" step="0.01" style="flex:0.4; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:11px; box-sizing:border-box;">
+                            </div>
+                        </div>
+                        
+                        <!-- Tinters Section -->
+                        <div style="background:#fff; padding:10px; border-radius:6px; border:1px solid #eee; margin-bottom:10px;">
+                            <div style="font-size:10px; font-weight:900; margin-bottom:8px; color:#666;">TINTERS (code space grams per line)</div>
+                            <textarea id="tintersList" placeholder="ITE303 5.88&#10;ITE306 5.95&#10;ITE310 5.75" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:11px; min-height:60px; box-sizing:border-box; font-family:monospace;"></textarea>
+                            <div style="font-size:9px; color:#999; margin-top:5px;">One tinter per line. Format: CODE GRAMS (just a space between them)</div>
+                        </div>
+                        
+                        <button onclick="addNewPaintFormulaUI()" style="width:100%; padding:10px; background:#34c759; color:#fff; border:none; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">+ ADD FORMULA</button>
+                    </div>
+                </div>
+                
+                <div>
+                    <div style="margin-bottom:10px; font-weight:900; font-size:12px;">
+                        Existing Formulas (<span id="formulaCount">0</span>)
+                        <input type="text" id="formulaSearch" placeholder="Search formula..." style="width:100%; padding:6px; margin-top:8px; border:1px solid #ddd; border-radius:4px; font-size:11px;" oninput="searchFormulas()">
+                    </div>
+                    <div id="paintFormulaList" style="background:#fff; border:1px solid #ddd; border-radius:8px; overflow:hidden; max-height:400px; overflow-y:auto;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="forms" class="view-section">
+        <div class="card">
+            <h3>Generate Form</h3>
+            <div class="form-grid">
+                <div id="form-estimate" class="form-card" onclick="genForm('Estimate')"><h4>Estimate</h4><p>Job breakdown only</p></div>
+                <div id="form-supply" class="form-card" onclick="genForm('Supply Docket')"><h4>Supply Docket</h4><p>Part list for client</p></div>
+                <div id="form-mixing" class="form-card" onclick="genForm('Mixing Card')"><h4>Mixing Card</h4><p>Paint shop formula</p></div>
+                <div id="form-invoice" class="form-card" onclick="genForm('Invoice')"><h4>Invoice</h4><p>Dynamic length billing</p></div>
+                <div id="form-quote" class="form-card" onclick="genForm('Quote Form')"><h4>Quote Form</h4><p>Raw vs Paint pricing</p></div>
+                <div id="form-cover" class="form-card" onclick="genForm('Cover Sheet')" style="background:#fff3e0; border-color:#ff9800;"><h4>📋 Cover Sheet</h4><p>Job info summary</p></div>
+                <div id="form-label" class="form-card" onclick="genForm('Shop Label')" style="background:#fce4ec; border-color:#e91e63;"><h4>🏷️ Shop Label</h4><p>Print & post on job</p></div>
+                <div id="form-a3schedule" class="form-card" onclick="openA3ScheduleModal()" style="background:#e8f5e9; border-color:#4caf50;"><h4>📅 A3 Schedule</h4><p>Work schedule view</p></div>
+                <div id="form-batch" class="form-card" onclick="openBatchPrintModal()" style="background:#f3e5f5; border-color:#9c27b0;"><h4>📦 Batch Print</h4><p>Select & print multiple</p></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="history" class="view-section">
+        <div class="card">
+            <h3>Job History</h3>
+            <p style="color:#666; font-size:12px; margin-bottom:15px;">Save your current job using the 💾 button above to add it to history</p>
+            
+            <!-- Filter Buttons -->
+            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:15px;">
+                <button onclick="filterHistory('all')" id="filter-all" style="background:#d4af37; color:#000; border:none; padding:8px 14px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">ALL</button>
+                <button onclick="filterHistory('active')" id="filter-active" style="background:#f0f0f0; color:#666; border:none; padding:8px 14px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">ACTIVE</button>
+                <button onclick="filterHistory('completed')" id="filter-completed" style="background:#f0f0f0; color:#666; border:none; padding:8px 14px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">COMPLETED</button>
+            </div>
+        </div>
+        <div id="history-list"></div>
+    </div>
+    
+    <div id="schedule" class="view-section" style="width:100vw; margin-left:calc(-50vw + 50%); position:relative;">
+    
+
+        <!-- Global Notifications -->
+        <div class="card" style="background:#f0fdf4; border-left:5px solid #34c759; margin-left:0; margin-right:0;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h3 style="margin:0; color:#34c759;">🔔 Global Notifications</h3>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <span id="notificationBadge" style="background:#ff3b30; color:#fff; border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:12px;">0</span>
+                    <button onclick="toggleNotifications()" style="border:none; background:#34c759; color:#fff; padding:6px 12px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">−</button>
+                </div>
+            </div>
+            <div id="globalNotifications" style="max-height:200px; overflow-y:auto; display:block;">
+                <p style="color:#999; text-align:center; font-size:12px;">No notifications yet</p>
+            </div>
+        </div>
+
+        <div class="card" style="margin-left:0; margin-right:0;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <h3 style="margin:0;">Jobs Chart</h3>
+                <div style="display:flex; gap:8px;">
+                    <button onclick="prevScheduleMonth()" style="border:none; background:#f0f0f0; width:35px; height:35px; border-radius:6px; font-weight:900; cursor:pointer;">←</button>
+                    <button onclick="nextScheduleMonth()" style="border:none; background:#f0f0f0; width:35px; height:35px; border-radius:6px; font-weight:900; cursor:pointer;">→</button>
+                    <button id="jobsChartToggleBtn" onclick="toggleJobsChart()" title="Minimize/Maximize" style="border:none; background:#2196f3; color:#fff; width:35px; height:35px; border-radius:6px; font-weight:900; cursor:pointer; font-size:18px;">−</button>
+                </div>
+            </div>
+            <div id="scheduleMonthYear" style="text-align:center; font-weight:900; font-size:16px; margin-bottom:15px; color:#000;"></div>
+        </div>
+
+        <!-- Jobs Chart Timeline - Full Width -->
+        <div id="ganttWrapper" style="width:100vw; margin-left:calc(-50vw + 50%); background:#fff; padding:15px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow-x:auto; overflow-y:hidden; min-height:600px; display:block; visibility:visible; scroll-behavior:smooth; cursor:grab;">
+            <!-- Jobs Chart Container -->
+            <div id="ganttChart" style="min-width:1200px; padding:0; display:flex; flex-direction:column; user-select:none;">
+                <!-- Jobs chart will render here -->
+            </div>
+        </div>
+        <div style="text-align:center; font-size:11px; color:#999; margin-top:8px;">← Scroll horizontally to view different months →</div>
+
+    </div>
+    
+    <div id="admin" class="view-section" style="display:flex; flex-direction:column; height:calc(100vh - 200px);">
+        <h3 style="margin-bottom:10px; background:#fff; padding:10px 0; border-bottom:2px solid #ddd; position:sticky; top:0; z-index:100;">Admin Settings</h3>
+        
+        <!-- Admin Sub-Tabs - Sticky Header -->
+        <div class="sub-nav" style="margin-bottom:0px; position:sticky; top:45px; background:#fff; z-index:99; border-bottom:2px solid var(--gs); padding-bottom:10px;">
+            <button class="sub-btn active" onclick="switchAdminTab('general')" id="admin-tab-general">General Settings</button>
+            <button class="sub-btn" onclick="switchAdminTab('colours')" id="admin-tab-colours">Colours</button>
+            <button class="sub-btn" onclick="switchAdminTab('clients')" id="admin-tab-clients">Clients</button>
+            <button class="sub-btn" onclick="switchAdminTab('pricing')" id="admin-tab-pricing">Price Matrix</button>
+        </div>
+        
+        <!-- Scrollable Content Area -->
+        <div class="card" style="overflow-y:auto; flex:1; margin-bottom:80px; padding-bottom:20px;">
+            <!-- General Settings Tab -->
+            <div id="admin-tab-general-content">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <h4 style="margin:0; margin-top:20px; font-weight:900;">Measure Tab Defaults</h4>
+                    <button onclick="let container = document.getElementById('measure-defaults-container'); container.style.display = container.style.display === 'none' ? 'block' : 'none';" style="background:none; border:none; cursor:pointer; font-weight:900; font-size:18px; color:#999;">−</button>
+                </div>
+                <div id="measure-defaults-container" style="display:block;">
+                <p style="font-size:11px; color:#666; margin-bottom:15px;">Set default values for new parts in the Measure tab</p>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-bottom:20px;">
+                    <div>
+                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Default Material Thickness (mm)</label>
+                        <input type="number" id="defaultThickness" value="18" min="1" max="50" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
+                    </div>
+                    <div>
+                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Default SE Return Value (mm)</label>
+                        <input type="number" id="defaultSEReturn" value="100" min="10" max="500" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
+                    </div>
+                </div>
+                <button onclick="saveDefaultSettings()" style="border:none; background:#34c759; color:#fff; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">✓ SAVE DEFAULTS</button>
+                </div>
+                
+                <hr style="margin:30px 0; border:none; border-top:1px solid #ddd;">
+                
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <h4 style="margin:0; margin-top:20px; font-weight:900;">🌍 Global Settings (v1.5.4+)</h4>
+                    <button onclick="let container = document.getElementById('global-settings-container'); container.style.display = container.style.display === 'none' ? 'block' : 'none';" style="background:none; border:none; cursor:pointer; font-weight:900; font-size:18px; color:#999;">−</button>
+                </div>
+                <div id="global-settings-container" style="display:block;">
+                <p style="font-size:11px; color:#666; margin-bottom:15px;">Configure global app settings for measurements, precision, and AI features</p>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-bottom:20px;">
+                    <div>
+                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Measurement Units</label>
+                        <select id="globalUnitsSelect" onchange="setUnits(this.value)" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
+                            <option value="METRIC">METRIC (mm)</option>
+                            <option value="IMPERIAL">IMPERIAL (inches)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Measurement Precision</label>
+                        <select id="globalPrecisionSelect" onchange="setPrecision(this.value)" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
+                            <option value="0.1">0.1 (nearest tenth)</option>
+                            <option value="0.01">0.01 (nearest hundredth)</option>
+                            <option value="0.001">0.001 (nearest thousandth)</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-bottom:15px;">
+                    <div style="padding:12px; background:#f0f8ff; border-radius:6px; border-left:4px solid #2196f3;">
+                        <label style="display:flex; align-items:center; gap:8px; font-weight:900; font-size:11px; color:#666; cursor:pointer;">
+                            <input type="checkbox" id="predictiveInputToggle" onchange="togglePredictiveInput(this.checked)" style="cursor:pointer; width:16px; height:16px;">
+                            Predictive Measurement Memory
+                        </label>
+                        <p style="font-size:10px; color:#999; margin-top:4px; margin-bottom:0;">Remember commonly used measurements</p>
+                    </div>
+                    <div style="padding:12px; background:#f0f8ff; border-radius:6px; border-left:4px solid #2196f3;">
+                        <label style="display:flex; align-items:center; gap:8px; font-weight:900; font-size:11px; color:#666; cursor:pointer;">
+                            <input type="checkbox" id="aiHelperToggle" onchange="toggleAIHelper(this.checked)" style="cursor:pointer; width:16px; height:16px;">
+                            AI Helper Bot
+                        </label>
+                        <p style="font-size:10px; color:#999; margin-top:4px; margin-bottom:0;">Enable AI assistant for trade guidance</p>
+                    </div>
+                </div>
+                <button onclick="updateGlobalSettingsUI()" style="border:none; background:#6200ea; color:#fff; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">🔄 UPDATE DISPLAY</button>
+                </div>
+                
+                <hr style="margin:30px 0; border:none; border-top:1px solid #ddd;">
+                
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <h4 style="margin:0; margin-top:20px; font-weight:900;">🎨 Paint Brands (Global Configuration)</h4>
+                    <button onclick="let container = document.getElementById('paint-brands-container'); container.style.display = container.style.display === 'none' ? 'block' : 'none';" style="background:none; border:none; cursor:pointer; font-weight:900; font-size:18px; color:#999;">−</button>
+                </div>
+                <div id="paint-brands-container" style="display:block;">
+                <p style="font-size:11px; color:#666; margin-bottom:15px;">Configure available paint brands for your region (e.g., Dulux, Wattyl for Australia; Benjamin Moore, Sherwin-Williams for USA)</p>
+                <div style="margin-bottom:15px;">
+                    <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Add New Brand</label>
+                    <div style="display:grid; grid-template-columns:1fr 80px; gap:10px;">
+                        <input type="text" id="newPaintBrandInput" placeholder="e.g., Benjamin Moore" style="padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
+                        <button onclick="addPaintBrand()" style="border:none; background:#34c759; color:#fff; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">+ ADD</button>
+                    </div>
+                </div>
+                <div style="background:#f9f9f9; padding:12px; border-radius:6px; margin-bottom:15px;">
+                    <p style="font-size:10px; font-weight:900; color:#666; margin-bottom:8px;">Available Brands:</p>
+                    <div id="paintBrandsList" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
+                </div>
+                <button onclick="savePaintBrands()" style="border:none; background:#d4af37; color:#000; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">💾 SAVE BRANDS</button>
+                </div>
+                
+                <hr style="margin:30px 0; border:none; border-top:1px solid #ddd;">
+                
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <h4 style="margin:0; margin-top:20px; font-weight:900;">Company Details (PDF Header)</h4>
+                    <button onclick="let container = document.getElementById('company-details-container'); container.style.display = container.style.display === 'none' ? 'block' : 'none';" style="background:none; border:none; cursor:pointer; font-weight:900; font-size:18px; color:#999;">−</button>
+                </div>
+                <div id="company-details-container" style="display:block;">
+                <p style="font-size:11px; color:#666; margin-bottom:15px;">Update your company information displayed on all PDF forms (Estimates, Quotes, Invoices, Supply Dockets)</p>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-bottom:20px;">
+                    <div>
+                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Company Name</label>
+                        <input type="text" id="companyName" placeholder="Paintworkz" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
+                    </div>
+                    <div>
+                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Phone Number</label>
+                        <input type="text" id="companyPhone" placeholder="0438 803 032" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
+                    </div>
+                    <div style="grid-column:1 / -1;">
+                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Email Address</label>
+                        <input type="email" id="companyEmail" placeholder="paint_workz@outlook.com" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
+                    </div>
+                    <div style="grid-column:1 / -1;">
+                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Address</label>
+                        <input type="text" id="companyAddress" placeholder="17 West Boundary Road, Hamilton 3300 VIC" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
+                    </div>
+                    <div style="grid-column:1 / -1;">
+                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Company Logo (PNG - Circle Logo)</label>
+                        <input type="file" id="companyLogo" accept="image/png" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:6px; font-size:11px; box-sizing:border-box;">
+                        <p style="font-size:10px; color:#999; margin-top:5px; margin-bottom:0;">Upload a PNG file for your circle logo (recommended size: 150x150px)</p>
+                    </div>
+                    <div style="grid-column:1 / -1;">
+                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Header Logo (PNG - Full Brand Header)</label>
+                        <input type="file" id="headerLogo" accept="image/png" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:6px; font-size:11px; box-sizing:border-box;">
+                        <p style="font-size:10px; color:#999; margin-top:5px; margin-bottom:0;">Upload a PNG file for your header/branding logo (recommended size: 1024x300px or similar aspect ratio)</p>
+                    </div>
+                </div>
+                <button onclick="saveCompanyDetails()" style="border:none; background:#d4af37; color:#000; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer; margin-right:10px;">💾 SAVE COMPANY DETAILS</button>
+                <button onclick="resetCompanyDetails()" style="border:none; background:#ff9500; color:#fff; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">↻ RESET TO DEFAULTS</button>
+                </div>
+                
+                <hr style="margin:30px 0; border:none; border-top:1px solid #ddd;">
+                
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <h4 style="margin:0; margin-top:20px; font-weight:900;">API Integration Keys</h4>
+                    <button onclick="let container = document.getElementById('api-keys-container'); container.style.display = container.style.display === 'none' ? 'block' : 'none';" style="background:none; border:none; cursor:pointer; font-weight:900; font-size:18px; color:#999;">−</button>
+                </div>
+                <div id="api-keys-container" style="display:block;">
+                <p style="font-size:11px; color:#666; margin-bottom:15px;">Store your external API keys for third-party integrations</p>
+                <div style="display:grid; grid-template-columns:1fr; gap:15px; margin-bottom:20px;">
+                    <div>
+                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Evic ExpressTint API Key</label>
+                        <input type="password" id="evicApiKey" placeholder="Enter your Evic API key" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
+                        <p style="font-size:10px; color:#999; margin-top:4px; margin-bottom:0;">Used to search and retrieve paint formulas from Evic's color database</p>
+                    </div>
+                    <div>
+                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Xero Integration API Key</label>
+                        <input type="password" id="xeroApiKey" placeholder="Enter your Xero API key" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
+                        <p style="font-size:10px; color:#999; margin-top:4px; margin-bottom:0;">Used to integrate with Xero accounting software for invoicing and reporting</p>
+                    </div>
+                </div>
+                <button onclick="saveApiKeys()" style="border:none; background:#2196f3; color:#fff; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">🔐 SAVE API KEYS</button>
+                </div>
+                
+                <hr style="margin:30px 0; border:none; border-top:1px solid #ddd;">
+                
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <h4 style="margin:0; margin-top:20px; font-weight:900;">Additional Charges Configuration</h4>
+                    <button onclick="let container = document.getElementById('additional-charges-container'); container.style.display = container.style.display === 'none' ? 'block' : 'none';" style="background:none; border:none; cursor:pointer; font-weight:900; font-size:18px; color:#999;">−</button>
+                </div>
+                <div id="additional-charges-container" style="display:block;">
+                <p style="font-size:11px; color:#666; margin-bottom:15px;">Configure door colour multipliers and delivery region charges</p>
+                
+                <!-- Door Colour Multipliers -->
+                <div style="margin-bottom:20px; padding:15px; background:#f5f5f5; border-radius:6px;">
+                    <h5 style="margin:0 0 15px 0; font-weight:bold; font-size:12px;">Door Colour Multipliers (% of paint price)</h5>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                        <div>
+                            <label style="display:block; font-weight:900; font-size:10px; color:#666; margin-bottom:4px;">Clear</label>
+                            <input type="number" id="chargeClear" value="0" min="0" max="100" step="0.5" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px; font-size:11px; box-sizing:border-box;">
+                        </div>
+                        <div>
+                            <label style="display:block; font-weight:900; font-size:10px; color:#666; margin-bottom:4px;">Standard</label>
+                            <input type="number" id="chargeStandard" value="0" min="0" max="100" step="0.5" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px; font-size:11px; box-sizing:border-box;">
+                        </div>
+                        <div>
+                            <label style="display:block; font-weight:900; font-size:10px; color:#666; margin-bottom:4px;">Light</label>
+                            <input type="number" id="chargeLight" value="0" min="0" max="100" step="0.5" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px; font-size:11px; box-sizing:border-box;">
+                        </div>
+                        <div>
+                            <label style="display:block; font-weight:900; font-size:10px; color:#666; margin-bottom:4px;">Dark</label>
+                            <input type="number" id="chargeDark" value="15" min="0" max="100" step="0.5" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px; font-size:11px; box-sizing:border-box;">
+                        </div>
+                        <div>
+                            <label style="display:block; font-weight:900; font-size:10px; color:#666; margin-bottom:4px;">Extra Tint</label>
+                            <input type="number" id="chargeExtraTint" value="30" min="0" max="100" step="0.5" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px; font-size:11px; box-sizing:border-box;">
+                        </div>
+                        <div>
+                            <label style="display:block; font-weight:900; font-size:10px; color:#666; margin-bottom:4px;">Undercoat (% of paint only)</label>
+                            <input type="number" id="chargeUndercoat" value="80" min="0" max="100" step="0.5" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px; font-size:11px; box-sizing:border-box;">
+                        </div>
+                        <div>
+                            <label style="display:block; font-weight:900; font-size:10px; color:#666; margin-bottom:4px;">Colour Match</label>
+                            <input type="number" id="chargeColourMatch" value="130" min="0" max="300" step="0.5" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px; font-size:11px; box-sizing:border-box;">
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Delivery Regions -->
+                <div style="margin-bottom:20px; padding:15px; background:#f5f5f5; border-radius:6px;">
+                    <h5 style="margin:0 0 15px 0; font-weight:bold; font-size:12px;">Delivery/Pickup Regions ($)</h5>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                        <div>
+                            <label style="display:block; font-weight:900; font-size:10px; color:#666; margin-bottom:4px;">Warrnambool</label>
+                            <input type="number" id="regionWarrnambool" value="90" min="0" step="5" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px; font-size:11px; box-sizing:border-box;">
+                        </div>
+                        <div>
+                            <label style="display:block; font-weight:900; font-size:10px; color:#666; margin-bottom:4px;">Geelong</label>
+                            <input type="number" id="regionGeelong" value="110" min="0" step="5" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px; font-size:11px; box-sizing:border-box;">
+                        </div>
+                        <div>
+                            <label style="display:block; font-weight:900; font-size:10px; color:#666; margin-bottom:4px;">Mt Gambier</label>
+                            <input type="number" id="regionMtGambier" value="110" min="0" step="5" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px; font-size:11px; box-sizing:border-box;">
+                        </div>
+                        <div>
+                            <label style="display:block; font-weight:900; font-size:10px; color:#666; margin-bottom:4px;">Adelaide</label>
+                            <input type="number" id="regionAdelaide" value="250" min="0" step="5" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px; font-size:11px; box-sizing:border-box;">
+                        </div>
+                        <div>
+                            <label style="display:block; font-weight:900; font-size:10px; color:#666; margin-bottom:4px;">Horsham</label>
+                            <input type="number" id="regionHorsham" value="110" min="0" step="5" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px; font-size:11px; box-sizing:border-box;">
+                        </div>
+                        <div>
+                            <label style="display:block; font-weight:900; font-size:10px; color:#666; margin-bottom:4px;">Ballarat</label>
+                            <input type="number" id="regionBallarat" value="160" min="0" step="5" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px; font-size:11px; box-sizing:border-box;">
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Other Settings -->
+                <div style="margin-bottom:20px; padding:15px; background:#f5f5f5; border-radius:6px;">
+                    <h5 style="margin:0 0 15px 0; font-weight:bold; font-size:12px;">Other Settings</h5>
+                    <div style="display:grid; grid-template-columns:1fr; gap:12px;">
+                        <div>
+                            <label style="display:block; font-weight:900; font-size:10px; color:#666; margin-bottom:4px;">GST Rate (%) - Applied to subtotal + charges</label>
+                            <input type="number" id="gstRate" value="10" min="0" max="25" step="0.1" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px; font-size:11px; box-sizing:border-box;">
+                        </div>
+                    </div>
+                </div>
+                
+                <button onclick="saveAdditionalCharges()" style="border:none; background:#34c759; color:#fff; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">✓ SAVE CHARGES</button>
+                </div>
+                
+                <hr style="margin:30px 0; border:none; border-top:1px solid #ddd;">
+                
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <h4 style="margin:0; margin-top:20px; font-weight:900;">Gantt Chart Timeline</h4>
+                    <button onclick="let container = document.getElementById('timeline-settings-container'); container.style.display = container.style.display === 'none' ? 'block' : 'none';" style="background:none; border:none; cursor:pointer; font-weight:900; font-size:18px; color:#999;">−</button>
+                </div>
+                <div id="timeline-settings-container" style="display:block;">
+                <p style="font-size:11px; color:#666; margin-bottom:15px;">Configure default timeline durations for the job Gantt chart (measured in days)</p>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-bottom:20px;">
+                    <div>
+                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Measure (m)</label>
+                        <input type="number" id="timelineMeasure" value="1" min="1" max="30" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
+                    </div>
+                    <div>
+                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Sand 1st Coat (s1)</label>
+                        <input type="number" id="timelineSand1" value="4" min="1" max="30" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
+                    </div>
+                    <div>
+                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Undercoat (u)</label>
+                        <input type="number" id="timelineUndercoat" value="2" min="1" max="30" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
+                    </div>
+                    <div>
+                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Sand 2nd Coat (s2)</label>
+                        <input type="number" id="timelineSand2" value="3" min="1" max="30" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
+                    </div>
+                    <div>
+                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Top Coat (t)</label>
+                        <input type="number" id="timelineTopcoat" value="2" min="1" max="30" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
+                    </div>
+                    <div>
+                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Inspection (i)</label>
+                        <input type="number" id="timelineInstall" value="2" min="1" max="30" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
+                    </div>
+                    <div>
+                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Completion/Delivery (c)</label>
+                        <input type="number" id="timelineCompletion" value="1" min="1" max="30" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
+                    </div>
+                </div>
+                <button onclick="saveTimelineSettings()" style="border:none; background:#2196f3; color:#fff; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer; margin-right:10px;">✓ SAVE TIMELINE</button>
+                <button onclick="resetTimelineSettings()" style="border:none; background:#ff9500; color:#fff; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">↻ RESET DEFAULTS</button>
+                </div>
+                
+                <hr style="margin:30px 0; border:none; border-top:1px solid #ddd;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <h4 style="margin:0; margin-top:20px; font-weight:900;">Notification Archive</h4>
+                    <button onclick="toggleAdminAlerts()" style="background:none; border:none; cursor:pointer; font-weight:900; font-size:18px; color:#999;">−</button>
+                </div>
+                <div id="admin-alerts-container" style="display:block;">
+                    <div id="admin-alerts"></div>
+                </div>
+                
+                <h4 style="margin-top:20px; margin-bottom:10px; font-weight:900;">Database Status</h4>
+                <p style="font-size:11px; color:#666; margin-bottom:10px; background:#f0f0f0; padding:10px; border-radius:6px;">All systems operational. Job history is clean and synced.</p>
+                
+                <hr style="margin:30px 0; border:none; border-top:1px solid #ddd;">
+                
+                <div style="background:#f5f5f5; border-left:4px solid #d4af37; padding:15px; border-radius:6px; margin-top:20px;">
+                    <p style="font-size:10px; color:#666; margin:0; line-height:1.6;">
+                        <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
+                        <span style="color:#999;">Created by Colin Bedford</span><br>
+                        <span style="color:#999;">Paintworkz PTY LTD</span><br>
+                        <span id="currentDate" style="color:#999;">14 February 2026</span><br><br>
+                        <span id="versionDisplay" style="color:#d4af37; font-weight:900;">v1.7.0 | </span><span id="versionDate" style="color:#d4af37; font-weight:900;"></span>
+                    </p>
+                </div>
+            </div>
+            
+            <!-- Colours Tab -->
+            <div id="admin-tab-colours-content" style="display:none;">
+                <h4 style="margin-top:20px; margin-bottom:10px; font-weight:900;">Theme Colours</h4>
+                <p style="font-size:11px; color:#666; margin-bottom:15px;">Customize all colours throughout the app - changes apply instantly</p>
+                <div id="colorCustomizerContent" style="display:grid; grid-template-columns:1fr 1fr; gap:15px;"></div>
+            </div>
+            
+            <!-- Clients Database Tab -->
+            <div id="admin-tab-clients-content" style="display:none;">
+                <h4 style="margin-top:20px; margin-bottom:10px; font-weight:900;">Client Database</h4>
+                <p style="font-size:11px; color:#666; margin-bottom:15px;">Scroll to see all clients or search by name</p>
+                <button onclick="showAddClientForm()" style="border:none; background:#34c759; color:#fff; padding:12px 20px; border-radius:6px; font-weight:900; font-size:12px; cursor:pointer; width:100%; margin-bottom:15px;">➕ ADD NEW CLIENT</button>
+                
+                <!-- Search box -->
+                <input type="text" id="clientSearchBox" placeholder="🔍 Search clients..." style="width:100%; padding:12px; border:1px solid #ddd; border-radius:6px; font-size:13px; box-sizing:border-box; margin-bottom:15px;" onkeyup="filterClientList()">
+                
+                <!-- Scrollable client list container with visible scrollbar -->
+                <div style="border:1px solid #ddd; border-radius:8px; background:#fff; padding:0;">
+                    <div id="clientsList" style="height:500px; overflow-y:scroll; display:flex; flex-direction:column; gap:0; padding:10px; scrollbar-width:thin; scrollbar-color:#2196f3 #f0f0f0;"></div>
+                </div>
+            </div>
+            
+            <!-- Price Matrix Tab -->
+            <div id="admin-tab-pricing-content" style="display:none;">
+                <div id="admin-pricing-matrix" style="margin-top:15px;"></div>
+            </div>
+        </div>
+        
+        <!-- Admin Footer - Sticky at Bottom with Notifications -->
+        <div style="position:fixed; bottom:80px; left:0; right:0; background:#fff; border-top:2px solid #ddd; padding:12px 15px; z-index:98; max-height:120px; overflow-y:auto;">
+            <div style="font-weight:900; font-size:11px; color:#666; margin-bottom:8px;">📋 ADMIN ALERTS & TIMELINE</div>
+            <div id="admin-footer-content" style="font-size:10px; color:#888; min-height:40px;">
+                <span style="color:#999;">No notifications • Timeline available on job schedule</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- WORKLOAD SUMMARY CONTAINER - Shows only in Schedule/Admin -->
+<div id="workloadSummaryContainer" style="display:none; background:#f9f9f9; border-top:1px solid #ddd; padding:12px 15px; position:fixed; bottom:60px; left:0; right:0; z-index:100;">
+    <div class="card" style="margin:0; background:transparent;">
+        <h4 style="margin-top:0; margin-bottom:8px; font-size:12px;">Workload Summary</h4>
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;">
+            <div style="text-align:center; padding:8px;">
+                <div id="totalActiveJobs" style="font-size:18px; font-weight:900; color:var(--gs);">0</div>
+                <div style="font-size:9px; color:#666; font-weight:700;">Active Jobs</div>
+            </div>
+            <div style="text-align:center; padding:8px; border-left:1px solid #ddd; border-right:1px solid #ddd;">
+                <div id="totalTasks" style="font-size:18px; font-weight:900; color:#ff9500;">0/0</div>
+                <div style="font-size:9px; color:#666; font-weight:700;">Tasks Complete</div>
+            </div>
+            <div style="text-align:center; padding:8px;">
+                <div id="totalWorkload" style="font-size:18px; font-weight:900; color:#2196f3;">0</div>
+                <div style="font-size:9px; color:#666; font-weight:700;">SQM Workload</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+    <!-- Global Notifications Banner - Visible on all tabs -->
+    <div id="globalNotificationsBanner" style="position:fixed; top:0; left:0; right:0; z-index:9999; background:linear-gradient(90deg, #fffef0 0%, #fffff8 100%); border-bottom:4px solid #ffc107; padding:16px; padding-top:20px; min-height:60px; max-height:250px; overflow-y:auto; display:none; box-shadow:0 4px 12px rgba(255, 193, 7, 0.3);">
+        <div id="globalNotificationsList" style="margin:0;"></div>
+    </div>
+    
+<div class="sticky-footer">
+    <div class="footer-item" style="margin-left:15px;"><div class="footer-label">TOTAL SQM (m²)</div><div class="footer-val" id="tA">0.000</div></div>
+    <div style="flex:1; display:flex; justify-content:center; gap:20px; align-items:center;">
+        <div class="icon-btn" onclick="genPDF()" style="color:#fff">📄</div>
+        <div class="icon-btn" onclick="openChatAI()" title="Chat AI Assistant (Coming Soon)" style="color:#6200ea; font-size:22px; cursor:pointer;">💬</div>
+        <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">PaintWorkz Pro v1.4.1</div>
+    </div>
+    <div class="footer-item"><div class="footer-label">PARTS</div><div class="footer-val" id="tQ">0</div></div>
+    <div class="icon-btn" onclick="handleLogout()" title="Logout" style="color:#ff3b30; font-size:24px; cursor:pointer; margin-right:15px;">🚪</div>
+</div>
+
+<script>
+    ////////////////////////////////////////////////////////////////////////////////
+    // 🎨 PAINTWORKZ PRO v1.6.0 GLOBAL (17 Feb 2026)
+    ////////////////////////////////////////////////////////////////////////////////
+    // LAST UPDATED: 17 Feb 2026
+    // CHANGES: Filtered PDF generation, Job Filing Sheet, Inspection timeline fix
+    // 
+    // ⚠️ HARDCODED GANTT CHART DEFAULTS (Admin → General Settings → Gantt Chart):
+    //    M (Measure) = 1 day
+    //    S1 (Sand 1st Coat) = 4 days
+    //    U (Undercoat) = 2 days
+    //    S2 (Sand 2nd Coat) = 3 days
+    //    T (Top Coat) = 2 days
+    //    I (Inspection) = 2 days
+    //    C (Completion/Delivery) = 1 day
+    //
+    // ⚠️ IMPORTANT: Keep this header updated with every code change!
+    ////////////////////////////////////////////////////////////////////////////////
+    
+    console.log('%c 🎨 PaintWorkz Pro v1.7.0 ENTERPRISE (2026-02-17) ', 'background:#6200ea;color:#fff;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('✅ UPDATES IN v1.7.0:');
+    console.log('✓ PAINT BRANDS - Fixed dropdown to show all configured brands (default: Dulux, Wattyl, Taubmans, etc)');
+    console.log('✓ MULTI-SURCHARGE SYSTEM - Users can apply 2+ surcharges per colour (e.g., Dark + Colour Match)');
+    console.log('✓ STICKY ADMIN LAYOUT - Header frozen at top, content scrolls, footer notifications at bottom');
+    console.log('✓ BATCH PRINT - Select multiple forms and generate all PDFs at once');
+    console.log('✓ All surcharge selections now stored as arrays for flexible pricing');
+    console.log('✓ Admin panel reorganized for better workflow');
+    console.log('🚀 Enterprise-ready with global configuration support');
+    console.log('✓ Client Editor - Fixed accidental data loss (removed overlay click-to-close)');
+    console.log('✓ Client Editor - Added STATE field (NSW/VIC/QLD/WA/SA/TAS/NT/ACT)');
+    console.log('✓ New Client Form - Added STATE field');
+    console.log('✓ CANCEL button now only way to close without saving');
+    console.log('✓ State field stored in client database and saved');
+    console.log('✓ Cover Sheet redesigned with full paint specs and client details');
+    console.log('✓ Filtered PDF generation complete');
+    console.log('✅ CRITICAL FIXES:');
+    console.log('✓ PDF button now shows form selection modal (not navigate to forms tab)');
+    console.log('✓ Disabled Firebase real-time sync (memory crashes fixed)');
+    console.log('✓ Improved error handling to prevent crashes');
+    console.log('✓ Door profile persistence fixed');
+    console.log('✓ Job completion toggle working');
+    console.log('✓ Measure sheet clears on save');
+    console.log('✓ Workload summary correctly excludes completed');
+    // ====================================
+    
+    // Firebase already initialized at top of page
+    let isSignup = false;
+
+    // Wait for Firebase to be initialized before using it
+    function waitForFirebase() {
+        if (typeof auth !== 'undefined' && auth !== null) {
+            // Firebase is ready, set up auth listener
+            window.onAuthStateChanged((user) => {
+              if (user) {
+                window.currentUser = user;
+                document.getElementById('loginScreen').classList.add('hidden');
+                document.getElementById('userInfo').innerHTML = `
+                  <span style="font-weight:900;">👤 ${user.email.split('@')[0]}</span>
+                  <button id="logoutBtn" onclick="logout()" style="background:#ff3b30; color:#fff; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; font-weight:900; margin-left:10px;">Logout</button>
+                `;
+                loadDataFromFirestore();
+              } else {
+                window.currentUser = null;
+                document.getElementById('loginScreen').classList.remove('hidden');
+                document.getElementById('userInfo').innerHTML = '';
+              }
+            });
+        } else {
+            // Firebase not ready yet, try again
+            setTimeout(waitForFirebase, 100);
+        }
+    }
+    
+    // Start waiting for Firebase
+    waitForFirebase();
+
+    // Login/Signup Handler
+    function handleAuth() {
+      const email = document.getElementById('loginEmail').value.trim();
+      const password = document.getElementById('loginPassword').value;
+      const errorDiv = document.getElementById('loginError');
+      
+      if (!email || !password) {
+        errorDiv.innerHTML = '⚠️ Please enter email and password';
+        return;
+      }
+      
+      if (isSignup) {
+        window.createUserWithEmailAndPassword(email, password)
+          .then(result => {
+            errorDiv.innerHTML = '✅ Account created! Logging in...';
+            setTimeout(() => {
+              document.getElementById('loginEmail').value = '';
+              document.getElementById('loginPassword').value = '';
+            }, 1000);
+          })
+          .catch(error => {
+            errorDiv.innerHTML = '❌ ' + error.message;
+          });
+      } else {
+        window.signInWithEmailAndPassword(email, password)
+          .then(result => {
+            errorDiv.innerHTML = '✅ Logged in successfully!';
+            document.getElementById('loginEmail').value = '';
+            document.getElementById('loginPassword').value = '';
+          })
+          .catch(error => {
+            errorDiv.innerHTML = '❌ ' + error.message;
+          });
+      }
+    }
+
+    function toggleSignup() {
+      isSignup = !isSignup;
+      document.getElementById('loginTitle').innerHTML = isSignup ? 'Create Account' : 'PaintWorkz Login';
+      document.getElementById('loginBtn').innerHTML = isSignup ? 'Sign Up' : 'Login';
+      document.getElementById('toggleBtn').innerHTML = isSignup ? 'Have an account? Login' : "Don't have an account? Sign Up";
+      document.getElementById('loginError').innerHTML = '';
+    }
+
+    function logout() {
+      window.signOut().then(() => {
+      });
+    }
+
+    // Save data to Firestore
+    async function saveDataToFirestore() {
+      if (!window.currentUser) {
+        return;
+      }
+      
+      try {
+        const data = {
+          items: items,
+          client: document.getElementById('cli')?.value || '',
+          dateReceived: document.getElementById('dRec')?.value || '',
+          totalSqm: document.getElementById('sqm')?.value || '',
+          doorProfiles: doorProfiles,
+          paintData: paintData,
+          lastSaved: new Date().toISOString()
+        };
+        
+        const measureDocRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'data', 'measureData');
+        await window.setDoc(measureDocRef, data);
+        
+        const historyDocRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'history', 'jobs');
+        await window.setDoc(historyDocRef, {
+          history: history,
+          lastUpdated: new Date().toISOString()
+        });
+        
+      } catch (error) {
+      }
+    }
+
+    // Load data from Firestore
+    async function loadDataFromFirestore() {
+      if (!window.currentUser) return;
+      
+      try {
+        // Load measure data
+        const measureDocRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'data', 'measureData');
+        const measureDoc = await window.getDoc(measureDocRef);
+        if (measureDoc.exists()) {
+          const data = measureDoc.data();
+          items = data.items || [];
+          doorProfiles = data.doorProfiles || [];
+          paintData = data.paintData || [];
+          if (document.getElementById('cli')) document.getElementById('cli').value = data.client || '';
+          if (document.getElementById('dRec')) document.getElementById('dRec').value = data.dateReceived || '';
+          if (document.getElementById('sqm')) document.getElementById('sqm').value = data.totalSqm || '';
+        }
+        
+        // Load job history
+        const historyDocRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'history', 'jobs');
+        const historyDoc = await window.getDoc(historyDocRef);
+        if (historyDoc.exists()) {
+          history = historyDoc.data().history || [];
+        }
+        
+        // NOTE: Door profiles are NOT loaded from Firebase
+        // They are ONLY loaded from localStorage to prevent stale data
+        // Firebase is used for backup/sync only, not for restoration
+        
+        refreshLists();
+        renderHistory();
+        renderScheduleCalendar();
+        initializeDefaultSettings();  // Load default thickness and SE return values
+        initializeCompanyDetailsForm();  // Load company details for PDF headers
+        initializeApiKeysForm();  // Load API keys from storage
+        initializeTimelineSettings();  // Load Gantt chart timeline settings
+        initializeAdditionalChargesForm();  // Load additional charges settings
+      } catch (error) {
+      }
+    }
+
+    // ==================== END FIREBASE SETUP ====================
+    let items = [], mode = 'SS', pType = 'Panel', fmState = 'Flat', currentPanelFilter = 'all', currentColorFilter = '';
+    
+    // RESTORED MASTER LISTS
+    let clients = ["ABM", "Absolute Kitchens", "Advanced Cabinetry", "AKC Kitchens", "Braw Creative", "Brian Moloney", "Cabinets & Stone", "Cabinets by Michael", "Chooka", "CKK", "Clover Doors", "Complete Style Joinery", "Concept 2 Reality", "Coronet Kitchens", "Create a Kitchen", "Creative Cabinetry", "Cutting Edge Joinery", "Driscolls Joinery", "Evolution Kitchens and Joinery", "Geoff Frost Builders", "GM Cabinets", "Grampians Joinery", "Grovedale Kitchens", "Gunning Concepts", "Hamilton Sheetmetal", "Harris Cabinets", "Howe Kitchens & Joinery", "Hy-Craft", "Jardines Cabinets", "Joinery by Jarrod", "Jonassons", "Kingston Kabinets", "Kitchens U Build", "Kyle Hendy", "Leighton Park", "Matthews Joinery", "Ocean Grove Joinery", "Onshore", "R J Walter", "Richardson Joinery", "Schier Cabinet Makers", "Snaauws Kitchens", "SRT Cabinetry", "Stawell Joinery", "Stephensons Kitchens", "T&J Kitchens", "Tony Lambert Kitchens", "Total Kitchen Solutions", "Trendset Kitchens", "Troy Turner", "Ultrabuild", "VG Cabinets", "VJS Geelong", "VJS Shepparton", "Walk in Client", "Westend Cabinetry"];
+    
+    // ========== GLOBAL ADMIN SETTINGS MODULE (v1.5.3+) ==========
+    // Non-intrusive, modular configuration for:
+    // - Measurement units (Metric/Imperial)
+    // - Precision levels
+    // - Predictive input memory
+    // - AI Helper toggle
+    
+    const AdminSettings = {
+        units: "METRIC",            // "METRIC" | "IMPERIAL"
+        precision: 0.01,            // 0.1 | 0.01 | 0.001
+        predictiveInput: true,      // remembers commonly used values
+        aiHelperEnabled: true       // AI helper bot toggle
+    };
+    
+    // Load AdminSettings from localStorage
+    function loadAdminSettings() {
+        const saved = localStorage.getItem('adminSettings');
+        if (saved) {
+            const loaded = JSON.parse(saved);
+            Object.assign(AdminSettings, loaded);
+            console.log('✓ Admin Settings loaded from localStorage:', AdminSettings);
+        }
+    }
+    
+    // Save AdminSettings to localStorage
+    function saveAdminSettings() {
+        localStorage.setItem('adminSettings', JSON.stringify(AdminSettings));
+        console.log('✓ Admin Settings saved to localStorage:', AdminSettings);
+    }
+    
+    // Unit conversion helpers
+    function mmToInches(mm) {
+        return mm / 25.4;
+    }
+    
+    function inchesToMm(inches) {
+        return inches * 25.4;
+    }
+    
+    function formatMeasurement(valueMm) {
+        let value = AdminSettings.units === "IMPERIAL"
+            ? mmToInches(valueMm)
+            : valueMm;
+        return roundToPrecision(value, AdminSettings.precision);
+    }
+    
+    function roundToPrecision(value, precision) {
+        return Math.round(value / precision) * precision;
+    }
+    
+    // Measurement input memory for predictive text
+    const MeasurementMemory = {
+        width: [],
+        height: [],
+        depth: []
+    };
+    
+    function saveMeasurement(type, value) {
+        if (!AdminSettings.predictiveInput) return;
+        const list = MeasurementMemory[type];
+        if (!list.includes(value)) {
+            list.unshift(value);
+            if (list.length > 10) list.pop();
+        }
+    }
+    
+    function getSuggestedMeasurements(type) {
+        return AdminSettings.predictiveInput ? MeasurementMemory[type] : [];
+    }
+    
+    function onMeasurementInput(type, rawValue) {
+        let valueMm = AdminSettings.units === "IMPERIAL"
+            ? inchesToMm(parseFloat(rawValue))
+            : parseFloat(rawValue);
+        valueMm = roundToPrecision(valueMm, AdminSettings.precision);
+        saveMeasurement(type, valueMm);
+        return valueMm;
+    }
+    
+    // Setters for Admin UI controls
+    function setUnits(value) {
+        AdminSettings.units = value;
+        saveAdminSettings();
+        notify(`✓ Units changed to: ${value}`);
+    }
+    
+    function setPrecision(value) {
+        AdminSettings.precision = parseFloat(value);
+        saveAdminSettings();
+        notify(`✓ Precision set to: ${value}`);
+    }
+    
+    function togglePredictiveInput(value) {
+        AdminSettings.predictiveInput = value;
+        saveAdminSettings();
+        notify(`✓ Predictive Input ${value ? 'enabled' : 'disabled'}`);
+    }
+    
+    function toggleAIHelper(value) {
+        AdminSettings.aiHelperEnabled = value;
+        saveAdminSettings();
+        notify(`✓ AI Helper ${value ? 'enabled' : 'disabled'}`);
+    }
+    
+    // Load settings on app startup
+    loadAdminSettings();
+    // Default door profiles
+    const DEFAULT_PROFILES = ["Plain (101)", "J-Mould (102)", "Sharknose (103)", "Bevelled Edge (104)", "Ashlee (201)", "Hamilton (202)", "Vertical Grooves (203)", "Tarrone (301)", "Bobby (302)", "Orford (303)", "Shaker (401)", "Shaker 45 (402)", "Shaker w/Lines (403)", "Jack (404)", "Georgia (501)", "Branxholme (502)", "Rosebrook (503)", "Benchtop", "Molding", "Custom"];
+    
+    let profiles = (function() {
+        // Load from localStorage if available
+        const saved = localStorage.getItem('doorProfiles');
+        console.log('📂 Loading profiles from localStorage...');
+        if (saved) {
+            try {
+                const loaded = JSON.parse(saved);
+                console.log(`  Found ${loaded.length} profiles in localStorage:`, loaded);
+                
+                // CRITICAL FIX: If profiles list is significantly shorter than defaults, it's outdated
+                // (Users may have previously deleted or lost profiles accidentally)
+                const expectedCount = DEFAULT_PROFILES.length;
+                if (Array.isArray(loaded) && loaded.length > 0 && loaded.length < expectedCount * 0.7) {
+                    console.warn(`⚠️ INCOMPLETE PROFILE LIST DETECTED (${loaded.length}/${expectedCount})`);
+                    console.warn('   Restoring full default profile list...');
+                    localStorage.removeItem('doorProfiles');
+                    // Fall through to use defaults below
+                } else if (Array.isArray(loaded) && loaded.length > 0) {
+                    // Filter out any null/undefined/empty/duplicate entries
+                    const cleaned = [];
+                    const seen = new Set();
+                    loaded.forEach(p => {
+                        if (p && typeof p === 'string' && p.trim().length > 0 && !seen.has(p)) {
+                            cleaned.push(p);
+                            seen.add(p);
+                        }
+                    });
+                    
+                    if (cleaned.length === 0) {
+                        console.warn('⚠️ All profiles were corrupt/empty, restoring defaults');
+                        localStorage.removeItem('doorProfiles');
+                    } else if (cleaned.length !== loaded.length) {
+                        console.warn(`⚠️ Removed ${loaded.length - cleaned.length} corrupt/duplicate entries, kept ${cleaned.length}`);
+                        localStorage.setItem('doorProfiles', JSON.stringify(cleaned));
+                        console.log('  Cleaned profiles:', cleaned);
+                        return cleaned;
+                    } else {
+                        console.log(`✓ Loaded ${loaded.length} door profiles from localStorage`);
+                        return loaded;
+                    }
+                } else if (Array.isArray(loaded) && loaded.length === 0) {
+                    console.warn('⚠️ doorProfiles array is empty, using defaults');
+                    localStorage.removeItem('doorProfiles');
+                } else {
+                    console.warn('⚠️ doorProfiles is not a valid array, restoring defaults');
+                    localStorage.removeItem('doorProfiles');
+                }
+            } catch(e) {
+                console.error('Error loading door profiles from localStorage:', e);
+                console.warn('⚠️ Restoring default door profiles');
+                localStorage.removeItem('doorProfiles');
+            }
+        } else {
+            console.log('ℹ️ No saved door profiles in localStorage, using defaults');
+        }
+        // Use defaults
+        const defaults = [...DEFAULT_PROFILES];
+        console.log(`✓ Using default ${DEFAULT_PROFILES.length} door profiles`);
+        console.log('  Saving defaults to localStorage immediately...');
+        localStorage.setItem('doorProfiles', JSON.stringify(defaults)); // SAVE DEFAULTS
+        console.log('  ✓ Defaults saved to localStorage');
+        return defaults;
+    })();
+    
+    // Log profiles initialization
+    console.log(`✅ PROFILES INITIALIZED: ${profiles.length} doors loaded`);
+    console.log('   Initial profiles array:', profiles);
+    
+    // Helper function to save profiles to localStorage
+    function saveProfilesToStorage() {
+        localStorage.setItem('doorProfiles', JSON.stringify(profiles));
+        console.log(`✓ Saved ${profiles.length} door profiles to localStorage`);
+    }
+    
+    // Restore all default profiles
+    function restoreDefaultProfiles() {
+        profiles = [...DEFAULT_PROFILES];
+        saveProfilesToStorage(); // Save to localStorage
+        console.log(`✓ Restored ${profiles.length} default door profiles`);
+        
+        // Try Firebase sync but don't fail if unavailable
+        try {
+            if (window.firebaseReady && window.currentUser) {
+                syncProfilesToFirebase();
+            } else {
+                console.log('ℹ️ Firebase not ready, skipping profile sync');
+            }
+        } catch(e) {
+            console.warn('⚠️ Firebase sync failed (non-critical):', e);
+        }
+        
+        // Update UI
+        try {
+            renderPricingMatrix();
+            checkForNewUnallocatedDoors();
+            renderDB(); // Refresh admin display
+        } catch(e) {
+            console.warn('⚠️ UI update failed:', e);
+        }
+        
+        notify('✓ Door profiles restored to 20 defaults');
+    }
+    
+    // ===== PAINT FORMULA DATABASE =====
+    let paintDatabase = (function() {
+        const saved = localStorage.getItem('paintFormulas');
+        if (saved) {
+            try {
+                let loaded = JSON.parse(saved);
+                if (Array.isArray(loaded) && loaded.length > 0) {
+                    console.log(`📚 LOADED ${loaded.length} paint formulas from localStorage:`);
+                    
+                    // Migrate/fix old formulas that are missing new fields
+                    loaded = loaded.map((f, idx) => {
+                        const updated = { ...f };
+                        let migrated = false;
+                        
+                        // Add missing evicCode
+                        if (!updated.evicCode && updated.code) {
+                            updated.evicCode = updated.code;
+                            migrated = true;
+                        }
+                        
+                        // Add missing baseType
+                        if (!updated.baseType && updated.product) {
+                            updated.baseType = updated.product;
+                            migrated = true;
+                        }
+                        
+                        // Add missing baseColor
+                        if (!updated.baseColor) {
+                            updated.baseColor = 'White';
+                            migrated = true;
+                        }
+                        
+                        // Fix whiteBase - ensure it has grams not amount
+                        if (updated.baseTinters && !updated.whiteBase) {
+                            updated.whiteBase = updated.baseTinters.map(item => ({
+                                code: item.code,
+                                grams: item.grams || item.amount || 0
+                            }));
+                            migrated = true;
+                        }
+                        
+                        // Fix/calculate totalWeight if missing or wrong
+                        if (!updated.totalWeight) {
+                            let calculated = 0;
+                            if (updated.whiteBase && Array.isArray(updated.whiteBase)) {
+                                updated.whiteBase.forEach(item => {
+                                    calculated += (item.grams || 0);
+                                });
+                            }
+                            if (updated.colourants && Array.isArray(updated.colourants)) {
+                                updated.colourants.forEach(item => {
+                                    calculated += (item.amount || 0);
+                                });
+                            }
+                            if (calculated > 0) {
+                                updated.totalWeight = calculated;
+                                migrated = true;
+                                console.log(`  [${idx}] ${updated.color}: Auto-calculated totalWeight = ${calculated.toFixed(2)}g`);
+                            }
+                        }
+                        
+                        if (migrated) {
+                            console.log(`  [${idx}] ${updated.color}: Formula migrated to v1.5.0 format`);
+                        }
+                        
+                        const tinterCount = (updated.colourants || []).length;
+                        console.log(`  [${idx}] ${updated.color}: ${tinterCount} tinters, totalWeight: ${updated.totalWeight}g`);
+                        
+                        return updated;
+                    });
+                    
+                    // Save the migrated formulas back to localStorage
+                    localStorage.setItem('paintFormulas', JSON.stringify(loaded));
+                    return loaded;
+                }
+            } catch(e) {
+                console.error('Error loading paint formulas:', e);
+            }
+        }
+        
+        // Default example formula
+        const defaults = [
+            {
+                id: 'lexicon-690-30',
+                brand: 'Evic',
+                color: 'Lexicon',
+                product: '690 30% XTint Poly',
+                code: 'XTSW1E3',
+                evicCode: 'XTSW1E3',
+                baseType: '690 30% XTint Poly',
+                baseColor: 'White',
+                version: 'SW1E3 DULUX WOC Series II (2018)',
+                finishes: ['Satin', 'Gloss', 'Matt'],
+                baseSize: 1,
+                baseTinters: [
+                    { code: 'ITE003', grams: 7.47 },
+                    { code: 'XB6930', grams: 1359.04 }
+                ],
+                whiteBase: [
+                    { code: 'ITE003', grams: 7.47 },
+                    { code: 'XB6930', grams: 1359.04 }
+                ],
+                colourants: [
+                    { code: 'ITE303', amount: 5.88 },
+                    { code: 'ITE306', amount: 5.95 },
+                    { code: 'ITE310', amount: 5.75 }
+                ],
+                totalWeight: 1384.09,
+                notes: '3 tinters'
+            }
+        ];
+        
+        console.log(`📚 USING ${defaults.length} DEFAULT paint formulas (localStorage was empty)`);
+        defaults.forEach((f, idx) => {
+            const tinterCount = (f.colourants || []).length;
+            console.log(`  [${idx}] ${f.color}: ${tinterCount} tinters`);
+        });
+        localStorage.setItem('paintFormulas', JSON.stringify(defaults));
+        return defaults;
+    })();
+
+    function savePaintFormulas() {
+        console.log('💾 SAVING FORMULAS TO LOCALSTORAGE:');
+        console.log('  Database has', paintDatabase.length, 'formulas');
+        paintDatabase.forEach((f, idx) => {
+            console.log(`    [${idx}] ${f.color}: ${(f.colourants || []).length} tinters`);
+        });
+        
+        localStorage.setItem('paintFormulas', JSON.stringify(paintDatabase));
+        console.log(`  ✓ Saved to localStorage`);
+    }
+
+    function getPaintFormula(colorName) {
+        const formula = paintDatabase.find(f => 
+            f.color.toLowerCase() === colorName.toLowerCase()
+        );
+        return formula || null;
+    }
+
+    function addOrUpdateFormula(formulaData) {
+        const index = paintDatabase.findIndex(f => f.id === formulaData.id);
+        if (index >= 0) {
+            paintDatabase[index] = formulaData;
+        } else {
+            formulaData.id = 'formula-' + Date.now();
+            paintDatabase.push(formulaData);
+        }
+        savePaintFormulas();
+        console.log(`✓ Saved formula: ${formulaData.color}`);
+    }
+
+    // ===== PAINT FORMULA UI FUNCTIONS =====
+    let selectedFormula = null;
+
+    function openPaintFormulaSearch() {
+        const colorInput = document.getElementById('p-color').value.trim();
+        
+        if (!colorInput) {
+            // Show all formulas if input is empty
+            displayFormulaOptions(paintDatabase);
+        } else {
+            // Filter formulas by color name
+            const matching = paintDatabase.filter(f =>
+                f.color.toLowerCase().includes(colorInput.toLowerCase())
+            );
+            displayFormulaOptions(matching);
+        }
+    }
+
+    function displayFormulaOptions(formulas) {
+        if (formulas.length === 0) {
+            notify('No matching formulas found');
+            return;
+        }
+        
+        // Show modal with first matching formula
+        selectedFormula = formulas[0];
+        displayPaintFormulaModal();
+    }
+
+    function displayPaintFormulaModal() {
+        if (!selectedFormula) return;
+        
+        const modal = document.getElementById('paintFormulaModal');
+        if (!modal) {
+            console.error('Paint formula modal element not found!');
+            return;
+        }
+        
+        document.getElementById('formulaColor').textContent = selectedFormula.color;
+        document.getElementById('formulaCode').textContent = selectedFormula.code;
+        
+        document.getElementById('mixLitres').value = '1';
+        updateFormulaScaling();
+        
+        // Show as flex for proper centering
+        modal.style.display = 'flex';
+        console.log('✓ Paint formula modal displayed');
+    }
+
+    function updateFormulaScaling() {
+        if (!selectedFormula) return;
+        
+        const litres = parseFloat(document.getElementById('mixLitres').value) || 1;
+        const scaleFactor = litres / selectedFormula.baseSize;
+        
+        let html = `<div style="font-size:12px; font-weight:900; margin-bottom:10px;">Scaled for ${litres}L:</div>`;
         
         html += '<div style="margin-bottom:10px;"><strong>Base Tinters:</strong></div>';
         selectedFormula.baseTinters.forEach(t => {
