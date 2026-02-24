@@ -2751,8 +2751,13 @@
         loadHeaderLogo();  // Load header logo on app init
         
         try {
-            // Clear measure sheet on fresh load
+            // Clear measure sheet on fresh load - INCLUDING PARTS LIST
             items = [];
+            mode = 'SS';
+            pType = 'Panel';
+            fmState = 'Flat';
+            currentPanelFilter = 'all';
+            currentColorFilter = '';
             
             const cliEl = document.getElementById('cli');
             const dRecEl = document.getElementById('dRec');
@@ -2772,10 +2777,19 @@
             if (pCodeEl) pCodeEl.value = '';
             if (pFinishEl) pFinishEl.value = 'Satin';
             
+            // Clear the parts list display
+            const listEl = document.getElementById('list');
+            if (listEl) listEl.innerHTML = '';
+            
             const totSqmEl = document.getElementById('tA');
             const totPartsEl = document.getElementById('tQ');
             if (totSqmEl) totSqmEl.innerText = '0.000';
             if (totPartsEl) totPartsEl.innerText = '0';
+            
+            // Reset job mode flags
+            isJobViewMode = false;
+            currentEditingJobIndex = null;
+            jobDataBeforeLoad = null;
             
             // Initialize default clients if database is empty
             initializeDefaultClients();
@@ -4437,7 +4451,7 @@
             let profOptions = profiles.map(p => `<option value="${p}" ${p === item.prof ? 'selected' : ''}>${p}</option>`).join('');
             
             const html = `
-                <div style="position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background:#fff; padding:25px; border-radius:8px; box-shadow:0 4px 20px rgba(0,0,0,0.3); z-index:10000; width:90%; max-width:500px; max-height:85vh; overflow-y:auto;">
+                <div style="position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background:#fff; padding:25px; border-radius:8px; box-shadow:0 4px 20px rgba(0,0,0,0.3); z-index:10001; width:90%; max-width:500px; max-height:85vh; overflow-y:auto;">
                     <h3 style="margin-top:0; margin-bottom:20px; color:#333;">✎ Edit Part</h3>
                     
                     <div style="margin-bottom:15px;">
@@ -4462,12 +4476,42 @@
                         </select>
                     </div>
                     
+                    <div style="margin-bottom:15px; padding:15px; background:#f0f8ff; border-radius:6px; border-left:4px solid #2196f3;">
+                        <label style="display:block; font-weight:900; margin-bottom:8px; font-size:12px; color:#333;">🎨 PAINT DETAILS</label>
+                        
+                        <div style="margin-bottom:10px;">
+                            <label style="display:block; font-weight:900; margin-bottom:4px; font-size:11px; color:#666;">Brand</label>
+                            <input type="text" id="editBrandInput" value="${item.brand || 'Dulux'}" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
+                        </div>
+                        
+                        <div style="margin-bottom:10px;">
+                            <label style="display:block; font-weight:900; margin-bottom:4px; font-size:11px; color:#666;">Colour</label>
+                            <input type="text" id="editColorInput" value="${item.color || ''}" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
+                        </div>
+                        
+                        <div style="margin-bottom:10px;">
+                            <label style="display:block; font-weight:900; margin-bottom:4px; font-size:11px; color:#666;">Code/Formula</label>
+                            <input type="text" id="editCodeInput" value="${item.code || ''}" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
+                        </div>
+                        
+                        <div>
+                            <label style="display:block; font-weight:900; margin-bottom:4px; font-size:11px; color:#666;">Finish</label>
+                            <select id="editFinishInput" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
+                                <option value="Satin" ${item.finish === 'Satin' ? 'selected' : ''}>Satin</option>
+                                <option value="Gloss" ${item.finish === 'Gloss' ? 'selected' : ''}>Gloss</option>
+                                <option value="Matt" ${item.finish === 'Matt' ? 'selected' : ''}>Matt</option>
+                                <option value="20% Gloss" ${item.finish === '20% Gloss' ? 'selected' : ''}>20% Gloss</option>
+                                <option value="30% Gloss" ${item.finish === '30% Gloss' ? 'selected' : ''}>30% Gloss</option>
+                            </select>
+                        </div>
+                    </div>
+                    
                     <div style="display:flex; gap:10px; margin-top:25px;">
                         <button onclick="confirmEditItem(${index})" style="flex:1; padding:12px; background:#34c759; color:#fff; border:none; border-radius:4px; font-weight:900; font-size:13px; cursor:pointer;">✓ SAVE CHANGES</button>
                         <button onclick="closeEditModal()" style="flex:1; padding:12px; background:#ddd; color:#000; border:none; border-radius:4px; font-weight:900; font-size:13px; cursor:pointer;">✕ CANCEL</button>
                     </div>
                 </div>
-                <div style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999;" onclick="closeEditModal()"></div>
+                <div style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:10000;" onclick="closeEditModal()"></div>
             `;
             
             // Remove any existing modal
@@ -4515,11 +4559,19 @@
         try {
             const select = document.getElementById('editProfSelect');
             const descInput = document.getElementById('editDescInput');
+            const brandInput = document.getElementById('editBrandInput');
+            const colorInput = document.getElementById('editColorInput');
+            const codeInput = document.getElementById('editCodeInput');
+            const finishInput = document.getElementById('editFinishInput');
             
             if (!select || !descInput) return;
             
             const newProf = select.value;
             const newDesc = descInput.value.trim();
+            const newBrand = brandInput.value.trim() || 'Dulux';
+            const newColor = colorInput.value.trim();
+            const newCode = codeInput.value.trim();
+            const newFinish = finishInput.value || 'Satin';
             
             if (!newDesc) {
                 notify('⚠️ Description cannot be empty');
@@ -4528,11 +4580,15 @@
             
             items[index].prof = newProf;
             items[index].desc = newDesc.toUpperCase();
+            items[index].brand = newBrand;
+            items[index].color = newColor;
+            items[index].code = newCode;
+            items[index].finish = newFinish;
             
             render();
             saveData();
             closeEditModal();
-            notify(`✓ Part updated: ${newDesc} (${items[index].type})`);
+            notify(`✓ Part updated: ${newDesc} (${newBrand} ${newColor})`);
             
         } catch(e) {
             console.error('Error confirming edit:', e);
@@ -7526,63 +7582,42 @@
         modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:5000;';
         
         const content = document.createElement('div');
-        content.style.cssText = 'background:#fff; border-radius:12px; padding:20px; max-width:500px; width:90%; max-height:80vh; overflow-y:auto; box-shadow:0 10px 40px rgba(0,0,0,0.3);';
+        content.style.cssText = 'background:#fff; border-radius:12px; padding:20px; max-width:450px; width:90%; max-height:80vh; overflow-y:auto; box-shadow:0 10px 40px rgba(0,0,0,0.3);';
         
         content.innerHTML = `
-            <h3 style="margin-top:0; margin-bottom:15px; font-weight:900;">📦 Batch Print Forms</h3>
+            <h3 style="margin-top:0; margin-bottom:15px; font-weight:900;">📦 Batch Print - Shop/Floor Forms</h3>
             
-            <div style="margin-bottom:15px;">
-                <p style="font-size:11px; color:#666; margin-bottom:10px; font-weight:900;">Quick Select:</p>
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:15px;">
-                    <button onclick="selectBatchCategory('shop')" style="padding:10px; background:#4caf50; color:#fff; border:none; border-radius:6px; font-weight:900; cursor:pointer; font-size:12px;">🏭 SHOP/FLOOR</button>
-                    <button onclick="selectBatchCategory('admin')" style="padding:10px; background:#ff9800; color:#fff; border:none; border-radius:6px; font-weight:900; cursor:pointer; font-size:12px;">💰 ADMIN ($$)</button>
+            <div style="margin-bottom:20px; padding:15px; background:#f5f5f5; border-radius:6px;">
+                <p style="margin:0 0 12px 0; font-weight:900; font-size:12px;">Select Forms & Quantity:</p>
+                
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px; padding:10px; background:#fff; border-radius:4px; border:1px solid #ddd;">
+                    <input type="checkbox" id="batch-supply" class="batch-form-check" style="width:18px; height:18px; cursor:pointer;">
+                    <label for="batch-supply" style="flex:1; cursor:pointer; font-size:12px; margin:0; font-weight:900;">📋 Supply Docket</label>
+                    <input type="number" id="qty-supply" value="1" min="1" max="50" style="width:50px; padding:6px; border:1px solid #ccc; border-radius:4px; font-size:12px; text-align:center;">
+                </div>
+                
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px; padding:10px; background:#fff; border-radius:4px; border:1px solid #ddd;">
+                    <input type="checkbox" id="batch-mixing" class="batch-form-check" style="width:18px; height:18px; cursor:pointer;">
+                    <label for="batch-mixing" style="flex:1; cursor:pointer; font-size:12px; margin:0; font-weight:900;">🎨 Mixing Card</label>
+                    <input type="number" id="qty-mixing" value="1" min="1" max="50" style="width:50px; padding:6px; border:1px solid #ccc; border-radius:4px; font-size:12px; text-align:center;">
+                </div>
+                
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px; padding:10px; background:#fff; border-radius:4px; border:1px solid #ddd;">
+                    <input type="checkbox" id="batch-cover" class="batch-form-check" style="width:18px; height:18px; cursor:pointer;">
+                    <label for="batch-cover" style="flex:1; cursor:pointer; font-size:12px; margin:0; font-weight:900;">📋 Cover Sheet</label>
+                    <input type="number" id="qty-cover" value="1" min="1" max="50" style="width:50px; padding:6px; border:1px solid #ccc; border-radius:4px; font-size:12px; text-align:center;">
+                </div>
+                
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom:0; padding:10px; background:#fff; border-radius:4px; border:1px solid #ddd;">
+                    <input type="checkbox" id="batch-label" class="batch-form-check" style="width:18px; height:18px; cursor:pointer;">
+                    <label for="batch-label" style="flex:1; cursor:pointer; font-size:12px; margin:0; font-weight:900;">🏷️ Shop Label</label>
+                    <input type="number" id="qty-label" value="1" min="1" max="50" style="width:50px; padding:6px; border:1px solid #ccc; border-radius:4px; font-size:12px; text-align:center;">
                 </div>
             </div>
             
-            <div style="margin-bottom:15px; padding:15px; background:#f5f5f5; border-radius:6px;">
-                <p style="margin:0 0 10px 0; font-weight:900; font-size:11px;">Select Forms:</p>
-                
-                <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px; cursor:pointer;">
-                    <input type="checkbox" id="batch-estimate" class="batch-form-check">
-                    <span style="font-size:11px;">📊 Estimate (Job breakdown)</span>
-                </label>
-                
-                <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px; cursor:pointer;">
-                    <input type="checkbox" id="batch-supply" class="batch-form-check">
-                    <span style="font-size:11px;">📋 Supply Docket (Part list)</span>
-                </label>
-                
-                <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px; cursor:pointer;">
-                    <input type="checkbox" id="batch-mixing" class="batch-form-check">
-                    <span style="font-size:11px;">🎨 Mixing Card (Formula)</span>
-                </label>
-                
-                <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px; cursor:pointer;">
-                    <input type="checkbox" id="batch-cover" class="batch-form-check">
-                    <span style="font-size:11px;">📋 Cover Sheet (Summary)</span>
-                </label>
-                
-                <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px; cursor:pointer;">
-                    <input type="checkbox" id="batch-label" class="batch-form-check">
-                    <span style="font-size:11px;">🏷️ Shop Label (Print & post)</span>
-                </label>
-                
-                <hr style="margin:10px 0; border:none; border-top:1px solid #ddd;">
-                
-                <label style="display:flex; align-items:center; gap:8px; margin-bottom:0; cursor:pointer;">
-                    <input type="checkbox" id="batch-quote" class="batch-form-check">
-                    <span style="font-size:11px;">💬 Quote Form (Raw vs Paint)</span>
-                </label>
-                
-                <label style="display:flex; align-items:center; gap:8px; margin-bottom:0; cursor:pointer;">
-                    <input type="checkbox" id="batch-invoice" class="batch-form-check">
-                    <span style="font-size:11px;">💵 Invoice (Billing)</span>
-                </label>
-            </div>
-            
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-                <button onclick="this.closest('div').parentElement.parentElement.remove();" style="padding:12px; background:#e0e0e0; color:#333; border:none; border-radius:6px; font-weight:900; cursor:pointer;">CANCEL</button>
-                <button onclick="executeBatchPrint()" style="padding:12px; background:#9c27b0; color:#fff; border:none; border-radius:6px; font-weight:900; cursor:pointer;">📦 BATCH PRINT</button>
+                <button onclick="this.closest('div').parentElement.parentElement.remove();" style="padding:12px; background:#e0e0e0; color:#333; border:none; border-radius:6px; font-weight:900; cursor:pointer; font-size:13px;">CANCEL</button>
+                <button onclick="executeBatchPrint()" style="padding:12px; background:#4caf50; color:#fff; border:none; border-radius:6px; font-weight:900; cursor:pointer; font-size:13px;">📦 PRINT</button>
             </div>
         `;
         
@@ -7612,19 +7647,18 @@
     
     function executeBatchPrint() {
         const forms = [];
-        const formMap = {
-            'batch-estimate': 'Estimate',
-            'batch-supply': 'Supply Docket',
-            'batch-mixing': 'Mixing Card',
-            'batch-cover': 'Cover Sheet',
-            'batch-label': 'Shop Label',
-            'batch-quote': 'Quote Form',
-            'batch-invoice': 'Invoice'
+        const formQuantities = {
+            'batch-supply': { name: 'Supply Docket', qty: parseInt(document.getElementById('qty-supply')?.value || '1') || 1, func: 'genSupplyDocket' },
+            'batch-mixing': { name: 'Mixing Card', qty: parseInt(document.getElementById('qty-mixing')?.value || '1') || 1, func: 'genMixingCard' },
+            'batch-cover': { name: 'Cover Sheet', qty: parseInt(document.getElementById('qty-cover')?.value || '1') || 1, func: 'genCoverSheet' },
+            'batch-label': { name: 'Shop Label', qty: parseInt(document.getElementById('qty-label')?.value || '1') || 1, func: 'genShopLabel' }
         };
         
-        for (const [id, formName] of Object.entries(formMap)) {
+        for (const [id, formData] of Object.entries(formQuantities)) {
             if (document.getElementById(id)?.checked) {
-                forms.push(formName);
+                for (let i = 0; i < formData.qty; i++) {
+                    forms.push(formData);
+                }
             }
         }
         
@@ -7641,14 +7675,18 @@
         // Generate forms in sequence
         notify(`📦 Generating ${forms.length} forms...`);
         let completed = 0;
-        
-        forms.forEach((formName, index) => {
+        forms.forEach((formData, index) => {
             setTimeout(() => {
-                genForm(formName);
+                // formData now has { name, qty, func } structure
+                if (formData.func === 'genSupplyDocket') genSupplyDocket();
+                else if (formData.func === 'genMixingCard') genMixingCard();
+                else if (formData.func === 'genCoverSheet') genCoverSheet();
+                else if (formData.func === 'genShopLabel') genShopLabel();
+                
                 completed++;
                 if (completed === forms.length) {
                     notify(`✓ Batch print complete: ${forms.length} forms generated`);
-                    console.log(`📦 BATCH PRINT: Generated ${forms.length} forms:`, forms);
+                    console.log(`📦 BATCH PRINT: Generated ${forms.length} forms`);
                 }
             }, index * 100); // Slight delay between each
         });
