@@ -4450,6 +4450,24 @@
             
             let profOptions = profiles.map(p => `<option value="${p}" ${p === item.prof ? 'selected' : ''}>${p}</option>`).join('');
             
+            // Get all unique colors from items for dropdown
+            const uniqueColors = new Set();
+            items.forEach(it => {
+                if (it.color && it.color.trim()) {
+                    uniqueColors.add(it.color.trim());
+                }
+            });
+            const sortedColors = Array.from(uniqueColors).sort();
+            let colorOptions = sortedColors.map(c => `<option value="${c}" ${c === item.color ? 'selected' : ''}>${c}</option>`).join('');
+            
+            // Add current color if it's not in the list
+            if (item.color && !sortedColors.includes(item.color)) {
+                colorOptions = `<option value="${item.color}" selected>${item.color}</option>` + colorOptions;
+            }
+            
+            // Add a blank option at the top for "no color"
+            colorOptions = `<option value="">-- Select Colour --</option>` + colorOptions;
+            
             const html = `
                 <div style="position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background:#fff; padding:25px; border-radius:8px; box-shadow:0 4px 20px rgba(0,0,0,0.3); z-index:10001; width:90%; max-width:500px; max-height:85vh; overflow-y:auto;">
                     <h3 style="margin-top:0; margin-bottom:20px; color:#333;">✎ Edit Part</h3>
@@ -4486,7 +4504,9 @@
                         
                         <div style="margin-bottom:10px;">
                             <label style="display:block; font-weight:900; margin-bottom:4px; font-size:11px; color:#666;">Colour</label>
-                            <input type="text" id="editColorInput" value="${item.color || ''}" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
+                            <select id="editColorInput" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
+                                ${colorOptions}
+                            </select>
                         </div>
                         
                         <div style="margin-bottom:10px;">
@@ -6287,13 +6307,13 @@
                 doc.text('MIXING CARD', 20, y);
                 y += 12;
                 
-                // ===== PAINT INFO BOX - SMALLER HEIGHT WITH GAP TO JOB NAME =====
+                // ===== PAINT INFO BOX - SIMPLE BLACK TEXT ON WHITE TO SAVE INK =====
                 doc.setFontSize(18);
                 doc.setFont(undefined, 'bold');
-                doc.setTextColor(255, 255, 255);
-                doc.setFillColor(170, 132, 30);
-                doc.setDrawColor(100, 100, 100);
-                doc.setLineWidth(1.5);
+                doc.setTextColor(0, 0, 0);  // Black text instead of white
+                doc.setFillColor(255, 255, 255);  // White background instead of gold
+                doc.setDrawColor(200, 200, 200);  // Light gray border instead of dark
+                doc.setLineWidth(1);
                 doc.rect(20, y, 170, 24, 'FD');  // Reduced from 32 to 24
                 
                 // Format: Brand | Color | Finish - fill the box with 5mm margins
@@ -7732,6 +7752,7 @@
         
         // Generate forms in sequence
         notify(`📦 Generating ${forms.length} forms...`);
+        window.autoPrintMode = true;  // Enable auto-print for batch mode
         let completed = 0;
         forms.forEach((formData, index) => {
             setTimeout(() => {
@@ -7748,6 +7769,7 @@
                 if (completed === forms.length) {
                     notify(`✓ Batch print complete: ${forms.length} forms generated`);
                     console.log(`📦 BATCH PRINT: Generated ${forms.length} forms`);
+                    window.autoPrintMode = false;  // Disable after batch complete
                 }
             }, index * 100); // Slight delay between each
         });
@@ -9088,6 +9110,9 @@
     function showPDFPreview(pdfDataUri, filename, title) {
         console.log('🔍 showPDFPreview called with:', filename);
         
+        // Check if we're in batch print auto-print mode
+        const autoPrint = window.autoPrintMode === true;
+        
         try {
             const modal = document.getElementById('pdfPreviewModal');
             const spinner = document.getElementById('pdfLoadingSpinner');
@@ -9115,10 +9140,22 @@
             console.log('📄 Loading PDF into iframe...');
             iframe.src = pdfDataUri;
             
-            // Hide spinner when iframe loads
+            // Hide spinner and auto-print if needed
             iframe.onload = () => {
                 console.log('✓ PDF loaded in iframe');
                 spinner.style.display = 'none';
+                
+                if (autoPrint) {
+                    // Auto-print for batch mode
+                    console.log('🖨️ Auto-printing...');
+                    setTimeout(() => {
+                        try {
+                            iframe.contentWindow.print();
+                        } catch(e) {
+                            console.error('Auto-print error:', e);
+                        }
+                    }, 500);
+                }
             };
             
             // Fallback: hide spinner after 3 seconds anyway
