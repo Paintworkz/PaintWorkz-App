@@ -831,10 +831,28 @@
                     <h5 style="margin-bottom:10px; font-weight:900; font-size:12px;">Add New Formula</h5>
                     <div style="background:#f9f9f9; padding:15px; border-radius:8px; border:1px solid #ddd;">
                         <div style="display:flex; gap:10px; margin-bottom:10px;">
+                            <select id="newPaintBrand" style="flex:1; padding:10px; border:1px solid #ddd; border-radius:6px; box-sizing:border-box; font-size:12px; font-weight:900;">
+                                <option value="">Select Brand</option>
+                                <option value="Dulux">Dulux</option>
+                                <option value="Wattyl">Wattyl</option>
+                                <option value="Taubmans">Taubmans</option>
+                                <option value="Haymes">Haymes</option>
+                                <option value="British Paints">British Paints</option>
+                                <option value="Evic">Evic</option>
+                                <option value="Custom">Custom</option>
+                            </select>
                             <input type="text" id="newPaintColor" placeholder="Colour Name (e.g., Lexicon)" style="flex:1.5; padding:10px; border:1px solid #ddd; border-radius:6px; box-sizing:border-box; font-size:12px;">
                             <input type="text" id="newPaintCode" placeholder="Code (e.g., XTSW1E3)" style="flex:1; padding:10px; border:1px solid #ddd; border-radius:6px; box-sizing:border-box; font-size:12px;">
                         </div>
-                        <input type="text" id="newPaintProduct" placeholder="Product (e.g., 690 30% XTint Poly)" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; margin-bottom:10px; box-sizing:border-box; font-size:12px;">
+                        <div style="display:flex; gap:10px; margin-bottom:10px;">
+                            <select id="newPaintFinish" style="flex:1; padding:10px; border:1px solid #ddd; border-radius:6px; box-sizing:border-box; font-size:12px; font-weight:900;">
+                                <option value="Satin">Satin</option>
+                                <option value="Matt">Matt</option>
+                                <option value="Semi Gloss">Semi Gloss</option>
+                                <option value="Gloss">Gloss</option>
+                            </select>
+                            <input type="text" id="newPaintProduct" placeholder="Product (e.g., 690 30% XTint Poly)" style="flex:2; padding:10px; border:1px solid #ddd; border-radius:6px; box-sizing:border-box; font-size:12px;">
+                        </div>
                         <input type="text" id="newPaintVersion" placeholder="Version (e.g., DULUX WOC Series II (2018))" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; margin-bottom:10px; box-sizing:border-box; font-size:12px;">
                         
                         <!-- Base Color & Multiple Base Codes -->
@@ -1918,14 +1936,70 @@
     })();
 
     function savePaintFormulas() {
-        console.log('💾 SAVING FORMULAS TO LOCALSTORAGE:');
+        console.log('💾 SAVING FORMULAS TO LOCALSTORAGE & FIREBASE:');
         console.log('  Database has', paintDatabase.length, 'formulas');
         paintDatabase.forEach((f, idx) => {
         });
         
+        // Save to localStorage (local backup)
         localStorage.setItem('paintFormulas', JSON.stringify(paintDatabase));
         console.log(`  ✓ Saved to localStorage`);
+        
+        // Save to Firebase for cloud sync (if user is authenticated)
+        if (typeof firebase !== 'undefined' && firebase.auth().currentUser) {
+            try {
+                const userId = firebase.auth().currentUser.uid;
+                const dbRef = firebase.database().ref(`users/${userId}/paintFormulas`);
+                dbRef.set(paintDatabase, (error) => {
+                    if (error) {
+                        console.warn('⚠️ Firebase save failed:', error);
+                    } else {
+                        console.log('  ✓ Synced to Firebase for all devices');
+                    }
+                });
+            } catch(e) {
+                console.warn('⚠️ Firebase sync unavailable:', e.message);
+            }
+        }
     }
+
+    // Load paint formulas from Firebase on auth
+    function loadPaintFormulasFromFirebase() {
+        if (typeof firebase === 'undefined' || !firebase.auth().currentUser) {
+            console.log('ℹ️ Firebase not ready or user not authenticated - using localStorage');
+            return;
+        }
+        
+        try {
+            const userId = firebase.auth().currentUser.uid;
+            const dbRef = firebase.database().ref(`users/${userId}/paintFormulas`);
+            
+            dbRef.get().then((snapshot) => {
+                if (snapshot.exists() && snapshot.val()) {
+                    const firebaseFormulas = snapshot.val();
+                    if (Array.isArray(firebaseFormulas) && firebaseFormulas.length > 0) {
+                        paintDatabase = firebaseFormulas;
+                        localStorage.setItem('paintFormulas', JSON.stringify(firebaseFormulas));
+                        console.log('☁️ Loaded', firebaseFormulas.length, 'formulas from Firebase');
+                        renderPaintFormulaList();
+                        return;
+                    }
+                }
+                console.log('ℹ️ No formulas in Firebase, using localStorage');
+            }).catch(error => {
+                console.warn('⚠️ Firebase load failed:', error);
+            });
+        } catch(e) {
+            console.warn('⚠️ Firebase not available:', e.message);
+        }
+    }
+    
+    // Call after Firebase auth state changes
+    firebase.auth().onAuthStateChanged(user => {
+        if (user) {
+            setTimeout(() => loadPaintFormulasFromFirebase(), 500);
+        }
+    });
 
     function getPaintFormula(colorName) {
         const formula = paintDatabase.find(f => 
@@ -2096,11 +2170,12 @@
             const baseTintCount = (f.baseTinters || []).length;
             const colCount = (f.colourants || []).length;
             
-            // Build full paint spec: Brand Color Finish
-            const fullPaintSpec = `${f.product || 'Wattyl'} ${f.color}${f.finish ? ' ' + f.finish : ' Satin'}`;
+            // Build formula header: BRAND / COLOUR / FINISH
+            const formulaHeader = `${f.brand || 'Brand'} / ${f.color} / ${f.finish || 'Satin'}`;
             
             html += '<div style="padding:12px; border-bottom:1px solid #eee;">';
-            html += '<div style="font-weight:900; font-size:12px; margin-bottom:4px; color:#2196f3;">📋 ' + fullPaintSpec + '</div>';
+            html += '<div style="font-weight:900; font-size:11px; margin-bottom:2px; color:#666;">📋 ' + formulaHeader + '</div>';
+            html += '<div style="font-size:10px; color:#2196f3; margin-bottom:6px; font-weight:bold;">-' + (f.product || 'Product') + '</div>';
             html += '<div style="font-size:10px; color:#666; margin-bottom:6px;">Code: ' + (f.code || '---') + '</div>';
             html += '<div style="font-size:9px; color:#999; margin-bottom:8px;">' + baseTintCount + ' base codes • ' + colCount + ' colourants</div>';
             html += '<div style="display:flex; gap:6px;">';
@@ -2114,8 +2189,10 @@
 
 
     function addNewPaintFormulaUI() {
+        const brand = document.getElementById('newPaintBrand').value.trim();
         const color = document.getElementById('newPaintColor').value.trim();
         const code = document.getElementById('newPaintCode').value.trim();
+        const finish = document.getElementById('newPaintFinish').value.trim() || 'Satin';
         const product = document.getElementById('newPaintProduct').value.trim();
         const version = document.getElementById('newPaintVersion').value.trim();
         const baseColor = document.getElementById('baseColor').value.trim();
@@ -2187,18 +2264,19 @@
             totalWeight += (item.amount || 0);
         });
         
-        // Create new formula with structured format INCLUDING EVIC FIELDS
+        // Create new formula with structured format INCLUDING BRAND & FINISH
         const newFormula = {
             id: 'formula-' + Date.now(),
-            brand: 'Evic',
+            brand: brand,  // Use selected brand
             color: color,
+            finish: finish,  // Use selected finish
             product: product || 'Custom Product',
             code: code,
             evicCode: code,  // Store the Evic code
             baseType: product || 'Custom',  // Base paint type
             baseColor: baseColor || 'White',  // NEW: Base paint color
             version: version || '',  // Version from user input
-            finishes: ['Satin'],
+            finishes: [finish],  // Store finish in array
             baseSize: 1,
             baseTinters: baseCodes,
             whiteBase: baseCodes,  // WHITE BASE as array (now can have 1-3 items)
@@ -2217,8 +2295,10 @@
         savePaintFormulas();
         
         // Clear form
+        document.getElementById('newPaintBrand').value = '';
         document.getElementById('newPaintColor').value = '';
         document.getElementById('newPaintCode').value = '';
+        document.getElementById('newPaintFinish').value = 'Satin';
         document.getElementById('newPaintProduct').value = '';
         document.getElementById('newPaintVersion').value = '';
         document.getElementById('baseColor').value = '';
@@ -2231,7 +2311,7 @@
         document.getElementById('tintersList').value = '';
         
         renderPaintFormulaList();
-        notify(`✓ Formula added: ${color} (${baseCodes.length} base codes, ${colourants.length} tinters)`);
+        notify(`✓ Formula added: ${brand} / ${color} / ${finish}`);
     }
 
     function editPaintFormula(idx) {
