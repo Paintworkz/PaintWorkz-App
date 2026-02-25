@@ -1946,32 +1946,41 @@
         console.log(`  ✓ Saved to localStorage`);
         
         // Save to Firebase for cloud sync (if user is authenticated)
-        if (typeof firebase !== 'undefined' && firebase.auth().currentUser) {
-            try {
-                const userId = firebase.auth().currentUser.uid;
-                const dbRef = firebase.database().ref(`users/${userId}/paintFormulas`);
-                dbRef.set(paintDatabase, (error) => {
-                    if (error) {
-                        console.warn('⚠️ Firebase save failed:', error);
-                    } else {
-                        console.log('  ✓ Synced to Firebase for all devices');
-                    }
-                });
-            } catch(e) {
-                console.warn('⚠️ Firebase sync unavailable:', e.message);
+        try {
+            if (typeof firebase !== 'undefined' && firebase.auth && typeof firebase.auth === 'function') {
+                const currentUser = firebase.auth().currentUser;
+                if (currentUser) {
+                    const userId = currentUser.uid;
+                    const dbRef = firebase.database().ref(`users/${userId}/paintFormulas`);
+                    dbRef.set(paintDatabase, (error) => {
+                        if (error) {
+                            console.warn('⚠️ Firebase save failed:', error);
+                        } else {
+                            console.log('  ✓ Synced to Firebase for all devices');
+                        }
+                    });
+                }
             }
+        } catch(e) {
+            console.warn('⚠️ Firebase sync unavailable:', e.message);
         }
     }
 
     // Load paint formulas from Firebase on auth
     function loadPaintFormulasFromFirebase() {
-        if (typeof firebase === 'undefined' || !firebase.auth().currentUser) {
-            console.log('ℹ️ Firebase not ready or user not authenticated - using localStorage');
-            return;
-        }
-        
         try {
-            const userId = firebase.auth().currentUser.uid;
+            if (typeof firebase === 'undefined' || !firebase.auth || typeof firebase.auth !== 'function') {
+                console.log('ℹ️ Firebase not ready - using localStorage');
+                return;
+            }
+            
+            const currentUser = firebase.auth().currentUser;
+            if (!currentUser) {
+                console.log('ℹ️ User not authenticated - using localStorage');
+                return;
+            }
+            
+            const userId = currentUser.uid;
             const dbRef = firebase.database().ref(`users/${userId}/paintFormulas`);
             
             dbRef.get().then((snapshot) => {
@@ -1994,12 +2003,16 @@
         }
     }
     
-    // Call after Firebase auth state changes
-    firebase.auth().onAuthStateChanged(user => {
-        if (user) {
-            setTimeout(() => loadPaintFormulasFromFirebase(), 500);
+    // Load formulas from Firebase when user authenticates
+    setTimeout(() => {
+        if (typeof firebase !== 'undefined' && firebase.auth) {
+            firebase.auth().onAuthStateChanged(user => {
+                if (user) {
+                    loadPaintFormulasFromFirebase();
+                }
+            });
         }
-    });
+    }, 500);
 
     function getPaintFormula(colorName) {
         const formula = paintDatabase.find(f => 
