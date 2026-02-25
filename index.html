@@ -2224,12 +2224,16 @@
         const tintersList = document.getElementById('tintersList').value.trim();
         
         // Validation
+        if (!brand || brand === '') {
+            notify('❌ Please select a Paint Brand');
+            return;
+        }
         if (!color || !code) {
-            notify('Please enter Colour and Code');
+            notify('❌ Please enter Colour and Code');
             return;
         }
         if (baseCodes.length === 0) {
-            notify('Please enter at least one Base Code with amount');
+            notify('❌ Please enter at least one Base Code with amount');
             return;
         }
         
@@ -2263,12 +2267,8 @@
         }
         
         console.log('✅ FINAL: Captured', colourants.length, 'tinters:', colourants);
-        console.log('📊 TOTAL WEIGHT CALCULATION:');
-        console.log('  Base codes total:', baseCodes.reduce((sum, b) => sum + (b.grams || 0), 0).toFixed(2) + 'g');
-        console.log('  Tinters total:', colourants.reduce((sum, c) => sum + (c.amount || 0), 0).toFixed(2) + 'g');
-        console.log('  Grand total:', totalWeight.toFixed(2) + 'g');
         
-        // Calculate total weight from base codes + tinters
+        // Calculate total weight from base codes + tinters (MOVED BEFORE LOGS)
         let totalWeight = 0;
         baseCodes.forEach(item => {
             totalWeight += (item.grams || 0);
@@ -2276,6 +2276,11 @@
         colourants.forEach(item => {
             totalWeight += (item.amount || 0);
         });
+        
+        console.log('📊 TOTAL WEIGHT CALCULATION:');
+        console.log('  Base codes total:', baseCodes.reduce((sum, b) => sum + (b.grams || 0), 0).toFixed(2) + 'g');
+        console.log('  Tinters total:', colourants.reduce((sum, c) => sum + (c.amount || 0), 0).toFixed(2) + 'g');
+        console.log('  Grand total:', totalWeight.toFixed(2) + 'g');
         
         // Create new formula with structured format INCLUDING BRAND & FINISH
         const newFormula = {
@@ -2352,8 +2357,32 @@
         let html = `
         <div style="font-size:12px; max-width:600px; max-height:600px; overflow-y:auto;">
             <div style="margin-bottom:12px;">
+                <label style="font-weight:bold; display:block; margin-bottom:4px;">Paint Brand:</label>
+                <select id="editBrand" style="width:100%; padding:6px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box; font-weight:bold;">
+                    <option value="">Select Brand</option>
+                    <option value="Dulux">Dulux</option>
+                    <option value="Wattyl">Wattyl</option>
+                    <option value="Taubmans">Taubmans</option>
+                    <option value="Haymes">Haymes</option>
+                    <option value="British Paints">British Paints</option>
+                    <option value="Evic">Evic</option>
+                    <option value="Custom">Custom</option>
+                </select>
+            </div>
+            
+            <div style="margin-bottom:12px;">
                 <label style="font-weight:bold; display:block; margin-bottom:4px;">Color Name:</label>
                 <input type="text" id="editColorName" value="${f.color || ''}" style="width:100%; padding:6px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box;">
+            </div>
+            
+            <div style="margin-bottom:12px;">
+                <label style="font-weight:bold; display:block; margin-bottom:4px;">Gloss Level:</label>
+                <select id="editFinish" style="width:100%; padding:6px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box; font-weight:bold;">
+                    <option value="Satin">Satin</option>
+                    <option value="Matt">Matt</option>
+                    <option value="Semi Gloss">Semi Gloss</option>
+                    <option value="Gloss">Gloss</option>
+                </select>
             </div>
             
             <div style="margin-bottom:12px;">
@@ -2411,25 +2440,38 @@
         `;
         document.body.appendChild(dialog);
         
-        // Use longer timeout and better DOM targeting to populate textareas
+        // Use longer timeout and better DOM targeting to populate form fields
         setTimeout(() => {
-            console.log('🔧 ATTEMPTING TO POPULATE TEXTAREAS (500ms timeout)');
+            console.log('🔧 ATTEMPTING TO POPULATE FORM FIELDS (500ms timeout)');
             
-            // Build the text content
-            const whiteBaseText = (f.whiteBase && Array.isArray(f.whiteBase)) ? 
-                f.whiteBase.map(item => `${item.code}: ${item.grams}`).join('\n') : '';
-            const colourantsText = (f.colourants && Array.isArray(f.colourants)) ? 
-                f.colourants.map(c => `${c.code} ${c.amount || c.grams}`).join('\n') : '';  // CHANGED: Space-separated instead of colon
-            
-            console.log('  colourants array:', f.colourants);
-            console.log('  colourantsText result:', JSON.stringify(colourantsText));
-            
-            // Find the elements inside the dialog (most recent one)
             const dialog = document.getElementById('paintFormulaEditDialog');
             if (!dialog) {
                 console.error('  ❌ Dialog not found!');
                 return;
             }
+            
+            // Set brand dropdown (with default fallback)
+            const brandSelect = dialog.querySelector('#editBrand');
+            if (brandSelect) {
+                brandSelect.value = f.brand || 'Dulux';  // Default to Dulux if not set
+                console.log('  ✓ Set brand to:', f.brand || 'Dulux');
+            }
+            
+            // Set finish dropdown (with default fallback)
+            const finishSelect = dialog.querySelector('#editFinish');
+            if (finishSelect) {
+                finishSelect.value = f.finish || 'Satin';  // Default to Satin if not set
+                console.log('  ✓ Set finish to:', f.finish || 'Satin');
+            }
+            
+            // Build the text content
+            const whiteBaseText = (f.whiteBase && Array.isArray(f.whiteBase)) ? 
+                f.whiteBase.map(item => `${item.code}: ${item.grams}`).join('\n') : '';
+            const colourantsText = (f.colourants && Array.isArray(f.colourants)) ? 
+                f.colourants.map(c => `${c.code} ${c.amount || c.grams}`).join('\n') : '';  // Space-separated
+            
+            console.log('  colourants array:', f.colourants);
+            console.log('  colourantsText result:', JSON.stringify(colourantsText));
             
             const whiteBaseTA = dialog.querySelector('#editWhiteBase');
             const colourantsTA = dialog.querySelector('#editColourants');
@@ -2463,7 +2505,9 @@
         if (!f) return;
         
         // Get values from dialog
+        f.brand = document.getElementById('editBrand').value;
         f.color = document.getElementById('editColorName').value;
+        f.finish = document.getElementById('editFinish').value;
         f.evicCode = document.getElementById('editEvicCode').value;
         f.baseType = document.getElementById('editBaseType').value;
         f.baseColor = document.getElementById('editBaseColor').value || 'White';  // Default to White
