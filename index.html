@@ -896,6 +896,7 @@
                 <div id="form-quote" class="form-card" onclick="genForm('Quote Form')"><h4>Quote Form</h4><p>Raw vs Paint pricing</p></div>
                 <div id="form-cover" class="form-card" onclick="genForm('Cover Sheet')" style="background:#fff3e0; border-color:#ff9800;"><h4>📋 Cover Sheet</h4><p>Job info summary</p></div>
                 <div id="form-label" class="form-card" onclick="genForm('Shop Label')" style="background:#fce4ec; border-color:#e91e63;"><h4>🏷️ Shop Label</h4><p>Print & post on job</p></div>
+                <div id="form-paint-order" class="form-card" onclick="genForm('Paint Order')" style="background:#e8f5e9; border-color:#4caf50;"><h4>🎨 Paint Order</h4><p>Manufacturing order form</p></div>
                 <div id="form-a3schedule" class="form-card" onclick="openA3ScheduleModal()" style="background:#e8f5e9; border-color:#4caf50;"><h4>📅 A3 Schedule</h4><p>Work schedule view</p></div>
                 <div id="form-batch" class="form-card" onclick="openBatchPrintModal()" style="background:#f3e5f5; border-color:#9c27b0;"><h4>📦 Batch Print</h4><p>Select & print multiple</p></div>
             </div>
@@ -4814,7 +4815,7 @@
             
             
             // Cover Sheet, Shop Label, and Mixing Card don't require parts/items
-            if (itemsToUse.length === 0 && type !== 'Cover Sheet' && type !== 'Shop Label' && type !== 'Mixing Card') {
+            if (itemsToUse.length === 0 && type !== 'Cover Sheet' && type !== 'Shop Label' && type !== 'Mixing Card' && type !== 'Paint Order') {
                 notify('❌ No items match the current filter');
                 return;
             }
@@ -4840,6 +4841,8 @@
                 genCoverSheet();
             } else if (type === 'Shop Label') {
                 genShopLabel();
+            } else if (type === 'Paint Order') {
+                genPaintOrder();
             } else {
                 notify('Form type not yet implemented');
             }
@@ -7463,6 +7466,213 @@
         const modal = document.getElementById('a3ScheduleModal');
         if (modal) {
             modal.style.display = 'none';
+        }
+    }
+    
+    function genPaintOrder() {
+        try {
+            const jsPDF = window.jspdf.jsPDF;
+            const doc = new jsPDF('p', 'mm', 'a4');
+            const items = window.pdfItemsToUse || window.items || [];
+            
+            // Get current job and customer info
+            const currentJob = JSON.parse(localStorage.getItem('currentJob')) || {};
+            const currentClient = JSON.parse(localStorage.getItem('currentClient')) || {};
+            const logoBase64 = localStorage.getItem('companyLogo');
+            
+            let y = 15;
+            const x = 15;
+            const pageWidth = doc.internal.pageSize.getWidth();
+            
+            // Add logo and header
+            if (logoBase64) {
+                try {
+                    doc.addImage(logoBase64, 'PNG', x, 8, 25, 18);
+                } catch(e) {}
+            }
+            
+            doc.setFontSize(14);
+            doc.setFont(undefined, 'bold');
+            doc.text('Paint Order Form', pageWidth / 2, 15, { align: 'center' });
+            
+            doc.setFontSize(9);
+            doc.setFont(undefined, 'normal');
+            doc.text('17 West Boundary Road Hamilton 3300', pageWidth / 2, 22, { align: 'center' });
+            doc.text('Phone: 0438803032', pageWidth / 2, 26, { align: 'center' });
+            doc.text('Email: paint_workz@outlook.com', pageWidth / 2, 30, { align: 'center' });
+            
+            y = 40;
+            
+            // Customer information boxes
+            doc.setDrawColor(0);
+            doc.setLineWidth(0.5);
+            
+            // Top row - Customer, Date
+            doc.rect(x, y, 85, 10);
+            doc.rect(x + 90, y, 105, 10);
+            
+            doc.setFont(undefined, 'bold');
+            doc.setFontSize(10);
+            doc.text('Customer:', x + 2, y + 5);
+            doc.text('Date:', x + 92, y + 5);
+            
+            doc.setFont(undefined, 'normal');
+            doc.setFontSize(9);
+            doc.text(currentClient.name || '', x + 25, y + 5);
+            doc.text(new Date().toLocaleDateString(), x + 112, y + 5);
+            
+            y += 12;
+            
+            // Address, Date Required
+            doc.rect(x, y, 85, 10);
+            doc.rect(x + 90, y, 105, 10);
+            
+            doc.setFont(undefined, 'bold');
+            doc.setFontSize(10);
+            doc.text('Address:', x + 2, y + 5);
+            doc.text('Date Required:', x + 92, y + 5);
+            
+            doc.setFont(undefined, 'normal');
+            doc.setFontSize(9);
+            const address = currentClient.address || '';
+            doc.text(address.substring(0, 50), x + 25, y + 5);
+            doc.text(currentJob.dateRequired || '', x + 112, y + 5);
+            
+            y += 12;
+            
+            // Contact, Job Reference
+            doc.rect(x, y, 85, 10);
+            doc.rect(x + 90, y, 105, 10);
+            
+            doc.setFont(undefined, 'bold');
+            doc.setFontSize(10);
+            doc.text('Contact Number:', x + 2, y + 5);
+            doc.text('Job Reference:', x + 92, y + 5);
+            
+            doc.setFont(undefined, 'normal');
+            doc.setFontSize(9);
+            doc.text(currentClient.phone || '', x + 30, y + 5);
+            doc.text(`Job #${currentJob.jobNo || currentJob.id || ''}`, x + 112, y + 5);
+            
+            y += 14;
+            
+            // Paint specifications
+            doc.setFont(undefined, 'bold');
+            doc.setFontSize(11);
+            doc.text('Paint Specifications:', x, y);
+            
+            y += 8;
+            
+            // Get unique colours, finishes, and edge profiles from items
+            const colours = [...new Set(items.map(it => it.color || 'Clear'))];
+            const finishes = [...new Set(items.map(it => it.finish || 'Satin'))];
+            const profiles = [...new Set(items.map(it => it.prof || 'Plain'))];
+            
+            doc.setFont(undefined, 'normal');
+            doc.setFontSize(9);
+            doc.text(`Door Colour: ${colours.join(', ')}`, x, y);
+            y += 6;
+            doc.text(`Gloss Level: ${finishes.join(', ')}`, x, y);
+            y += 6;
+            doc.text(`Edge Profile: ${profiles.join(', ')}`, x, y);
+            
+            y += 10;
+            
+            // Items table
+            doc.setFont(undefined, 'bold');
+            doc.setFontSize(9);
+            
+            const tableY = y;
+            const colWidth = [12, 25, 15, 18, 18, 25, 25, 25, 50];
+            const headers = ['Line', 'Door/Panel', 'Qty', 'Height', 'Width', 'Profile', 'Paint\nOptions', 'Edges', 'Description'];
+            
+            let currentX = x;
+            headers.forEach((header, idx) => {
+                doc.rect(currentX, tableY, colWidth[idx], 12);
+                doc.setFontSize(8);
+                doc.text(header, currentX + colWidth[idx]/2, tableY + 6, { align: 'center', maxWidth: colWidth[idx] - 1 });
+                currentX += colWidth[idx];
+            });
+            
+            doc.setFont(undefined, 'normal');
+            y = tableY + 12;
+            
+            // Add items rows
+            items.forEach((item, idx) => {
+                if (y > 250) {
+                    doc.addPage();
+                    y = 15;
+                }
+                
+                const lineNum = idx + 1;
+                const doorType = item.desc || 'Door';
+                const qty = item.qty || 1;
+                const height = item.h || 0;
+                const width = item.w || 0;
+                const profile = (item.prof || 'Plain').split(' ')[0];
+                const paintOptions = item.doubleSide ? 'DS' : 'SS';
+                const edges = item.edges || 'ALL';
+                
+                const rowData = [
+                    lineNum.toString(),
+                    doorType.substring(0, 15),
+                    qty.toString(),
+                    height.toString(),
+                    width.toString(),
+                    profile,
+                    paintOptions,
+                    edges,
+                    ''
+                ];
+                
+                currentX = x;
+                rowData.forEach((data, idx) => {
+                    doc.rect(currentX, y, colWidth[idx], 8);
+                    doc.setFontSize(8);
+                    doc.text(data, currentX + 1, y + 4, { maxWidth: colWidth[idx] - 2 });
+                    currentX += colWidth[idx];
+                });
+                
+                y += 8;
+            });
+            
+            // Add empty rows for manual entry
+            for (let i = items.length; i < 12; i++) {
+                if (y > 250) {
+                    doc.addPage();
+                    y = 15;
+                }
+                
+                currentX = x;
+                for (let j = 0; j < colWidth.length; j++) {
+                    doc.rect(currentX, y, colWidth[j], 8);
+                    currentX += colWidth[j];
+                }
+                y += 8;
+            }
+            
+            y += 10;
+            
+            // Notes section
+            doc.setFont(undefined, 'bold');
+            doc.setFontSize(10);
+            doc.text('NOTES', x, y);
+            
+            y += 6;
+            doc.setFont(undefined, 'normal');
+            doc.setFontSize(9);
+            doc.rect(x, y, pageWidth - 30, 40);
+            
+            // Generate and display PDF
+            const filename = `Paint_Order_${currentJob.jobNo || 'Job'}_${new Date().toLocaleDateString().replace(/\//g, '-')}.pdf`;
+            const pdfData = doc.output('dataurlstring');
+            showPDFPreview(filename, pdfData);
+            
+            notify('✓ Paint Order Ready - Review & Download');
+            
+        } catch(error) {
+            console.error('❌ Paint Order PDF Error:', error);
+            notify('Paint Order Error: ' + error.message);
         }
     }
     
