@@ -2979,14 +2979,19 @@
     function removeDuplicateJobs() {
         try {
             let history = JSON.parse(localStorage.getItem('jobHistory')) || [];
+            const originalCount = history.length;
             const seen = new Map();
             let cleaned = [];
             let duplicates = 0;
+            
+            // BACKUP before removing anything!
+            localStorage.setItem('jobHistory_backup_' + Date.now(), JSON.stringify(history));
             
             history.forEach(job => {
                 // Skip jobs with missing critical fields
                 if (!job.jobNum || !job.dateReceived || !job.client) {
                     duplicates++;
+                    console.warn('⚠️ Skipping job with missing fields:', job.jobNum);
                     return;
                 }
                 
@@ -2996,21 +3001,55 @@
                     cleaned.push(job);
                 } else {
                     duplicates++;
+                    console.log('ℹ️ Removing duplicate of:', job.jobNum);
                 }
             });
             
             if (duplicates > 0) {
+                // WARN user before deleting
+                if (!confirm(`⚠️ CONFIRM: Delete ${duplicates} duplicate jobs?\n\nA backup has been saved. You can undo this action.`)) {
+                    notify('❌ Cancelled - No jobs deleted');
+                    return;
+                }
+                
                 localStorage.setItem('jobHistory', JSON.stringify(cleaned));
                 renderHistory();
                 renderJobTasks();
                 renderScheduleCalendar();
-                notify(`✓ Cleaned ${duplicates} duplicate/invalid jobs!`);
+                notify(`✓ Cleaned ${duplicates} duplicate jobs (${originalCount} → ${cleaned.length})`);
             } else {
                 notify('✓ No duplicates found');
             }
         } catch(e) {
             console.error('Error removing duplicates:', e);
             notify('⚠️ Error cleaning duplicates');
+        }
+    }
+    
+    // Recovery function - restore from backup
+    function recoverFromBackup() {
+        const backups = [];
+        for (let key in localStorage) {
+            if (key.startsWith('jobHistory_backup_')) {
+                backups.push(key);
+            }
+        }
+        
+        if (backups.length === 0) {
+            notify('❌ No backups found');
+            return;
+        }
+        
+        // Get most recent backup
+        const latestBackup = backups.sort().pop();
+        const backupData = JSON.parse(localStorage.getItem(latestBackup));
+        
+        if (confirm(`Restore ${backupData.length} jobs from backup?\n\nThis will replace current job list.`)) {
+            localStorage.setItem('jobHistory', JSON.stringify(backupData));
+            renderHistory();
+            renderJobTasks();
+            renderScheduleCalendar();
+            notify(`✓ Restored ${backupData.length} jobs from backup!`);
         }
     }
     
@@ -7767,13 +7806,24 @@
             });
             yPos += 15;
             
+            // Stretch down to 15mm from bottom (282mm on A4)
+            const bottomMargin = 15;
+            const pageHeight = 297;
+            const maxY = pageHeight - bottomMargin;
+            const spacerY = maxY - yPos - 25;  // Account for measured by section + footer
+            
+            // Add spacing to push form down to near footer
+            if (spacerY > 20) {
+                yPos += (spacerY - 10);  // Leave some room for measured by
+            }
+            
             // Measured by
             doc.setFont(undefined, 'normal');
             doc.setFontSize(9);
             doc.text('Measured by Paintworkz', marginL, yPos);
             doc.text('…………………………………………………', marginL + 42, yPos);
             doc.text('DATE', pageWidth - marginL - 16, yPos);
-            yPos += 10;
+            yPos += 7;
             
             doc.setFontSize(7);
             doc.text('*Door (has a face route)  Panel (has no face route)          *Mark R on edges you want returned. NOT x', marginL, yPos);
