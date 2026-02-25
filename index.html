@@ -1018,11 +1018,9 @@
                 </div>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-bottom:15px;">
                     <div style="padding:12px; background:#f0f8ff; border-radius:6px; border-left:4px solid #2196f3;">
-                        <label style="display:flex; align-items:center; gap:8px; font-weight:900; font-size:11px; color:#666; cursor:pointer;">
-                            <input type="checkbox" id="predictiveInputToggle" onchange="togglePredictiveInput(this.checked)" style="cursor:pointer; width:16px; height:16px;">
-                            Predictive Measurement Memory
-                        </label>
-                        <p style="font-size:10px; color:#999; margin-top:4px; margin-bottom:0;">Remember commonly used measurements</p>
+                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:8px;">Colour Match Surcharge ($)</label>
+                        <input type="number" id="colourMatchSurcharge" value="85" min="0" step="1" onchange="setColourMatchSurcharge(this.value)" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px; font-size:12px; box-sizing:border-box;">
+                        <p style="font-size:10px; color:#999; margin-top:4px; margin-bottom:0;">Fixed flat rate for colour match surcharge</p>
                     </div>
                     <div style="padding:12px; background:#f0f8ff; border-radius:6px; border-left:4px solid #2196f3;">
                         <label style="display:flex; align-items:center; gap:8px; font-weight:900; font-size:11px; color:#666; cursor:pointer;">
@@ -1158,8 +1156,8 @@
                             <input type="number" id="chargeUndercoat" value="80" min="0" max="100" step="0.5" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px; font-size:11px; box-sizing:border-box;">
                         </div>
                         <div>
-                            <label style="display:block; font-weight:900; font-size:10px; color:#666; margin-bottom:4px;">Colour Match</label>
-                            <input type="number" id="chargeColourMatch" value="130" min="0" max="300" step="0.5" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px; font-size:11px; box-sizing:border-box;">
+                            <label style="display:block; font-weight:900; font-size:10px; color:#666; margin-bottom:4px;">Colour Match (Flat $)</label>
+                            <input type="number" id="chargeColourMatch" value="85" min="0" max="500" step="1" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px; font-size:11px; box-sizing:border-box;">
                         </div>
                     </div>
                 </div>
@@ -1598,7 +1596,8 @@
         units: "METRIC",            // "METRIC" | "IMPERIAL"
         precision: 0.01,            // 0.1 | 0.01 | 0.001
         predictiveInput: true,      // remembers commonly used values
-        aiHelperEnabled: true       // AI helper bot toggle
+        aiHelperEnabled: true,      // AI helper bot toggle
+        colourMatchSurcharge: 85     // Flat rate for colour match surcharge ($)
     };
     
     // Load AdminSettings from localStorage
@@ -1689,6 +1688,12 @@
         AdminSettings.aiHelperEnabled = value;
         saveAdminSettings();
         notify(`✓ AI Helper ${value ? 'enabled' : 'disabled'}`);
+    }
+    
+    function setColourMatchSurcharge(value) {
+        loadAdditionalCharges().colourMatchFlatRate = parseFloat(value) || 85;
+        saveAdminSettings();
+        notify(`✓ Colour Match Surcharge set to: $${loadAdditionalCharges().colourMatchFlatRate}`);
     }
     
     // Load settings on app startup
@@ -5107,7 +5112,7 @@
                     if (multiplier > 0) {
                         doc.setFont(undefined, 'normal');
                         doc.setFontSize(8);
-                        let surcharge = colourTotal * multiplier;
+                        let surcharge = (multiplier === 1.30) ? loadAdditionalCharges().colourMatchFlatRate : (colourTotal * multiplier);
                         
                         // Check if this colour has Undercoat selected
                         // (This would require tracking which option was selected - using a simple check)
@@ -5117,7 +5122,7 @@
                                              multiplier === 0.15 ? '(Dark +15%)' :
                                              multiplier === 0.30 ? '(Extra Tint +30%)' :
                                              multiplier === 0.80 ? '(Undercoat 80%)' :
-                                             multiplier === 1.30 ? '(Colour Match +130%)' : '';
+                                             multiplier === 1.30 ? `(Colour Match $${loadAdditionalCharges().colourMatchFlatRate})` : '';
                         
                         doc.text(`  Paint Colour Surcharge ${surchargeLabel}:`, x, y);
                         doc.text(`$${surcharge.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
@@ -5469,7 +5474,7 @@
                     if (multiplier > 0) {
                         doc.setFont(undefined, 'normal');
                         doc.setFontSize(8);
-                        let surcharge = colourTotal * multiplier;
+                        let surcharge = (multiplier === 1.30) ? loadAdditionalCharges().colourMatchFlatRate : (colourTotal * multiplier);
                         
                         // Check if this colour has Undercoat selected
                         // (This would require tracking which option was selected - using a simple check)
@@ -5479,7 +5484,7 @@
                                              multiplier === 0.15 ? '(Dark +15%)' :
                                              multiplier === 0.30 ? '(Extra Tint +30%)' :
                                              multiplier === 0.80 ? '(Undercoat 80%)' :
-                                             multiplier === 1.30 ? '(Colour Match +130%)' : '';
+                                             multiplier === 1.30 ? `(Colour Match $${loadAdditionalCharges().colourMatchFlatRate})` : '';
                         
                         doc.text(`  Paint Colour Surcharge ${surchargeLabel}:`, x, y);
                         doc.text(`$${surcharge.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
@@ -5832,7 +5837,7 @@
                     if (multiplier > 0) {
                         doc.setFont(undefined, 'normal');
                         doc.setFontSize(8);
-                        let surcharge = colourTotal * multiplier;
+                        let surcharge = (multiplier === 1.30) ? loadAdditionalCharges().colourMatchFlatRate : (colourTotal * multiplier);
                         
                         // Check if this colour has Undercoat selected
                         // (This would require tracking which option was selected - using a simple check)
@@ -5842,7 +5847,7 @@
                                              multiplier === 0.15 ? '(Dark +15%)' :
                                              multiplier === 0.30 ? '(Extra Tint +30%)' :
                                              multiplier === 0.80 ? '(Undercoat 80%)' :
-                                             multiplier === 1.30 ? '(Colour Match +130%)' : '';
+                                             multiplier === 1.30 ? `(Colour Match $${loadAdditionalCharges().colourMatchFlatRate})` : '';
                         
                         doc.text(`  Paint Colour Surcharge ${surchargeLabel}:`, x, y);
                         doc.text(`$${surcharge.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
@@ -9306,6 +9311,7 @@
         // Calculate total colour surcharges - NOW HANDLES MULTIPLE SURCHARGES
         let totalColourSurcharge = 0;
         let surchargeDetails = []; // Track all surcharges for display
+        const chargesData = loadAdditionalCharges();  // Load flat rate for colour match
         
         Object.entries(colorSubtotals).forEach(([colour, colourSubtotal]) => {
             const multipliers = colourSurcharges[colour] || [];
@@ -9316,25 +9322,28 @@
                 
                 multipliers.forEach(mult => {
                     if (mult > 0) {
-                        // Check if this is Undercoat (special handling - only on paint portion)
-                        let surcharge = (mult === 0.8) ? (colourSubtotal * 0.35 * mult) : (colourSubtotal * mult);
+                        // Check if this is Colour Match (use flat rate)
+                        let surcharge;
+                        if (mult === 1.30) {
+                            // Colour Match - use flat rate
+                            surcharge = chargesData.colourMatchFlatRate;
+                            surchargeDetails.push(`${colour}: Colour Match = $${surcharge.toFixed(2)}`);
+                        } else if (mult === 0.8) {
+                            // Undercoat (special handling - only on paint portion)
+                            surcharge = colourSubtotal * 0.35 * mult;
+                            surchargeDetails.push(`${colour}: ${(mult * 100).toFixed(0)}% = $${surcharge.toFixed(2)}`);
+                        } else {
+                            // Other multipliers (percentage-based)
+                            surcharge = colourSubtotal * mult;
+                            surchargeDetails.push(`${colour}: ${(mult * 100).toFixed(0)}% = $${surcharge.toFixed(2)}`);
+                        }
                         colourTotalSurcharge += surcharge;
-                        surchargeDetails.push(`${colour}: ${(mult * 100).toFixed(0)}% = $${surcharge.toFixed(2)}`);
                     }
                 });
                 
                 totalColourSurcharge += colourTotalSurcharge;
             }
         });
-                
-        const deliveryCharge = parseFloat(document.getElementById('deliveryRegionSelect').value) || 0;
-        const courierCost = parseFloat(document.getElementById('freightChargeInput').value) || 0;
-        const otherChargeAmount = parseFloat(document.getElementById('otherChargeAmount').value) || 0;
-        
-        const subtotalPlusCharges = subtotal + totalColourSurcharge + deliveryCharge + courierCost + otherChargeAmount;
-        
-        const chargesData = loadAdditionalCharges();
-        const gstRate = chargesData.gstRate || 0.10;
         const gstAmount = subtotalPlusCharges * gstRate;
         const totalWithGST = subtotalPlusCharges + gstAmount;
         
@@ -10488,11 +10497,13 @@
         const precisionSelect = document.getElementById('globalPrecisionSelect');
         const predictiveToggle = document.getElementById('predictiveInputToggle');
         const aiHelperToggle = document.getElementById('aiHelperToggle');
+        const colourMatchInput = document.getElementById('colourMatchSurcharge');
         
         if (unitsSelect) unitsSelect.value = AdminSettings.units;
         if (precisionSelect) precisionSelect.value = AdminSettings.precision;
         if (predictiveToggle) predictiveToggle.checked = AdminSettings.predictiveInput;
         if (aiHelperToggle) aiHelperToggle.checked = AdminSettings.aiHelperEnabled;
+        if (colourMatchInput) colourMatchInput.value = loadAdditionalCharges().colourMatchFlatRate;
         
         console.log('✓ Global Settings UI updated');
         renderPaintBrandsList();
@@ -10808,8 +10819,9 @@
                 Dark: parseFloat(document.getElementById('chargeDark')?.value || 15) / 100,
                 'Extra Tint': parseFloat(document.getElementById('chargeExtraTint')?.value || 30) / 100,
                 Undercoat: parseFloat(document.getElementById('chargeUndercoat')?.value || 80) / 100,
-                'Colour Match': parseFloat(document.getElementById('chargeColourMatch')?.value || 130) / 100
+                'Colour Match': 1.30  // Keep as marker for colour match
             },
+            colourMatchFlatRate: parseFloat(document.getElementById('chargeColourMatch')?.value || 85),  // NEW: Flat rate for colour match
             deliveryRegions: {
                 Warrnambool: parseFloat(document.getElementById('regionWarrnambool')?.value || 90),
                 Geelong: parseFloat(document.getElementById('regionGeelong')?.value || 110),
@@ -10835,8 +10847,9 @@
                 Dark: 0.15,
                 'Extra Tint': 0.30,
                 Undercoat: 0.80,
-                'Colour Match': 1.30
+                'Colour Match': 1.30  // Keep as marker
             },
+            colourMatchFlatRate: 85,  // NEW: Default flat rate
             deliveryRegions: {
                 Warrnambool: 90,
                 Geelong: 110,
@@ -10853,6 +10866,7 @@
         // Properly merge nested objects
         return {
             colourMultipliers: { ...defaults.colourMultipliers, ...(saved.colourMultipliers || {}) },
+            colourMatchFlatRate: saved.colourMatchFlatRate !== undefined ? saved.colourMatchFlatRate : defaults.colourMatchFlatRate,
             deliveryRegions: { ...defaults.deliveryRegions, ...(saved.deliveryRegions || {}) },
             gstRate: saved.gstRate !== undefined ? saved.gstRate : defaults.gstRate
         };
@@ -10868,7 +10882,7 @@
         document.getElementById('chargeDark').value = (charges.colourMultipliers.Dark * 100).toFixed(1);
         document.getElementById('chargeExtraTint').value = (charges.colourMultipliers['Extra Tint'] * 100).toFixed(1);
         document.getElementById('chargeUndercoat').value = (charges.colourMultipliers.Undercoat * 100).toFixed(1);
-        document.getElementById('chargeColourMatch').value = (charges.colourMultipliers['Colour Match'] * 100).toFixed(1);
+        document.getElementById('chargeColourMatch').value = charges.colourMatchFlatRate;  // Load flat rate instead of percentage
         
         // Load delivery regions
         document.getElementById('regionWarrnambool').value = charges.deliveryRegions.Warrnambool;
