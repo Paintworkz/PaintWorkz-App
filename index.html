@@ -1157,7 +1157,10 @@
                         </div>
                         <div>
                             <label style="display:block; font-weight:900; font-size:10px; color:#666; margin-bottom:4px;">Colour Match (Flat $)</label>
-                            <input type="number" id="chargeColourMatch" value="85" min="0" max="500" step="1" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px; font-size:11px; box-sizing:border-box;">
+                            <div style="display:flex; gap:8px;">
+                                <input type="number" id="chargeColourMatch" value="85" min="0" max="500" step="1" style="flex:1; padding:8px; border:1px solid #ccc; border-radius:4px; font-size:11px; box-sizing:border-box;">
+                                <button onclick="document.getElementById('chargeColourMatch').value = 85; notify('✓ Reset to $85');" style="border:none; background:#666; color:#fff; padding:8px 12px; border-radius:4px; font-weight:900; font-size:10px; cursor:pointer; white-space:nowrap;">Reset</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -5112,7 +5115,7 @@
                     if (multiplier > 0) {
                         doc.setFont(undefined, 'normal');
                         doc.setFontSize(8);
-                        let surcharge = (multiplier === 1.30) ? loadAdditionalCharges().colourMatchFlatRate : (colourTotal * multiplier);
+                        let surcharge = (multiplier === 1.3 || multiplier === 1.30) ? loadAdditionalCharges().colourMatchFlatRate : (colourTotal * multiplier);
                         
                         // Check if this colour has Undercoat selected
                         // (This would require tracking which option was selected - using a simple check)
@@ -5122,7 +5125,7 @@
                                              multiplier === 0.15 ? '(Dark +15%)' :
                                              multiplier === 0.30 ? '(Extra Tint +30%)' :
                                              multiplier === 0.80 ? '(Undercoat 80%)' :
-                                             multiplier === 1.30 ? `(Colour Match $${loadAdditionalCharges().colourMatchFlatRate})` : '';
+                                             multiplier === 1.3 || multiplier === 1.30 ? `(Colour Match $${loadAdditionalCharges().colourMatchFlatRate})` : '';
                         
                         doc.text(`  Paint Colour Surcharge ${surchargeLabel}:`, x, y);
                         doc.text(`$${surcharge.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
@@ -5474,7 +5477,7 @@
                     if (multiplier > 0) {
                         doc.setFont(undefined, 'normal');
                         doc.setFontSize(8);
-                        let surcharge = (multiplier === 1.30) ? loadAdditionalCharges().colourMatchFlatRate : (colourTotal * multiplier);
+                        let surcharge = (multiplier === 1.3 || multiplier === 1.30) ? loadAdditionalCharges().colourMatchFlatRate : (colourTotal * multiplier);
                         
                         // Check if this colour has Undercoat selected
                         // (This would require tracking which option was selected - using a simple check)
@@ -5484,7 +5487,7 @@
                                              multiplier === 0.15 ? '(Dark +15%)' :
                                              multiplier === 0.30 ? '(Extra Tint +30%)' :
                                              multiplier === 0.80 ? '(Undercoat 80%)' :
-                                             multiplier === 1.30 ? `(Colour Match $${loadAdditionalCharges().colourMatchFlatRate})` : '';
+                                             multiplier === 1.3 || multiplier === 1.30 ? `(Colour Match $${loadAdditionalCharges().colourMatchFlatRate})` : '';
                         
                         doc.text(`  Paint Colour Surcharge ${surchargeLabel}:`, x, y);
                         doc.text(`$${surcharge.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
@@ -5837,7 +5840,7 @@
                     if (multiplier > 0) {
                         doc.setFont(undefined, 'normal');
                         doc.setFontSize(8);
-                        let surcharge = (multiplier === 1.30) ? loadAdditionalCharges().colourMatchFlatRate : (colourTotal * multiplier);
+                        let surcharge = (multiplier === 1.3 || multiplier === 1.30) ? loadAdditionalCharges().colourMatchFlatRate : (colourTotal * multiplier);
                         
                         // Check if this colour has Undercoat selected
                         // (This would require tracking which option was selected - using a simple check)
@@ -5847,7 +5850,7 @@
                                              multiplier === 0.15 ? '(Dark +15%)' :
                                              multiplier === 0.30 ? '(Extra Tint +30%)' :
                                              multiplier === 0.80 ? '(Undercoat 80%)' :
-                                             multiplier === 1.30 ? `(Colour Match $${loadAdditionalCharges().colourMatchFlatRate})` : '';
+                                             multiplier === 1.3 || multiplier === 1.30 ? `(Colour Match $${loadAdditionalCharges().colourMatchFlatRate})` : '';
                         
                         doc.text(`  Paint Colour Surcharge ${surchargeLabel}:`, x, y);
                         doc.text(`$${surcharge.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
@@ -9324,7 +9327,7 @@
                     if (mult > 0) {
                         // Check if this is Colour Match (use flat rate)
                         let surcharge;
-                        if (mult === 1.30) {
+                        if (mult === 1.3 || mult === 1.30) {
                             // Colour Match - use flat rate
                             surcharge = chargesData.colourMatchFlatRate;
                             surchargeDetails.push(`${colour}: Colour Match = $${surcharge.toFixed(2)}`);
@@ -10862,6 +10865,15 @@
         };
         
         const saved = JSON.parse(localStorage.getItem('additionalCharges')) || {};
+        
+        // MIGRATION: Convert old Colour Match percentage format to new flat rate format
+        if (saved.colourMultipliers && saved.colourMultipliers['Colour Match'] && saved.colourMatchFlatRate === undefined) {
+            // Old format detected - migrate to new format
+            const oldMultiplier = saved.colourMultipliers['Colour Match'];
+            // Convert percentage to flat rate: if it was 1.30 (130%), use default $85
+            saved.colourMatchFlatRate = 85;
+            console.log('✓ Migrated Colour Match from percentage (1.30) to flat rate ($85)');
+        }
         
         // Properly merge nested objects
         return {
