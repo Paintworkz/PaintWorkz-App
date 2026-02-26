@@ -9293,6 +9293,7 @@
     }
     
     function switchAdminTab(tab) {
+        console.log('🔄 Switching to admin tab:', tab);
         // Hide all admin tabs
         document.getElementById('admin-tab-general-content').style.display = 'none';
         document.getElementById('admin-tab-colours-content').style.display = 'none';
@@ -9325,21 +9326,25 @@
             document.getElementById('admin-tab-general').classList.add('active');
             renderAdminAlerts(); // Refresh all notifications
         } else if (tab === 'colours') {
+            console.log('✓ Showing colours tab, calling renderColorCustomizer...');
             document.getElementById('admin-tab-colours-content').style.display = 'block';
             document.getElementById('admin-tab-colours').classList.add('active');
-            setTimeout(() => renderColorCustomizer(), 100);
+            renderColorCustomizer();
         } else if (tab === 'clients') {
+            console.log('✓ Showing clients tab, calling renderClientsList...');
             if (clientsContent) {
                 clientsContent.style.display = 'block';
                 if (clientsBtn) clientsBtn.classList.add('active');
                 const searchBox = document.getElementById('clientSearchBox');
                 if (searchBox) searchBox.value = '';
-                setTimeout(() => renderClientsList(), 100);
+                renderClientsList();
             }
         } else if (tab === 'pricing') {
+            console.log('✓ Showing pricing tab, calling renderPricingMatrix...');
             document.getElementById('admin-tab-pricing-content').style.display = 'block';
             document.getElementById('admin-tab-pricing').classList.add('active');
-            setTimeout(() => { renderPricingMatrix(); checkForNewUnallocatedDoors(); }, 100);
+            renderPricingMatrix();
+            checkForNewUnallocatedDoors();
         }
     }
 
@@ -9480,12 +9485,18 @@
     
     function renderColorCustomizer() {
         const target = document.getElementById('colorCustomizerContent');
-        if (!target) return;
+        if (!target) {
+            console.error('❌ colorCustomizerContent not found!');
+            return;
+        }
+        
+        // Merge defaultColors with any saved appColors
+        const mergedColors = { ...defaultColors, ...appColors };
         
         let html = '';
         
-        Object.keys(appColors).forEach(colorName => {
-            const colorValue = appColors[colorName];
+        Object.keys(mergedColors).forEach(colorName => {
+            const colorValue = mergedColors[colorName];
             const description = colorDescriptions[colorName] || '';
             html += `
                 <div style="padding:12px; border:1px solid #dddddd; border-radius:6px; background:#ffffff;">
@@ -10250,7 +10261,10 @@
     
     function renderClientsList() {
         const clientsDiv = document.getElementById('clientsList');
-        if (!clientsDiv) return;
+        if (!clientsDiv) {
+            console.error('❌ clientsList div not found!');
+            return;
+        }
         
         try {
             const seen = new Set();
@@ -10259,8 +10273,7 @@
             // 1. Get from client database (authoritative source)
             const db = getClientDatabase();
             Object.entries(db).forEach(([clientId, client]) => {
-                if (client.name && !seen.has(client.name.toLowerCase())) {
-                    // Include the ID from the database key
+                if (client && client.name && !seen.has(client.name.toLowerCase())) {
                     const clientWithId = { ...client, id: clientId };
                     allClients.push(clientWithId);
                     seen.add(client.name.toLowerCase());
@@ -10310,56 +10323,33 @@
                 });
             }
             
-            
-            // Sort alphabetically by name
+            // Sort alphabetically
             allClients.sort((a, b) => a.name.localeCompare(b.name));
             
-            
-            
+            // Render empty state or client list
             if (allClients.length === 0) {
-                clientsDiv.innerHTML = '<p style="text-align:center; color:#999; font-size:12px; padding:20px;">No clients yet. Add one to get started!</p>';
+                clientsDiv.innerHTML = '<p style="text-align:center; color:#999; font-size:12px; padding:20px;">No clients found. Add one above to get started!</p>';
                 return;
             }
             
             let html = '';
             allClients.forEach(client => {
-                const clientId = client.id || '';
-                console.log('Rendering client:', client.name, 'ID:', clientId);
-                html += `<div data-client-name="${client.name}" data-client-id="${clientId}" style="display:flex; justify-content:space-between; align-items:center; padding:12px 15px; background:#fff; border-bottom:1px solid #f0f0f0; flex-shrink:0;">
-                    <div style="flex:1;">
-                        <div style="font-weight:900; font-size:13px; color:#333;">${client.name}</div>
+                html += `
+                    <div data-client-name="${client.name}" style="padding:12px; border-bottom:1px solid #f0f0f0; display:flex; justify-content:space-between; align-items:center;">
+                        <div style="flex:1;">
+                            <div style="font-weight:900; font-size:12px; color:#333;">${client.name}</div>
+                            <div style="font-size:10px; color:#999;">${client.contactName || 'No contact'}</div>
+                        </div>
+                        <button onclick="editClientForm('${client.id}')" style="border:none; background:#2196f3; color:#fff; padding:6px 10px; border-radius:4px; font-weight:900; font-size:10px; cursor:pointer; margin-right:5px;">Edit</button>
                     </div>
-                    <div style="display:flex; gap:8px;">
-                        <button class="editClientBtn" style="background:#2196f3; color:#fff; border:none; padding:8px 14px; border-radius:4px; font-weight:900; font-size:11px; cursor:pointer;">✏️ EDIT</button>
-                        <button class="deleteClientBtn" style="background:#ff3b30; color:#fff; border:none; padding:8px 14px; border-radius:4px; font-weight:900; font-size:11px; cursor:pointer;">🗑️ DELETE</button>
-                    </div>
-                </div>`;
+                `;
             });
             
             clientsDiv.innerHTML = html;
-            
-            // Add event listeners to edit/delete buttons
-            document.querySelectorAll('.editClientBtn').forEach(btn => {
-                btn.addEventListener('click', function(e) {
-                    const clientId = this.closest('[data-client-id]').getAttribute('data-client-id');
-                    const clientName = this.closest('[data-client-name]').getAttribute('data-client-name');
-                    console.log('Edit button clicked for:', clientName, 'ID:', clientId);
-                    showEditClientForm(clientId, clientName);
-                });
-            });
-            
-            document.querySelectorAll('.deleteClientBtn').forEach(btn => {
-                btn.addEventListener('click', function(e) {
-                    const clientId = this.closest('[data-client-id]').getAttribute('data-client-id');
-                    const clientName = this.closest('[data-client-name]').getAttribute('data-client-name');
-                    if(confirm(`Delete ${clientName}?`)) {
-                        deleteClient(clientId);
-                    }
-                });
-            });
+            console.log('✓ Rendered', allClients.length, 'clients');
         } catch(e) {
-            console.error('Error rendering clients list:', e);
-            clientsDiv.innerHTML = '<p style="color:red; padding:20px;">Error loading clients</p>';
+            console.error('Error in renderClientsList:', e);
+            clientsDiv.innerHTML = '<p style="color:#f00; padding:20px;">Error loading clients. Check console.</p>';
         }
     }
     function showEditClientForm(clientId, clientName) {
