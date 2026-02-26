@@ -816,13 +816,13 @@
     </div>
 
     <div id="db" class="view-section">
-        <div class="sub-nav">
+        <div class="sub-nav" style="position:fixed; top:120px; left:0; right:0; background:#fff; z-index:99; border-bottom:2px solid var(--gs); padding:10px 15px; display:flex; gap:10px; border-radius:0; margin-bottom:0;">
             <button class="sub-btn active" id="sub-btn-clients" onclick="subTab('clients')">CLIENTS</button>
             <button class="sub-btn" id="sub-btn-profiles" onclick="subTab('profiles')">DOOR PROFILES</button>
             <button class="sub-btn" id="sub-btn-paint" onclick="subTab('paint')">PAINT</button>
         </div>
 
-        <div id="sub-clients" class="sub-section active">
+        <div id="sub-clients" class="sub-section active" style="margin-top:50px;">
             <div class="card">
                 <div class="add-row">
                     <input type="text" id="new-client" placeholder="New Client Name" style="margin-bottom:0;">
@@ -1001,10 +1001,9 @@
     </div>
     
     <div id="admin" class="view-section" style="flex-direction:column; height:calc(100vh - 200px);">
-        <h3 style="margin-bottom:10px; background:#fff; padding:10px 0; border-bottom:2px solid #ddd; position:sticky; top:0; z-index:100;">Admin Settings</h3>
         
-        <!-- Admin Sub-Tabs - Sticky Header -->
-        <div class="sub-nav" style="margin-bottom:0px; position:sticky; top:45px; background:#fff; z-index:99; border-bottom:2px solid var(--gs); padding-bottom:10px;">
+        <!-- Admin Sub-Tabs - Fixed below main tabs -->
+        <div class="sub-nav" style="margin-bottom:0px; position:fixed; top:120px; left:0; right:0; background:#fff; z-index:99; border-bottom:2px solid var(--gs); padding:10px 15px; display:flex; gap:10px; border-radius:0;">
             <button class="sub-btn active" onclick="switchAdminTab('general')" id="admin-tab-general">General Settings</button>
             <button class="sub-btn" onclick="switchAdminTab('colours')" id="admin-tab-colours">Colours</button>
             <button class="sub-btn" onclick="switchAdminTab('clients')" id="admin-tab-clients">Clients</button>
@@ -1012,7 +1011,7 @@
         </div>
         
         <!-- Scrollable Content Area -->
-        <div class="card" style="overflow-y:auto; flex:1; margin-bottom:80px; padding-bottom:20px;">
+        <div class="card" style="overflow-y:auto; flex:1; margin-bottom:80px; padding-bottom:20px; margin-top:50px;">
             <!-- General Settings Tab -->
             <div id="admin-tab-general-content">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
@@ -1955,39 +1954,66 @@
             return;
         }
         
+        // Convert to uppercase for consistency
+        color = color.toUpperCase();
+        
         // Update button style
         const btn = document.getElementById(buttonId);
         if (btn) {
-            const rgb = parseInt(color.slice(1), 16);
-            const r = (rgb >> 16) & 255;
-            const g = (rgb >> 8) & 255;
-            const b = rgb & 255;
-            
             btn.style.background = color;
-            btn.style.borderColor = `rgb(${Math.max(0, r-50)}, ${Math.max(0, g-50)}, ${Math.max(0, b-50)})`;
+            btn.style.borderColor = color;
         }
         
-        // Update input fields
+        // Update input fields - use the actual element IDs
         const colorPicker = document.getElementById(inputId);
-        const colorCode = document.getElementById(inputId + 'Code');
-        if (colorPicker) colorPicker.value = color;
-        if (colorCode) colorCode.value = color;
+        const colorCodeInput = document.getElementById(inputId + 'Code') || document.getElementById(inputId.replace('ButtonColor', 'ColorCode'));
         
-        // Save to localStorage
-        localStorage.setItem(buttonId + '_color', color);
-        const buttonName = buttonId.replace('form-', '').replace('-', ' ').toUpperCase();
+        if (colorPicker) colorPicker.value = color;
+        if (colorCodeInput) colorCodeInput.value = color;
+        
+        // Save to localStorage with consistent key
+        const storageKey = buttonId + '_color';
+        localStorage.setItem(storageKey, color);
+        
+        const buttonName = buttonId.replace('form-', '').replace(/-/g, ' ').toUpperCase();
         notify(`✓ ${buttonName} button colour changed to ${color}`);
+    }
+    
+    // Load all form button colors on startup
+    function loadFormButtonColors() {
+        const formButtons = [
+            { id: 'form-estimate', inputId: 'estimateButtonColor' },
+            { id: 'form-quote', inputId: 'quoteFormButtonColor' },
+            { id: 'form-mixing', inputId: 'mixingCardButtonColor' },
+            { id: 'form-supply-docket', inputId: 'supplyDocketButtonColor' },
+            { id: 'form-shop-label', inputId: 'shopLabelButtonColor' },
+            { id: 'form-invoice', inputId: 'invoiceButtonColor' },
+            { id: 'form-cover-sheet', inputId: 'coverSheetButtonColor' },
+            { id: 'form-a3-schedule', inputId: 'a3ScheduleButtonColor' },
+            { id: 'form-batch-print', inputId: 'batchPrintButtonColor' }
+        ];
+        
+        formButtons.forEach(({ id, inputId }) => {
+            const savedColor = localStorage.getItem(id + '_color');
+            if (savedColor && /^#[0-9A-F]{6}$/i.test(savedColor)) {
+                changeFormButtonColor(id, savedColor, inputId);
+            }
+        });
     }
     
     // Load all form button colors on startup
     function loadAllFormButtonColors() {
         const buttons = [
             { id: 'form-paint-order', name: 'paintOrderButtonColor' },
-            { id: 'form-supply-docket', name: 'supplyDocketButtonColor' },
+            { id: 'form-estimate', name: 'estimateButtonColor' },
+            { id: 'form-quote', name: 'quoteFormButtonColor' },
             { id: 'form-mixing', name: 'mixingCardButtonColor' },
-            { id: 'form-cover-sheet', name: 'coverSheetButtonColor' },
+            { id: 'form-supply-docket', name: 'supplyDocketButtonColor' },
             { id: 'form-shop-label', name: 'shopLabelButtonColor' },
-            { id: 'form-estimate', name: 'estimateButtonColor' }
+            { id: 'form-invoice', name: 'invoiceButtonColor' },
+            { id: 'form-cover-sheet', name: 'coverSheetButtonColor' },
+            { id: 'form-a3-schedule', name: 'a3ScheduleButtonColor' },
+            { id: 'form-batch-print', name: 'batchPrintButtonColor' }
         ];
         
         buttons.forEach(btn => {
