@@ -1834,14 +1834,14 @@
         document.getElementById('paintOrderButtonColor').value = color;
         document.getElementById('paintOrderColorCode').value = color;
         
-        // Save to localStorage
-        localStorage.setItem('paintOrderButtonColor', color);
+        // Save to localStorage with consistent key format
+        localStorage.setItem('form-paint-order_color', color);
         notify(`✓ Paint Order button colour changed to ${color}`);
     }
     
     // Load Paint Order button color on startup
     function loadPaintOrderButtonColor() {
-        const savedColor = localStorage.getItem('paintOrderButtonColor');
+        const savedColor = localStorage.getItem('form-paint-order_color');
         if (savedColor && /^#[0-9A-F]{6}$/i.test(savedColor)) {
             changePaintOrderButtonColor(savedColor);
         }
@@ -1901,7 +1901,6 @@
     // Load on startup
     setTimeout(() => {
         loadAllFormButtonColors();
-        loadPaintOrderButtonColor();
     }, 500);
     
     // Load settings on app startup
@@ -4880,6 +4879,24 @@
                     </div>
                     
                     <div style="margin-bottom:15px;">
+                        <label style="display:block; font-weight:900; margin-bottom:8px; font-size:12px; color:#666;">PANEL TYPE</label>
+                        <div style="display:flex; gap:6px;">
+                            <button onclick="setEditPanelType(${index}, 'Flat')" id="editPanelType-Flat" style="flex:1; padding:8px; background:${item.panelType === 'Flat' ? '#ff9800' : '#f0f0f0'}; color:${item.panelType === 'Flat' ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">FLAT</button>
+                            <button onclick="setEditPanelType(${index}, 'Moulded')" id="editPanelType-Moulded" style="flex:1; padding:8px; background:${item.panelType === 'Moulded' ? '#ff9800' : '#f0f0f0'}; color:${item.panelType === 'Moulded' ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">MOULDED</button>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom:15px;">
+                        <label style="display:block; font-weight:900; margin-bottom:8px; font-size:12px; color:#666;">EDGE CONFIG</label>
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+                            <button onclick="setEditEdgeConfig(${index}, 'SS')" id="editEdge-SS" style="padding:8px; background:${item.edgeConfig === 'SS' ? '#17a2b8' : '#f0f0f0'}; color:${item.edgeConfig === 'SS' ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">SS</button>
+                            <button onclick="setEditEdgeConfig(${index}, 'SE')" id="editEdge-SE" style="padding:8px; background:${item.edgeConfig === 'SE' ? '#17a2b8' : '#f0f0f0'}; color:${item.edgeConfig === 'SE' ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">SE</button>
+                            <button onclick="setEditEdgeConfig(${index}, 'DS')" id="editEdge-DS" style="padding:8px; background:${item.edgeConfig === 'DS' ? '#17a2b8' : '#f0f0f0'}; color:${item.edgeConfig === 'DS' ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">DS</button>
+                            <button onclick="setEditEdgeConfig(${index}, 'Custom')" id="editEdge-Custom" style="padding:8px; background:${item.edgeConfig === 'Custom' ? '#17a2b8' : '#f0f0f0'}; color:${item.edgeConfig === 'Custom' ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">CUSTOM</button>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom:15px;">
                         <label style="display:block; font-weight:900; margin-bottom:8px; font-size:12px; color:#666;">DESCRIPTION</label>
                         <input type="text" id="editDescInput" value="${item.desc}" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:4px; font-size:14px; box-sizing:border-box;">
                     </div>
@@ -4965,6 +4982,38 @@
                 const colors = { 'Door': '#2196f3', 'Panel': '#34c759', 'Drawer': '#2196f3', 'Custom': '#af52de' };
                 if (t === type) {
                     btn.style.background = colors[t];
+                    btn.style.color = '#fff';
+                } else {
+                    btn.style.background = '#f0f0f0';
+                    btn.style.color = '#000';
+                }
+            }
+        });
+    }
+    
+    function setEditPanelType(index, panelType) {
+        items[index].panelType = panelType;
+        ['Flat', 'Moulded'].forEach(p => {
+            const btn = document.getElementById(`editPanelType-${p}`);
+            if (btn) {
+                if (p === panelType) {
+                    btn.style.background = '#ff9800';
+                    btn.style.color = '#fff';
+                } else {
+                    btn.style.background = '#f0f0f0';
+                    btn.style.color = '#000';
+                }
+            }
+        });
+    }
+    
+    function setEditEdgeConfig(index, edgeConfig) {
+        items[index].edgeConfig = edgeConfig;
+        ['SS', 'SE', 'DS', 'Custom'].forEach(e => {
+            const btn = document.getElementById(`editEdge-${e}`);
+            if (btn) {
+                if (e === edgeConfig) {
+                    btn.style.background = '#17a2b8';
                     btn.style.color = '#fff';
                 } else {
                     btn.style.background = '#f0f0f0';
@@ -11638,51 +11687,53 @@
         
         content.innerHTML = `
             <div style="background:#f9f9f9; padding:15px; border-radius:8px;">
-                <div style="margin-bottom:15px;">
-                    <label style="display:block; font-weight:900; margin-bottom:5px; font-size:11px;">Measuring Phase End Day</label>
-                    <input type="number" id="edit_measuring" value="${timelineEditData.measuring || 2}" min="1" max="30" oninput="updateTimelinePreview()" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; box-sizing:border-box;">
+                <p style="font-size:11px; color:#666; margin-bottom:15px; font-weight:900;">Configure timeline durations for each phase (measured in days)</p>
+                
+                <div style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+                    <label style="font-weight:900; font-size:12px; color:#333;">MEASURE (M)</label>
+                    <input type="number" id="edit_measuring" value="${timelineEditData.measuring || 1}" min="1" max="30" oninput="updateTimelinePreview()" style="width:60px; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:14px; text-align:center; box-sizing:border-box;">
                 </div>
                 
-                <div style="margin-bottom:15px;">
-                    <label style="display:block; font-weight:900; margin-bottom:5px; font-size:11px;">Sanding 1 Phase End Day</label>
-                    <input type="number" id="edit_sanding1" value="${timelineEditData.sanding1 || 16}" min="1" max="30" oninput="updateTimelinePreview()" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; box-sizing:border-box;">
+                <div style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+                    <label style="font-weight:900; font-size:12px; color:#333;">SAND 1ST COAT (S1)</label>
+                    <input type="number" id="edit_sanding1" value="${timelineEditData.sanding1 || 4}" min="1" max="30" oninput="updateTimelinePreview()" style="width:60px; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:14px; text-align:center; box-sizing:border-box;">
                 </div>
                 
-                <div style="margin-bottom:15px;">
-                    <label style="display:block; font-weight:900; margin-bottom:5px; font-size:11px;">Undercoat Phase End Day</label>
-                    <input type="number" id="edit_undercoat" value="${timelineEditData.undercoat || 18}" min="1" max="30" oninput="updateTimelinePreview()" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; box-sizing:border-box;">
+                <div style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+                    <label style="font-weight:900; font-size:12px; color:#333;">UNDERCOAT (U)</label>
+                    <input type="number" id="edit_undercoat" value="${timelineEditData.undercoat || 2}" min="1" max="30" oninput="updateTimelinePreview()" style="width:60px; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:14px; text-align:center; box-sizing:border-box;">
                 </div>
                 
-                <div style="margin-bottom:15px;">
-                    <label style="display:block; font-weight:900; margin-bottom:5px; font-size:11px;">Sanding 2 Phase End Day</label>
-                    <input type="number" id="edit_sanding2" value="${timelineEditData.sanding2 || 20}" min="1" max="30" oninput="updateTimelinePreview()" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; box-sizing:border-box;">
+                <div style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+                    <label style="font-weight:900; font-size:12px; color:#333;">SAND 2ND COAT (S2)</label>
+                    <input type="number" id="edit_sanding2" value="${timelineEditData.sanding2 || 3}" min="1" max="30" oninput="updateTimelinePreview()" style="width:60px; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:14px; text-align:center; box-sizing:border-box;">
                 </div>
                 
-                <div style="margin-bottom:15px;">
-                    <label style="display:block; font-weight:900; margin-bottom:5px; font-size:11px;">Top Coat Phase End Day</label>
-                    <input type="number" id="edit_topcoat" value="${timelineEditData.topcoat || 22}" min="1" max="30" oninput="updateTimelinePreview()" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; box-sizing:border-box;">
+                <div style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+                    <label style="font-weight:900; font-size:12px; color:#333;">TOP COAT (T)</label>
+                    <input type="number" id="edit_topcoat" value="${timelineEditData.topcoat || 2}" min="1" max="30" oninput="updateTimelinePreview()" style="width:60px; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:14px; text-align:center; box-sizing:border-box;">
                 </div>
                 
-                <div style="margin-bottom:15px;">
-                    <label style="display:block; font-weight:900; margin-bottom:5px; font-size:11px;">Inspect & Wrap Phase End Day</label>
-                    <input type="number" id="edit_inspect" value="${timelineEditData.inspect || 24}" min="1" max="30" oninput="updateTimelinePreview()" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; box-sizing:border-box;">
+                <div style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+                    <label style="font-weight:900; font-size:12px; color:#333;">INSPECTION (I)</label>
+                    <input type="number" id="edit_inspect" value="${timelineEditData.inspect || 2}" min="1" max="30" oninput="updateTimelinePreview()" style="width:60px; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:14px; text-align:center; box-sizing:border-box;">
                 </div>
                 
-                <div style="margin-bottom:15px;">
-                    <label style="display:block; font-weight:900; margin-bottom:5px; font-size:11px;">Complete Day (Job Finished)</label>
-                    <input type="number" id="edit_complete" value="${timelineEditData.complete || 25}" min="1" max="30" oninput="updateTimelinePreview()" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; box-sizing:border-box;">
+                <div style="margin-bottom:20px; display:flex; justify-content:space-between; align-items:center;">
+                    <label style="font-weight:900; font-size:12px; color:#333;">COMPLETION/DELIVERY (C)</label>
+                    <input type="number" id="edit_complete" value="${timelineEditData.complete || 1}" min="1" max="30" oninput="updateTimelinePreview()" style="width:60px; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:14px; text-align:center; box-sizing:border-box;">
                 </div>
                 
                 <div id="timelinePreview" style="background:#e8f5e9; padding:12px; border-radius:6px; border-left:4px solid #34c759; margin-top:15px;">
-                    <div style="font-size:10px; color:#333; font-weight:700; line-height:1.6;">
+                    <div style="font-size:10px; color:#333; font-weight:700; line-height:1.8;">
                         <strong style="font-size:11px;">📅 Timeline Preview:</strong><br>
-                        Days 0-2: Measuring<br>
-                        Days 2-16: Sanding 1<br>
-                        Days 16-18: Undercoat<br>
-                        Days 18-20: Sanding 2<br>
-                        Days 20-22: Top Coat<br>
-                        Days 22-24: Inspect & Wrap<br>
-                        Days 24-25: Complete
+                        MEASURE (M): 1 day<br>
+                        SAND 1ST COAT (S1): 4 days<br>
+                        UNDERCOAT (U): 2 days<br>
+                        SAND 2ND COAT (S2): 3 days<br>
+                        TOP COAT (T): 2 days<br>
+                        INSPECTION (I): 2 days<br>
+                        COMPLETION/DELIVERY (C): 1 day
                     </div>
                 </div>
             </div>
