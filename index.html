@@ -7280,261 +7280,267 @@
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('p', 'mm', 'a4');
             
-            // Get job data from measure tab
-            const jobNum = (document.getElementById('jN')?.value || '---').trim();
-            const jobName = (document.getElementById('jNm')?.value || '---').trim();
-            const jobClient = (document.getElementById('cli')?.value || '---').trim();
+            // Page dimensions
+            const pageWidth = doc.internal.pageSize.width;
+            const pageHeight = doc.internal.pageSize.height;
+            const leftMargin = 12;
+            const rightMargin = 12;
+            const contentWidth = pageWidth - (leftMargin + rightMargin);
+            
+            // Get job data
+            const jobNum = (document.getElementById('jN')?.value || 'TBD').trim();
+            const jobName = (document.getElementById('jNm')?.value || '').trim();
+            const jobClient = (document.getElementById('cli')?.value || 'TBD').trim();
             const dateReceived = (document.getElementById('dRec')?.value || '').trim();
             
-            // Get paint spec from FIRST ITEM or from measure tab inputs
             let paintBrand = 'Dulux';
             let paintFinish = 'Satin';
             
-            // First try to get from items array
             if (items && items.length > 0) {
-                paintBrand = (items[0]?.brand || document.getElementById('p-brand')?.value || 'Dulux').trim();
-                paintFinish = (items[0]?.finish || document.getElementById('p-finish')?.value || 'Satin').trim();
-            } else {
-                // If no items, use measure tab dropdowns
-                paintBrand = (document.getElementById('p-brand')?.value || 'Dulux').trim();
-                paintFinish = (document.getElementById('p-finish')?.value || 'Satin').trim();
+                paintBrand = (items[0]?.brand || 'Dulux').trim();
+                paintFinish = (items[0]?.finish || 'Satin').trim();
             }
             
-            // Try to get date completed (if available in job history)
-            let dateCompleted = '';
-            const jobHistory = JSON.parse(localStorage.getItem('jobHistory')) || [];
-            const currentJob = jobHistory.find(j => j.jobNum === jobNum);
-            if (currentJob?.dateCompleted) {
-                dateCompleted = currentJob.dateCompleted;
-            }
-            
-            // Get client full details from database
             const clientDB = getClientDatabase();
             let clientDetails = null;
-            
             Object.entries(clientDB).forEach(([id, client]) => {
                 if (client.name && client.name.toLowerCase() === jobClient.toLowerCase()) {
                     clientDetails = client;
                 }
             });
             
-            if (!clientDetails) {
-                console.log(`⚠️ Client not found in database, will show name only`);
-            }
-            
-            // Items to use (respects filters)
             const itemsForPDF = window.pdfItemsToUse || items;
             
-            // Build color breakdown table with full paint spec
-            const colorBreakdown = {};
+            // Build breakdown by panel type AND color
+            const panelBreakdown = {};
             let totalPanels = 0;
             let totalSQM = 0;
             
             if (itemsForPDF && itemsForPDF.length > 0) {
                 itemsForPDF.forEach(item => {
+                    const panelType = (item.panel || 'Panel').trim();
                     const color = (item.color || 'Unspecified').trim();
-                    const fullPaintSpec = `${paintBrand} ${color} ${paintFinish}`;
+                    const key = `${panelType}|${color}`;
                     const qty = parseInt(item.qty || 1);
                     const sqm = parseFloat(item.sqm || 0);
                     const lineSQM = sqm * qty;
                     
-                    if (!colorBreakdown[fullPaintSpec]) {
-                        colorBreakdown[fullPaintSpec] = { count: 0, sqm: 0 };
+                    if (!panelBreakdown[key]) {
+                        panelBreakdown[key] = { panelType, color, count: 0, sqm: 0 };
                     }
-                    colorBreakdown[fullPaintSpec].count += qty;
-                    colorBreakdown[fullPaintSpec].sqm += lineSQM;
+                    panelBreakdown[key].count += qty;
+                    panelBreakdown[key].sqm += lineSQM;
                     totalPanels += qty;
                     totalSQM += lineSQM;
                 });
             }
             
-            const x = 15;
-            const pageHeight = doc.internal.pageSize.height;
-            let y = 15;
+            let y = 10;
             
-            // ===== TITLE =====
-            doc.setFontSize(28);
-            doc.setFont(undefined, 'bold');
-            doc.setTextColor(0, 0, 0);
-            doc.text('COVER SHEET', x, y);
-            y += 16;
+            // HEADER - GOLDEN BOX
+            doc.setFillColor(212, 175, 55);
+            doc.rect(leftMargin - 2, y, contentWidth + 4, 20, 'F');
             
-            // ===== JOB NUMBER =====
-            doc.setFontSize(12);
-            doc.setFont(undefined, 'bold');
-            doc.setTextColor(100, 100, 100);
-            doc.text('Job No:', x, y);
-            doc.setFontSize(26);
-            doc.setFont(undefined, 'bold');
-            doc.setTextColor(0, 0, 0);
-            doc.text(jobNum, x + 28, y);
-            y += 18;
-            
-            // ===== CUSTOMER DETAILS SECTION =====
-            doc.setFontSize(13);
-            doc.setFont(undefined, 'bold');
-            doc.setTextColor(50, 50, 50);
-            doc.text('CUSTOMER DETAILS', x, y);
-            y += 9;
-            
-            doc.setFontSize(11);
-            doc.setFont(undefined, 'bold');
-            doc.setTextColor(0, 0, 0);
-            doc.text('Company:', x, y);
-            doc.setFont(undefined, 'normal');
-            doc.text(jobClient, x + 40, y);
-            y += 8;
-            
-            if (clientDetails?.contactName) {
-                doc.setFont(undefined, 'bold');
-                doc.text('Contact:', x, y);
-                doc.setFont(undefined, 'normal');
-                doc.text(clientDetails.contactName, x + 40, y);
-                y += 8;
-            }
-            
-            if (clientDetails?.address) {
-                doc.setFont(undefined, 'bold');
-                doc.text('Address:', x, y);
-                doc.setFont(undefined, 'normal');
-                let addressText = clientDetails.address;
-                if (clientDetails.town) addressText += ', ' + clientDetails.town;
-                if (clientDetails.postcode) addressText += ' ' + clientDetails.postcode;
-                doc.text(addressText, x + 40, y);
-                y += 8;
-            }
-            
-            if (clientDetails?.landline) {
-                doc.setFont(undefined, 'bold');
-                doc.text('Phone:', x, y);
-                doc.setFont(undefined, 'normal');
-                doc.text(clientDetails.landline, x + 40, y);
-                y += 8;
-            }
-            
-            if (clientDetails?.email1) {
-                doc.setFont(undefined, 'bold');
-                doc.text('Email:', x, y);
-                doc.setFont(undefined, 'normal');
-                doc.text(clientDetails.email1, x + 40, y);
-                y += 10;
-            }
-            
-            // ===== JOB INFORMATION =====
-            doc.setFontSize(13);
-            doc.setFont(undefined, 'bold');
-            doc.setTextColor(50, 50, 50);
-            doc.text('JOB INFORMATION', x, y);
-            y += 9;
-            
-            doc.setFontSize(11);
-            doc.setFont(undefined, 'bold');
-            doc.setTextColor(0, 0, 0);
-            
-            doc.text('Job Name:', x, y);
-            doc.setFont(undefined, 'normal');
-            doc.text(jobName, x + 40, y);
-            y += 8;
-            
-            doc.setFont(undefined, 'bold');
-            doc.text('Date Started:', x, y);
-            doc.setFont(undefined, 'normal');
-            doc.text(dateReceived || '---', x + 40, y);
-            y += 8;
-            
-            doc.setFont(undefined, 'bold');
-            doc.text('Date Completed:', x, y);
-            doc.setFont(undefined, 'normal');
-            doc.text(dateCompleted || '---', x + 40, y);
-            y += 12;
-            
-            // ===== PAINT COLOUR BREAKDOWN TABLE =====
-            doc.setFontSize(13);
-            doc.setFont(undefined, 'bold');
-            doc.setTextColor(50, 50, 50);
-            doc.text('PAINT COLOUR BREAKDOWN', x, y);
-            y += 10;
-            
-            // Table headers
             doc.setFontSize(10);
             doc.setFont(undefined, 'bold');
             doc.setTextColor(255, 255, 255);
-            doc.setFillColor(80, 80, 80);
-            doc.rect(x, y - 5, 75, 6, 'F');
-            doc.text('Paint Specification', x + 3, y);
-            doc.rect(x + 75, y - 5, 30, 6, 'F');
-            doc.text('Panels', x + 80, y);
-            doc.rect(x + 105, y - 5, 35, 6, 'F');
-            doc.text('Sq Metres', x + 113, y);
-            y += 8;
+            doc.text('PAINTWORKZ PRO', leftMargin + 5, y + 8);
+            doc.setFontSize(8);
+            doc.text('Job Cover Sheet', leftMargin + 5, y + 13);
             
-            // Table data
-            doc.setFont(undefined, 'normal');
-            doc.setTextColor(0, 0, 0);
-            let colorCount = 0;
-            Object.entries(colorBreakdown).forEach(([paintSpec, data]) => {
-                colorCount++;
-                const rowBg = colorCount % 2 === 0 ? 245 : 255;
-                doc.setFillColor(rowBg, rowBg, rowBg);
-                doc.rect(x, y - 5, 110, 6, 'F');
-                
-                doc.setFontSize(10);
-                doc.text(paintSpec, x + 3, y);
-                doc.text(data.count.toString(), x + 80, y);
-                doc.text(data.sqm.toFixed(2), x + 113, y);
-                y += 6;
-            });
-            
-            // Total row
+            doc.setFontSize(10);
             doc.setFont(undefined, 'bold');
-            doc.setFontSize(11);
-            doc.setFillColor(200, 200, 200);
-            doc.rect(x, y - 5, 110, 6, 'F');
-            doc.text('TOTAL', x + 3, y);
-            doc.text(totalPanels.toString(), x + 80, y);
-            doc.text(totalSQM.toFixed(2), x + 113, y);
+            doc.setTextColor(0, 0, 0);
+            doc.text(`Job #${jobNum}`, pageWidth - rightMargin - 30, y + 11);
+            
+            y += 24;
+            
+            // CUSTOMER NAME - VERY LARGE
+            doc.setFontSize(26);
+            doc.setFont(undefined, 'bold');
+            doc.setTextColor(0, 0, 0);
+            const customerName = jobClient.toUpperCase();
+            doc.text(customerName, leftMargin, y);
             y += 12;
             
-            // ===== TOTALS SECTION =====
-            doc.setFontSize(12);
+            // JOB NAME
+            if (jobName) {
+                doc.setFontSize(13);
+                doc.setFont(undefined, 'normal');
+                doc.setTextColor(50, 50, 50);
+                doc.text(`Project: ${jobName}`, leftMargin, y);
+                y += 7;
+            }
+            
+            y += 2;
+            
+            // INFO GRID - Left column (dates, contact) and right column (paint spec)
+            doc.setFontSize(9);
             doc.setFont(undefined, 'bold');
             doc.setTextColor(50, 50, 50);
-            doc.text('PROJECT TOTALS', x, y);
+            
+            // Left column
+            doc.text('Date Received:', leftMargin, y);
+            doc.setFont(undefined, 'normal');
+            doc.text(dateReceived || 'TBD', leftMargin + 35, y);
+            
+            // Right column
+            doc.setFont(undefined, 'bold');
+            doc.text('Paint Brand:', pageWidth / 2 + 5, y);
+            doc.setFont(undefined, 'normal');
+            doc.text(paintBrand, pageWidth / 2 + 35, y);
+            
+            y += 6;
+            
+            // Contact
+            if (clientDetails?.contactName) {
+                doc.setFont(undefined, 'bold');
+                doc.text('Contact:', leftMargin, y);
+                doc.setFont(undefined, 'normal');
+                doc.text(clientDetails.contactName, leftMargin + 35, y);
+            }
+            
+            // Finish
+            doc.setFont(undefined, 'bold');
+            doc.text('Finish:', pageWidth / 2 + 5, y);
+            doc.setFont(undefined, 'normal');
+            doc.text(paintFinish, pageWidth / 2 + 35, y);
+            
+            y += 6;
+            
+            // Phone
+            if (clientDetails?.landline) {
+                doc.setFont(undefined, 'bold');
+                doc.text('Phone:', leftMargin, y);
+                doc.setFont(undefined, 'normal');
+                doc.text(clientDetails.landline, leftMargin + 35, y);
+            }
+            
             y += 8;
+            
+            // PAINT COLOUR BREAKDOWN - TABLE
+            doc.setFontSize(11);
+            doc.setFont(undefined, 'bold');
+            doc.setTextColor(0, 0, 0);
+            doc.text('PAINT COLOUR BREAKDOWN', leftMargin, y);
+            y += 6;
+            
+            // TABLE HEADER
+            doc.setFontSize(9);
+            doc.setFont(undefined, 'bold');
+            doc.setTextColor(255, 255, 255);
+            doc.setFillColor(100, 100, 100);
+            
+            const colWidths = [35, 50, 30, 30];
+            const headers = ['Panel Type', 'Colour', 'Qty', 'Sq.M'];
+            let xPos = leftMargin;
+            
+            headers.forEach((header, i) => {
+                doc.rect(xPos, y - 4, colWidths[i], 6, 'F');
+                doc.text(header, xPos + 2, y, { align: 'left' });
+                xPos += colWidths[i];
+            });
+            
+            y += 7;
+            
+            // TABLE ROWS
+            doc.setFont(undefined, 'normal');
+            doc.setTextColor(0, 0, 0);
+            
+            let rowNum = 0;
+            Object.values(panelBreakdown).forEach(row => {
+                if (y > pageHeight - 25) {
+                    doc.addPage();
+                    y = 15;
+                }
+                
+                // Alternate row colors
+                if (rowNum % 2 === 0) {
+                    doc.setFillColor(240, 240, 240);
+                    doc.rect(leftMargin, y - 4, contentWidth, 5.5, 'F');
+                }
+                
+                xPos = leftMargin;
+                doc.text(row.panelType, xPos + 1, y, { maxWidth: colWidths[0] - 2 });
+                xPos += colWidths[0];
+                
+                doc.text(row.color, xPos + 1, y, { maxWidth: colWidths[1] - 2 });
+                xPos += colWidths[1];
+                
+                doc.text(String(row.count), xPos + 1, y);
+                xPos += colWidths[2];
+                
+                doc.text(row.sqm.toFixed(2), xPos + 1, y);
+                
+                y += 5.5;
+                rowNum++;
+            });
+            
+            // TOTAL ROW
+            if (y > pageHeight - 20) {
+                doc.addPage();
+                y = 15;
+            }
+            
+            doc.setFont(undefined, 'bold');
+            doc.setFillColor(212, 175, 55);
+            doc.rect(leftMargin, y - 4, contentWidth, 6, 'F');
+            doc.setTextColor(0, 0, 0);
+            
+            xPos = leftMargin;
+            doc.text('TOTALS', xPos + 1, y);
+            xPos += colWidths[0] + colWidths[1];
+            
+            doc.text(String(totalPanels), xPos + 1, y);
+            xPos += colWidths[2];
+            
+            doc.text(totalSQM.toFixed(2), xPos + 1, y);
+            
+            y += 10;
+            
+            // JOB SPECIFICATIONS SECTION
+            if (y > pageHeight - 35) {
+                doc.addPage();
+                y = 15;
+            }
             
             doc.setFontSize(11);
             doc.setFont(undefined, 'bold');
             doc.setTextColor(0, 0, 0);
-            doc.text('Total Panels:', x, y);
-            doc.setFont(undefined, 'normal');
-            doc.text(totalPanels.toString(), x + 45, y);
-            y += 8;
+            doc.text('JOB SPECIFICATIONS', leftMargin, y);
+            y += 6;
             
-            doc.setFont(undefined, 'bold');
-            doc.text('Total Square Metres:', x, y);
+            doc.setFontSize(9);
             doc.setFont(undefined, 'normal');
-            doc.text(totalSQM.toFixed(2), x + 45, y);
             
-            // ===== FOOTER =====
+            const specs = [
+                `Paint Brand: ${paintBrand}`,
+                `Paint Finish: ${paintFinish}`,
+                `Total Panels: ${totalPanels}`,
+                `Total Area: ${totalSQM.toFixed(2)} m²`,
+                clientDetails?.address ? `Address: ${clientDetails.address}${clientDetails.town ? ', ' + clientDetails.town : ''}` : ''
+            ].filter(s => s);
+            
+            specs.forEach(spec => {
+                doc.text('• ' + spec, leftMargin + 3, y, { maxWidth: contentWidth - 6 });
+                y += 5;
+            });
+            
+            // FOOTER
             doc.setFontSize(8);
-            doc.setFont(undefined, 'italic');
             doc.setTextColor(150, 150, 150);
-            doc.text(`Generated: ${new Date().toLocaleDateString('en-AU')} | Job ${jobNum} | ${jobClient}`, x, pageHeight - 8);
+            doc.text(`Generated: ${new Date().toLocaleDateString('en-AU')} | PaintWorkz Pro v1.7.14`, leftMargin, pageHeight - 5);
             
-            doc.text('© 2026 - PaintWorkz Pro Software', x, pageHeight - 5);
-            const filename = `CoverSheet_${jobClient.replace(/\s+/g, '_')}_${jobNum}_${new Date().toISOString().split('T')[0]}.pdf`;
+            const filename = `CoverSheet_${jobClient.replace(/\\s+/g, '_')}_Job${jobNum}_${new Date().toISOString().split('T')[0]}.pdf`;
             const pdfDataUri = doc.output('datauristring');
             showPDFPreview(pdfDataUri, filename, '📋 Cover Sheet');
             notify("✓ Cover Sheet Ready");
-            
             
         } catch(err) {
             console.error('❌ Cover Sheet Error:', err);
             notify('❌ Error: ' + err.message);
         }
     }
-
-    // A3 PRINTABLE SCHEDULE (Continuous 90-day view)
 
     // SHOP LABEL - Front page/cover for printing and posting on job
     function genShopLabel() {
@@ -9580,6 +9586,16 @@
         }
     });
     
+    // Normalize hex colors from 3-digit to 6-digit format
+    function normalizeHex(hex) {
+        if (!hex) return '#000000';
+        if (hex.length === 4) {
+            // Convert 3-digit hex to 6-digit: #abc -> #aabbcc
+            return '#' + hex[1] + hex[1] + hex[2] + hex[2] + hex[3] + hex[3];
+        }
+        return hex;
+    }
+    
     function renderColorCustomizer() {
         const target = document.getElementById('colorCustomizerContent');
         if (!target) return;
@@ -9587,23 +9603,24 @@
         let html = '';
         
         Object.keys(appColors).forEach(colorName => {
-            const colorValue = appColors[colorName];
+            let colorValue = appColors[colorName];
+            colorValue = normalizeHex(colorValue); // Ensure 6-digit hex
             const description = colorDescriptions[colorName] || '';
             html += `
-                <div style="padding:12px; border:1px solid #ddd; border-radius:6px; background:#fff;">
-                    <label style="display:block; font-weight:900; font-size:12px; margin-bottom:2px; color:#000;">${colorName}</label>
-                    <div style="font-size:10px; color:#666; margin-bottom:10px; line-height:1.4;">${description}</div>
+                <div style="padding:12px; border:1px solid #dddddd; border-radius:6px; background:#ffffff;">
+                    <label style="display:block; font-weight:900; font-size:12px; margin-bottom:2px; color:#000000;">${colorName}</label>
+                    <div style="font-size:10px; color:#666666; margin-bottom:10px; line-height:1.4;">${description}</div>
                     <div style="display:flex; gap:10px; align-items:center; margin-bottom:8px;">
-                        <input type="color" value="${colorValue}" id="color_${colorName.replace(/[^a-zA-Z0-9]/g, '_')}" onchange="updateAppColor('${colorName}', this.value)" style="width:50px; height:40px; border:1px solid #ddd; border-radius:4px; cursor:pointer;">
-                        <input type="text" value="${colorValue}" id="colorText_${colorName.replace(/[^a-zA-Z0-9]/g, '_')}" onchange="updateAppColor('${colorName}', this.value)" style="flex:1; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:11px; font-family:monospace;">
+                        <input type="color" value="${colorValue}" id="color_${colorName.replace(/[^a-zA-Z0-9]/g, '_')}" onchange="updateAppColor('${colorName}', this.value)" style="width:50px; height:40px; border:1px solid #dddddd; border-radius:4px; cursor:pointer;">
+                        <input type="text" value="${colorValue}" id="colorText_${colorName.replace(/[^a-zA-Z0-9]/g, '_')}" onchange="updateAppColor('${colorName}', this.value)" style="flex:1; padding:8px; border:1px solid #dddddd; border-radius:4px; font-size:11px; font-family:monospace;">
                     </div>
-                    <div id="preview_${colorName.replace(/[^a-zA-Z0-9]/g, '_')}" style="padding:12px; border-radius:4px; background:${colorValue}; color:${parseInt(colorValue.replace('#', ''), 16) > 0x888888 ? '#000' : '#fff'}; font-weight:900; text-align:center; font-size:12px;">Preview</div>
+                    <div id="preview_${colorName.replace(/[^a-zA-Z0-9]/g, '_')}" style="padding:12px; border-radius:4px; background:${colorValue}; color:${parseInt(colorValue.replace('#', ''), 16) > 0x888888 ? '#000000' : '#ffffff'}; font-weight:900; text-align:center; font-size:12px;">Preview</div>
                 </div>
             `;
         });
         
         html += `<div style="grid-column:1/-1; margin-top:10px; padding:10px; background:#f0f0f0; border-radius:6px; text-align:center;">
-            <button onclick="resetAppColors()" style="padding:10px 20px; background:#999; color:#fff; border:none; border-radius:6px; font-weight:900; cursor:pointer;">RESET TO DEFAULT</button>
+            <button onclick="resetAppColors()" style="padding:10px 20px; background:#999999; color:#ffffff; border:none; border-radius:6px; font-weight:900; cursor:pointer;">RESET TO DEFAULT</button>
         </div>`;
         
         target.innerHTML = html;
