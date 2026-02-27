@@ -7604,6 +7604,14 @@
             const dateReceived = document.getElementById('dat')?.value || new Date().toLocaleDateString('en-AU');
             const totalSQM = parseFloat(document.getElementById('tot')?.innerText || '0') || 0;
             
+            // Get job completion date from history (if marked complete)
+            let dateFinished = '';
+            const jobHistory = JSON.parse(localStorage.getItem('jobHistory')) || [];
+            const currentJob = jobHistory.find(j => j.jobNum === jobNum && j.client === jobClient && j.dateReceived === dateReceived);
+            if (currentJob && currentJob.dateCompleted) {
+                dateFinished = currentJob.dateCompleted;
+            }
+            
             // Paint data - get brand/finish from FIRST ITEM (all parts should have same brand)
             const defaultBrand = (items[0]?.brand) || document.getElementById('p-brand')?.value || 'Dulux';
             const defaultFinish = (items[0]?.finish) || document.getElementById('p-finish')?.value || 'Satin';
@@ -7720,7 +7728,7 @@
                 y += 12;
                 
                 // ===== JOB NAME & DATE - CENTERED =====
-                doc.setFontSize(16);
+                doc.setFontSize(14);
                 doc.setFont(undefined, 'normal');
                 const jobText = `Job: ${jobName}`;
                 const jobWidth = doc.getTextWidth(jobText);
@@ -7730,13 +7738,13 @@
                 const dateText = `Date Received: ${dateReceived}`;
                 const dateWidth = doc.getTextWidth(dateText);
                 doc.text(dateText, (pageWidth - dateWidth) / 2, y);
-                y += 7;
+                y += 6;
                 
-                // Finish Date line
-                doc.setFontSize(11);
-                doc.setFont(undefined, 'normal');
-                doc.text('Finish Date: _____________________', (pageWidth - doc.getTextWidth('Finish Date: _____________________')) / 2, y);
-                y += 12;
+                // Finish Date - auto-filled if job is marked complete
+                const finishDateText = dateFinished ? `Finish Date: ${dateFinished}` : 'Finish Date: Pending';
+                const finishDateWidth = doc.getTextWidth(finishDateText);
+                doc.text(finishDateText, (pageWidth - finishDateWidth) / 2, y);
+                y += 10;
                 
                 // ===== CALCULATIONS FOR THIS COLOR =====
                 let colorSQM = 0;
@@ -9435,118 +9443,84 @@
         }, 500);
     }
     
+    // Helper function to force show/hide tabs with inline styles (bypasses CSS)
+    function forceShowTab(elementId) {
+        const elem = document.getElementById(elementId);
+        if (elem) {
+            elem.style.cssText = 'display: block !important; visibility: visible !important; opacity: 1 !important; position: relative !important; z-index: 100 !important;';
+            console.log(`✓ Forced visible: ${elementId}`);
+        }
+    }
+    
+    function forceHideTab(elementId) {
+        const elem = document.getElementById(elementId);
+        if (elem) {
+            elem.style.cssText = 'display: none !important; visibility: hidden !important; opacity: 0 !important;';
+            console.log(`✓ Forced hidden: ${elementId}`);
+        }
+    }
+    
     function switchAdminTab(tab) {
         console.log(`🔄 Switching to admin tab: ${tab}`);
         
-        // Hide all admin tabs and remove active class
-        const generalContent = document.getElementById('admin-tab-general-content');
-        if (generalContent) {
-            generalContent.classList.remove('active');
-            generalContent.style.display = 'none';
-        }
-        const coloursContent = document.getElementById('admin-tab-colours-content');
-        if (coloursContent) {
-            coloursContent.classList.remove('active');
-            coloursContent.style.display = 'none';
-        }
-        const clientsContent = document.getElementById('admin-tab-clients-content');
-        if (clientsContent) {
-            clientsContent.classList.remove('active');
-            clientsContent.style.display = 'none';
-        }
-        const pricingContent = document.getElementById('admin-tab-pricing-content');
-        if (pricingContent) {
-            pricingContent.classList.remove('active');
-            pricingContent.style.display = 'none';
-        }
+        // Hide ALL tabs using forced inline styles
+        forceHideTab('admin-tab-general-content');
+        forceHideTab('admin-tab-colours-content');
+        forceHideTab('admin-tab-clients-content');
+        forceHideTab('admin-tab-pricing-content');
         
-        // Remove active class from all buttons
-        document.getElementById('admin-tab-general').classList.remove('active');
-        document.getElementById('admin-tab-colours').classList.remove('active');
-        const clientsBtn = document.getElementById('admin-tab-clients');
-        if (clientsBtn) clientsBtn.classList.remove('active');
-        document.getElementById('admin-tab-pricing').classList.remove('active');
+        // Remove active button classes
+        document.getElementById('admin-tab-general')?.classList.remove('active');
+        document.getElementById('admin-tab-colours')?.classList.remove('active');
+        document.getElementById('admin-tab-clients')?.classList.remove('active');
+        document.getElementById('admin-tab-pricing')?.classList.remove('active');
         
-        // Show selected tab and mark button as active
+        // Show selected tab with FORCED inline styles
         if (tab === 'general') {
-            console.log('  → Showing general tab');
-            const generalContent = document.getElementById('admin-tab-general-content');
-            if (generalContent) {
-                generalContent.classList.add('active');
-                generalContent.style.display = 'block';
-                generalContent.style.visibility = 'visible';
-                generalContent.style.opacity = '1';
-                console.log('  ✓ General content visible');
-                console.log('  Computed style:', window.getComputedStyle(generalContent).display);
-            }
+            console.log('  ✓ FORCING general tab visible');
+            forceShowTab('admin-tab-general-content');
             document.getElementById('admin-tab-general').classList.add('active');
             setTimeout(() => {
-                console.log('  → Rendering alerts and chart');
                 updateVersionDisplay();
                 renderAdminAlerts();
                 renderAdminGanttChart();
             }, 50);
-        } else if (tab === 'colours') {
-            console.log('  → Showing colours tab');
-            const coloursContent = document.getElementById('admin-tab-colours-content');
-            if (coloursContent) {
-                coloursContent.classList.add('active');
-                coloursContent.style.display = 'block';
-                coloursContent.style.visibility = 'visible';
-                coloursContent.style.opacity = '1';
-                console.log('  ✓ Colours content visible');
-                console.log('  Computed style:', window.getComputedStyle(coloursContent).display);
-            }
+        } 
+        else if (tab === 'colours') {
+            console.log('  ✓ FORCING colours tab visible');
+            forceShowTab('admin-tab-colours-content');
             document.getElementById('admin-tab-colours').classList.add('active');
             
-            // Ensure appColors is initialized
             if (!window.appColors || Object.keys(window.appColors).length === 0) {
-                console.log('  ⚠️ appColors empty, reinitializing');
                 window.appColors = JSON.parse(JSON.stringify(defaultColors));
                 localStorage.setItem('appColors', JSON.stringify(window.appColors));
             }
             
-            console.log(`  → Rendering ${Object.keys(window.appColors).length} colors`);
             setTimeout(() => {
                 renderColorCustomizer();
                 console.log('  ✓ Colors rendered');
             }, 50);
-        } else if (tab === 'clients') {
-            console.log('  → Showing clients tab');
-            if (clientsContent) {
-                clientsContent.classList.add('active');
-                clientsContent.style.display = 'block';
-                clientsContent.style.visibility = 'visible';
-                clientsContent.style.opacity = '1';
-                console.log('  ✓ Clients content visible');
-                console.log('  Computed style:', window.getComputedStyle(clientsContent).display);
-                if (clientsBtn) clientsBtn.classList.add('active');
-                const searchBox = document.getElementById('clientSearchBox');
-                if (searchBox) searchBox.value = '';
-                console.log('  → Rendering clients list');
-                setTimeout(() => {
-                    renderClientsList();
-                    console.log('  ✓ Clients rendered');
-                }, 50);
-            }
-        } else if (tab === 'pricing') {
-            console.log('  → Showing pricing tab');
-            const pricingContent = document.getElementById('admin-tab-pricing-content');
-            if (pricingContent) {
-                pricingContent.classList.add('active');
-                pricingContent.style.display = 'block';
-                pricingContent.style.visibility = 'visible';
-                pricingContent.style.opacity = '1';
-                console.log('  ✓ Pricing content visible');
-                console.log('  Computed style:', window.getComputedStyle(pricingContent).display);
-                document.getElementById('admin-tab-pricing').classList.add('active');
-                console.log('  → Rendering pricing matrix');
-                setTimeout(() => {
-                    renderPricingMatrix();
-                    checkForNewUnallocatedDoors();
-                    console.log('  ✓ Pricing rendered');
-                }, 50);
-            }
+        } 
+        else if (tab === 'clients') {
+            console.log('  ✓ FORCING clients tab visible');
+            forceShowTab('admin-tab-clients-content');
+            document.getElementById('admin-tab-clients').classList.add('active');
+            const searchBox = document.getElementById('clientSearchBox');
+            if (searchBox) searchBox.value = '';
+            setTimeout(() => {
+                renderClientsList();
+                console.log('  ✓ Clients rendered');
+            }, 50);
+        } 
+        else if (tab === 'pricing') {
+            console.log('  ✓ FORCING pricing tab visible');
+            forceShowTab('admin-tab-pricing-content');
+            document.getElementById('admin-tab-pricing').classList.add('active');
+            setTimeout(() => {
+                renderPricingMatrix();
+                checkForNewUnallocatedDoors();
+                console.log('  ✓ Pricing rendered');
+            }, 50);
         }
     }
 
