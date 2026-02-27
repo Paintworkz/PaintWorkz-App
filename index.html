@@ -89,6 +89,7 @@
         /* ===== MOBILE RESPONSIVE DESIGN ===== */
         @media (max-width: 768px) {
             .container { padding: 10px; max-width: 100%; }
+            .nav-tabs { position: fixed; top: 70px; border-bottom: none; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
             input, select { height:40px; font-size:14px; }
             label { font-size:9px; }
             .bubble-row { flex-direction: column; gap:8px; }
@@ -106,6 +107,7 @@
         @media (max-width: 480px) {
             header { height:70px; }
             .logo-text { font-size:16px; }
+            .nav-tabs { position: fixed; top: 65px; border-bottom: none; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
             .nav-btn { min-width:60px; padding:10px 0; font-size:8px; }
             .container { padding:8px; }
             .bubble-unit input { font-size:14px; }
@@ -1071,14 +1073,7 @@
                         </label>
                         <p style="font-size:10px; color:#999; margin-top:4px; margin-bottom:0;">Enable AI assistant for trade guidance</p>
                     </div>
-                    <div style="padding:12px; background:#f0f8ff; border-radius:6px; border-left:4px solid #2196f3;">
-                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Google Gemini API Key</label>
-                        <input type="password" id="geminiApiKey" placeholder="AIza..." style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px; font-size:11px; box-sizing:border-box;" oninput="saveGeminiApiKey(this.value)" onchange="saveGeminiApiKey(this.value)" onblur="validateAndSaveApiKey()">
-                        <p style="font-size:10px; color:#999; margin-top:4px; margin-bottom:0;">Get free from Google AI Studio → <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:#2196f3; text-decoration:none;">aistudio.google.com/app/apikey</a></p>
-                    </div>
                 </div>
-                
-                <hr style="margin:30px 0; border:none; border-top:1px solid #ddd;">
                 
                 <hr style="margin:30px 0; border:none; border-top:1px solid #ddd;">
                 
@@ -1152,8 +1147,14 @@
                     <button onclick="let container = document.getElementById('api-keys-container'); container.style.display = container.style.display === 'none' ? 'block' : 'none';" style="background:none; border:none; cursor:pointer; font-weight:900; font-size:18px; color:#999;">−</button>
                 </div>
                 <div id="api-keys-container" style="display:none;">
-                <p style="font-size:11px; color:#666; margin-bottom:15px;">Store your external API keys for third-party integrations</p>
+                <p style="font-size:11px; color:#666; margin-bottom:15px;">Store your external API keys for third-party integrations and AI features</p>
                 <div style="display:grid; grid-template-columns:1fr; gap:15px; margin-bottom:20px;">
+                    <div style="padding:12px; background:#e8f5ff; border-radius:6px; border-left:4px solid #6200ea;">
+                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">🤖 Google Gemini API Key</label>
+                        <input type="password" id="geminiApiKey" placeholder="AIza..." style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px; font-size:11px; box-sizing:border-box;" oninput="saveGeminiApiKey(this.value)" onchange="saveGeminiApiKey(this.value)" onblur="validateAndSaveApiKey()">
+                        <p style="font-size:10px; color:#999; margin-top:4px; margin-bottom:0;">Get free from <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:#2196f3; text-decoration:none;">Google AI Studio →</a> for AI chat features</p>
+                        <div id="apiKeyStatus" style="font-size:10px; color:#34c759; margin-top:6px; font-weight:900; display:none;">✓ API Key Saved</div>
+                    </div>
                     <div>
                         <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Evic ExpressTint API Key</label>
                         <input type="password" id="evicApiKey" placeholder="Enter your Evic API key" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
@@ -1893,42 +1894,6 @@
         notify(`✓ Colour Match Surcharge set to: $${loadAdditionalCharges().colourMatchFlatRate}`);
     }
     
-    function changePaintOrderButtonColor(color) {
-        // Validate hex color
-        if (!/^#[0-9A-F]{6}$/i.test(color)) {
-            notify('❌ Invalid colour code. Use format: #RRGGBB');
-            return;
-        }
-        
-        // Update button style
-        const btn = document.getElementById('form-paint-order');
-        if (btn) {
-            const rgb = parseInt(color.slice(1), 16);
-            const r = (rgb >> 16) & 255;
-            const g = (rgb >> 8) & 255;
-            const b = rgb & 255;
-            
-            btn.style.background = color;
-            btn.style.borderColor = `rgb(${Math.max(0, r-50)}, ${Math.max(0, g-50)}, ${Math.max(0, b-50)})`;
-        }
-        
-        // Update input fields
-        document.getElementById('paintOrderButtonColor').value = color;
-        document.getElementById('paintOrderColorCode').value = color;
-        
-        // Save to localStorage
-        localStorage.setItem('paintOrderButtonColor', color);
-        notify(`✓ Paint Order button colour changed to ${color}`);
-    }
-    
-    // Load Paint Order button color on startup
-    function loadPaintOrderButtonColor() {
-        const savedColor = localStorage.getItem('paintOrderButtonColor');
-        if (savedColor && /^#[0-9A-F]{6}$/i.test(savedColor)) {
-            changePaintOrderButtonColor(savedColor);
-        }
-    }
-    
     // UNIFIED COLOR SYSTEM - Simple and reliable
     function updateFormColor(buttonId, color) {
         // Validate hex color
@@ -1983,9 +1948,12 @@
     // Load on startup - initialize all colors and settings
     setTimeout(() => {
         loadAllFormButtonColors();
-        loadPaintOrderButtonColor();
-        const apiKey = localStorage.getItem("geminiApiKey")
-        if (apiKey) document.getElementById("geminiApiKey")
+        
+        // Load Gemini API key if it exists
+        const apiKey = localStorage.getItem("geminiApiKey");
+        if (apiKey && document.getElementById("geminiApiKey")) {
+            document.getElementById("geminiApiKey").value = apiKey;
+        }
     }, 500);
     
     // Load settings on app startup
@@ -7307,9 +7275,19 @@
             const jobClient = (document.getElementById('cli')?.value || '---').trim();
             const dateReceived = (document.getElementById('dRec')?.value || '').trim();
             
-            // Get paint spec from FIRST ITEM (more reliable than dropdown when loading jobs)
-            const paintBrand = ((items[0]?.brand) || document.getElementById('p-brand')?.value || 'Dulux').trim();
-            const paintFinish = ((items[0]?.finish) || document.getElementById('p-finish')?.value || 'Satin').trim();
+            // Get paint spec from FIRST ITEM or from measure tab inputs
+            let paintBrand = 'Dulux';
+            let paintFinish = 'Satin';
+            
+            // First try to get from items array
+            if (items && items.length > 0) {
+                paintBrand = (items[0]?.brand || document.getElementById('p-brand')?.value || 'Dulux').trim();
+                paintFinish = (items[0]?.finish || document.getElementById('p-finish')?.value || 'Satin').trim();
+            } else {
+                // If no items, use measure tab dropdowns
+                paintBrand = (document.getElementById('p-brand')?.value || 'Dulux').trim();
+                paintFinish = (document.getElementById('p-finish')?.value || 'Satin').trim();
+            }
             
             // Try to get date completed (if available in job history)
             let dateCompleted = '';
@@ -7322,7 +7300,6 @@
             // Get client full details from database
             const clientDB = getClientDatabase();
             let clientDetails = null;
-            
             
             Object.entries(clientDB).forEach(([id, client]) => {
                 if (client.name && client.name.toLowerCase() === jobClient.toLowerCase()) {
@@ -7342,21 +7319,23 @@
             let totalPanels = 0;
             let totalSQM = 0;
             
-            itemsForPDF.forEach(item => {
-                const color = (item.color || 'Unspecified').trim();
-                const fullPaintSpec = `${paintBrand} ${color} ${paintFinish}`;
-                const qty = parseInt(item.qty || 1);
-                const sqm = parseFloat(item.sqm || 0);
-                const lineSQM = sqm * qty;
-                
-                if (!colorBreakdown[fullPaintSpec]) {
-                    colorBreakdown[fullPaintSpec] = { count: 0, sqm: 0 };
-                }
-                colorBreakdown[fullPaintSpec].count += qty;
-                colorBreakdown[fullPaintSpec].sqm += lineSQM;
-                totalPanels += qty;
-                totalSQM += lineSQM;
-            });
+            if (itemsForPDF && itemsForPDF.length > 0) {
+                itemsForPDF.forEach(item => {
+                    const color = (item.color || 'Unspecified').trim();
+                    const fullPaintSpec = `${paintBrand} ${color} ${paintFinish}`;
+                    const qty = parseInt(item.qty || 1);
+                    const sqm = parseFloat(item.sqm || 0);
+                    const lineSQM = sqm * qty;
+                    
+                    if (!colorBreakdown[fullPaintSpec]) {
+                        colorBreakdown[fullPaintSpec] = { count: 0, sqm: 0 };
+                    }
+                    colorBreakdown[fullPaintSpec].count += qty;
+                    colorBreakdown[fullPaintSpec].sqm += lineSQM;
+                    totalPanels += qty;
+                    totalSQM += lineSQM;
+                });
+            }
             
             const x = 15;
             const pageHeight = doc.internal.pageSize.height;
