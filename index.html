@@ -1,23 +1,50 @@
-<!-- 
+<!--- 
 ╔════════════════════════════════════════════════════════════════╗
-║                                                                ║
-║  ⚖️  OWNERSHIP NOTICE - HARDLOCKED                             ║
-║                                                                ║
-║  SOFTWARE OWNED BY: COLIN BEDFORD                             ║
-║  COPYRIGHT: © 2026 Colin Bedford                              ║
-║  PROPERTY: Personal Intellectual Property                     ║
-║                                                                ║
-║  NOT OWNED BY: PAINTWORKZ PTY LTD                             ║
-║  NOT PART OF BUSINESS ASSETS OR VALUATION                     ║
-║                                                                ║
-║  UNAUTHORIZED USE, COPYING, OR CLAIMING OWNERSHIP IS          ║
-║  STRICTLY PROHIBITED AND MAY RESULT IN LEGAL ACTION.          ║
-║                                                                ║
-║  This notice is embedded in the source code and will remain   ║
-║  in all versions of this software.                            ║
-║                                                                ║
+║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
+║  Version: v1.7.22 | Updated: 2026-02-27                       ║
+║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
--->
+--->
+<script>
+(function() {
+    const CURRENT_VERSION = 'v1.7.22';
+    const VERSION_KEY = 'paintworkz_version';
+    
+    const storedVersion = localStorage.getItem(VERSION_KEY);
+    
+    // If version doesn't match, clear all caches and localStorage
+    if (storedVersion !== CURRENT_VERSION) {
+        console.log(`🔄 VERSION CHANGE DETECTED: ${storedVersion || 'NONE'} → ${CURRENT_VERSION}`);
+        console.log('🗑️ Clearing old cache and localStorage...');
+        
+        // Clear localStorage (keeps jobHistory and other essential data)
+        // Only clear UI/cache related items
+        const keysToKeep = ['jobHistory', 'clientDatabase', 'appColors', 'adminAlerts'];
+        const keysToDelete = [];
+        
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (!keysToKeep.includes(key) && key.includes('cache')) {
+                keysToDelete.push(key);
+            }
+        }
+        
+        keysToDelete.forEach(key => {
+            localStorage.removeItem(key);
+            console.log(`  ✓ Removed: ${key}`);
+        });
+        
+        // Update version
+        localStorage.setItem(VERSION_KEY, CURRENT_VERSION);
+        console.log(`✅ Cache cleared. Version updated to: ${CURRENT_VERSION}`);
+        
+        // Force hard refresh
+        if (window.location.pathname.includes('index.html')) {
+            window.location.reload(true);
+        }
+    }
+})();
+</script>
 <!--
 ╔════════════════════════════════════════════════════════════════╗
 ║                       PAINTWORKZ PRO                            ║
@@ -1025,6 +1052,23 @@
         <div class="card" style="overflow-y:auto; flex:1; margin-bottom:80px; padding-bottom:20px; margin-top:50px;">
             <!-- General Settings Tab -->
             <div id="admin-tab-general-content">
+                <!-- VERSION DISPLAY - Always visible -->
+                <div style="background:#f0f0f0; border:2px solid #2196f3; border-radius:6px; padding:15px; margin-bottom:20px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <h4 style="margin:0; margin-bottom:5px; font-weight:900; color:#2196f3;">🔹 PaintWorkz Pro Version</h4>
+                            <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
+                        </div>
+                        <div style="text-align:right;">
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.7.22</div>
+                            <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
+                        </div>
+                    </div>
+                    <div style="margin-top:10px; padding-top:10px; border-top:1px solid #ddd; font-size:9px; color:#999;">
+                        ✓ If version changes, <strong>clear cache</strong> with: Ctrl+Shift+Delete (browser) or Ctrl+Shift+R (hard refresh)
+                    </div>
+                </div>
+                
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                     <h4 style="margin:0; margin-top:20px; font-weight:900;">Measure Tab Defaults</h4>
                     <button onclick="let container = document.getElementById('measure-defaults-container'); container.style.display = container.style.display === 'none' ? 'block' : 'none';" style="background:none; border:none; cursor:pointer; font-weight:900; font-size:18px; color:#999;">−</button>
@@ -4167,6 +4211,22 @@
         }
     }
 
+    function updateVersionDisplay() {
+        const CURRENT_VERSION = 'v1.7.22';
+        const CURRENT_DATE = '2026-02-27';
+        
+        const versionDisplay = document.getElementById('adminVersionDisplay');
+        const versionDate = document.getElementById('adminVersionDate');
+        
+        if (versionDisplay) versionDisplay.innerText = CURRENT_VERSION;
+        if (versionDate) versionDate.innerText = CURRENT_DATE;
+        
+        // Also update localStorage version
+        localStorage.setItem('paintworkz_version', CURRENT_VERSION);
+        
+        console.log(`✅ Version display updated: ${CURRENT_VERSION} | ${CURRENT_DATE}`);
+    }
+    
     function renderAdminAlerts() {
         const adminAlertsDiv = document.getElementById('admin-alerts');
         if (!adminAlertsDiv) return;
@@ -7667,9 +7727,15 @@
                 doc.text(jobText, (pageWidth - jobWidth) / 2, y);
                 y += 8;
                 
-                const dateText = `Date: ${dateReceived}`;
+                const dateText = `Date Received: ${dateReceived}`;
                 const dateWidth = doc.getTextWidth(dateText);
                 doc.text(dateText, (pageWidth - dateWidth) / 2, y);
+                y += 7;
+                
+                // Finish Date line
+                doc.setFontSize(11);
+                doc.setFont(undefined, 'normal');
+                doc.text('Finish Date: _____________________', (pageWidth - doc.getTextWidth('Finish Date: _____________________')) / 2, y);
                 y += 12;
                 
                 // ===== CALCULATIONS FOR THIS COLOR =====
@@ -9416,6 +9482,7 @@
             document.getElementById('admin-tab-general').classList.add('active');
             setTimeout(() => {
                 console.log('  → Rendering alerts and chart');
+                updateVersionDisplay();
                 renderAdminAlerts();
                 renderAdminGanttChart();
             }, 50);
