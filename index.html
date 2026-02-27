@@ -9536,6 +9536,8 @@
     }
     
     function switchAdminTab(tab) {
+        console.log(`🔄 Switching to admin tab: ${tab}`);
+        
         // Hide all admin tabs
         document.getElementById('admin-tab-general-content').style.display = 'none';
         document.getElementById('admin-tab-colours-content').style.display = 'none';
@@ -9552,52 +9554,67 @@
         
         // Show selected tab and mark button as active
         if (tab === 'general') {
+            console.log('  → Showing general tab');
             const generalContent = document.getElementById('admin-tab-general-content');
-            if (generalContent) generalContent.style.display = 'block';
+            if (generalContent) {
+                generalContent.style.display = 'block';
+                console.log('  ✓ General content visible');
+            }
             document.getElementById('admin-tab-general').classList.add('active');
             setTimeout(() => {
+                console.log('  → Rendering alerts and chart');
                 renderAdminAlerts();
                 renderAdminGanttChart();
-            }, 100);
+            }, 50);
         } else if (tab === 'colours') {
+            console.log('  → Showing colours tab');
             const coloursContent = document.getElementById('admin-tab-colours-content');
-            if (coloursContent) coloursContent.style.display = 'block';
+            if (coloursContent) {
+                coloursContent.style.display = 'block';
+                console.log('  ✓ Colours content visible');
+            }
             document.getElementById('admin-tab-colours').classList.add('active');
             
             // Ensure appColors is initialized
             if (!window.appColors || Object.keys(window.appColors).length === 0) {
-                window.appColors = {
-                    'Primary Button': '#6200ea',
-                    'Secondary Button': '#34c759',
-                    'Danger Button': '#ff3b30',
-                    'Header Background': '#d4af37',
-                    'Border Color': '#cccccc',
-                    'Text Primary': '#000000',
-                    'Text Secondary': '#666666'
-                };
+                console.log('  ⚠️ appColors empty, reinitializing');
+                window.appColors = JSON.parse(JSON.stringify(defaultColors));
                 localStorage.setItem('appColors', JSON.stringify(window.appColors));
             }
             
-            // Delay render to ensure DOM is ready
-            setTimeout(() => renderColorCustomizer(), 100);
+            console.log(`  → Rendering ${Object.keys(window.appColors).length} colors`);
+            setTimeout(() => {
+                renderColorCustomizer();
+                console.log('  ✓ Colors rendered');
+            }, 50);
         } else if (tab === 'clients') {
+            console.log('  → Showing clients tab');
             if (clientsContent) {
                 clientsContent.style.display = 'block';
+                console.log('  ✓ Clients content visible');
                 if (clientsBtn) clientsBtn.classList.add('active');
                 const searchBox = document.getElementById('clientSearchBox');
                 if (searchBox) searchBox.value = '';
-                // Delay render to ensure DOM is ready
-                setTimeout(() => renderClientsList(), 100);
+                console.log('  → Rendering clients list');
+                setTimeout(() => {
+                    renderClientsList();
+                    console.log('  ✓ Clients rendered');
+                }, 50);
             }
         } else if (tab === 'pricing') {
+            console.log('  → Showing pricing tab');
             const pricingContent = document.getElementById('admin-tab-pricing-content');
-            if (pricingContent) pricingContent.style.display = 'block';
-            document.getElementById('admin-tab-pricing').classList.add('active');
-            // Delay render to ensure DOM is ready
-            setTimeout(() => {
-                renderPricingMatrix();
-                checkForNewUnallocatedDoors();
-            }, 100);
+            if (pricingContent) {
+                pricingContent.style.display = 'block';
+                console.log('  ✓ Pricing content visible');
+                document.getElementById('admin-tab-pricing').classList.add('active');
+                console.log('  → Rendering pricing matrix');
+                setTimeout(() => {
+                    renderPricingMatrix();
+                    checkForNewUnallocatedDoors();
+                    console.log('  ✓ Pricing rendered');
+                }, 50);
+            }
         }
     }
 
@@ -9751,22 +9768,26 @@
     }
     
     function renderColorCustomizer() {
+        console.log('renderColorCustomizer called');
         const target = document.getElementById('colorCustomizerContent');
         if (!target) {
-            console.warn('colorCustomizerContent div not found');
+            console.error('❌ colorCustomizerContent div not found!');
             return;
         }
+        console.log('✓ Found target div:', target);
         
         if (!window.appColors) {
-            console.warn('appColors not initialized');
+            console.warn('⚠️ appColors not initialized, using defaults');
             window.appColors = defaultColors;
         }
+        
+        console.log(`📝 Rendering ${Object.keys(window.appColors).length} colors`);
         
         let html = '';
         
         Object.keys(window.appColors).forEach(colorName => {
             let colorValue = window.appColors[colorName];
-            colorValue = normalizeHex(colorValue); // Ensure 6-digit hex
+            colorValue = normalizeHex(colorValue);
             const description = colorDescriptions[colorName] || '';
             html += `
                 <div style="padding:12px; border:1px solid #dddddd; border-radius:6px; background:#ffffff;">
@@ -9786,6 +9807,7 @@
         </div>`;
         
         target.innerHTML = html;
+        console.log(`✓ Rendered ${Object.keys(window.appColors).length} colors to DOM`);
     }
     
     function updateAppColor(colorName, colorValue) {
@@ -10530,8 +10552,13 @@
     }
     
     function renderClientsList() {
+        console.log('renderClientsList called');
         const clientsDiv = document.getElementById('clientsList');
-        if (!clientsDiv) return;
+        if (!clientsDiv) {
+            console.error('❌ clientsList div not found!');
+            return;
+        }
+        console.log('✓ Found clientsList div');
         
         try {
             const seen = new Set();
@@ -10539,6 +10566,7 @@
             
             // 1. Get free from Google AI Studio → client database (authoritative source)
             const db = getClientDatabase();
+            console.log(`📊 Client database has ${Object.keys(db).length} clients`);
             Object.entries(db).forEach(([clientId, client]) => {
                 if (client.name && !seen.has(client.name.toLowerCase())) {
                     // Include the ID from the database key
@@ -11161,8 +11189,13 @@
     }
     
     function renderPricingMatrix() {
+        console.log('renderPricingMatrix called');
         const target = document.getElementById('admin-pricing-matrix');
-        if (!target) return;
+        if (!target) {
+            console.error('❌ admin-pricing-matrix div not found!');
+            return;
+        }
+        console.log('✓ Found admin-pricing-matrix div');
         
         
         let html = `
@@ -12924,12 +12957,12 @@ Provide helpful, concise advice about painting, joinery, measurements, job plann
         attachTabListeners();
         setTimeout(() => {
             populatePaintBrandsDropdown();
-            // Initialize all admin sections
-            renderAdminAlerts();  // Populate global notifications
-            renderAdminGanttChart();  // Populate jobs chart
-            renderColorCustomizer();  // Populate colours
-            renderClientsList();  // Populate clients
-            renderPricingMatrix();  // Populate pricing
+            // Only render the VISIBLE tab on page load (General Settings)
+            // Other tabs will render when clicked
+            setTimeout(() => {
+                renderAdminAlerts();
+                renderAdminGanttChart();
+            }, 50);
         }, 100);
     });
 
