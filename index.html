@@ -317,6 +317,8 @@
         
         .admin-tab-content.active {
             display: block !important;
+            width: 100% !important;
+            min-height: auto !important;
         }
     </style>
 </head>
@@ -3858,6 +3860,7 @@
             // Mark job as complete
             job.completed = true;
             job.completedDate = new Date().toISOString();
+            job.dateCompleted = new Date().toLocaleDateString('en-AU');
             history[jobIdx] = job;
             localStorage.setItem('jobHistory', JSON.stringify(history));
             
@@ -7618,15 +7621,30 @@
             // Get job completion date from history (if marked complete)
             let dateFinished = '';
             const jobHistory = JSON.parse(localStorage.getItem('jobHistory')) || [];
+            console.log(`📋 Looking for job: #${jobNum} | Client: ${jobClient} | Date: ${dateReceived}`);
+            console.log(`📋 Total jobs in history: ${jobHistory.length}`);
+            
             const currentJob = jobHistory.find(j => j.jobNum === jobNum && j.client === jobClient && j.dateReceived === dateReceived);
-            if (currentJob && currentJob.dateCompleted) {
-                dateFinished = currentJob.dateCompleted;
+            if (currentJob) {
+                console.log(`✅ FOUND job in history:`, currentJob);
+                if (currentJob.dateCompleted) {
+                    dateFinished = currentJob.dateCompleted;
+                    console.log(`✅ Found completion date: ${dateFinished}`);
+                } else {
+                    console.warn(`⚠️ Job found but no dateCompleted field`);
+                }
+            } else {
+                console.warn(`❌ Job NOT found in history`);
+                console.log(`Available jobs:`, jobHistory.map(j => `#${j.jobNum} | ${j.client} | ${j.dateReceived}`));
             }
             
             // Get scheduled finish date from job timeline (for shop label)
             let scheduledFinish = '';
             if (currentJob && currentJob.timeline) {
                 scheduledFinish = getScheduledFinishDate(dateReceived, currentJob.timeline);
+                console.log(`📅 Scheduled finish: ${scheduledFinish}`);
+            } else if (currentJob) {
+                console.warn(`⚠️ Job found but no timeline field`);
             }
             
             // Paint data - get brand/finish from FIRST ITEM (all parts should have same brand)
@@ -9473,6 +9491,14 @@
         console.log(`🔄 Switching to admin tab: ${tab}`);
         console.log(`Current time: ${new Date().toLocaleTimeString()}`);
         
+        // Check if admin view is visible
+        const adminView = document.getElementById('admin');
+        if (adminView) {
+            const adminStyle = window.getComputedStyle(adminView);
+            console.log(`  Admin view display: ${adminStyle.display}`);
+            console.log(`  Admin view visibility: ${adminStyle.visibility}`);
+        }
+        
         // Remove active class from ALL tabs
         const allTabs = ['admin-tab-general-content', 'admin-tab-colours-content', 'admin-tab-clients-content', 'admin-tab-pricing-content'];
         allTabs.forEach(tabId => {
@@ -9498,9 +9524,18 @@
         
         if (tabEl) {
             tabEl.classList.add('active');
+            const tabStyle = window.getComputedStyle(tabEl);
             console.log(`  ✅ ADDED .active to admin-tab-${tab}-content`);
-            console.log(`  Computed display: ${window.getComputedStyle(tabEl).display}`);
-            console.log(`  Computed visibility: ${window.getComputedStyle(tabEl).visibility}`);
+            console.log(`  Computed display: ${tabStyle.display}`);
+            console.log(`  Computed visibility: ${tabStyle.visibility}`);
+            console.log(`  Computed height: ${tabStyle.height}`);
+            console.log(`  Computed position: ${tabStyle.position}`);
+            
+            // Scroll tab into view
+            setTimeout(() => {
+                tabEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                console.log(`  📍 Scrolled tab into view`);
+            }, 100);
         } else {
             console.error(`  ❌ Could NOT find element: admin-tab-${tab}-content`);
         }
