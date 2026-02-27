@@ -1924,10 +1924,10 @@
         // Save
         localStorage.setItem(buttonId + '_color', color);
         
-        notify(`✓ ${buttonId.replace('form-', '').toUpperCase()} → ${color}`);
+        if (typeof shouldNotify === 'undefined' || shouldNotify) notify(`✓ ${buttonId.replace('form-', '').toUpperCase()} → ${color}`);
     }
     
-    // Load all colors on startup
+    // Load all colors on startup - silently
     function loadAllFormButtonColors() {
         const buttons = [
             'form-paint-order', 'form-estimate', 'form-quote', 'form-mixing',
@@ -1938,7 +1938,18 @@
         buttons.forEach(buttonId => {
             const saved = localStorage.getItem(buttonId + '_color');
             if (saved && /^#[0-9A-F]{6}$/i.test(saved)) {
-                updateFormColor(buttonId, saved);
+                // Load silently without notifications
+                const btn = document.getElementById(buttonId);
+                if (btn) {
+                    btn.style.background = saved;
+                    btn.style.borderColor = saved;
+                }
+                const colorPickerId = buttonId.replace('form-', '') + '_picker';
+                const colorCodeId = buttonId.replace('form-', '') + '_code';
+                const picker = document.getElementById(colorPickerId);
+                const code = document.getElementById(colorCodeId);
+                if (picker) picker.value = saved;
+                if (code) code.value = saved;
             }
         });
     }
@@ -9402,6 +9413,21 @@
         } else if (tab === 'colours') {
             document.getElementById('admin-tab-colours-content').style.display = 'block';
             document.getElementById('admin-tab-colours').classList.add('active');
+            
+            // Ensure appColors is initialized
+            if (!window.appColors || Object.keys(window.appColors).length === 0) {
+                window.appColors = {
+                    'Primary Button': '#6200ea',
+                    'Secondary Button': '#34c759',
+                    'Danger Button': '#ff3b30',
+                    'Header Background': '#d4af37',
+                    'Border Color': '#cccccc',
+                    'Text Primary': '#000000',
+                    'Text Secondary': '#666666'
+                };
+                localStorage.setItem('appColors', JSON.stringify(window.appColors));
+            }
+            
             renderColorCustomizer();
         } else if (tab === 'clients') {
             if (clientsContent) {
@@ -11473,8 +11499,16 @@
         if (!chatModal) {
             chatModal = document.createElement('div');
             chatModal.id = 'aiChatModal';
+            
+            // Detect if mobile
+            const isMobile = window.innerWidth <= 480;
+            const modalWidth = isMobile ? 'calc(100vw - 20px)' : '380px';
+            const modalHeight = isMobile ? 'calc(100vh - 180px)' : '500px';
+            const modalRight = isMobile ? '10px' : '20px';
+            const modalTop = isMobile ? '90px' : '80px';
+            
             chatModal.innerHTML = `
-                <div style="position:fixed; top:80px; right:20px; width:380px; height:500px; background:#fff; border-radius:12px; box-shadow:0 8px 32px rgba(98, 0, 234, 0.2); z-index:5000; display:flex; flex-direction:column; border:2px solid #6200ea;">
+                <div style="position:fixed; top:${modalTop}; right:${modalRight}; width:${modalWidth}; max-width:100%; height:${modalHeight}; max-height:calc(100vh - 150px); background:#fff; border-radius:12px; box-shadow:0 8px 32px rgba(98, 0, 234, 0.2); z-index:5000; display:flex; flex-direction:column; border:2px solid #6200ea; box-sizing:border-box;">
                     <!-- Header -->
                     <div style="background:linear-gradient(135deg, #6200ea 0%, #7c3aed 100%); color:#fff; padding:16px; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center;">
                         <div>
@@ -11618,15 +11652,26 @@ Provide helpful, concise advice about painting, joinery, measurements, job plann
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
             
         } catch (error) {
-            console.error('AI error:', error);
+            console.error('AI error detailed:', error);
+            console.error('Error message:', error.message);
+            console.error('Error stack:', error.stack);
             
             if (thinkingDiv && thinkingDiv.parentNode) {
                 thinkingDiv.remove();
             }
             
+            let errorMsg = '';
+            if (error.message && error.message.includes('API error:')) {
+                errorMsg = `API Error: ${error.message}. Check your API key is valid.`;
+            } else if (error.message && error.message.includes('Failed to fetch')) {
+                errorMsg = 'Network error. Check your internet connection and API key.';
+            } else {
+                errorMsg = `Error: ${error.message || 'Unknown error'}`;
+            }
+            
             const errorDiv = document.createElement('div');
             errorDiv.style.cssText = 'background:#ffe8e8; color:#666; padding:10px; border-radius:8px; font-size:11px;';
-            errorDiv.innerHTML = '<strong>⚠️ Note:</strong> To use Gemini AI, add your API key. For now, I can provide general guidance!';
+            errorDiv.innerHTML = `<strong>⚠️ ${errorMsg}</strong>`;
             messagesDiv.appendChild(errorDiv);
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
