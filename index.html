@@ -6971,6 +6971,14 @@
                 doc.setFontSize(13);
                 doc.setFont(undefined, 'bold');
                 doc.text('TINT FORMULA - EVIC DETAILS', 20, y);
+                y += 5;
+                
+                // Add subtitle showing this is for 1 litre
+                doc.setFontSize(10);
+                doc.setFont(undefined, 'normal');
+                doc.setTextColor(200, 30, 30);
+                doc.text('(Weights for 1 Litre of Paint)', 20, y);
+                doc.setTextColor(0, 0, 0);
                 y += 8;
                 
                 doc.setFontSize(11);  // INCREASED from 9
@@ -7251,6 +7259,232 @@
                 doc.text(`Generated: ${new Date().toLocaleDateString('en-AU')} | ${color} | Base: ${paintQty}L | SQM: ${colorSQM.toFixed(2)}`, 20, pageHeight - 8);
                 
                 doc.text('© 2026 - PaintWorkz Pro Software', 20, pageHeight - 5);
+                
+                // ===== SECOND PAGE - SCALED FORMULA FOR JOB REQUIREMENT =====
+                // Add new page for scaled recipe
+                doc.addPage();
+                let y2 = 15;
+                
+                // Logo on second page
+                if (headerLogo) {
+                    try {
+                        doc.addImage(headerLogo, 'PNG', 145, 5, 50, 20);
+                    } catch(e) {}
+                }
+                
+                // Title
+                doc.setFontSize(28);
+                doc.setFont(undefined, 'bold');
+                doc.setTextColor(0, 0, 0);
+                doc.text('MIXING CARD', 20, y2);
+                y2 += 12;
+                
+                // Paint info box
+                doc.setFontSize(18);
+                doc.setFont(undefined, 'bold');
+                doc.setTextColor(0, 0, 0);
+                doc.setFillColor(255, 255, 255);
+                doc.setDrawColor(200, 200, 200);
+                doc.setLineWidth(1);
+                doc.rect(20, y2, 170, 24, 'FD');
+                doc.text(paintInfo, 25, y2 + 16);
+                y2 += 28;
+                y2 += 8;
+                
+                // Job details (same as page 1)
+                doc.setFontSize(12);
+                doc.setFont(undefined, 'bold');
+                doc.setTextColor(0, 0, 0);
+                doc.text('Job Name', 20, y2);
+                doc.text('Job #', 110, y2);
+                y2 += 6;
+                doc.setFont(undefined, 'normal');
+                doc.setFontSize(13);
+                doc.text(jobName.substring(0, 30), 20, y2);
+                doc.text(jobNum, 110, y2);
+                y2 += 10;
+                
+                doc.setFontSize(12);
+                doc.setFont(undefined, 'bold');
+                doc.text('Client', 20, y2);
+                doc.text('Date', 110, y2);
+                y2 += 6;
+                doc.setFont(undefined, 'normal');
+                doc.setFontSize(13);
+                doc.text(jobClient.substring(0, 40), 20, y2);
+                doc.text(dateReceived, 110, y2);
+                y2 += 10;
+                
+                doc.setFontSize(12);
+                doc.setFont(undefined, 'bold');
+                doc.text('SQM', 20, y2);
+                doc.text('Paint Required', 110, y2);
+                y2 += 6;
+                doc.setFont(undefined, 'normal');
+                doc.setFontSize(13);
+                doc.text(colorSQM.toFixed(2), 20, y2);
+                doc.text(paintQty + ' L', 110, y2);
+                y2 += 12;
+                
+                // TINT FORMULA HEADER - SCALED VERSION
+                doc.setFontSize(13);
+                doc.setFont(undefined, 'bold');
+                doc.text('TINT FORMULA - EVIC DETAILS', 20, y2);
+                y2 += 5;
+                
+                // Add subtitle showing this is SCALED for job requirement
+                doc.setFontSize(10);
+                doc.setFont(undefined, 'normal');
+                doc.setTextColor(200, 30, 30);
+                doc.text(`(Weights for ${paintQty} Litres of Paint - Job Requirement)`, 20, y2);
+                doc.setTextColor(0, 0, 0);
+                y2 += 8;
+                
+                doc.setFontSize(11);
+                doc.setFont(undefined, 'normal');
+                
+                // Draw formula box
+                const boxHeight2 = pageHeight - y2 - 30;
+                doc.setDrawColor(0, 0, 0);
+                doc.setLineWidth(0.5);
+                doc.rect(20, y2, 170, boxHeight2);
+                
+                let boxY2 = y2 + 10;
+                const scaleFactor = parseFloat(paintQty); // Multiply all weights by this factor
+                
+                if (formula) {
+                    // Show Evic Code and Base Type at top
+                    doc.setFontSize(12);
+                    doc.setFont(undefined, 'bold');
+                    doc.text(`Evic Code: ${formula.evicCode || '_____________________________'}`, 25, boxY2);
+                    boxY2 += 7;
+                    doc.text(`Base Type: ${formula.baseType || '______________________________'}`, 25, boxY2);
+                    boxY2 += 7;
+                    doc.text(`Base Color: ${formula.baseColor || 'White'}`, 25, boxY2);
+                    boxY2 += 7;
+                    if (formula.version) {
+                        doc.text(`Version: ${formula.version}`, 25, boxY2);
+                        boxY2 += 7;
+                    }
+                    
+                    boxY2 += 5;
+                    
+                    // BASE section with SCALED values
+                    doc.setFontSize(12);
+                    doc.setFont(undefined, 'bold');
+                    doc.text('Base:', 25, boxY2);
+                    doc.text('RUNNING TOTAL', 140, boxY2);
+                    boxY2 += 7;
+                    
+                    doc.setFontSize(11);
+                    doc.setFont(undefined, 'normal');
+                    
+                    let runningTotal2 = 0;
+                    const baseItemsToShow2 = 3;
+                    
+                    if (formula.whiteBase && formula.whiteBase.length > 0) {
+                        formula.whiteBase.forEach((item, idx) => {
+                            const code = item.code || '';
+                            let gramStr = String(item.grams || '0').trim();
+                            let grams = parseFloat(gramStr.replace(/[\s,]/g, '.'));
+                            grams = isNaN(grams) ? 0 : grams;
+                            
+                            // SCALE the grams
+                            const scaledGrams = grams * scaleFactor;
+                            runningTotal2 += scaledGrams;
+                            
+                            doc.text(`${code}: ${scaledGrams.toFixed(2)}g`, 30, boxY2);
+                            doc.text(`${runningTotal2.toFixed(2)}g`, 140, boxY2);
+                            boxY2 += 5;
+                        });
+                        
+                        // Fill remaining rows
+                        for (let i = formula.whiteBase.length; i < baseItemsToShow2; i++) {
+                            doc.text(`Item ${i + 1}: _____________ g`, 30, boxY2);
+                            doc.text('_________ g', 140, boxY2);
+                            boxY2 += 5;
+                        }
+                    } else {
+                        for (let i = 0; i < baseItemsToShow2; i++) {
+                            doc.text(`Item ${i + 1}: _____________ g`, 30, boxY2);
+                            doc.text('_________ g', 140, boxY2);
+                            boxY2 += 5;
+                        }
+                    }
+                    boxY2 += 2;
+                    
+                    // TINTERS section with SCALED values
+                    doc.setFontSize(12);
+                    doc.setFont(undefined, 'bold');
+                    doc.text('TINTERS:', 25, boxY2);
+                    doc.text('RUNNING TOTAL', 140, boxY2);
+                    boxY2 += 7;
+                    
+                    doc.setFontSize(11);
+                    doc.setFont(undefined, 'normal');
+                    
+                    const minTintersToShow2 = 4;
+                    let tinterRunningTotal2 = 0;
+                    let actualTinterCount2 = 0;
+                    
+                    if (formula.colourants && formula.colourants.length > 0) {
+                        formula.colourants.forEach((tint, idx) => {
+                            const code = tint.code || '';
+                            let gramStr = String(tint.amount || tint.grams || '0').trim();
+                            let grams = parseFloat(gramStr.replace(/[\s,]/g, '.'));
+                            grams = isNaN(grams) ? 0 : grams;
+                            
+                            // SCALE the grams
+                            const scaledGrams = grams * scaleFactor;
+                            const name = tint.name || '';
+                            tinterRunningTotal2 += scaledGrams;
+                            
+                            doc.text(`${code}: ${scaledGrams.toFixed(2)}g ${name}`, 30, boxY2);
+                            doc.text(`${tinterRunningTotal2.toFixed(2)}g`, 140, boxY2);
+                            boxY2 += 5;
+                            actualTinterCount2++;
+                        });
+                        
+                        for (let i = actualTinterCount2; i < minTintersToShow2; i++) {
+                            doc.text(`Tint ${i + 1}: _____________ g`, 30, boxY2);
+                            doc.text('_________ g', 140, boxY2);
+                            boxY2 += 5;
+                        }
+                    } else {
+                        for (let i = 0; i < minTintersToShow2; i++) {
+                            doc.text(`Tint ${i + 1}: _____________ g`, 30, boxY2);
+                            doc.text('_________ g', 140, boxY2);
+                            boxY2 += 5;
+                        }
+                    }
+                    
+                    boxY2 += 3;
+                    
+                    // TOTAL WEIGHT for scaled version
+                    const totalBase = formula.whiteBase ? formula.whiteBase.reduce((sum, item) => {
+                        let grams = parseFloat(String(item.grams || '0').replace(/[\s,]/g, '.'));
+                        return sum + (isNaN(grams) ? 0 : grams);
+                    }, 0) : 0;
+                    
+                    const totalTinters = formula.colourants ? formula.colourants.reduce((sum, item) => {
+                        let grams = parseFloat(String(item.amount || item.grams || '0').replace(/[\s,]/g, '.'));
+                        return sum + (isNaN(grams) ? 0 : grams);
+                    }, 0) : 0;
+                    
+                    const totalWeight2 = (totalBase + totalTinters) * scaleFactor;
+                    
+                    doc.setFontSize(12);
+                    doc.setFont(undefined, 'bold');
+                    doc.text(`TOTAL WEIGHT: ${totalWeight2.toFixed(2)} grams`, 25, boxY2);
+                }
+                
+                // Footer for second page
+                doc.setFontSize(9);
+                doc.setFont(undefined, 'italic');
+                doc.setTextColor(100, 100, 100);
+                doc.text(`Generated: ${new Date().toLocaleDateString('en-AU')} | ${color} | Scaled: ${paintQty}L | SQM: ${colorSQM.toFixed(2)}`, 20, pageHeight - 8);
+                doc.text('© 2026 - PaintWorkz Pro Software', 20, pageHeight - 5);
+                
                 colorPageCount++;
             });
             
@@ -12117,6 +12351,12 @@ Provide helpful, concise advice about painting, joinery, measurements, job plann
     }
     
     function renderAdminGanttChart() {
+        // Initialize scheduleCalendarDate if not set
+        if (!scheduleCalendarDate || isNaN(scheduleCalendarDate?.getTime())) {
+            scheduleCalendarDate = new Date();
+            scheduleCalendarDate.setHours(0, 0, 0, 0);
+        }
+        
         const year = scheduleCalendarDate.getFullYear();
         const month = scheduleCalendarDate.getMonth();
         
@@ -12684,8 +12924,12 @@ Provide helpful, concise advice about painting, joinery, measurements, job plann
         attachTabListeners();
         setTimeout(() => {
             populatePaintBrandsDropdown();
+            // Initialize all admin sections
             renderAdminAlerts();  // Populate global notifications
             renderAdminGanttChart();  // Populate jobs chart
+            renderColorCustomizer();  // Populate colours
+            renderClientsList();  // Populate clients
+            renderPricingMatrix();  // Populate pricing
         }, 100);
     });
 
