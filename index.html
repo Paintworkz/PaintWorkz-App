@@ -293,23 +293,10 @@
         
         .admin-tab-content {
             display: none !important;
-            visibility: hidden !important;
-            opacity: 0 !important;
-            position: relative !important;
-            pointer-events: none !important;
-            height: 0 !important;
-            overflow: hidden !important;
         }
         
         .admin-tab-content.active {
             display: block !important;
-            visibility: visible !important;
-            opacity: 1 !important;
-            position: relative !important;
-            pointer-events: auto !important;
-            z-index: 100 !important;
-            height: auto !important;
-            overflow: visible !important;
         }
     </style>
 </head>
@@ -1055,7 +1042,7 @@
         <!-- Scrollable Content Area -->
         <div class="card" style="overflow-y:auto; flex:1; margin-bottom:80px; padding-bottom:20px; margin-top:50px;">
             <!-- General Settings Tab -->
-            <div id="admin-tab-general-content">
+            <div id="admin-tab-general-content" class="admin-tab-content active">
                 <!-- VERSION DISPLAY - Always visible -->
                 <div style="background:#f0f0f0; border:2px solid #2196f3; border-radius:6px; padding:15px; margin-bottom:20px;">
                     <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -7616,6 +7603,12 @@
                 dateFinished = currentJob.dateCompleted;
             }
             
+            // Get scheduled finish date from job timeline (for shop label)
+            let scheduledFinish = '';
+            if (currentJob && currentJob.timeline) {
+                scheduledFinish = getScheduledFinishDate(dateReceived, currentJob.timeline);
+            }
+            
             // Paint data - get brand/finish from FIRST ITEM (all parts should have same brand)
             const defaultBrand = (items[0]?.brand) || document.getElementById('p-brand')?.value || 'Dulux';
             const defaultFinish = (items[0]?.finish) || document.getElementById('p-finish')?.value || 'Satin';
@@ -7744,14 +7737,16 @@
                 doc.text(dateText, (pageWidth - dateWidth) / 2, y);
                 y += 6;
                 
-                // Finish Date - auto-filled ONLY for cover sheet, blank line for shop label
+                // Finish Date - auto-filled ONLY for cover sheet, scheduled for shop label
                 let finishDateText;
                 if (isCoverSheet && dateFinished) {
                     finishDateText = `Finish Date: ${dateFinished}`;
                 } else if (isCoverSheet) {
                     finishDateText = 'Finish Date: Pending';
+                } else if (scheduledFinish) {
+                    finishDateText = `Scheduled Finish: ${scheduledFinish}`;
                 } else {
-                    finishDateText = 'Finish Date: _____________________';
+                    finishDateText = 'Scheduled Finish: _____________________';
                 }
                 const finishDateWidth = doc.getTextWidth(finishDateText);
                 doc.text(finishDateText, (pageWidth - finishDateWidth) / 2, y);
@@ -9454,31 +9449,14 @@
         }, 500);
     }
     
-    // Helper function to force show/hide tabs with inline styles (bypasses CSS)
-    function forceShowTab(elementId) {
-        const elem = document.getElementById(elementId);
-        if (elem) {
-            elem.style.cssText = 'display: block !important; visibility: visible !important; opacity: 1 !important; position: relative !important; z-index: 100 !important;';
-            console.log(`✓ Forced visible: ${elementId}`);
-        }
-    }
-    
-    function forceHideTab(elementId) {
-        const elem = document.getElementById(elementId);
-        if (elem) {
-            elem.style.cssText = 'display: none !important; visibility: hidden !important; opacity: 0 !important;';
-            console.log(`✓ Forced hidden: ${elementId}`);
-        }
-    }
-    
     function switchAdminTab(tab) {
         console.log(`🔄 Switching to admin tab: ${tab}`);
         
-        // Hide ALL tabs using forced inline styles
-        forceHideTab('admin-tab-general-content');
-        forceHideTab('admin-tab-colours-content');
-        forceHideTab('admin-tab-clients-content');
-        forceHideTab('admin-tab-pricing-content');
+        // Remove active class from ALL tabs
+        document.getElementById('admin-tab-general-content')?.classList.remove('active');
+        document.getElementById('admin-tab-colours-content')?.classList.remove('active');
+        document.getElementById('admin-tab-clients-content')?.classList.remove('active');
+        document.getElementById('admin-tab-pricing-content')?.classList.remove('active');
         
         // Remove active button classes
         document.getElementById('admin-tab-general')?.classList.remove('active');
@@ -9486,11 +9464,10 @@
         document.getElementById('admin-tab-clients')?.classList.remove('active');
         document.getElementById('admin-tab-pricing')?.classList.remove('active');
         
-        // Show selected tab with FORCED inline styles
+        // Show selected tab
         if (tab === 'general') {
-            console.log('  ✓ FORCING general tab visible');
-            forceShowTab('admin-tab-general-content');
-            document.getElementById('admin-tab-general').classList.add('active');
+            document.getElementById('admin-tab-general-content')?.classList.add('active');
+            document.getElementById('admin-tab-general')?.classList.add('active');
             setTimeout(() => {
                 updateVersionDisplay();
                 renderAdminAlerts();
@@ -9498,9 +9475,8 @@
             }, 50);
         } 
         else if (tab === 'colours') {
-            console.log('  ✓ FORCING colours tab visible');
-            forceShowTab('admin-tab-colours-content');
-            document.getElementById('admin-tab-colours').classList.add('active');
+            document.getElementById('admin-tab-colours-content')?.classList.add('active');
+            document.getElementById('admin-tab-colours')?.classList.add('active');
             
             if (!window.appColors || Object.keys(window.appColors).length === 0) {
                 window.appColors = JSON.parse(JSON.stringify(defaultColors));
@@ -9509,28 +9485,23 @@
             
             setTimeout(() => {
                 renderColorCustomizer();
-                console.log('  ✓ Colors rendered');
             }, 50);
         } 
         else if (tab === 'clients') {
-            console.log('  ✓ FORCING clients tab visible');
-            forceShowTab('admin-tab-clients-content');
-            document.getElementById('admin-tab-clients').classList.add('active');
+            document.getElementById('admin-tab-clients-content')?.classList.add('active');
+            document.getElementById('admin-tab-clients')?.classList.add('active');
             const searchBox = document.getElementById('clientSearchBox');
             if (searchBox) searchBox.value = '';
             setTimeout(() => {
                 renderClientsList();
-                console.log('  ✓ Clients rendered');
             }, 50);
         } 
         else if (tab === 'pricing') {
-            console.log('  ✓ FORCING pricing tab visible');
-            forceShowTab('admin-tab-pricing-content');
-            document.getElementById('admin-tab-pricing').classList.add('active');
+            document.getElementById('admin-tab-pricing-content')?.classList.add('active');
+            document.getElementById('admin-tab-pricing')?.classList.add('active');
             setTimeout(() => {
                 renderPricingMatrix();
                 checkForNewUnallocatedDoors();
-                console.log('  ✓ Pricing rendered');
             }, 50);
         }
     }
@@ -11394,6 +11365,35 @@
     // TIMELINE EDITOR
     let timelineEditMode = null; // 'default' or jobIdx
     let timelineEditData = {};
+
+    function getScheduledFinishDate(dateReceived, jobTimeline) {
+        if (!dateReceived || !jobTimeline) return null;
+        
+        // Parse received date
+        const received = new Date(dateReceived);
+        if (isNaN(received.getTime())) return null;
+        
+        // Sum all timeline days
+        const totalDays = 
+            (jobTimeline.measuring || 1) +
+            (jobTimeline.sanding1 || 4) +
+            (jobTimeline.undercoat || 2) +
+            (jobTimeline.sanding2 || 3) +
+            (jobTimeline.topcoat || 2) +
+            (jobTimeline.inspect || 2) +
+            (jobTimeline.complete || 1);
+        
+        // Add days to received date
+        const scheduled = new Date(received);
+        scheduled.setDate(scheduled.getDate() + totalDays);
+        
+        // Format as DD/MM/YYYY
+        const day = String(scheduled.getDate()).padStart(2, '0');
+        const month = String(scheduled.getMonth() + 1).padStart(2, '0');
+        const year = scheduled.getFullYear();
+        
+        return `${day}/${month}/${year}`;
+    }
 
     function getDefaultTimeline() {
         const defaults = JSON.parse(localStorage.getItem('defaultTimeline')) || {
