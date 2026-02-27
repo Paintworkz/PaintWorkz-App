@@ -19,7 +19,7 @@
 ╚════════════════════════════════════════════════════════════════╝
 -->
 <!--
-╔════════════════════════════════════════════════════════════════╗     
+╔════════════════════════════════════════════════════════════════╗
 ║                       PAINTWORKZ PRO                            ║
 ║                    REVISION TRACKING                            ║
 ╠════════════════════════════════════════════════════════════════╣
@@ -7280,258 +7280,109 @@
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('p', 'mm', 'a4');
             
-            // Page dimensions
-            const pageWidth = doc.internal.pageSize.width;
-            const pageHeight = doc.internal.pageSize.height;
-            const leftMargin = 12;
-            const rightMargin = 12;
-            const contentWidth = pageWidth - (leftMargin + rightMargin);
-            
             // Get job data
-            const jobNum = (document.getElementById('jN')?.value || 'TBD').trim();
-            const jobName = (document.getElementById('jNm')?.value || '').trim();
-            const jobClient = (document.getElementById('cli')?.value || 'TBD').trim();
-            const dateReceived = (document.getElementById('dRec')?.value || '').trim();
+            const jobClient = (document.getElementById('cli')?.value || 'CLIENT').trim();
+            const jobNum = (document.getElementById('jN')?.value || 'XXX').trim();
+            const jobName = (document.getElementById('jNm')?.value || 'Job Name').trim();
+            const dateReceived = (document.getElementById('dRec')?.value || new Date().toLocaleDateString('en-AU')).trim();
+            const totalSQM = parseFloat(document.getElementById('tA')?.innerText || '0') || 0;
+            const totalPanels = parseInt(document.getElementById('tQ')?.innerText || '0') || 0;
             
-            let paintBrand = 'Dulux';
-            let paintFinish = 'Satin';
+            // Paint data
+            const defaultBrand = (items[0]?.brand) || document.getElementById('p-brand')?.value || 'Dulux';
+            const defaultFinish = (items[0]?.finish) || document.getElementById('p-finish')?.value || 'Satin';
             
-            if (items && items.length > 0) {
-                paintBrand = (items[0]?.brand || 'Dulux').trim();
-                paintFinish = (items[0]?.finish || 'Satin').trim();
-            }
-            
-            const clientDB = getClientDatabase();
-            let clientDetails = null;
-            Object.entries(clientDB).forEach(([id, client]) => {
-                if (client.name && client.name.toLowerCase() === jobClient.toLowerCase()) {
-                    clientDetails = client;
+            // Get unique colors
+            const uniqueColors = new Set();
+            const itemsForPDF = window.pdfItemsToUse || items;
+            itemsForPDF.forEach(item => {
+                if (item.color && item.color.trim()) {
+                    uniqueColors.add(item.color.trim());
                 }
             });
+            const colors = Array.from(uniqueColors).sort();
             
-            const itemsForPDF = window.pdfItemsToUse || items;
-            
-            // Build breakdown by panel type AND color
-            const panelBreakdown = {};
-            let totalPanels = 0;
-            let totalSQM = 0;
-            
-            if (itemsForPDF && itemsForPDF.length > 0) {
-                itemsForPDF.forEach(item => {
-                    const panelType = (item.panel || 'Panel').trim();
-                    const color = (item.color || 'Unspecified').trim();
-                    const key = `${panelType}|${color}`;
-                    const qty = parseInt(item.qty || 1);
-                    const sqm = parseFloat(item.sqm || 0);
-                    const lineSQM = sqm * qty;
-                    
-                    if (!panelBreakdown[key]) {
-                        panelBreakdown[key] = { panelType, color, count: 0, sqm: 0 };
-                    }
-                    panelBreakdown[key].count += qty;
-                    panelBreakdown[key].sqm += lineSQM;
-                    totalPanels += qty;
-                    totalSQM += lineSQM;
-                });
-            }
-            
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const pageHeight = doc.internal.pageSize.getHeight();
             let y = 10;
             
-            // HEADER - GOLDEN BOX
+            // HEADER BOX
             doc.setFillColor(212, 175, 55);
-            doc.rect(leftMargin - 2, y, contentWidth + 4, 20, 'F');
-            
-            doc.setFontSize(10);
+            doc.rect(8, y, pageWidth - 16, 20, 'F');
+            doc.setFontSize(20);
             doc.setFont(undefined, 'bold');
             doc.setTextColor(255, 255, 255);
-            doc.text('PAINTWORKZ PRO', leftMargin + 5, y + 8);
-            doc.setFontSize(8);
-            doc.text('Job Cover Sheet', leftMargin + 5, y + 13);
+            doc.text('COVER SHEET', 15, y + 13);
             
-            doc.setFontSize(10);
-            doc.setFont(undefined, 'bold');
+            doc.setFontSize(12);
             doc.setTextColor(0, 0, 0);
-            doc.text(`Job #${jobNum}`, pageWidth - rightMargin - 30, y + 11);
+            doc.text(`Job #${jobNum}`, pageWidth - 35, y + 13);
             
-            y += 24;
+            y += 28;
             
-            // CUSTOMER NAME - VERY LARGE
-            doc.setFontSize(26);
+            // CUSTOMER INFO
+            doc.setFontSize(14);
             doc.setFont(undefined, 'bold');
-            doc.setTextColor(0, 0, 0);
-            const customerName = jobClient.toUpperCase();
-            doc.text(customerName, leftMargin, y);
-            y += 12;
-            
-            // JOB NAME
-            if (jobName) {
-                doc.setFontSize(13);
-                doc.setFont(undefined, 'normal');
-                doc.setTextColor(50, 50, 50);
-                doc.text(`Project: ${jobName}`, leftMargin, y);
-                y += 7;
-            }
-            
-            y += 2;
-            
-            // INFO GRID - Left column (dates, contact) and right column (paint spec)
-            doc.setFontSize(9);
-            doc.setFont(undefined, 'bold');
-            doc.setTextColor(50, 50, 50);
-            
-            // Left column
-            doc.text('Date Received:', leftMargin, y);
-            doc.setFont(undefined, 'normal');
-            doc.text(dateReceived || 'TBD', leftMargin + 35, y);
-            
-            // Right column
-            doc.setFont(undefined, 'bold');
-            doc.text('Paint Brand:', pageWidth / 2 + 5, y);
-            doc.setFont(undefined, 'normal');
-            doc.text(paintBrand, pageWidth / 2 + 35, y);
-            
-            y += 6;
-            
-            // Contact
-            if (clientDetails?.contactName) {
-                doc.setFont(undefined, 'bold');
-                doc.text('Contact:', leftMargin, y);
-                doc.setFont(undefined, 'normal');
-                doc.text(clientDetails.contactName, leftMargin + 35, y);
-            }
-            
-            // Finish
-            doc.setFont(undefined, 'bold');
-            doc.text('Finish:', pageWidth / 2 + 5, y);
-            doc.setFont(undefined, 'normal');
-            doc.text(paintFinish, pageWidth / 2 + 35, y);
-            
-            y += 6;
-            
-            // Phone
-            if (clientDetails?.landline) {
-                doc.setFont(undefined, 'bold');
-                doc.text('Phone:', leftMargin, y);
-                doc.setFont(undefined, 'normal');
-                doc.text(clientDetails.landline, leftMargin + 35, y);
-            }
-            
+            doc.text(jobClient.toUpperCase(), 15, y);
             y += 8;
             
-            // PAINT COLOUR BREAKDOWN - TABLE
             doc.setFontSize(11);
-            doc.setFont(undefined, 'bold');
-            doc.setTextColor(0, 0, 0);
-            doc.text('PAINT COLOUR BREAKDOWN', leftMargin, y);
+            doc.setFont(undefined, 'normal');
+            if (jobName) doc.text(`${jobName}`, 15, y);
             y += 6;
             
-            // TABLE HEADER
-            doc.setFontSize(9);
+            // DATES
+            doc.setFontSize(10);
             doc.setFont(undefined, 'bold');
-            doc.setTextColor(255, 255, 255);
-            doc.setFillColor(100, 100, 100);
-            
-            const colWidths = [35, 50, 30, 30];
-            const headers = ['Panel Type', 'Colour', 'Qty', 'Sq.M'];
-            let xPos = leftMargin;
-            
-            headers.forEach((header, i) => {
-                doc.rect(xPos, y - 4, colWidths[i], 6, 'F');
-                doc.text(header, xPos + 2, y, { align: 'left' });
-                xPos += colWidths[i];
-            });
-            
-            y += 7;
-            
-            // TABLE ROWS
+            doc.text('Date Received:', 15, y);
             doc.setFont(undefined, 'normal');
-            doc.setTextColor(0, 0, 0);
-            
-            let rowNum = 0;
-            Object.values(panelBreakdown).forEach(row => {
-                if (y > pageHeight - 25) {
-                    doc.addPage();
-                    y = 15;
-                }
-                
-                // Alternate row colors
-                if (rowNum % 2 === 0) {
-                    doc.setFillColor(240, 240, 240);
-                    doc.rect(leftMargin, y - 4, contentWidth, 5.5, 'F');
-                }
-                
-                xPos = leftMargin;
-                doc.text(row.panelType, xPos + 1, y, { maxWidth: colWidths[0] - 2 });
-                xPos += colWidths[0];
-                
-                doc.text(row.color, xPos + 1, y, { maxWidth: colWidths[1] - 2 });
-                xPos += colWidths[1];
-                
-                doc.text(String(row.count), xPos + 1, y);
-                xPos += colWidths[2];
-                
-                doc.text(row.sqm.toFixed(2), xPos + 1, y);
-                
-                y += 5.5;
-                rowNum++;
-            });
-            
-            // TOTAL ROW
-            if (y > pageHeight - 20) {
-                doc.addPage();
-                y = 15;
-            }
-            
-            doc.setFont(undefined, 'bold');
-            doc.setFillColor(212, 175, 55);
-            doc.rect(leftMargin, y - 4, contentWidth, 6, 'F');
-            doc.setTextColor(0, 0, 0);
-            
-            xPos = leftMargin;
-            doc.text('TOTALS', xPos + 1, y);
-            xPos += colWidths[0] + colWidths[1];
-            
-            doc.text(String(totalPanels), xPos + 1, y);
-            xPos += colWidths[2];
-            
-            doc.text(totalSQM.toFixed(2), xPos + 1, y);
-            
-            y += 10;
-            
-            // JOB SPECIFICATIONS SECTION
-            if (y > pageHeight - 35) {
-                doc.addPage();
-                y = 15;
-            }
-            
-            doc.setFontSize(11);
-            doc.setFont(undefined, 'bold');
-            doc.setTextColor(0, 0, 0);
-            doc.text('JOB SPECIFICATIONS', leftMargin, y);
+            doc.text(dateReceived, 50, y);
             y += 6;
             
-            doc.setFontSize(9);
+            doc.setFont(undefined, 'bold');
+            doc.text('Completion Date:', 15, y);
             doc.setFont(undefined, 'normal');
+            doc.text('_________________________', 50, y);
+            y += 8;
             
-            const specs = [
-                `Paint Brand: ${paintBrand}`,
-                `Paint Finish: ${paintFinish}`,
-                `Total Panels: ${totalPanels}`,
-                `Total Area: ${totalSQM.toFixed(2)} m²`,
-                clientDetails?.address ? `Address: ${clientDetails.address}${clientDetails.town ? ', ' + clientDetails.town : ''}` : ''
-            ].filter(s => s);
+            // PAINT SPEC
+            doc.setFontSize(11);
+            doc.setFont(undefined, 'bold');
+            doc.text('PAINT SPECIFICATION:', 15, y);
+            y += 6;
             
-            specs.forEach(spec => {
-                doc.text('• ' + spec, leftMargin + 3, y, { maxWidth: contentWidth - 6 });
+            doc.setFontSize(10);
+            doc.setFont(undefined, 'normal');
+            doc.text(`Brand: ${defaultBrand}`, 15, y);
+            y += 5;
+            doc.text(`Finish: ${defaultFinish}`, 15, y);
+            y += 5;
+            doc.text(`Total Panels: ${totalPanels}`, 15, y);
+            y += 5;
+            doc.text(`Total Area: ${totalSQM.toFixed(2)} m²`, 15, y);
+            y += 8;
+            
+            // COLORS
+            if (colors.length > 0) {
+                doc.setFontSize(11);
+                doc.setFont(undefined, 'bold');
+                doc.text('COLOURS:', 15, y);
                 y += 5;
-            });
+                
+                doc.setFontSize(10);
+                doc.setFont(undefined, 'normal');
+                colors.forEach(color => {
+                    doc.text(`• ${color}`, 15, y);
+                    y += 5;
+                });
+            }
             
             // FOOTER
             doc.setFontSize(8);
             doc.setTextColor(150, 150, 150);
-            doc.text(`Generated: ${new Date().toLocaleDateString('en-AU')} | PaintWorkz Pro v1.7.14`, leftMargin, pageHeight - 5);
+            doc.text(`Generated: ${new Date().toLocaleDateString('en-AU')} | PaintWorkz Pro`, 15, pageHeight - 8);
             
-            const filename = `CoverSheet_${jobClient.replace(/\\s+/g, '_')}_Job${jobNum}_${new Date().toISOString().split('T')[0]}.pdf`;
+            const filename = `CoverSheet_${jobClient.replace(/\\s+/g, '_')}_Job${jobNum}.pdf`;
             const pdfDataUri = doc.output('datauristring');
             showPDFPreview(pdfDataUri, filename, '📋 Cover Sheet');
             notify("✓ Cover Sheet Ready");
@@ -9392,18 +9243,6 @@
         if (clientsContent) clientsContent.style.display = 'none';
         document.getElementById('admin-tab-pricing-content').style.display = 'none';
         
-        // Collapse all expandable sections when switching tabs
-        const expandableSections = [
-            'measure-defaults-container',
-            'global-settings-container',
-            'paint-brands-container',
-            'additional-charges-container'
-        ];
-        expandableSections.forEach(id => {
-            const elem = document.getElementById(id);
-            if (elem) elem.style.display = 'none';
-        });
-        
         // Remove active class from all buttons
         document.getElementById('admin-tab-general').classList.remove('active');
         document.getElementById('admin-tab-colours').classList.remove('active');
@@ -9413,11 +9252,13 @@
         
         // Show selected tab and mark button as active
         if (tab === 'general') {
-            document.getElementById('admin-tab-general-content').style.display = 'block';
+            const generalContent = document.getElementById('admin-tab-general-content');
+            if (generalContent) generalContent.style.display = 'block';
             document.getElementById('admin-tab-general').classList.add('active');
-            renderAdminAlerts(); // Refresh all notifications
+            renderAdminAlerts();
         } else if (tab === 'colours') {
-            document.getElementById('admin-tab-colours-content').style.display = 'block';
+            const coloursContent = document.getElementById('admin-tab-colours-content');
+            if (coloursContent) coloursContent.style.display = 'block';
             document.getElementById('admin-tab-colours').classList.add('active');
             
             // Ensure appColors is initialized
@@ -9434,20 +9275,26 @@
                 localStorage.setItem('appColors', JSON.stringify(window.appColors));
             }
             
-            renderColorCustomizer();
+            // Delay render to ensure DOM is ready
+            setTimeout(() => renderColorCustomizer(), 100);
         } else if (tab === 'clients') {
             if (clientsContent) {
                 clientsContent.style.display = 'block';
                 if (clientsBtn) clientsBtn.classList.add('active');
                 const searchBox = document.getElementById('clientSearchBox');
                 if (searchBox) searchBox.value = '';
-                renderClientsList();
+                // Delay render to ensure DOM is ready
+                setTimeout(() => renderClientsList(), 100);
             }
         } else if (tab === 'pricing') {
-            document.getElementById('admin-tab-pricing-content').style.display = 'block';
+            const pricingContent = document.getElementById('admin-tab-pricing-content');
+            if (pricingContent) pricingContent.style.display = 'block';
             document.getElementById('admin-tab-pricing').classList.add('active');
-            renderPricingMatrix(); // Load pricing matrix when tab opens
-            checkForNewUnallocatedDoors(); // Check and notify about unallocated doors
+            // Delay render to ensure DOM is ready
+            setTimeout(() => {
+                renderPricingMatrix();
+                checkForNewUnallocatedDoors();
+            }, 100);
         }
     }
 
@@ -11631,7 +11478,7 @@ User question: ${userMessage}
 
 Provide helpful, concise advice about painting, joinery, measurements, job planning, or using PaintWorkz Pro. Keep responses under 150 words.`;
             
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${apiKey}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
