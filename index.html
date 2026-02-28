@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.7.40 | Updated: 2026-02-28                       ║
+║  Version: v1.7.41 | Updated: 2026-02-28                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.7.40';
+    const CURRENT_VERSION = 'v1.7.41';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1119,7 +1119,7 @@
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.7.40</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.7.41</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -1436,7 +1436,7 @@
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created & Owned by Colin Bedford</strong></span><br>
                         <span id="currentDate" style="color:#999;">14 February 2026</span><br><br>
-                        <span id="versionDisplay" style="color:#d4af37; font-weight:900;">v1.7.40 |</span><span id="versionDate" style="color:#d4af37; font-weight:900;"> 2026-02-27</span>
+                        <span id="versionDisplay" style="color:#d4af37; font-weight:900;">v1.7.41 |</span><span id="versionDate" style="color:#d4af37; font-weight:900;"> 2026-02-27</span>
                     </p>
                 </div>
             </div><!-- END admin-tab-general-content -->
@@ -3061,7 +3061,7 @@
         setTimeout(() => {
             ['measure-defaults-container','global-settings-container','paint-brands-container',
              'company-details-container','api-keys-container','additional-charges-container',
-             'timeline-settings-container'].forEach(function(id) {
+             'timeline-settings-container','admin-alerts-container'].forEach(function(id) {
                 var el = document.getElementById(id);
                 if (el) el.style.display = 'none';
             });
@@ -3073,7 +3073,9 @@
             if (cb) { cb.textContent = '+'; cb.style.background = '#666'; }
             var notif = document.getElementById('globalNotifications');
             if (notif) notif.style.display = 'none';
-        }, 200);
+            // Update all collapse buttons to show +
+            document.querySelectorAll('[onclick="toggleNotifications()"], [onclick="toggleAdminAlerts()"]').forEach(function(b) { b.textContent = '+'; });
+            }, 200);
 
         // renderScheduleCalendar(); // Don't render until Schedule tab is clicked
     };
@@ -4273,8 +4275,8 @@
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.7.40';
-        const CURRENT_DATE = '2026-02-27';
+        const CURRENT_VERSION = 'v1.7.41';
+        const CURRENT_DATE = '2026-02-28';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
         const versionDate = document.getElementById('adminVersionDate');
@@ -8637,15 +8639,16 @@
                 y += rh;
             }
 
-            // ===== JOB CHART PAGE =====
-            doc.addPage();
+            // ===== JOB CHART SECTION (same page, flows after table) =====
+            y += 12;
+            if (y > pageHeight - 80) { doc.addPage(); y = 15; }
 
             // heading
-            if (headerLogo) { try { doc.addImage(headerLogo, 'PNG', pageWidth-55, 6, 40, 18); } catch(e){} }
             doc.setFont(undefined, 'bold');
-            doc.setFontSize(16);
+            doc.setFontSize(13);
             doc.setTextColor(0, 0, 0);
-            doc.text('JOB CHART', 20, 12);
+            doc.text('JOB CHART', 20, y);
+            y += 6;
             doc.setFont(undefined, 'normal');
             doc.setFontSize(7);
             doc.setTextColor(80, 80, 80);
@@ -8653,7 +8656,8 @@
             var _ed = schedEnd.getDate(),   _em = schedEnd.getMonth()+1,   _ey = schedEnd.getFullYear();
             var _sdStr = (_sd<10?'0':'')+_sd+'/'+ (_sm<10?'0':'')+_sm+'/'+_sy;
             var _edStr = (_ed<10?'0':'')+_ed+'/'+ (_em<10?'0':'')+_em+'/'+_ey;
-            doc.text(_sdStr + ' to ' + _edStr + '   ' + (companySettings.name||''), 20, 20);
+            doc.text(_sdStr + ' to ' + _edStr + '   ' + (companySettings.name||''), 20, y);
+            y += 6;
 
             // layout
             var _CL=20, _LW=82, _CW=pageWidth-20-82-15, _CX=20+82;
@@ -8678,7 +8682,7 @@
             }
 
             // draw header (month row + date row) at given y, returns new y
-            var _ry = 25;
+            var _ry = y; // continue from current y position after table
 
             // --- MONTH ROW ---
             doc.setFillColor(15, 60, 120);
@@ -8817,9 +8821,16 @@
             doc.setFont(undefined,'italic'); doc.setFontSize(7); doc.setTextColor(140,140,140);
             doc.text('Generated: '+new Date().toLocaleString('en-AU')+'  -  '+(companySettings.name||'')+'  -  PaintWorkz Pro', 20, pageHeight-8);
             const filename = `Work_Schedule_${new Date().toISOString().split('T')[0]}.pdf`;
-            const pdfDataUri = doc.output('datauristring');
-            showPDFPreview(pdfDataUri, filename, '📅 A3 Schedule');
-            notify('✓ Work Schedule Ready — A3 Landscape');
+            // Open in new tab - works on iOS Safari (iframe PDF has page limit issues)
+            const pdfBlob = doc.output('blob');
+            const blobUrl = URL.createObjectURL(pdfBlob);
+            const newTab = window.open(blobUrl, '_blank');
+            if (!newTab) {
+                // Fallback: use data URI preview if popups blocked
+                const pdfDataUri = doc.output('datauristring');
+                showPDFPreview(pdfDataUri, filename, '📅 Work Schedule');
+            }
+            notify('✓ Work Schedule ready — opened in new tab');
         } catch(err) {
             console.error('A3 Schedule Error:', err);
             notify('❌ Error: ' + err.message);
