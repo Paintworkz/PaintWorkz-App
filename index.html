@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.7.39 | Updated: 2026-02-28                       ║
+║  Version: v1.7.40 | Updated: 2026-02-28                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.7.39';
+    const CURRENT_VERSION = 'v1.7.40';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1119,7 +1119,7 @@
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.7.39</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.7.40</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -1436,7 +1436,7 @@
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created & Owned by Colin Bedford</strong></span><br>
                         <span id="currentDate" style="color:#999;">14 February 2026</span><br><br>
-                        <span id="versionDisplay" style="color:#d4af37; font-weight:900;">v1.7.39 |</span><span id="versionDate" style="color:#d4af37; font-weight:900;"> 2026-02-27</span>
+                        <span id="versionDisplay" style="color:#d4af37; font-weight:900;">v1.7.40 |</span><span id="versionDate" style="color:#d4af37; font-weight:900;"> 2026-02-27</span>
                     </p>
                 </div>
             </div><!-- END admin-tab-general-content -->
@@ -3056,6 +3056,25 @@
                 refreshLists();
             }
         }, 100);
+
+        // Minimize all collapsible sections on load
+        setTimeout(() => {
+            ['measure-defaults-container','global-settings-container','paint-brands-container',
+             'company-details-container','api-keys-container','additional-charges-container',
+             'timeline-settings-container'].forEach(function(id) {
+                var el = document.getElementById(id);
+                if (el) el.style.display = 'none';
+            });
+            var gw = document.getElementById('ganttWrapper');
+            var my = document.getElementById('scheduleMonthYear');
+            var cb = document.getElementById('jobsChartToggleBtn');
+            if (gw) gw.style.display = 'none';
+            if (my) my.style.display = 'none';
+            if (cb) { cb.textContent = '+'; cb.style.background = '#666'; }
+            var notif = document.getElementById('globalNotifications');
+            if (notif) notif.style.display = 'none';
+        }, 200);
+
         // renderScheduleCalendar(); // Don't render until Schedule tab is clicked
     };
 
@@ -4254,7 +4273,7 @@
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.7.39';
+        const CURRENT_VERSION = 'v1.7.40';
         const CURRENT_DATE = '2026-02-27';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -8479,13 +8498,28 @@
             }
 
             // ===== Load & setup dates =====
-            const schedStart = startDateObj ? new Date(startDateObj) : new Date();
-            schedStart.setHours(0,0,0,0);
+            let jobHistory = JSON.parse(localStorage.getItem('jobHistory')) || [];
+            const activeJobsForDate = jobHistory.filter(function(j){ return !j.completed; });
+
+            // Start chart from earliest active job date so all bars are visible
+            let schedStartDate = startDateObj ? new Date(startDateObj) : new Date();
+            schedStartDate.setHours(0,0,0,0);
+            if (!startDateObj) {
+                for (var _sai=0; _sai<activeJobsForDate.length; _sai++) {
+                    var _sadr = activeJobsForDate[_sai].dateReceived;
+                    if (_sadr && _sadr.indexOf('/')!==-1) {
+                        var _sap=_sadr.split('/');
+                        var _say=_sap[2].length===2?parseInt('20'+_sap[2]):parseInt(_sap[2]);
+                        var _sad=new Date(_say, parseInt(_sap[1])-1, parseInt(_sap[0]));
+                        _sad.setHours(0,0,0,0);
+                        if (!isNaN(_sad.getTime()) && _sad < schedStartDate) schedStartDate = _sad;
+                    }
+                }
+            }
+            const schedStart = schedStartDate;
             const totalDays = days;
             const schedEnd  = new Date(schedStart);
             schedEnd.setDate(schedEnd.getDate() + totalDays - 1);
-
-            let jobHistory = JSON.parse(localStorage.getItem('jobHistory')) || [];
 
             // ===== Phase config =====
             const phaseColors = {
