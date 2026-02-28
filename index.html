@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.7.38 | Updated: 2026-02-28                       ║
+║  Version: v1.7.39 | Updated: 2026-02-28                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.7.38';
+    const CURRENT_VERSION = 'v1.7.39';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1119,7 +1119,7 @@
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.7.38</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.7.39</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -1436,7 +1436,7 @@
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created & Owned by Colin Bedford</strong></span><br>
                         <span id="currentDate" style="color:#999;">14 February 2026</span><br><br>
-                        <span id="versionDisplay" style="color:#d4af37; font-weight:900;">v1.7.38 |</span><span id="versionDate" style="color:#d4af37; font-weight:900;"> 2026-02-27</span>
+                        <span id="versionDisplay" style="color:#d4af37; font-weight:900;">v1.7.39 |</span><span id="versionDate" style="color:#d4af37; font-weight:900;"> 2026-02-27</span>
                     </p>
                 </div>
             </div><!-- END admin-tab-general-content -->
@@ -4254,7 +4254,7 @@
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.7.38';
+        const CURRENT_VERSION = 'v1.7.39';
         const CURRENT_DATE = '2026-02-27';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -8606,195 +8606,186 @@
             // ===== JOB CHART PAGE =====
             doc.addPage();
 
-            // --- header ---
+            // heading
             if (headerLogo) { try { doc.addImage(headerLogo, 'PNG', pageWidth-55, 6, 40, 18); } catch(e){} }
-            doc.setFont(undefined,'bold'); doc.setFontSize(16); doc.setTextColor(0,0,0);
+            doc.setFont(undefined, 'bold');
+            doc.setFontSize(16);
+            doc.setTextColor(0, 0, 0);
             doc.text('JOB CHART', 20, 12);
-            doc.setFont(undefined,'normal'); doc.setFontSize(7); doc.setTextColor(80,80,80);
-            doc.text(schedStart.toLocaleDateString('en-AU') + ' to ' + schedEnd.toLocaleDateString('en-AU') + '   ' + (companySettings.name||''), 20, 20);
+            doc.setFont(undefined, 'normal');
+            doc.setFontSize(7);
+            doc.setTextColor(80, 80, 80);
+            var _sd = schedStart.getDate(), _sm = schedStart.getMonth()+1, _sy = schedStart.getFullYear();
+            var _ed = schedEnd.getDate(),   _em = schedEnd.getMonth()+1,   _ey = schedEnd.getFullYear();
+            var _sdStr = (_sd<10?'0':'')+_sd+'/'+ (_sm<10?'0':'')+_sm+'/'+_sy;
+            var _edStr = (_ed<10?'0':'')+_ed+'/'+ (_em<10?'0':'')+_em+'/'+_ey;
+            doc.text(_sdStr + ' to ' + _edStr + '   ' + (companySettings.name||''), 20, 20);
 
-            // --- layout constants ---
-            var CL   = 20;        // chart left margin
-            var LW   = 82;        // label column width
-            var CW   = pageWidth - CL - LW - 15;  // chart area width
-            var CX   = CL + LW;   // chart area x start
-            var CH   = 11;        // job row height
-            var MRH  = 7;         // month row height
-            var DRH  = 7;         // date row height
-            var PPD  = CW / totalDays;  // pixels per calendar day
+            // layout
+            var _CL=20, _LW=82, _CW=pageWidth-20-82-15, _CX=20+82;
+            var _CH=11, _MH=7, _DH=7, _PPD=_CW/totalDays;
+            var _MON=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 
-            // helper: exact calendar day offset
-            function cdo(d) { return Math.round((d - schedStart) / 86400000); }
+            // phase colours/labels
+            var _PK=['m','s1','u','s2','t','i','c'];
+            var _PR=[33,255,139,255,156,103,52],  _PG=[150,149,69,149,39,58,199], _PB=[243,0,19,0,176,183,89];
+            var _PL=['M','S1','U','S2','T','I','C'];
+            var _PN=['Measure','Sand 1st','Undercoat','Sand 2nd','Topcoat','Inspect','Complete'];
 
-            // helper: add N biz days
-            function abd(fromDate, n) {
-                var d = new Date(fromDate); var added = 0;
-                while (added < n) { d.setDate(d.getDate()+1); if (d.getDay()!==0 && d.getDay()!==6) added++; }
-                return d;
+            // build month spans
+            var _months=[], _mc=new Date(schedStart.getFullYear(), schedStart.getMonth(), 1);
+            for (var _mi=0; _mi<24 && _mc<=schedEnd; _mi++) {
+                var _mend = new Date(_mc.getFullYear(), _mc.getMonth()+1, 0);
+                var _mspan = (_mend < schedEnd) ? _mend : schedEnd;
+                var _msi = Math.max(0, Math.round((_mc - schedStart)/86400000));
+                var _mei = Math.min(totalDays, Math.round((_mspan - schedStart)/86400000)+1);
+                if (_mei > _msi) _months.push({l: _MON[_mc.getMonth()]+' '+_mc.getFullYear(), s:_msi, e:_mei});
+                _mc = new Date(_mc.getFullYear(), _mc.getMonth()+1, 1);
             }
 
-            // helper: parse AU date
-            function pad(str) {
-                if (!str) return new Date(schedStart);
-                if (str.indexOf('/') !== -1) {
-                    var p = str.split('/');
-                    var yr2 = p[2].length===2 ? parseInt('20'+p[2]) : parseInt(p[2]);
-                    var dd = new Date(yr2, parseInt(p[1])-1, parseInt(p[0]));
-                    dd.setHours(0,0,0,0); return dd;
-                }
-                var dd2 = new Date(str); dd2.setHours(0,0,0,0);
-                return isNaN(dd2) ? new Date(schedStart) : dd2;
+            // draw header (month row + date row) at given y, returns new y
+            var _ry = 25;
+
+            // --- MONTH ROW ---
+            doc.setFillColor(15, 60, 120);
+            doc.rect(_CL, _ry, _LW, _MH, 'F');
+            doc.setFont(undefined,'bold'); doc.setFontSize(5.5); doc.setTextColor(255,255,255);
+            doc.text('MONTH', _CL+2, _ry+5);
+            for (var _mj=0; _mj<_months.length; _mj++) {
+                var _mo=_months[_mj], _mx=_CX+_mo.s*_PPD, _mw=(_mo.e-_mo.s)*_PPD;
+                if (_mw<=0) continue;
+                doc.setFillColor(33,102,185);
+                doc.rect(_mx, _ry, _mw, _MH, 'F');
+                doc.setDrawColor(255,255,255); doc.setLineWidth(0.2); doc.rect(_mx, _ry, _mw, _MH);
+                if (_mw>8) { doc.setTextColor(255,255,255); doc.setFontSize(5.5); doc.text(_mo.l.substring(0,Math.max(3,Math.floor((_mw-3)*1.5))), _mx+2, _ry+5); }
             }
+            _ry += _MH;
 
-            // --- phase config ---
-            var PC = {m:[33,150,243],s1:[255,149,0],u:[139,69,19],s2:[255,149,0],t:[156,39,176],i:[103,58,183],c:[52,199,89]};
-            var PL = {m:'M',s1:'S1',u:'U',s2:'S2',t:'T',i:'I',c:'C'};
-            var PN = {m:'Measure',s1:'Sand 1st',u:'Undercoat',s2:'Sand 2nd',t:'Topcoat',i:'Inspect',c:'Complete'};
-            var PK = ['m','s1','u','s2','t','i','c'];
-
-            // --- build month spans ---
-            var months2 = [];
-            var mc = new Date(schedStart.getFullYear(), schedStart.getMonth(), 1);
-            for (var mi = 0; mi < 24 && mc <= schedEnd; mi++) {
-                var mend = new Date(mc.getFullYear(), mc.getMonth()+1, 0);
-                var mspan = mend < schedEnd ? mend : new Date(schedEnd);
-                var ms_idx = Math.max(0, cdo(new Date(mc)));
-                var me_idx = Math.min(totalDays, cdo(mspan) + 1);
-                var mlabel = mc.toLocaleString('default',{month:'short'}).toUpperCase() + ' ' + mc.getFullYear();
-                if (me_idx > ms_idx) months2.push({label:mlabel, s:ms_idx, e:me_idx});
-                mc = new Date(mc.getFullYear(), mc.getMonth()+1, 1);
+            // --- DATE ROW ---
+            doc.setFillColor(50,50,50);
+            doc.rect(_CL, _ry, _LW, _DH, 'F');
+            doc.setFont(undefined,'bold'); doc.setFontSize(5); doc.setTextColor(255,255,255);
+            doc.text('JOB / CLIENT / NAME', _CL+2, _ry+5);
+            for (var _di=0; _di<totalDays; _di+=7) {
+                var _dd=new Date(schedStart.getTime()); _dd.setDate(_dd.getDate()+_di);
+                var _dx=_CX+_di*_PPD, _dw=Math.min(7*_PPD, _CX+_CW-_dx);
+                if (_dw<=0) continue;
+                doc.setFillColor(60,60,60); doc.rect(_dx, _ry, _dw, _DH, 'F');
+                doc.setDrawColor(100,100,100); doc.setLineWidth(0.1); doc.rect(_dx, _ry, _dw, _DH);
+                doc.setTextColor(255,255,255); doc.setFontSize(4.8);
+                var _dda=_dd.getDate(), _ddm=_dd.getMonth()+1;
+                doc.text((_dda<10?'0':'')+_dda+'/'+ (_ddm<10?'0':'')+_ddm, _dx+1, _ry+5);
             }
+            _ry += _DH;
 
-            var ry = 25;  // start y for chart rows
+            // --- JOB ROWS ---
+            for (var _ji=0; _ji<activeJobs.length; _ji++) {
+                var _job=activeJobs[_ji];
 
-            // draw header rows function (reused on page breaks)
-            function drawChartHeader(hy) {
-                // month row
-                doc.setFillColor(15,60,120);
-                doc.rect(CL, hy, LW, MRH, 'F');
-                doc.setFont(undefined,'bold'); doc.setFontSize(5.5); doc.setTextColor(255,255,255);
-                doc.text('MONTH', CL+2, hy+5);
-                for (var mi2 = 0; mi2 < months2.length; mi2++) {
-                    var mo = months2[mi2];
-                    var mx = CX + mo.s * PPD;
-                    var mw = (mo.e - mo.s) * PPD;
-                    if (mw <= 0) continue;
-                    doc.setFillColor(33,102,185);
-                    doc.rect(mx, hy, mw, MRH, 'F');
-                    doc.setDrawColor(255,255,255); doc.setLineWidth(0.2);
-                    doc.rect(mx, hy, mw, MRH);
-                    if (mw > 8) {
-                        doc.setTextColor(255,255,255); doc.setFontSize(5.5);
-                        var mc2 = Math.max(3, Math.floor((mw-3)*1.5));
-                        doc.text(mo.label.substring(0,mc2), mx+2, hy+5);
-                    }
-                }
-                hy += MRH;
-                // date row
-                doc.setFillColor(50,50,50);
-                doc.rect(CL, hy, LW, DRH, 'F');
-                doc.setFont(undefined,'bold'); doc.setFontSize(5); doc.setTextColor(255,255,255);
-                doc.text('JOB / CLIENT / NAME', CL+2, hy+5);
-                for (var dd3 = 0; dd3 < totalDays; dd3 += 7) {
-                    var td3 = new Date(schedStart); td3.setDate(td3.getDate()+dd3);
-                    var dx3 = CX + dd3 * PPD;
-                    var ww3 = Math.min(7*PPD, CX+CW-dx3);
-                    if (ww3 <= 0) continue;
-                    doc.setFillColor(60,60,60);
-                    doc.rect(dx3, hy, ww3, DRH, 'F');
-                    doc.setDrawColor(100,100,100); doc.setLineWidth(0.1);
-                    doc.rect(dx3, hy, ww3, DRH);
-                    doc.setTextColor(255,255,255); doc.setFontSize(4.8);
-                    doc.text(td3.toLocaleDateString('en-AU',{day:'2-digit',month:'2-digit'}), dx3+1, hy+5);
-                }
-                hy += DRH;
-                return hy;
-            }
-
-            ry = drawChartHeader(ry);
-
-            // --- draw each job row ---
-            for (var ji2 = 0; ji2 < activeJobs.length; ji2++) {
-                var job2 = activeJobs[ji2];
-
-                if (ry > pageHeight - 22) {
+                // page break
+                if (_ry > pageHeight-22) {
                     doc.addPage();
-                    ry = 12;
-                    ry = drawChartHeader(ry);
+                    _ry = 12;
+                    // re-draw month row
+                    doc.setFillColor(15,60,120); doc.rect(_CL,_ry,_LW,_MH,'F');
+                    doc.setFont(undefined,'bold'); doc.setFontSize(5.5); doc.setTextColor(255,255,255);
+                    doc.text('MONTH', _CL+2, _ry+5);
+                    for (var _mj2=0; _mj2<_months.length; _mj2++) {
+                        var _mo2=_months[_mj2], _mx2=_CX+_mo2.s*_PPD, _mw2=(_mo2.e-_mo2.s)*_PPD;
+                        if (_mw2<=0) continue;
+                        doc.setFillColor(33,102,185); doc.rect(_mx2,_ry,_mw2,_MH,'F');
+                        doc.setDrawColor(255,255,255); doc.setLineWidth(0.2); doc.rect(_mx2,_ry,_mw2,_MH);
+                        if (_mw2>8) { doc.setTextColor(255,255,255); doc.setFontSize(5.5); doc.text(_mo2.l.substring(0,Math.max(3,Math.floor((_mw2-3)*1.5))),_mx2+2,_ry+5); }
+                    }
+                    _ry += _MH;
+                    // re-draw date row
+                    doc.setFillColor(50,50,50); doc.rect(_CL,_ry,_LW,_DH,'F');
+                    doc.setFont(undefined,'bold'); doc.setFontSize(5); doc.setTextColor(255,255,255);
+                    doc.text('JOB / CLIENT / NAME', _CL+2, _ry+5);
+                    for (var _di2=0; _di2<totalDays; _di2+=7) {
+                        var _dd2=new Date(schedStart.getTime()); _dd2.setDate(_dd2.getDate()+_di2);
+                        var _dx2=_CX+_di2*_PPD, _dw2=Math.min(7*_PPD,_CX+_CW-_dx2);
+                        if (_dw2<=0) continue;
+                        doc.setFillColor(60,60,60); doc.rect(_dx2,_ry,_dw2,_DH,'F');
+                        doc.setDrawColor(100,100,100); doc.setLineWidth(0.1); doc.rect(_dx2,_ry,_dw2,_DH);
+                        doc.setTextColor(255,255,255); doc.setFontSize(4.8);
+                        var _dda2=_dd2.getDate(), _ddm2=_dd2.getMonth()+1;
+                        doc.text((_dda2<10?'0':'')+_dda2+'/'+ (_ddm2<10?'0':'')+_ddm2, _dx2+1, _ry+5);
+                    }
+                    _ry += _DH;
                 }
 
                 // row background
-                doc.setFillColor(ji2%2===0 ? 252:244, ji2%2===0 ? 252:244, ji2%2===0 ? 252:244);
-                doc.rect(CL, ry, LW+CW, CH, 'F');
+                var _bg = (_ji%2===0) ? 252 : 244;
+                doc.setFillColor(_bg, _bg, _bg);
+                doc.rect(_CL, _ry, _LW+_CW, _CH, 'F');
 
-                // job labels
+                // parse job start date
+                var _js = schedStart, _jdr = _job.dateReceived;
+                if (_jdr) {
+                    if (_jdr.indexOf('/')!==-1) {
+                        var _jp=_jdr.split('/'), _jy=(_jp[2].length===2?parseInt('20'+_jp[2]):parseInt(_jp[2]));
+                        var _jd=new Date(_jy, parseInt(_jp[1])-1, parseInt(_jp[0]));
+                        _jd.setHours(0,0,0,0); if (!isNaN(_jd.getTime())) _js=_jd;
+                    } else {
+                        var _jd2=new Date(_jdr); _jd2.setHours(0,0,0,0); if (!isNaN(_jd2.getTime())) _js=_jd2;
+                    }
+                }
+
+                // labels
                 doc.setFont(undefined,'bold'); doc.setFontSize(6.5); doc.setTextColor(0,0,0);
-                doc.text('#' + (job2.jobNum||'?').toString().substring(0,10), CL+2, ry+3.5);
+                doc.text('#'+(_job.jobNum||'?').toString().substring(0,10), _CL+2, _ry+3.5);
                 doc.setFont(undefined,'normal'); doc.setFontSize(5.5); doc.setTextColor(40,40,40);
-                doc.text((job2.client||'').substring(0,18), CL+2, ry+7);
-                doc.setTextColor(90,90,90);
-                doc.text((job2.jobName||job2.name||'').substring(0,18), CL+2, ry+10.5);
+                doc.text((_job.client||'').substring(0,18), _CL+2, _ry+7);
+                doc.setTextColor(100,100,100);
+                doc.text((_job.jobName||_job.name||'').substring(0,18), _CL+2, _ry+10.5);
 
                 // phase bars
-                var js2 = pad(job2.dateReceived);
-                var tl3 = job2.timeline || {measuring:1,sanding1:4,undercoat:2,sanding2:3,topcoat:2,inspect:2,complete:1};
-                var durs = [tl3.measuring||1, tl3.sanding1||4, tl3.undercoat||2, tl3.sanding2||3, tl3.topcoat||2, tl3.inspect||2, tl3.complete||1];
-                var ps3 = new Date(js2);
-                for (var pi2 = 0; pi2 < PK.length; pi2++) {
-                    var pe3 = abd(ps3, durs[pi2]);
-                    var bs  = Math.max(0, cdo(ps3));
-                    var be  = Math.min(totalDays, cdo(pe3));
-                    if (bs < totalDays && be > 0 && be > bs) {
-                        var bx3 = CX + bs * PPD;
-                        var bw3 = Math.max(0.5, (be - bs) * PPD - 0.2);
-                        var rgb3 = PC[PK[pi2]];
-                        doc.setFillColor(rgb3[0], rgb3[1], rgb3[2]);
-                        doc.rect(bx3, ry+1.5, bw3, CH-3, 'F');
-                        if (bw3 > 5) {
-                            doc.setFont(undefined,'bold'); doc.setFontSize(4.5); doc.setTextColor(255,255,255);
-                            doc.text(PL[PK[pi2]], bx3 + bw3/2 - 1.5, ry + CH/2 + 1.5);
-                        }
+                var _tl=_job.timeline||{measuring:1,sanding1:4,undercoat:2,sanding2:3,topcoat:2,inspect:2,complete:1};
+                var _durs=[_tl.measuring||1, _tl.sanding1||4, _tl.undercoat||2, _tl.sanding2||3, _tl.topcoat||2, _tl.inspect||2, _tl.complete||1];
+                var _ps = new Date(_js.getTime());
+                for (var _pi=0; _pi<_PK.length; _pi++) {
+                    // add business days inline
+                    var _pe=new Date(_ps.getTime()), _badd=0;
+                    while (_badd<_durs[_pi]) { _pe.setDate(_pe.getDate()+1); if (_pe.getDay()!==0&&_pe.getDay()!==6) _badd++; }
+                    var _bs=Math.max(0, Math.round((_ps-schedStart)/86400000));
+                    var _be=Math.min(totalDays, Math.round((_pe-schedStart)/86400000));
+                    if (_bs<totalDays && _be>0 && _be>_bs) {
+                        var _bx=_CX+_bs*_PPD, _bw=Math.max(0.5,(_be-_bs)*_PPD-0.2);
+                        doc.setFillColor(_PR[_pi],_PG[_pi],_PB[_pi]);
+                        doc.rect(_bx, _ry+1.5, _bw, _CH-3, 'F');
+                        if (_bw>5) { doc.setFont(undefined,'bold'); doc.setFontSize(4.5); doc.setTextColor(255,255,255); doc.text(_PL[_pi], _bx+_bw/2-1.5, _ry+_CH/2+1.5); }
                     }
-                    ps3 = pe3;
+                    _ps = _pe;
                 }
 
-                // row border + week dividers
-                doc.setDrawColor(200,200,200); doc.setLineWidth(0.1);
-                doc.rect(CL, ry, LW+CW, CH);
-                for (var wdiv = 7; wdiv < totalDays; wdiv += 7) {
-                    var ldx = CX + wdiv * PPD;
-                    doc.setDrawColor(180,180,180); doc.setLineWidth(0.1);
-                    doc.line(ldx, ry, ldx, ry+CH);
-                }
+                // row border + week lines
+                doc.setDrawColor(200,200,200); doc.setLineWidth(0.1); doc.rect(_CL, _ry, _LW+_CW, _CH);
+                for (var _wd=7; _wd<totalDays; _wd+=7) { var _wl=_CX+_wd*_PPD; doc.setDrawColor(185,185,185); doc.setLineWidth(0.1); doc.line(_wl,_ry,_wl,_ry+_CH); }
 
-                ry += CH;
+                _ry += _CH;
             }
 
-            // --- legend ---
-            ry += 6;
-            if (ry > pageHeight - 15) { doc.addPage(); ry = 15; }
+            // legend
+            _ry += 6;
+            if (_ry > pageHeight-15) { doc.addPage(); _ry=15; }
             doc.setFont(undefined,'bold'); doc.setFontSize(7); doc.setTextColor(0,0,0);
-            doc.text('LEGEND:', CL, ry+4);
-            var lx3 = CL + 18;
-            for (var li2 = 0; li2 < PK.length; li2++) {
-                var lk2 = PK[li2]; var lrgb = PC[lk2];
-                doc.setFillColor(lrgb[0],lrgb[1],lrgb[2]);
-                doc.rect(lx3, ry, 7, 5, 'F');
+            doc.text('LEGEND:', _CL, _ry+4);
+            var _lx=_CL+18;
+            for (var _li=0; _li<_PK.length; _li++) {
+                doc.setFillColor(_PR[_li],_PG[_li],_PB[_li]); doc.rect(_lx, _ry, 7, 5, 'F');
                 doc.setFont(undefined,'normal'); doc.setFontSize(6); doc.setTextColor(0,0,0);
-                doc.text(PN[lk2], lx3+9, ry+4);
-                lx3 += 34;
-                if (lx3 > pageWidth - 40) { ry += 8; lx3 = CL + 18; }
+                doc.text(_PN[_li], _lx+9, _ry+4);
+                _lx+=34; if (_lx>pageWidth-40) { _ry+=8; _lx=_CL+18; }
             }
 
-            // --- footer ---
+            // footer
             doc.setFont(undefined,'italic'); doc.setFontSize(7); doc.setTextColor(140,140,140);
-            doc.text('Generated: ' + new Date().toLocaleString('en-AU') + '  -  ' + (companySettings.name||'') + '  -  PaintWorkz Pro', 20, pageHeight-8);
-
+            doc.text('Generated: '+new Date().toLocaleString('en-AU')+'  -  '+(companySettings.name||'')+'  -  PaintWorkz Pro', 20, pageHeight-8);
             const filename = `Work_Schedule_${new Date().toISOString().split('T')[0]}.pdf`;
             const pdfDataUri = doc.output('datauristring');
             showPDFPreview(pdfDataUri, filename, '📅 A3 Schedule');
             notify('✓ Work Schedule Ready — A3 Landscape');
-            
         } catch(err) {
             console.error('A3 Schedule Error:', err);
             notify('❌ Error: ' + err.message);
