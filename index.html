@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.7.36 | Updated: 2026-02-28                       ║
+║  Version: v1.7.37 | Updated: 2026-02-28                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.7.36';
+    const CURRENT_VERSION = 'v1.7.37';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1119,7 +1119,7 @@
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.7.36</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.7.37</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -1436,7 +1436,7 @@
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created & Owned by Colin Bedford</strong></span><br>
                         <span id="currentDate" style="color:#999;">14 February 2026</span><br><br>
-                        <span id="versionDisplay" style="color:#d4af37; font-weight:900;">v1.7.36 |</span><span id="versionDate" style="color:#d4af37; font-weight:900;"> 2026-02-27</span>
+                        <span id="versionDisplay" style="color:#d4af37; font-weight:900;">v1.7.37 |</span><span id="versionDate" style="color:#d4af37; font-weight:900;"> 2026-02-27</span>
                     </p>
                 </div>
             </div><!-- END admin-tab-general-content -->
@@ -4254,7 +4254,7 @@
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.7.36';
+        const CURRENT_VERSION = 'v1.7.37';
         const CURRENT_DATE = '2026-02-27';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -8590,7 +8590,7 @@
                 doc.text(paintStr.substring(0,42), col.paint+2, y+5.5);
 
                 // SQM
-                doc.text(job.totalSQM ? job.totalSQM.toFixed(1) : '—', col.sqm+2, y+5.5);
+                const sqmVal = job.totalSqm || job.totalSQM; doc.text(sqmVal ? parseFloat(sqmVal).toFixed(1) : '—', col.sqm+2, y+5.5);
 
                 // Due date (calculated from schedule)
                 const dueDate = getCompletionDate(job);
@@ -8669,9 +8669,13 @@
                 doc.rect(mx, y, mw, monthRowH);
                 doc.setTextColor(255,255,255);
                 doc.setFontSize(6.5);
-                // Clip text to column
-                const txt = m.label;
-                if (mw > 12) doc.text(txt, mx+2, y+5.5, {maxWidth: mw-3});
+                // Clip text to column - use char truncation (no maxWidth, it causes y drift)
+                if (mw > 12) {
+                    const charsPerMm = 1.8;
+                    const maxChars = Math.max(3, Math.floor((mw - 4) * charsPerMm));
+                    const txt = m.label.substring(0, maxChars);
+                    doc.text(txt, mx+2, y+5.5);
+                }
             }
             y += monthRowH;
 
@@ -8684,24 +8688,21 @@
             doc.setTextColor(255,255,255);
             doc.text('JOB  ·  CLIENT  ·  NAME', chartLeft+2, y+5.5);
 
-            // Draw date ticks — every 7 days, aligned to exact calendar day positions
+            // Draw date ticks — one block per 7 days, show start date of each week
             doc.setFontSize(5.5);
-            for (let d = 0; d < totalDays; d++) {
+            for (let d = 0; d < totalDays; d += 7) {
                 const tickDate = new Date(schedStart);
                 tickDate.setDate(tickDate.getDate() + d);
-                const dow = tickDate.getDay(); // 0=Sun,1=Mon...
                 const dx = chartX + d * pxPerDay;
-
-                if (d % 7 === 0) {
-                    // Week start — show date
-                    doc.setFillColor(60,60,60);
-                    doc.rect(dx, y, 7*pxPerDay < chartW - d*pxPerDay ? 7*pxPerDay : chartW - d*pxPerDay, dateRowH, 'F');
-                    doc.setDrawColor(120,120,120);
-                    doc.setLineWidth(0.2);
-                    doc.rect(dx, y, 7*pxPerDay < chartW - d*pxPerDay ? 7*pxPerDay : chartW - d*pxPerDay, dateRowH);
-                    doc.setTextColor(255,255,255);
-                    doc.text(tickDate.toLocaleDateString('en-AU',{day:'2-digit',month:'2-digit'}), dx+1, y+5.5);
-                }
+                const ww = Math.min(7 * pxPerDay, chartW - d * pxPerDay);
+                if (ww <= 0) continue;
+                doc.setFillColor(60,60,60);
+                doc.rect(dx, y, ww, dateRowH, 'F');
+                doc.setDrawColor(120,120,120);
+                doc.setLineWidth(0.2);
+                doc.rect(dx, y, ww, dateRowH);
+                doc.setTextColor(255,255,255);
+                doc.text(tickDate.toLocaleDateString('en-AU',{day:'2-digit',month:'2-digit'}), dx+1, y+5.5);
             }
             y += dateRowH;
 
@@ -8726,7 +8727,7 @@
                         doc.setDrawColor(255,255,255); doc.setLineWidth(0.4);
                         doc.rect(mx, y, mw, monthRowH);
                         doc.setTextColor(255,255,255); doc.setFontSize(6.5);
-                        if (mw > 12) doc.text(m.label, mx+2, y+5.5, {maxWidth:mw-3});
+                        if (mw > 12) { const maxC=Math.max(3,Math.floor((mw-4)*1.8)); doc.text(m.label.substring(0,maxC), mx+2, y+5.5); }
                     }
                     y += monthRowH;
                     doc.setFillColor(50,50,50);
@@ -8750,12 +8751,15 @@
                 doc.setFillColor(ji%2===0 ? 252:242, ji%2===0 ? 252:242, ji%2===0 ? 252:242);
                 doc.rect(chartLeft, y, labelW + chartW, cellH, 'F');
 
-                // Weekend shading stripes on chart area
-                for (let d = 0; d < totalDays; d++) {
-                    const wd = new Date(schedStart); wd.setDate(wd.getDate()+d);
-                    if (wd.getDay()===0 || wd.getDay()===6) {
-                        doc.setFillColor(220,220,220);
-                        doc.rect(chartX + d*pxPerDay, y, pxPerDay, cellH, 'F');
+                // Shade weekend columns (skip for large ranges — too many draws)
+                if (totalDays <= 60) {
+                    for (let d = 0; d < totalDays; d++) {
+                        const wd = new Date(schedStart); wd.setDate(wd.getDate()+d);
+                        const dow = wd.getDay();
+                        if (dow === 0 || dow === 6) {
+                            doc.setFillColor(215,215,215);
+                            doc.rect(chartX + d*pxPerDay, y, pxPerDay, cellH, 'F');
+                        }
                     }
                 }
 
