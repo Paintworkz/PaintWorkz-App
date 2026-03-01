@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.7.47 | Updated: 2026-03-01                       ║
+║  Version: v1.7.49 | Updated: 2026-03-01                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.7.47';
+    const CURRENT_VERSION = 'v1.7.49';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -542,27 +542,27 @@
                 // Load jobs from Firebase ONLY after document is fully loaded
                 if (document.readyState === 'loading') {
                     document.addEventListener('DOMContentLoaded', () => {
-                        setTimeout(() => {
+                        const tryLoad = (attempts) => {
                             if (window.loadAllDataFromFirebase) {
-                                try {
-                                    window.loadAllDataFromFirebase();
-                                } catch (e) {
-                                    console.error('loadAllDataFromFirebase error:', e);
-                                }
+                                try { window.loadAllDataFromFirebase(); } catch(e) { console.error('loadAllDataFromFirebase error:', e); }
+                            } else if (attempts > 0) {
+                                setTimeout(() => tryLoad(attempts - 1), 400);
                             }
-                        }, 500);
+                        };
+                        setTimeout(() => tryLoad(10), 500);
                     });
                 } else {
-                    // DOM already loaded
-                    setTimeout(() => {
+                    // DOM already loaded - retry until main script has defined the function
+                    const tryLoad = (attempts) => {
                         if (window.loadAllDataFromFirebase) {
-                            try {
-                                window.loadAllDataFromFirebase();
-                            } catch (e) {
-                                console.error('loadAllDataFromFirebase error:', e);
-                            }
+                            try { window.loadAllDataFromFirebase(); } catch(e) { console.error('loadAllDataFromFirebase error:', e); }
+                        } else if (attempts > 0) {
+                            setTimeout(() => tryLoad(attempts - 1), 400);
+                        } else {
+                            console.warn('⚠️ loadAllDataFromFirebase never became available');
                         }
-                    }, 500);
+                    };
+                    setTimeout(() => tryLoad(10), 500); // retry up to 10x every 400ms
                 }
                 
                 // Only set up real-time sync ONCE per session (DISABLED by default due to memory issues)
@@ -787,7 +787,7 @@
 
 <!-- HEADER + NAV always outside appContainer so banner/tabs are always rendered -->
 <div id="staffModeBanner">
-    <span>&#x1F477; STAFF MODE &mdash; Restricted access</span>
+    <span>&#x1F477; STAFF MODE</span>
     <button onclick="exitStaffMode()" style="border:none; background:rgba(255,255,255,0.2); color:#fff; padding:4px 12px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">&#x1F512; Admin Login</button>
 </div>
 
@@ -1180,7 +1180,7 @@
         </div>
         
         <!-- Scrollable card: margin-top clears fixed header+subnav. padding-bottom inside scroll area clears fixed workload+footer at bottom -->
-        <div class="card" style="overflow-y:auto; overflow-x:hidden; flex:1; min-height:0; margin-top:calc(var(--nav-h) + 49px); margin-bottom:0; padding:0 15px 150px 15px; border-radius:0; position:relative; z-index:1;">
+        <div class="card" style="overflow-y:auto; overflow-x:auto; flex:1; min-height:0; margin-top:calc(var(--nav-h) + 49px); margin-bottom:0; padding:0 15px 150px 15px; border-radius:0; position:relative; z-index:1;">
             <!-- General Settings Tab -->
             <div id="admin-tab-general-content" class="admin-tab-content active" style="padding-top:12px;">
                 <!-- VERSION DISPLAY - Always visible -->
@@ -1191,7 +1191,7 @@
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.7.47</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.7.49</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -1634,7 +1634,7 @@
                                 1. Install Node.js from <strong>nodejs.org</strong> (free, one-time)<br>
                                 2. Save <strong>paintworkz-backup.js</strong> to your PC (e.g. Documents folder)<br>
                                 3. In Command Prompt, run:<br>
-                                &nbsp;&nbsp;&nbsp;<code style="background:#f0f0f0; padding:1px 4px; border-radius:2px;">setx PAINTWORKZ_EMAIL "your@email.com"</code><br>
+                                &nbsp;&nbsp;&nbsp;<code style="background:#f0f0f0; padding:1px 4px; border-radius:2px;">setx PAINTWORKZ_EMAIL "<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="6811071d1a280d05090104460b0705">[email&#160;protected]</a>"</code><br>
                                 &nbsp;&nbsp;&nbsp;<code style="background:#f0f0f0; padding:1px 4px; border-radius:2px;">setx PAINTWORKZ_PASSWORD "yourpassword"</code><br>
                                 4. Open <strong>Task Scheduler</strong> → Create Basic Task → Daily at 2:00 AM<br>
                                 &nbsp;&nbsp;&nbsp;Program: <code style="background:#f0f0f0; padding:1px 4px;">node</code> &nbsp; Arguments: full path to paintworkz-backup.js<br>
@@ -1652,17 +1652,18 @@
                             <span style="font-size:10px; color:#999;">&#x26A0;&#xFE0F; This will overwrite current data</span>
                         </div>
                     </div>
+                    <div style="background:#ffebee; border-left:4px solid #ff3b30; border-radius:6px; padding:14px; margin-top:12px;">
+                        <div style="font-weight:900; font-size:12px; margin-bottom:8px; color:#b71c1c;">&#x26A0;&#xFE0F; FIREBASE SIGN OUT</div>
+                        <p style="font-size:10px; color:#666; margin:0 0 10px 0; line-height:1.5;">
+                            Fully signs out of Firebase. You will need your <strong>email &amp; password</strong> to log back in.<br>
+                            The normal 🚪 logout button keeps your session alive for Staff PIN access — use this only when handing the device to someone else or leaving the office.
+                        </p>
+                        <button onclick="fullSignOut()" style="border:none; background:#ff3b30; color:#fff; padding:10px 18px; border-radius:6px; font-weight:900; font-size:12px; cursor:pointer;">&#x1F6AA; Full Sign Out of Firebase</button>
+                    </div>
                 </div>
-
-                <h4 style="margin-top:20px; margin-bottom:10px; font-weight:900;">Database Status</h4>
                 <p style="font-size:11px; color:#666; margin-bottom:10px; background:#f0f0f0; padding:10px; border-radius:6px;">All systems operational. Job history is clean and synced.</p>
                 
                 <hr style="margin:30px 0; border:none; border-top:1px solid #ddd;">
-                
-                <div style="margin-top:12px; margin-bottom:4px;">
-                    <button onclick="fullSignOut()" style="border:none; background:#ff3b30; color:#fff; padding:8px 16px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">&#x1F6AA; Full Sign Out of Firebase</button>
-                    <p style="font-size:10px; color:#999; margin:4px 0 0 0;">Use this to fully sign out. Normal logout keeps session alive for staff PIN access.</p>
-                </div>
                 <div style="background:#f5f5f5; border-left:4px solid #d4af37; padding:15px; border-radius:6px; margin-top:20px;">
                     <p style="font-size:10px; color:#666; margin:0; line-height:1.6;">
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
@@ -1844,7 +1845,7 @@
     <div class="icon-btn" onclick="handleLogout()" title="Logout" style="color:#ff3b30; font-size:24px; cursor:pointer; margin-right:15px;">🚪</div>
 </div>
 
-<script>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
     ////////////////////////////////////////////////////////////////////////////////
     // 🎨 PAINTWORKZ PRO v1.6.0 GLOBAL (17 Feb 2026)
     ////////////////////////////////////////////////////////////////////////////////
@@ -2486,70 +2487,44 @@
     })();
 
     function savePaintFormulas() {
-        console.log('💾 SAVING FORMULAS TO LOCALSTORAGE & FIREBASE:');
-        console.log('  Database has', paintDatabase.length, 'formulas');
-        paintDatabase.forEach((f, idx) => {
-        });
-        
         // Save to localStorage (local backup)
         localStorage.setItem('paintFormulas', JSON.stringify(paintDatabase));
-        console.log(`  ✓ Saved to localStorage`);
         
-        // Save to Firebase for cloud sync (if user is authenticated)
+        // Save to Firestore for cross-device sync
         try {
-            if (typeof firebase !== 'undefined' && firebase.auth && typeof firebase.auth === 'function') {
-                const currentUser = firebase.auth().currentUser;
-                if (currentUser) {
-                    const userId = currentUser.uid;
-                    const dbRef = firebase.database().ref(`users/${userId}/paintFormulas`);
-                    dbRef.set(paintDatabase, (error) => {
-                        if (error) {
-                            console.warn('⚠️ Firebase save failed:', error);
-                        } else {
-                            console.log('  ✓ Synced to Firebase for all devices');
-                        }
-                    });
-                }
+            if (window.currentUser && window.firebaseDb && window.setDoc && window.doc) {
+                const ref = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'paintFormulas');
+                window.setDoc(ref, { formulas: paintDatabase, updated: new Date().toISOString() })
+                    .then(() => console.log('☁️ Paint formulas synced to Firestore'))
+                    .catch(e => console.warn('⚠️ Firestore paint formula save failed:', e));
             }
         } catch(e) {
-            console.warn('⚠️ Firebase sync unavailable:', e.message);
+            console.warn('⚠️ Firestore sync error:', e.message);
         }
     }
 
-    // Load paint formulas from Firebase on auth
-    function loadPaintFormulasFromFirebase() {
+    // Load paint formulas from Firestore on auth
+    async function loadPaintFormulasFromFirebase() {
         try {
-            if (typeof firebase === 'undefined' || !firebase.auth || typeof firebase.auth !== 'function') {
-                console.log('ℹ️ Firebase not ready - using localStorage');
+            if (!window.currentUser || !window.firebaseDb || !window.getDoc || !window.doc) {
+                console.log('ℹ️ Firestore not ready - using localStorage for paint formulas');
                 return;
             }
-            
-            const currentUser = firebase.auth().currentUser;
-            if (!currentUser) {
-                console.log('ℹ️ User not authenticated - using localStorage');
-                return;
-            }
-            
-            const userId = currentUser.uid;
-            const dbRef = firebase.database().ref(`users/${userId}/paintFormulas`);
-            
-            dbRef.get().then((snapshot) => {
-                if (snapshot.exists() && snapshot.val()) {
-                    const firebaseFormulas = snapshot.val();
-                    if (Array.isArray(firebaseFormulas) && firebaseFormulas.length > 0) {
-                        paintDatabase = firebaseFormulas;
-                        localStorage.setItem('paintFormulas', JSON.stringify(firebaseFormulas));
-                        console.log('☁️ Loaded', firebaseFormulas.length, 'formulas from Firebase');
-                        renderPaintFormulaList();
-                        return;
-                    }
+            const ref = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'paintFormulas');
+            const snap = await window.getDoc(ref);
+            if (snap.exists()) {
+                const data = snap.data();
+                if (Array.isArray(data.formulas) && data.formulas.length > 0) {
+                    paintDatabase = data.formulas;
+                    localStorage.setItem('paintFormulas', JSON.stringify(paintDatabase));
+                    console.log('☁️ Loaded', paintDatabase.length, 'paint formulas from Firestore');
+                    renderPaintFormulaList();
+                    return;
                 }
-                console.log('ℹ️ No formulas in Firebase, using localStorage');
-            }).catch(error => {
-                console.warn('⚠️ Firebase load failed:', error);
-            });
+            }
+            console.log('ℹ️ No paint formulas in Firestore - using localStorage');
         } catch(e) {
-            console.warn('⚠️ Firebase not available:', e.message);
+            console.warn('⚠️ Firestore paint formula load error:', e.message);
         }
     }
     
@@ -5087,7 +5062,7 @@
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.7.47';
+        const CURRENT_VERSION = 'v1.7.49';
         const CURRENT_DATE = '2026-02-28';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -9794,13 +9769,13 @@
             if (el.textContent.includes('Batch Print')) el.remove();
         });
         
-        // Generate forms in sequence
-        notify(`📦 Generating ${forms.length} forms...`);
-        window.autoPrintMode = true;  // Enable auto-print for batch mode
-        let completed = 0;
+        // Generate forms in sequence with enough delay for each PDF to generate & download
+        const totalForms = forms.length;
+        notify(`📦 Generating ${totalForms} form${totalForms > 1 ? 's' : ''}... they will download one by one`);
+        window.autoPrintMode = true;  // Enable batch download mode
+        
         forms.forEach((formData, index) => {
             setTimeout(() => {
-                // formData now has { name, qty, func } structure
                 if (formData.func === 'genSupplyDocket') genSupplyDocket();
                 else if (formData.func === 'genMixingCard') genMixingCard();
                 else if (formData.func === 'genCoverSheet') genCoverSheet();
@@ -9810,12 +9785,14 @@
                 else if (formData.func === 'genQuoteForm') genQuoteForm();
                 else if (formData.func === 'genInvoice') genInvoice();
                 
-                completed++;
-                if (completed === forms.length) {
-                    notify(`✓ Batch print complete: ${forms.length} forms generated`);
-                    window.autoPrintMode = false;  // Disable after batch complete
+                // After the last form, turn off batch mode
+                if (index === totalForms - 1) {
+                    setTimeout(() => {
+                        window.autoPrintMode = false;
+                        notify(`✅ Batch complete — ${totalForms} PDF${totalForms > 1 ? 's' : ''} downloaded`);
+                    }, 600);
                 }
-            }, index * 100); // Slight delay between each
+            }, index * 800); // 800ms between each so downloads don't clash
         });
     }
 
@@ -11278,8 +11255,21 @@
     function showPDFPreview(pdfDataUri, filename, title) {
         console.log('🔍 showPDFPreview called with:', filename);
         
-        // Check if we're in batch print auto-print mode
-        const autoPrint = window.autoPrintMode === true;
+        // In batch mode: skip the modal entirely — just download the PDF directly
+        if (window.autoPrintMode === true) {
+            try {
+                const link = document.createElement('a');
+                link.href = pdfDataUri;
+                link.download = filename || 'document.pdf';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                console.log('📦 Batch download:', filename);
+            } catch(e) {
+                console.error('Batch download error:', e);
+            }
+            return;
+        }
         
         try {
             const modal = document.getElementById('pdfPreviewModal');
@@ -11292,44 +11282,17 @@
                 return;
             }
             
-            console.log('✓ Modal found, showing...');
-            
             // Show modal
             modal.style.display = 'flex';
             modal.style.visibility = 'visible';
-            
-            // Show spinner
             spinner.style.display = 'block';
-            
-            // Set title
             document.getElementById('pdfPreviewTitle').textContent = title || 'PDF Preview';
             
-            // Load PDF into iframe
-            console.log('📄 Loading PDF into iframe...');
             iframe.src = pdfDataUri;
+            iframe.onload = () => { spinner.style.display = 'none'; };
             
-            // Hide spinner and auto-print if needed
-            iframe.onload = () => {
-                console.log('✓ PDF loaded in iframe');
-                spinner.style.display = 'none';
-                
-                if (autoPrint) {
-                    // Auto-print for batch mode
-                    console.log('🖨️ Auto-printing...');
-                    setTimeout(() => {
-                        try {
-                            iframe.contentWindow.print();
-                        } catch(e) {
-                            console.error('Auto-print error:', e);
-                        }
-                    }, 500);
-                }
-            };
-            
-            // Fallback: hide spinner after 3 seconds anyway
-            setTimeout(() => {
-                spinner.style.display = 'none';
-            }, 3000);
+            // Fallback: hide spinner after 3 seconds
+            setTimeout(() => { spinner.style.display = 'none'; }, 3000);
             
             currentPDFData = pdfDataUri;
             currentPDFFilename = filename;
@@ -11678,6 +11641,17 @@
     
     function saveClientDatabase(db) {
         localStorage.setItem('clientDatabase', JSON.stringify(db));
+        // Sync to Firestore for cross-device access
+        try {
+            if (window.currentUser && window.firebaseDb && window.setDoc && window.doc) {
+                const ref = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'clientDatabase');
+                window.setDoc(ref, { clients: db, updated: new Date().toISOString() })
+                    .then(() => console.log('☁️ Client database synced to Firestore'))
+                    .catch(e => console.warn('⚠️ Firestore client save failed:', e));
+            }
+        } catch(e) {
+            console.warn('⚠️ Firestore client sync error:', e.message);
+        }
     }
     
     function filterClientList() {
@@ -12356,13 +12330,14 @@
                 <strong style="color:#9c27b0;">🔍 Diagnose:</strong> Shows exactly what's in browser storage (check console F12)
             </p>
             
-            <table style="width:100%; border-collapse:collapse; font-size:10px; background:#fff;">
+            <div style="-webkit-overflow-scrolling:touch; overflow-x:auto; width:100%;">
+            <table style="min-width:480px; width:100%; border-collapse:collapse; font-size:10px; background:#fff;">
                 <tr style="background:#000; color:var(--gs); font-weight:900;">
-                    <th style="padding:8px; text-align:left; width:150px;">Profile</th>
-                    <th style="padding:8px; text-align:center;">Matt</th>
-                    <th style="padding:8px; text-align:center;">Satin</th>
-                    <th style="padding:8px; text-align:center;">Semi-Gloss</th>
-                    <th style="padding:8px; text-align:center;">Gloss</th>
+                    <th style="padding:8px; text-align:left; min-width:150px;">Profile</th>
+                    <th style="padding:8px; text-align:center; min-width:80px;">Matt</th>
+                    <th style="padding:8px; text-align:center; min-width:80px;">Satin</th>
+                    <th style="padding:8px; text-align:center; min-width:80px;">Semi-Gloss</th>
+                    <th style="padding:8px; text-align:center; min-width:80px;">Gloss</th>
                 </tr>
         `;
         
@@ -12447,7 +12422,7 @@
             html += `<tr style="background:#fffaf0;"><td colspan="5" style="padding:12px; text-align:center; color:#999; font-size:11px;">✓ All doors allocated!</td></tr>`;
         }
         
-        html += `</table>`;
+        html += `</table></div>`;
         target.innerHTML = html;
     }
     
@@ -12540,7 +12515,21 @@
     function updatePricingMatrix(tier, code, priceIndex, val) {
         masterMatrix[tier][code][priceIndex + 1] = parseFloat(val);
         localStorage.setItem('masterMatrix', JSON.stringify(masterMatrix));
+        syncMasterMatrixToFirestore();
         notify('✓ Price Updated');
+    }
+    
+    function syncMasterMatrixToFirestore() {
+        try {
+            if (window.currentUser && window.firebaseDb && window.setDoc && window.doc) {
+                const ref = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'masterMatrix');
+                window.setDoc(ref, { matrix: masterMatrix, updated: new Date().toISOString() })
+                    .then(() => console.log('☁️ Pricing matrix synced to Firestore'))
+                    .catch(e => console.warn('⚠️ Firestore pricing save failed:', e));
+            }
+        } catch(e) {
+            console.warn('⚠️ Firestore pricing sync error:', e.message);
+        }
     }
     
     // Edit door name in price matrix
@@ -13869,6 +13858,12 @@ Provide helpful, concise advice about painting, joinery, measurements, job plann
             if (typeof initializeApp === 'function') {
                 try { setTimeout(() => initializeApp(), 50); } catch(e) {}
             }
+            // Always reload Firebase data on login - ensures cross-device sync on iOS
+            setTimeout(() => {
+                if (typeof loadAllDataFromFirebase === 'function') {
+                    loadAllDataFromFirebase().catch(e => console.warn('loadAllDataFromFirebase:', e));
+                }
+            }, 300);
         }
 
         // If a Firebase session is already alive (locked screen scenario),
@@ -13974,9 +13969,36 @@ Provide helpful, concise advice about painting, joinery, measurements, job plann
     }
 
     function fullSignOut() {
-        if (confirm('Fully sign out of Firebase?\nYou will need your email and password to log back in.')) {
-            window.signOut();
-        }
+        // Show a proper warning modal before signing out
+        const modal = document.createElement('div');
+        modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:99999;';
+        modal.innerHTML = `
+            <div style="background:#fff;border-radius:14px;padding:28px;max-width:340px;width:90%;box-shadow:0 12px 40px rgba(0,0,0,0.35);text-align:center;">
+                <div style="font-size:48px;margin-bottom:12px;">⚠️</div>
+                <h3 style="margin:0 0 10px;font-weight:900;color:#b71c1c;font-size:18px;">Full Firebase Sign Out</h3>
+                <p style="font-size:13px;color:#555;margin:0 0 18px;line-height:1.6;">
+                    This will <strong>completely sign you out</strong> of Firebase.<br><br>
+                    You will need your <strong>email &amp; password</strong> to log back in — the Staff PIN will not work until you do.
+                </p>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                    <button onclick="this.closest('div').parentElement.parentElement.remove()" 
+                        style="padding:12px;background:#e0e0e0;color:#333;border:none;border-radius:8px;font-weight:900;cursor:pointer;font-size:13px;">
+                        CANCEL
+                    </button>
+                    <button onclick="
+                        this.closest('div').parentElement.parentElement.remove();
+                        window.signOut().then(() => {
+                            const mh=document.getElementById('mainHeader');
+                            const mn=document.getElementById('mainNavTabs');
+                            if(mh)mh.style.display='none';
+                            if(mn)mn.style.display='none';
+                        }).catch(e => console.error(e));
+                    " style="padding:12px;background:#ff3b30;color:#fff;border:none;border-radius:8px;font-weight:900;cursor:pointer;font-size:13px;">
+                        &#x1F6AA; SIGN OUT
+                    </button>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
     }
 
     // Save job data to Firebase
@@ -13995,9 +14017,10 @@ Provide helpful, concise advice about painting, joinery, measurements, job plann
     // Load all jobs from Firebase
     async function loadAllDataFromFirebase() {
         if (!window.currentUser) return;
+        window.loadAllDataFromFirebase = loadAllDataFromFirebase; // keep self-reference fresh
         
         try {
-            // Build reference to jobs subcollection properly
+            // ── 1. Jobs ────────────────────────────────────────────
             const userDocRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid);
             const jobsCollectionRef = window.collection(userDocRef, 'jobs');
             const snapshot = await window.getDocs(jobsCollectionRef);
@@ -14005,22 +14028,63 @@ Provide helpful, concise advice about painting, joinery, measurements, job plann
             snapshot.forEach(doc => {
                 jobs.push({ ...doc.data(), id: doc.id });
             });
-            
-            // Update localStorage with Firebase data (for compatibility)
             localStorage.setItem('jobHistory', JSON.stringify(jobs));
             fullHistory = jobs;
             history = jobs.filter(j => !j.completed);
-            
-            // Update UI - wrapped in try/catch
+            try { if (typeof renderHistory === 'function') renderHistory(); } catch(e) {}
+
+            // ── 2. Paint Formulas ──────────────────────────────────
             try {
-                if (typeof renderHistory === 'function') renderHistory();
-            } catch (e) {
-                console.warn('renderHistory error:', e);
-            }
+                const pfRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'paintFormulas');
+                const pfSnap = await window.getDoc(pfRef);
+                if (pfSnap.exists()) {
+                    const pfData = pfSnap.data();
+                    if (Array.isArray(pfData.formulas) && pfData.formulas.length > 0) {
+                        paintDatabase = pfData.formulas;
+                        localStorage.setItem('paintFormulas', JSON.stringify(paintDatabase));
+                        console.log('☁️ Loaded', paintDatabase.length, 'paint formulas from Firestore');
+                        try { if (typeof renderPaintFormulaList === 'function') renderPaintFormulaList(); } catch(e) {}
+                    }
+                }
+            } catch(e) { console.warn('Paint formula load error:', e.message); }
+
+            // ── 3. Client Database ─────────────────────────────────
+            try {
+                const cdRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'clientDatabase');
+                const cdSnap = await window.getDoc(cdRef);
+                if (cdSnap.exists()) {
+                    const cdData = cdSnap.data();
+                    if (cdData.clients && typeof cdData.clients === 'object') {
+                        localStorage.setItem('clientDatabase', JSON.stringify(cdData.clients));
+                        console.log('☁️ Client database loaded from Firestore');
+                        try { if (typeof renderClientList === 'function') renderClientList(); } catch(e) {}
+                    }
+                }
+            } catch(e) { console.warn('Client database load error:', e.message); }
+
+            // ── 4. Pricing Matrix ──────────────────────────────────
+            try {
+                const mmRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'masterMatrix');
+                const mmSnap = await window.getDoc(mmRef);
+                if (mmSnap.exists()) {
+                    const mmData = mmSnap.data();
+                    if (mmData.matrix && typeof mmData.matrix === 'object' && Object.keys(mmData.matrix).length > 0) {
+                        masterMatrix = mmData.matrix;
+                        localStorage.setItem('masterMatrix', JSON.stringify(masterMatrix));
+                        console.log('☁️ Pricing matrix loaded from Firestore');
+                    }
+                }
+            } catch(e) { console.warn('Pricing matrix load error:', e.message); }
+
         } catch (err) {
-            console.error('Error loading jobs from Firebase:', err);
+            console.error('Error loading data from Firebase:', err);
         }
     }
+
+    // Expose critical Firebase functions to window so the module script can access them
+    // (the module's onAuthStateChanged fires before main script fully parses on slow devices)
+    window.loadAllDataFromFirebase = loadAllDataFromFirebase;
+    window.loadPaintFormulasFromFirebase = loadPaintFormulasFromFirebase;
 
     // Set up real-time listener for jobs
     function setupRealtimeSync() {
@@ -14221,15 +14285,3 @@ Provide helpful, concise advice about painting, joinery, measurements, job plann
         
         const filtered = paintDatabase.filter(f => 
             f.color.toLowerCase().includes(query) ||
-            f.product.toLowerCase().includes(query) ||
-            f.code.toLowerCase().includes(query)
-        );
-        
-        renderPaintFormulaList(filtered);
-    }
-
-</script>
-
-</div> <!-- Close appContainer -->
-</body>
-</html>
