@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.7.53 | Updated: 2026-03-02                       ║
+║  Version: v1.7.54 | Updated: 2026-03-02                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.7.53';
+    const CURRENT_VERSION = 'v1.7.54';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1077,8 +1077,8 @@
                         <!-- Tinters Section -->
                         <div style="background:#fff; padding:10px; border-radius:6px; border:1px solid #eee; margin-bottom:10px;">
                             <div style="font-size:10px; font-weight:900; margin-bottom:8px; color:#666;">TINTERS (code space grams per line)</div>
-                            <textarea id="tintersList" placeholder="ITE303 5.88&#10;ITE306 5.95&#10;ITE310 5.75" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:11px; min-height:60px; box-sizing:border-box; font-family:monospace;"></textarea>
-                            <div style="font-size:9px; color:#999; margin-top:5px;">One tinter per line. Format: CODE GRAMS (just a space between them)</div>
+                            <textarea id="tintersList" placeholder="ITE303 5.88&#10;ITE306 5.95&#10;ITE310 5.75&#10;&#10;Or with alt code for larger qty:&#10;ITE303 5.88 ITE103 4" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:11px; min-height:80px; box-sizing:border-box; font-family:monospace;"></textarea>
+                            <div style="font-size:9px; color:#999; margin-top:5px;">One tinter per line. Basic: <strong>CODE GRAMS</strong> &nbsp;|&nbsp; With alt code for larger qty: <strong>CODE GRAMS ALT_CODE LITRES_THRESHOLD</strong><br>Example: <code>ITE303 5.88 ITE103 4</code> → uses ITE303 under 4L, ITE103 at 4L+</div>
                         </div>
                         
                         <button onclick="addNewPaintFormulaUI()" style="width:100%; padding:10px; background:#34c759; color:#fff; border:none; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">+ ADD FORMULA</button>
@@ -1193,7 +1193,7 @@
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.7.53</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.7.54</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -2793,16 +2793,26 @@
                 const trimmed = line.trim();
                 
                 const match = trimmed.match(/^(\S+)\s+([\d,.]+)$/);  // Simple: CODE GRAMS (space-separated)
-                console.log(`      Regex match:`, match ? 'SUCCESS' : 'FAILED');
+                const matchAlt = trimmed.match(/^(\S+)\s+([\d,.]+)\s+(\S+)\s+([\d,.]+)$/);  // With alt: CODE GRAMS ALT_CODE THRESHOLD
                 
-                if (match) {
+                if (matchAlt) {
+                    const amount = parseFloat(matchAlt[2].replace(',', '.'));
+                    const altThreshold = parseFloat(matchAlt[4].replace(',', '.'));
+                    colourants.push({
+                        code: matchAlt[1],
+                        amount: amount,
+                        altCode: matchAlt[3],
+                        altThreshold: altThreshold  // litre qty at which to switch to altCode
+                    });
+                    console.log(`      Alt code match: ${matchAlt[1]} → ${matchAlt[3]} at ${altThreshold}L`);
+                } else if (match) {
                     const amount = parseFloat(match[2].replace(',', '.'));  // Handle both , and . decimals
                     colourants.push({
                         code: match[1],
                         amount: amount
                     });
                 } else {
-                    console.log(`      → NO MATCH (expected format: CODE GRAMS - just a space between)`);
+                    console.log(`      → NO MATCH (expected format: CODE GRAMS or CODE GRAMS ALT_CODE THRESHOLD)`);
                 }
             });
         } else {
@@ -3011,7 +3021,10 @@
             const whiteBaseText = (f.whiteBase && Array.isArray(f.whiteBase)) ? 
                 f.whiteBase.map(item => `${item.code}: ${item.grams}`).join('\n') : '';
             const colourantsText = (f.colourants && Array.isArray(f.colourants)) ? 
-                f.colourants.map(c => `${c.code} ${c.amount || c.grams}`).join('\n') : '';  // Space-separated
+                f.colourants.map(c => {
+                    const base = `${c.code} ${c.amount || c.grams}`;
+                    return c.altCode ? `${base} ${c.altCode} ${c.altThreshold}` : base;
+                }).join('\n') : '';  // Space-separated, include alt code if present
             
             console.log('  colourants array:', f.colourants);
             console.log('  colourantsText result:', JSON.stringify(colourantsText));
@@ -3096,17 +3109,26 @@
             });
         }
         
-        // Parse colourants (tinters)
+        // Parse colourants (tinters) - supports: "CODE GRAMS" or "CODE GRAMS ALT_CODE THRESHOLD"
         const colourantsText = document.getElementById('editColourants').value.trim();
         f.colourants = [];
         if (colourantsText) {
             console.log('📝 TINTERS TEXT:\n' + colourantsText);
             colourantsText.split('\n').forEach((line, idx) => {
-                // Accept both: "CODE GRAMS" (space) or "CODE: GRAMS" (colon)
-                const match = line.match(/^(\S+)\s+[\s:]*\s*([\d,.]+)/);
-                if (match) {
+                const lineT = line.trim();
+                // Try alt code format first: CODE GRAMS ALT_CODE THRESHOLD
+                const matchAlt = lineT.match(/^(\S+)\s+([\d,.]+)\s+(\S+)\s+([\d,.]+)/);
+                const match = lineT.match(/^(\S+)\s+[\s:]*\s*([\d,.]+)/);
+                if (matchAlt) {
+                    f.colourants.push({
+                        code: matchAlt[1],
+                        amount: parseNumber(matchAlt[2]),
+                        altCode: matchAlt[3],
+                        altThreshold: parseNumber(matchAlt[4])
+                    });
+                } else if (match) {
                     const amount = parseNumber(match[2]);
-                    f.colourants.push({ code: match[1], amount: amount });  // Store as number
+                    f.colourants.push({ code: match[1], amount: amount });
                 }
             });
         }
@@ -5118,7 +5140,7 @@
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.7.53';
+        const CURRENT_VERSION = 'v1.7.54';
         const CURRENT_DATE = '2026-02-28';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -5947,18 +5969,18 @@
                     <div style="margin-bottom:15px;">
                         <label style="display:block; font-weight:900; margin-bottom:8px; font-size:12px; color:#666;">PANEL TYPE</label>
                         <div style="display:flex; gap:6px;">
-                            <button onclick="setEditPanelType(${index}, 'Flat')" id="editPanel-Flat" style="flex:1; padding:8px; background:${item.panelType === 'Flat' ? '#17a2b8' : '#f0f0f0'}; color:${item.panelType === 'Flat' ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">FLAT</button>
-                            <button onclick="setEditPanelType(${index}, 'Moulded')" id="editPanel-Moulded" style="flex:1; padding:8px; background:${item.panelType === 'Moulded' ? '#17a2b8' : '#f0f0f0'}; color:${item.panelType === 'Moulded' ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">MOULDED</button>
+                            <button onclick="setEditPanelType(${index}, 'Flat')" id="editPanel-Flat" style="flex:1; padding:8px; background:${(item.fm||item.panelType) === 'Flat' ? '#17a2b8' : '#f0f0f0'}; color:${(item.fm||item.panelType) === 'Flat' ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">FLAT</button>
+                            <button onclick="setEditPanelType(${index}, 'Moulded')" id="editPanel-Moulded" style="flex:1; padding:8px; background:${(item.fm||item.panelType) === 'Moulded' ? '#17a2b8' : '#f0f0f0'}; color:${(item.fm||item.panelType) === 'Moulded' ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">MOULDED</button>
                         </div>
                     </div>
                     
                     <div style="margin-bottom:15px;">
                         <label style="display:block; font-weight:900; margin-bottom:8px; font-size:12px; color:#666;">PAINT MODE</label>
                         <div style="display:flex; gap:6px;">
-                            <button onclick="setEditEdgeConfig(${index}, 'SS')" id="editEdge-SS" style="flex:1; padding:8px; background:${item.edgeConfig === 'SS' ? '#17a2b8' : '#f0f0f0'}; color:${item.edgeConfig === 'SS' ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">SS</button>
-                            <button onclick="setEditEdgeConfig(${index}, 'SE')" id="editEdge-SE" style="flex:1; padding:8px; background:${item.edgeConfig === 'SE' ? '#17a2b8' : '#f0f0f0'}; color:${item.edgeConfig === 'SE' ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">SE</button>
-                            <button onclick="setEditEdgeConfig(${index}, 'DS')" id="editEdge-DS" style="flex:1; padding:8px; background:${item.edgeConfig === 'DS' ? '#17a2b8' : '#f0f0f0'}; color:${item.edgeConfig === 'DS' ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">DS</button>
-                            <button onclick="setEditEdgeConfig(${index}, 'Custom')" id="editEdge-Custom" style="flex:1; padding:8px; background:${item.edgeConfig === 'Custom' ? '#17a2b8' : '#f0f0f0'}; color:${item.edgeConfig === 'Custom' ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">CUSTOM</button>
+                            <button onclick="setEditEdgeConfig(${index}, 'SS')" id="editEdge-SS" style="flex:1; padding:8px; background:${item.mode === 'SS' ? '#17a2b8' : '#f0f0f0'}; color:${item.mode === 'SS' ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">SS</button>
+                            <button onclick="setEditEdgeConfig(${index}, 'SE')" id="editEdge-SE" style="flex:1; padding:8px; background:${item.mode === 'SE' ? '#17a2b8' : '#f0f0f0'}; color:${item.mode === 'SE' ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">SE</button>
+                            <button onclick="setEditEdgeConfig(${index}, 'DS')" id="editEdge-DS" style="flex:1; padding:8px; background:${item.mode === 'DS' ? '#17a2b8' : '#f0f0f0'}; color:${item.mode === 'DS' ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">DS</button>
+                            <button onclick="setEditEdgeConfig(${index}, 'Custom')" id="editEdge-Custom" style="flex:1; padding:8px; background:${item.mode === 'Custom' ? '#17a2b8' : '#f0f0f0'}; color:${item.mode === 'Custom' ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">CUSTOM</button>
                         </div>
                     </div>
                     
@@ -6124,7 +6146,8 @@
 
     function setEditPanelType(index, panelType) {
         if (items[index]) {
-            items[index].panelType = panelType;
+            items[index].fm = panelType;        // fm is the real field used throughout the app
+            items[index].panelType = panelType; // keep in sync for any legacy references
             document.querySelectorAll('[id^="editPanel-"]').forEach(btn => {
                 btn.style.background = btn.id === `editPanel-${panelType}` ? '#17a2b8' : '#f0f0f0';
                 btn.style.color = btn.id === `editPanel-${panelType}` ? '#fff' : '#000';
@@ -6134,7 +6157,8 @@
 
     function setEditEdgeConfig(index, edgeConfig) {
         if (items[index]) {
-            items[index].edgeConfig = edgeConfig;
+            items[index].mode = edgeConfig;       // mode is the real field used throughout the app
+            items[index].edgeConfig = edgeConfig; // keep in sync
             document.querySelectorAll('[id^="editEdge-"]').forEach(btn => {
                 btn.style.background = btn.id === `editEdge-${edgeConfig}` ? '#17a2b8' : '#f0f0f0';
                 btn.style.color = btn.id === `editEdge-${edgeConfig}` ? '#fff' : '#000';
@@ -8190,7 +8214,15 @@
                     if (formula.colourants && formula.colourants.length > 0) {
                         // Show ALL actual tinter data first
                         formula.colourants.forEach((tint, idx) => {
-                            const code = tint.code || '';
+                            const baseCode = tint.code || '';
+                            // Determine which code to use based on total paint qty
+                            let code = baseCode;
+                            let usingAlt = false;
+                            if (tint.altCode && tint.altThreshold && paintQty >= tint.altThreshold) {
+                                code = tint.altCode;
+                                usingAlt = true;
+                            }
+                            
                             // Robust parsing: handle all decimal formats
                             let gramStr = String(tint.amount || tint.grams || '0').trim();
                             let grams = 0;
@@ -8216,7 +8248,15 @@
                             grams = isNaN(grams) ? 0 : grams;
                             const name = tint.name || '';
                             tinterRunningTotal += grams;
-                            doc.text(`${code}: ${grams.toFixed(2)}g ${name}`, 30, boxY);
+                            
+                            // Show the code with alt indicator if switched
+                            let codeDisplay = code;
+                            if (usingAlt) {
+                                codeDisplay = code + ' ▲';  // ▲ = switched to large-qty code
+                            } else if (tint.altCode) {
+                                codeDisplay = code + ' ▽';  // ▽ = small qty code, alt exists
+                            }
+                            doc.text(`${codeDisplay}: ${grams.toFixed(2)}g ${name}`, 30, boxY);
                             doc.text(`${tinterRunningTotal.toFixed(2)}g`, 140, boxY);
                             boxY += 5;
                             actualTinterCount++;
@@ -8237,6 +8277,18 @@
                         }
                     }
                     
+                    boxY += 3;
+                    
+                    // If any tinters have alt codes, show a legend
+                    const hasAltCodes = formula.colourants && formula.colourants.some(t => t.altCode);
+                    if (hasAltCodes) {
+                        doc.setFontSize(7.5);
+                        doc.setFont(undefined, 'normal');
+                        doc.setTextColor(120, 120, 120);
+                        doc.text(`▽ = small qty code  |  ▲ = large qty code (switched at threshold for ${paintQty}L job)`, 25, boxY);
+                        doc.setTextColor(0, 0, 0);
+                        boxY += 6;
+                    }
                     boxY += 3;
                     
                     // Total weight - ALWAYS SHOW with robust parsing
@@ -11467,6 +11519,8 @@
         )];
         
         // Build colour surcharge selectors - MULTI-SELECT with checkboxes
+        const savedCharges = loadAdditionalCharges();
+        const cm = savedCharges.colourMultipliers;
         let colourHTML = '';
         if (uniqueColours.length > 0) {
             colourHTML = '<div style="margin-bottom:8px;"><label style="display:block; font-weight:bold; color:#333; margin-bottom:6px; font-size:11px;">🎨 Paint Colour Surcharges:</label>';
@@ -11477,32 +11531,32 @@
                     <div style="font-weight:900; font-size:10px; color:#000; margin-bottom:5px;">${colour}</div>
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; font-size:9px;">
                         <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
-                            <input type="checkbox" class="surcharge-check" data-colour="${colour}" data-type="Clear" data-mult="0" style="cursor:pointer; width:14px; height:14px;">
+                            <input type="checkbox" class="surcharge-check" data-colour="${colour}" data-type="Clear" data-mult="${cm.Clear || 0}" style="cursor:pointer; width:14px; height:14px;">
                             <span>Clear</span>
                         </label>
                         <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
-                            <input type="checkbox" class="surcharge-check" data-colour="${colour}" data-type="Standard" data-mult="0.05" style="cursor:pointer; width:14px; height:14px;">
-                            <span>Std +5%</span>
+                            <input type="checkbox" class="surcharge-check" data-colour="${colour}" data-type="Standard" data-mult="${cm.Standard || 0.05}" style="cursor:pointer; width:14px; height:14px;">
+                            <span>Std +${((cm.Standard||0.05)*100).toFixed(0)}%</span>
                         </label>
                         <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
-                            <input type="checkbox" class="surcharge-check" data-colour="${colour}" data-type="Light" data-mult="0.05" style="cursor:pointer; width:14px; height:14px;">
-                            <span>Light +5%</span>
+                            <input type="checkbox" class="surcharge-check" data-colour="${colour}" data-type="Light" data-mult="${cm.Light || 0.05}" style="cursor:pointer; width:14px; height:14px;">
+                            <span>Light +${((cm.Light||0.05)*100).toFixed(0)}%</span>
                         </label>
                         <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
-                            <input type="checkbox" class="surcharge-check" data-colour="${colour}" data-type="Dark" data-mult="0.15" style="cursor:pointer; width:14px; height:14px;">
-                            <span>Dark +15%</span>
+                            <input type="checkbox" class="surcharge-check" data-colour="${colour}" data-type="Dark" data-mult="${cm.Dark || 0.15}" style="cursor:pointer; width:14px; height:14px;">
+                            <span>Dark +${((cm.Dark||0.15)*100).toFixed(0)}%</span>
                         </label>
                         <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
-                            <input type="checkbox" class="surcharge-check" data-colour="${colour}" data-type="ExtraTint" data-mult="0.3" style="cursor:pointer; width:14px; height:14px;">
-                            <span>Tint +30%</span>
+                            <input type="checkbox" class="surcharge-check" data-colour="${colour}" data-type="ExtraTint" data-mult="${cm['Extra Tint'] || 0.3}" style="cursor:pointer; width:14px; height:14px;">
+                            <span>Tint +${((cm['Extra Tint']||0.3)*100).toFixed(0)}%</span>
                         </label>
                         <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
-                            <input type="checkbox" class="surcharge-check" data-colour="${colour}" data-type="Undercoat" data-mult="0.8" style="cursor:pointer; width:14px; height:14px;">
-                            <span>UC +80%</span>
+                            <input type="checkbox" class="surcharge-check" data-colour="${colour}" data-type="Undercoat" data-mult="${cm.Undercoat || 0.8}" style="cursor:pointer; width:14px; height:14px;">
+                            <span>UC +${((cm.Undercoat||0.8)*100).toFixed(0)}%</span>
                         </label>
                         <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
                             <input type="checkbox" class="surcharge-check" data-colour="${colour}" data-type="ColourMatch" data-mult="1.3" style="cursor:pointer; width:14px; height:14px;">
-                            <span>Colour Match</span>
+                            <span>Colour Match $${savedCharges.colourMatchFlatRate||85}</span>
                         </label>
                     </div>
                 </div>`;
