@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.7.52 | Updated: 2026-03-02                       ║
+║  Version: v1.7.53 | Updated: 2026-03-02                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.7.52';
+    const CURRENT_VERSION = 'v1.7.53';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1193,7 +1193,7 @@
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.7.52</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.7.53</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -4127,7 +4127,6 @@
     function completeJobById(jobNum, dateReceived, client) {
         const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
         
-        // Find job by unique identifiers
         const jobIdx = history.findIndex(j => j.jobNum === jobNum && j.dateReceived === dateReceived && j.client === client);
         
         if (jobIdx < 0) {
@@ -4138,50 +4137,87 @@
         
         const job = history[jobIdx];
         
-        if (confirm(`Complete Job #${job.jobNum}?\n\nThis will:\n✓ Mark job as complete\n✓ Generate all PDFs\n✓ Alert admins`)) {
-            // Mark job as complete
-            job.completed = true;
-            job.completedDate = new Date().toISOString();
-            job.dateCompleted = new Date().toLocaleDateString('en-AU');
-            history[jobIdx] = job;
-            localStorage.setItem('jobHistory', JSON.stringify(history));
-            
-            
-            // Verify it was saved
-            const verify = JSON.parse(localStorage.getItem('jobHistory')) || [];
-            const verifiedJob = verify.find(j => j.jobNum === jobNum && j.dateReceived === dateReceived && j.client === client);
-            if (verifiedJob && verifiedJob.completed) {
-                console.log(`✓ Verified: Job is now marked as completed in localStorage`);
-            } else {
-                console.error(`❌ FAILED: Job completion not saved properly!`);
-                notify('⚠️ Error: Failed to save completion status');
-                return;
-            }
-            
-            // Sync to Firebase IMMEDIATELY
-            if (window.syncJobsToFirebase) {
-                try {
-                    window.syncJobsToFirebase();
-                    console.log('🔄 Synced completion to Firebase');
-                } catch(e) {
-                    console.error('Firebase sync error:', e);
-                }
-            }
-            
-            // Generate batch PDFs
-            generateBatchPDFs(job);
-            
-            // Alert admins
-            alertAdmins(job);
-            
-            notify('✓ Job Completed - PDFs Generated');
-            showGlobalNotification(`✅ JOB COMPLETED #${job.jobNum}\n${job.client} • ${job.totalParts} parts`, '#e8f5e9', '#34c759');
-            
-            // Re-render ALL views to show completion
-            renderHistory();
-            renderJobTasks();
-            renderScheduleCalendar();
+        // Show a modal with a date picker instead of a plain confirm()
+        const todayISO = new Date().toISOString().split('T')[0];
+        
+        const modal = document.createElement('div');
+        modal.id = 'completeJobModal';
+        modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:99999;';
+        modal.innerHTML = `
+            <div style="background:#fff;border-radius:14px;padding:28px;max-width:360px;width:90%;box-shadow:0 12px 40px rgba(0,0,0,0.3);">
+                <div style="font-size:36px;text-align:center;margin-bottom:10px;">✅</div>
+                <h3 style="margin:0 0 6px;font-weight:900;font-size:17px;text-align:center;">Complete Job #${job.jobNum}</h3>
+                <p style="font-size:12px;color:#666;text-align:center;margin:0 0 20px;">${job.client}${job.jobName ? ' — ' + job.jobName : ''}</p>
+                
+                <label style="display:block;font-weight:900;font-size:11px;color:#555;margin-bottom:6px;">DATE COMPLETED</label>
+                <input type="date" id="completionDatePicker" value="${todayISO}"
+                    style="width:100%;padding:12px;border:2px solid #34c759;border-radius:8px;font-size:15px;box-sizing:border-box;margin-bottom:20px;font-weight:900;color:#333;">
+                
+                <p style="font-size:11px;color:#888;margin:0 0 20px;line-height:1.5;">
+                    This will mark the job complete, generate all PDFs and alert admins.
+                </p>
+                
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                    <button onclick="document.getElementById('completeJobModal').remove()"
+                        style="padding:13px;background:#e0e0e0;color:#333;border:none;border-radius:8px;font-weight:900;cursor:pointer;font-size:13px;">
+                        CANCEL
+                    </button>
+                    <button onclick="confirmCompleteJob('${jobNum}','${dateReceived}','${client}')"
+                        style="padding:13px;background:#34c759;color:#fff;border:none;border-radius:8px;font-weight:900;cursor:pointer;font-size:13px;">
+                        ✅ COMPLETE
+                    </button>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+    }
+    
+    function confirmCompleteJob(jobNum, dateReceived, client) {
+        const picker = document.getElementById('completionDatePicker');
+        const chosenDateISO = picker ? picker.value : new Date().toISOString().split('T')[0];
+        
+        // Format as DD/MM/YYYY for display
+        const [y, m, d] = chosenDateISO.split('-');
+        const chosenDateDisplay = `${d}/${m}/${y}`;
+        const chosenDateISOfull = new Date(chosenDateISO + 'T00:00:00').toISOString();
+        
+        // Close modal
+        const modal = document.getElementById('completeJobModal');
+        if (modal) modal.remove();
+        
+        const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
+        const jobIdx = history.findIndex(j => j.jobNum === jobNum && j.dateReceived === dateReceived && j.client === client);
+        if (jobIdx < 0) { notify('⚠️ Error: Job not found'); return; }
+        
+        const job = history[jobIdx];
+        job.completed = true;
+        job.completedDate = chosenDateISOfull;
+        job.dateCompleted = chosenDateDisplay;
+        history[jobIdx] = job;
+        localStorage.setItem('jobHistory', JSON.stringify(history));
+        
+        // Verify save
+        const verify = JSON.parse(localStorage.getItem('jobHistory')) || [];
+        const verifiedJob = verify.find(j => j.jobNum === jobNum && j.dateReceived === dateReceived && j.client === client);
+        if (!verifiedJob || !verifiedJob.completed) {
+            notify('⚠️ Error: Failed to save completion status');
+            return;
         }
+        
+        // Sync to Firebase
+        if (window.syncJobsToFirebase) {
+            try { window.syncJobsToFirebase(); } catch(e) { console.error('Firebase sync error:', e); }
+        }
+        
+        // Generate batch PDFs
+        generateBatchPDFs(job);
+        alertAdmins(job);
+        
+        notify(`✓ Job #${jobNum} completed on ${chosenDateDisplay} — PDFs generated`);
+        showGlobalNotification(`✅ JOB COMPLETED #${job.jobNum}\n${job.client} • ${chosenDateDisplay}`, '#e8f5e9', '#34c759');
+        
+        renderHistory();
+        renderJobTasks();
+        renderScheduleCalendar();
     }
     
     // Kept for backwards compatibility but calls new function
@@ -5082,7 +5118,7 @@
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.7.52';
+        const CURRENT_VERSION = 'v1.7.53';
         const CURRENT_DATE = '2026-02-28';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
