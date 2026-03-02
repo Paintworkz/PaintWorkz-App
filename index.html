@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.7.51 | Updated: 2026-03-01                       ║
+║  Version: v1.7.52 | Updated: 2026-03-02                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.7.51';
+    const CURRENT_VERSION = 'v1.7.52';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1193,7 +1193,7 @@
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.7.51</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.7.52</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -5082,7 +5082,7 @@
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.7.51';
+        const CURRENT_VERSION = 'v1.7.52';
         const CURRENT_DATE = '2026-02-28';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -5610,8 +5610,13 @@
         document.getElementById('h').value = ''; 
         document.getElementById('w').value = '';
         document.getElementById('desc').value = '';
-        const defaults = loadDefaultSettings();
-        document.getElementById('thk').value = defaults.thickness;  // Reset to default thickness
+        // Thickness is STICKY - keep last used value for batch entry
+        // Only reset if the field is blank
+        const thkEl = document.getElementById('thk');
+        if (thkEl && !thkEl.value) {
+            const defaults = loadDefaultSettings();
+            thkEl.value = defaults.thickness;
+        }
         
         // Focus on length (h) input for continuous data entry
         setTimeout(() => {
@@ -5927,6 +5932,11 @@
                     </div>
                     
                     <div style="margin-bottom:15px;">
+                        <label style="display:block; font-weight:900; margin-bottom:8px; font-size:12px; color:#666;">THICKNESS (mm)</label>
+                        <input type="number" id="editThkInput" value="${item.thk || 18}" min="1" max="100" style="width:100px; padding:10px; border:1px solid #ddd; border-radius:4px; font-size:14px; box-sizing:border-box;">
+                    </div>
+                    
+                    <div style="margin-bottom:15px;">
                         <label style="display:block; font-weight:900; margin-bottom:8px; font-size:12px; color:#666;">DOOR PROFILE</label>
                         <select id="editProfSelect" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:4px; font-size:14px; box-sizing:border-box;">
                             ${profOptions}
@@ -6020,6 +6030,7 @@
         try {
             const select = document.getElementById('editProfSelect');
             const descInput = document.getElementById('editDescInput');
+            const thkInput = document.getElementById('editThkInput');
             const brandInput = document.getElementById('editBrandInput');
             const colorInput = document.getElementById('editColorInput');
             const codeInput = document.getElementById('editCodeInput');
@@ -6029,6 +6040,7 @@
             
             const newProf = select.value;
             const newDesc = descInput.value.trim();
+            const newThk = thkInput ? thkInput.value : (items[index].thk || 18);
             const newBrand = brandInput.value.trim() || 'Dulux';
             const newColor = colorInput.value.trim();
             const newCode = codeInput.value.trim();
@@ -6041,10 +6053,12 @@
             
             items[index].prof = newProf;
             items[index].desc = newDesc.toUpperCase();
+            items[index].thk = newThk;
             items[index].brand = newBrand;
             items[index].color = newColor;
             items[index].code = newCode;
             items[index].finish = newFinish;
+            // type, panelType, edgeConfig are updated live by their setEdit* functions
             
             render();
             saveData();
@@ -6466,8 +6480,8 @@
             Object.entries(colourGroups).forEach((colourEntry, colourIndex) => {
                 const [colourName, colourItems] = colourEntry;
                 
-                // Page break if needed
-                if (y > 280) {
+                // Page break if needed - ensure enough room for heading + column headers + at least a few rows
+                if (y > 240) {
                     doc.addPage();
                     y = 20;
                 }
@@ -6510,6 +6524,26 @@
                 
                 let colourTotal = 0;
                 colourItems.forEach((item) => {
+                    // Page break check - if near bottom, start new page and reprint headers
+                    if (y > 270) {
+                        doc.addPage();
+                        y = 20;
+                        // Reprint column headers on new page
+                        let hStartX = x;
+                        doc.setFontSize(9);
+                        doc.setFont(undefined, 'bold');
+                        headers.forEach((header, i) => {
+                            doc.setDrawColor(0,0,0); doc.setFillColor(0,0,0); doc.setTextColor(255,255,255);
+                            doc.rect(hStartX, y, colWidths[i], cellHeight, 'FD');
+                            doc.text(header, hStartX + colWidths[i]/2, y + cellHeight/2 + 1.2, { align:'center' });
+                            hStartX += colWidths[i];
+                        });
+                        y += cellHeight;
+                        doc.setFont(undefined, 'normal');
+                        doc.setFontSize(8);
+                        doc.setTextColor(0,0,0);
+                    }
+                    
                     startX = x;
                     
                     const qty = item.qty || 1;
@@ -6839,8 +6873,8 @@
             Object.entries(colourGroups).forEach((colourEntry, colourIndex) => {
                 const [colourName, colourItems] = colourEntry;
                 
-                // Page break if needed
-                if (y > 280) {
+                // Page break if needed - ensure enough room for heading + column headers + at least a few rows
+                if (y > 240) {
                     doc.addPage();
                     y = 20;
                 }
@@ -6883,6 +6917,26 @@
                 
                 let colourTotal = 0;
                 colourItems.forEach((item) => {
+                    // Page break check - if near bottom, start new page and reprint headers
+                    if (y > 270) {
+                        doc.addPage();
+                        y = 20;
+                        // Reprint column headers on new page
+                        let hStartX = x;
+                        doc.setFontSize(9);
+                        doc.setFont(undefined, 'bold');
+                        headers.forEach((header, i) => {
+                            doc.setDrawColor(0,0,0); doc.setFillColor(0,0,0); doc.setTextColor(255,255,255);
+                            doc.rect(hStartX, y, colWidths[i], cellHeight, 'FD');
+                            doc.text(header, hStartX + colWidths[i]/2, y + cellHeight/2 + 1.2, { align:'center' });
+                            hStartX += colWidths[i];
+                        });
+                        y += cellHeight;
+                        doc.setFont(undefined, 'normal');
+                        doc.setFontSize(8);
+                        doc.setTextColor(0,0,0);
+                    }
+                    
                     startX = x;
                     
                     const qty = item.qty || 1;
@@ -7213,8 +7267,8 @@
             Object.entries(colourGroups).forEach((colourEntry, colourIndex) => {
                 const [colourName, colourItems] = colourEntry;
                 
-                // Page break if needed
-                if (y > 280) {
+                // Page break if needed - ensure enough room for heading + column headers + at least a few rows
+                if (y > 240) {
                     doc.addPage();
                     y = 20;
                 }
@@ -7257,6 +7311,26 @@
                 
                 let colourTotal = 0;
                 colourItems.forEach((item) => {
+                    // Page break check - if near bottom, start new page and reprint headers
+                    if (y > 270) {
+                        doc.addPage();
+                        y = 20;
+                        // Reprint column headers on new page
+                        let hStartX = x;
+                        doc.setFontSize(9);
+                        doc.setFont(undefined, 'bold');
+                        headers.forEach((header, i) => {
+                            doc.setDrawColor(0,0,0); doc.setFillColor(0,0,0); doc.setTextColor(255,255,255);
+                            doc.rect(hStartX, y, colWidths[i], cellHeight, 'FD');
+                            doc.text(header, hStartX + colWidths[i]/2, y + cellHeight/2 + 1.2, { align:'center' });
+                            hStartX += colWidths[i];
+                        });
+                        y += cellHeight;
+                        doc.setFont(undefined, 'normal');
+                        doc.setFontSize(8);
+                        doc.setTextColor(0,0,0);
+                    }
+                    
                     startX = x;
                     
                     const qty = item.qty || 1;
@@ -7760,7 +7834,7 @@
             const jobClient = document.getElementById('cli')?.value || 'Client Name';
             const jobNum = document.getElementById('jNum')?.value || document.getElementById('jN')?.value || '';
             const jobName = document.getElementById('jNm')?.value || 'Job Name';
-            const dateReceived = document.getElementById('dat')?.value || new Date().toLocaleDateString('en-AU');
+            const dateReceived = document.getElementById('dRec')?.value || document.getElementById('dat')?.value || new Date().toLocaleDateString('en-AU');
             const totalSQM = parseFloat(document.getElementById('tA')?.innerText || '0') || 0;  // FIX: was 'tot', should be 'tA'
             console.log('MIXING CARD START - totalSQM: ' + totalSQM + ', items: ' + items.length);
             
@@ -8488,7 +8562,7 @@
             const jobClient = document.getElementById('cli')?.value || 'CLIENT';
             const jobNum = document.getElementById('jNum')?.value || document.getElementById('jN')?.value || 'XXX';
             const jobName = document.getElementById('jNm')?.value || 'Job Name';
-            const dateReceived = document.getElementById('dat')?.value || new Date().toLocaleDateString('en-AU');
+            const dateReceived = document.getElementById('dRec')?.value || document.getElementById('dat')?.value || new Date().toLocaleDateString('en-AU');
             const totalSQM = parseFloat(document.getElementById('tot')?.innerText || '0') || 0;
             
             // Get job completion date from history (if marked complete)
