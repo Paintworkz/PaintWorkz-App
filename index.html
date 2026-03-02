@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.7.57 | Updated: 2026-03-02                       ║
+║  Version: v1.7.58 | Updated: 2026-03-03                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.7.57';
+    const CURRENT_VERSION = 'v1.7.58';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -226,6 +226,11 @@
         .sub-btn.active { background: #fff; color: #000; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
 
         .container { padding: 15px; max-width: 600px; margin: auto; }
+        @media (min-width: 900px) {
+            #admin-tab-pricing-content .container,
+            #admin-tab-pricing-content { max-width: none !important; width: 100% !important; }
+            #admin-pricing-matrix table { min-width: 700px !important; }
+        }
         .view-section { display:none !important; padding-top: var(--top-total); padding-bottom: 80px; } .view-section.active { display:block !important; }
         #admin.view-section { padding-top: 0 !important; padding-bottom: 0 !important; }
         #admin.view-section.active { display:flex !important; }
@@ -1074,11 +1079,24 @@
                             </div>
                         </div>
                         
-                        <!-- Tinters Section -->
+                        <!-- Tinters Section - structured rows -->
                         <div style="background:#fff; padding:10px; border-radius:6px; border:1px solid #eee; margin-bottom:10px;">
-                            <div style="font-size:10px; font-weight:900; margin-bottom:8px; color:#666;">TINTERS (code space grams per line)</div>
-                            <textarea id="tintersList" placeholder="ITE303 5.88&#10;ITE306 5.95&#10;ITE310 5.75&#10;&#10;Or with alt code for larger qty:&#10;ITE303 5.88 ITE103 4" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:11px; min-height:80px; box-sizing:border-box; font-family:monospace;"></textarea>
-                            <div style="font-size:9px; color:#999; margin-top:5px;">One tinter per line. Basic: <strong>CODE GRAMS</strong> &nbsp;|&nbsp; With alt code for larger qty: <strong>CODE GRAMS ALT_CODE LITRES_THRESHOLD</strong><br>Example: <code>ITE303 5.88 ITE103 4</code> → uses ITE303 under 4L, ITE103 at 4L+</div>
+                            <div style="font-size:10px; font-weight:900; margin-bottom:6px; color:#666;">TINTERS</div>
+                            <!-- Column headers -->
+                            <div style="display:grid; grid-template-columns:1fr 80px 1fr 80px 28px; gap:4px; margin-bottom:4px; padding:0 2px;">
+                                <div style="font-size:9px; font-weight:900; color:#999; text-align:center;">CODE</div>
+                                <div style="font-size:9px; font-weight:900; color:#999; text-align:center;">GRAMS</div>
+                                <div style="font-size:9px; font-weight:900; color:#1565c0; text-align:center;">ALT CODE <span style="font-weight:400;">(large qty)</span></div>
+                                <div style="font-size:9px; font-weight:900; color:#1565c0; text-align:center;">FROM (L)</div>
+                                <div></div>
+                            </div>
+                            <div id="tintersRows">
+                                <!-- Rows injected by JS -->
+                            </div>
+                            <button type="button" onclick="addTinterRow()" style="margin-top:6px; padding:5px 10px; background:#f0f0f0; border:1px dashed #ccc; border-radius:4px; font-size:10px; font-weight:900; cursor:pointer; width:100%;">+ Add Tinter Row</button>
+                            <div style="font-size:9px; color:#999; margin-top:6px;">Code + Grams required. Alt Code + From (litres) optional — if the job needs ≥ that many litres, the alt code is used on the mixing card instead.</div>
+                            <!-- Hidden textarea keeps compatibility with save logic -->
+                            <textarea id="tintersList" style="display:none;"></textarea>
                         </div>
                         
                         <button onclick="addNewPaintFormulaUI()" style="width:100%; padding:10px; background:#34c759; color:#fff; border:none; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">+ ADD FORMULA</button>
@@ -1193,7 +1211,7 @@
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.7.57</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.7.58</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -2744,7 +2762,66 @@
     }
 
 
-    function addNewPaintFormulaUI() {
+    // ===== TINTER ROW HELPERS =====
+    function addTinterRow(code='', grams='', altCode='', altThreshold='') {
+        const container = document.getElementById('tintersRows');
+        if (!container) return;
+        const idx = container.children.length;
+        const row = document.createElement('div');
+        row.style.cssText = 'display:grid; grid-template-columns:1fr 80px 1fr 80px 28px; gap:4px; margin-bottom:4px;';
+        row.dataset.tinterIdx = idx;
+        row.innerHTML = `
+            <input type="text" placeholder="e.g. ITE303" value="${code}" style="padding:6px; border:1px solid #ddd; border-radius:4px; font-size:11px; font-family:monospace; box-sizing:border-box; width:100%;">
+            <input type="number" placeholder="g" step="0.01" value="${grams}" style="padding:6px; border:1px solid #ddd; border-radius:4px; font-size:11px; text-align:right; box-sizing:border-box; width:100%;">
+            <input type="text" placeholder="Alt code" value="${altCode}" style="padding:6px; border:1px solid #90caf9; border-radius:4px; font-size:11px; font-family:monospace; background:#f0f7ff; box-sizing:border-box; width:100%;">
+            <input type="number" placeholder="L" step="0.5" value="${altThreshold}" style="padding:6px; border:1px solid #90caf9; border-radius:4px; font-size:11px; text-align:right; background:#f0f7ff; box-sizing:border-box; width:100%;">
+            <button type="button" onclick="this.closest('[data-tinter-idx]').remove()" style="padding:0; width:28px; height:28px; border:none; background:#ff3b30; color:#fff; border-radius:4px; font-size:14px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center;">×</button>
+        `;
+        container.appendChild(row);
+    }
+
+    function syncTinterRowsToTextarea() {
+        const container = document.getElementById('tintersRows');
+        const ta = document.getElementById('tintersList');
+        if (!container || !ta) return;
+        const lines = [];
+        container.querySelectorAll('[data-tinter-idx]').forEach(row => {
+            const inputs = row.querySelectorAll('input');
+            const code = inputs[0].value.trim();
+            const grams = inputs[1].value.trim();
+            const altCode = inputs[2].value.trim();
+            const altThresh = inputs[3].value.trim();
+            if (code && grams) {
+                if (altCode && altThresh) {
+                    lines.push(`${code} ${grams} ${altCode} ${altThresh}`);
+                } else {
+                    lines.push(`${code} ${grams}`);
+                }
+            }
+        });
+        ta.value = lines.join('\n');
+    }
+
+    function clearTinterRows() {
+        const container = document.getElementById('tintersRows');
+        if (container) container.innerHTML = '';
+        // Start with 3 blank rows
+        addTinterRow(); addTinterRow(); addTinterRow();
+    }
+
+    function populateTinterRows(colourants) {
+        const container = document.getElementById('tintersRows');
+        if (!container) return;
+        container.innerHTML = '';
+        if (colourants && colourants.length > 0) {
+            colourants.forEach(c => addTinterRow(c.code||'', c.amount||c.grams||'', c.altCode||'', c.altThreshold||''));
+        }
+        // Always add a blank row at the end
+        addTinterRow();
+    }
+    // ===== END TINTER ROW HELPERS =====
+
+        function addNewPaintFormulaUI() {
         const brand = document.getElementById('newPaintBrand').value.trim();
         const color = document.getElementById('newPaintColor').value.trim();
         const code = document.getElementById('newPaintCode').value.trim();
@@ -2764,6 +2841,8 @@
             }
         }
         
+        // Serialise structured tinter rows into the hidden textarea format, then read
+        syncTinterRowsToTextarea();
         const tintersList = document.getElementById('tintersList').value.trim();
         
         // Validation
@@ -2880,6 +2959,7 @@
         document.getElementById('baseCode3').value = '';
         document.getElementById('baseAmount3').value = '';
         document.getElementById('tintersList').value = '';
+        clearTinterRows();
         
         renderPaintFormulaList();
         notify(`✓ Formula added: ${brand} / ${color} / ${finish}`);
@@ -3040,8 +3120,10 @@
                 console.log('  ✓ Set whiteBase, value is now:', JSON.stringify(whiteBaseTA.value.substring(0, 50)));
             }
             
-            if (colourantsTA && colourantsText) {
-                colourantsTA.value = colourantsText;
+            if (colourantsTA) {
+                colourantsTA.value = colourantsText; // keep for edit dialog textarea
+                // Also populate the add-form structured rows if they exist
+                if (document.getElementById('tintersRows') && f.colourants) populateTinterRows(f.colourants);
                 console.log('  ✓ Set colourants, value is now:', JSON.stringify(colourantsTA.value.substring(0, 50)));
             } else if (colourantsTA) {
                 console.log('  ⚠️  colourantsTA found but colourantsText is empty!');
@@ -5140,7 +5222,7 @@
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.7.57';
+        const CURRENT_VERSION = 'v1.7.58';
         const CURRENT_DATE = '2026-02-28';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -10338,39 +10420,41 @@
                             let isStrikeThrough = false;
                             
                             // Assign working day to phase (simple whole day allocation)
+                            // Read phase colours from appColors (Admin > Colours) with fallbacks
+                            const pc = window.appColors || {};
                             if (workingDayNum <= measuringEnd) {
                                 phaseKey = 'measuring';
-                                phaseColor = '#2196f3';
+                                phaseColor = pc['Measuring Blue (M)'] || '#2196f3';
                                 phaseLabel = 'M';
                                 isStrikeThrough = job.phases && job.phases.measuring;
                             } else if (workingDayNum <= sanding1End) {
                                 phaseKey = 'sanding1';
-                                phaseColor = '#ff9500';
+                                phaseColor = pc['Sanding Phase 1 (S1)'] || '#ff9500';
                                 phaseLabel = 'S1';
                                 isStrikeThrough = job.phases && job.phases.sanding1;
                             } else if (workingDayNum <= undercoatEnd) {
                                 phaseKey = 'undercoat';
-                                phaseColor = '#8b4513';
+                                phaseColor = pc['Undercoat Brown (U)'] || '#8b4513';
                                 phaseLabel = 'U';
                                 isStrikeThrough = job.phases && job.phases.undercoat;
                             } else if (workingDayNum <= sanding2End) {
                                 phaseKey = 'sanding2';
-                                phaseColor = '#ff9500';
+                                phaseColor = pc['Sanding Phase 2 (S2)'] || '#ff9500';
                                 phaseLabel = 'S2';
                                 isStrikeThrough = job.phases && job.phases.sanding2;
                             } else if (workingDayNum <= topCoatEnd) {
                                 phaseKey = 'topcoat';
-                                phaseColor = '#9c27b0';
+                                phaseColor = pc['TopCoat Purple (T)'] || '#9c27b0';
                                 phaseLabel = 'T';
                                 isStrikeThrough = job.phases && job.phases.topcoat;
                             } else if (workingDayNum <= inspectEnd) {
                                 phaseKey = 'inspect';
-                                phaseColor = '#673ab7';
+                                phaseColor = pc['Inspect Purple (I)'] || '#673ab7';
                                 phaseLabel = 'I';
                                 isStrikeThrough = job.phases && job.phases.inspect;
                             } else if (workingDayNum <= completionDay) {
                                 phaseKey = 'complete';
-                                phaseColor = '#34c759';
+                                phaseColor = pc['Complete Green (C)'] || '#34c759';
                                 phaseLabel = 'C';
                                 isStrikeThrough = job.phases && job.phases.complete;
                             }
@@ -11203,6 +11287,8 @@
     
     // Apply colors on page load
     applyAppColors();
+    // Initialize tinter rows on page load
+    setTimeout(() => { if (document.getElementById('tintersRows')) clearTinterRows(); }, 500);
     const defaultMasterMatrix = {
         "Tier 1": { 101: ["Plain", 125, 125, 152, 152, 110], 102: ["J-Mould", 148, 148, 171, 171, 125], 103: ["Sharknose", 148, 148, 171, 171, 125], 104: ["Bevelled Edge", 148, 148, 171, 171, 125] },
         "Tier 2": { 201: ["Ashlee", 148, 148, 171, 171, 125], 202: ["Hamilton", 148, 148, 171, 171, 125], 203: ["Vertical Grooves", 148, 148, 171, 171, 125] },
@@ -12487,7 +12573,7 @@
             </p>
             
             <div style="-webkit-overflow-scrolling:touch; overflow-x:auto; width:100%;">
-            <table style="min-width:480px; width:100%; border-collapse:collapse; font-size:10px; background:#fff;">
+            <table style="min-width:680px; width:100%; border-collapse:collapse; font-size:10px; background:#fff;">
                 <tr style="background:#000; color:var(--gs); font-weight:900;">
                     <th style="padding:8px; text-align:left; min-width:150px;">Profile</th>
                     <th style="padding:8px; text-align:center; min-width:70px;">Matt</th>
