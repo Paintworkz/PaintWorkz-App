@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.7.65 | Updated: 2026-03-03                       ║
+║  Version: v1.7.66 | Updated: 2026-03-03                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.7.65';
+    const CURRENT_VERSION = 'v1.7.66';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1206,7 +1206,7 @@
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.7.65</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.7.66</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -5402,7 +5402,7 @@
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.7.65';
+        const CURRENT_VERSION = 'v1.7.66';
         const CURRENT_DATE = '2026-02-28';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -8433,16 +8433,9 @@
                     
                     if (formula.whiteBase && formula.whiteBase.length > 0) {
                         formula.whiteBase.forEach((item, idx) => {
-                            // Use alt code/grams if paintQty meets threshold
-                            let code = item.code || '';
-                            let usingBaseAlt = false;
-                            if (item.altCode && item.altThreshold && paintQty >= item.altThreshold) {
-                                code = item.altCode;
-                                usingBaseAlt = true;
-                            }
-                            // Use altGrams if switching to alt code
-                            const gramsSource = (usingBaseAlt && item.altGrams != null) ? item.altGrams : (item.grams || 0);
-                            let gramStr = String(gramsSource).trim();
+                            // Page 1 always shows 1L original formula - no alt logic
+                            const code = item.code || '';
+                            let gramStr = String(item.grams || 0).trim();
                             let grams = 0;
                             
                             gramStr = gramStr.replace(/\s/g, '');
@@ -8498,21 +8491,11 @@
                     let actualTinterCount = 0;
                     
                     if (formula.colourants && formula.colourants.length > 0) {
-                        // Show ALL actual tinter data first
+                        // Page 1: always show original 1L formula - no alt logic
                         formula.colourants.forEach((tint, idx) => {
-                            const baseCode = tint.code || '';
-                            // Determine which code to use based on total paint qty
-                            let code = baseCode;
-                            let usingAlt = false;
-                            if (tint.altCode && tint.altThreshold && paintQty >= tint.altThreshold) {
-                                code = tint.altCode;
-                                usingAlt = true;
-                            }
+                            const code = tint.code || '';
                             
-                            // Robust parsing: handle all decimal formats
-                            // Use altGrams if switching to alt code and altGrams is defined
-                            const gramsSource = (usingAlt && tint.altGrams != null) ? tint.altGrams : (tint.amount || tint.grams || 0);
-                            let gramStr = String(gramsSource).trim();
+                            let gramStr = String(tint.amount || tint.grams || 0).trim();
                             let grams = 0;
                             
                             gramStr = gramStr.replace(/\s/g, '');
@@ -8673,7 +8656,6 @@
                     } catch(e) {}
                 }
                 
-                // Title
                 doc.setFontSize(28);
                 doc.setFont(undefined, 'bold');
                 doc.setTextColor(0, 0, 0);
@@ -8727,21 +8709,30 @@
                 doc.text(paintQty + ' L', 110, y2);
                 y2 += 12;
                 
-                // TINT FORMULA HEADER - SCALED VERSION
+                // Determine alt state for all of page 2
+                const altTrigger = formula && formula.colourants && formula.colourants.find(t => t.altCode && t.altThreshold && parseFloat(paintQty) >= t.altThreshold);
+                const baseAltTrigger = formula && formula.whiteBase && formula.whiteBase.find(b => b.altCode && b.altThreshold && parseFloat(paintQty) >= b.altThreshold);
+                const anyAltActive = altTrigger || baseAltTrigger;
+                const altQty = anyAltActive ? (altTrigger || baseAltTrigger).altThreshold : null;
+
+                // TINT FORMULA HEADER
                 doc.setFontSize(13);
                 doc.setFont(undefined, 'bold');
-                doc.text('TINT FORMULA - EVIC DETAILS', 20, y2);
+                if (anyAltActive) {
+                    doc.text(`TINT FORMULA — ${altQty}L RECIPE (ALT CODES)`, 20, y2);
+                } else {
+                    doc.text(`TINT FORMULA — ${paintQty}L SCALED RECIPE`, 20, y2);
+                }
                 y2 += 5;
                 
-                // Add subtitle showing this is SCALED for job requirement
                 doc.setFontSize(10);
                 doc.setFont(undefined, 'normal');
                 doc.setTextColor(200, 30, 30);
-                    const altTrigger = formula && formula.colourants && formula.colourants.find(t => t.altCode && t.altThreshold && parseFloat(paintQty) >= t.altThreshold);
-                    const baseAltTrigger = formula && formula.whiteBase && formula.whiteBase.find(b => b.altCode && b.altThreshold && parseFloat(paintQty) >= b.altThreshold);
-                    const anyAltActive = altTrigger || baseAltTrigger;
-                    const altQty = anyAltActive ? (altTrigger || baseAltTrigger).altThreshold : null;
-                    doc.text(`(Weights for ${anyAltActive ? altQty : paintQty} Litres of Paint)`, 20, y2);
+                if (anyAltActive) {
+                    doc.text(`Using alt code weights entered for ${altQty}L — do NOT scale these values`, 20, y2);
+                } else {
+                    doc.text(`(1L weights × ${paintQty} — scaled for job requirement)`, 20, y2);
+                }
                 doc.setTextColor(0, 0, 0);
                 y2 += 8;
                 
@@ -8791,7 +8782,7 @@
                         formula.whiteBase.forEach((item, idx) => {
                             const code = item.code || '';
                             // Use altGrams if alt triggered, otherwise scale 1L grams by paintQty
-                            const usingBaseAlt2 = item.altCode && item.altThreshold && parseFloat(paintQty) >= item.altThreshold;
+                            const usingBaseAlt2 = anyAltActive && item.altCode && item.altThreshold && parseFloat(paintQty) >= item.altThreshold;
                             let grams;
                             if (usingBaseAlt2 && item.altGrams != null) {
                                 grams = parseFloat(item.altGrams) || 0; // already the full-qty weight
@@ -8836,7 +8827,7 @@
                     
                     if (formula.colourants && formula.colourants.length > 0) {
                         formula.colourants.forEach((tint, idx) => {
-                            const usingTintAlt2 = tint.altCode && tint.altThreshold && parseFloat(paintQty) >= tint.altThreshold;
+                            const usingTintAlt2 = anyAltActive && tint.altCode && tint.altThreshold && parseFloat(paintQty) >= tint.altThreshold;
                             const displayCode = usingTintAlt2 ? tint.altCode : (tint.code || '');
                             let grams;
                             if (usingTintAlt2 && tint.altGrams != null) {
