@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.7.67 | Updated: 2026-03-03                       ║
+║  Version: v1.7.68 | Updated: 2026-03-04                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.7.67';
+    const CURRENT_VERSION = 'v1.7.68';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1208,7 +1208,7 @@
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.7.67</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.7.68</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -5440,7 +5440,7 @@
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.7.67';
+        const CURRENT_VERSION = 'v1.7.68';
         const CURRENT_DATE = '2026-02-28';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -10474,6 +10474,10 @@
         toDate.setHours(23,59,59);
 
         const history = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+        const paintDB = typeof getPaintFormulas === 'function' ? getPaintFormulas() : [];
+
+        // Helper: find formula for a colour name
+        const getFormula = (colorName) => paintDB.find(f => f.color && f.color.toLowerCase() === (colorName||'').toLowerCase());
 
         // Filter jobs in range
         const jobs = history.filter(j => {
@@ -10490,6 +10494,7 @@
         // ── Aggregate stats ──────────────────────────────────────────────────
         let totalSqm = 0, totalParts = 0;
         const colourCount = {}, profileCount = {}, clientCount = {}, monthlyData = {}, finishCount = {};
+        const baseCodeLitres = {}; // FIX 4: base code totals
 
         jobs.forEach(job => {
             const sqm = parseFloat(job.totalSqm) || 0;
@@ -10497,95 +10502,133 @@
             totalSqm += sqm;
             totalParts += parts;
 
-            // Monthly breakdown
             const d = parseReportDate(job.dateReceived) || new Date(job.timestamp || 0);
             const mo = d.toLocaleDateString('en-AU', { month: 'short', year: 'numeric' });
             if (!monthlyData[mo]) monthlyData[mo] = { sqm: 0, jobs: 0 };
             monthlyData[mo].sqm += sqm;
             monthlyData[mo].jobs += 1;
 
-            // Client
             const cl = job.client || 'Unknown';
             clientCount[cl] = (clientCount[cl] || 0) + sqm;
 
-            // Finish
             const fin = job.finish || 'Unknown';
             finishCount[fin] = (finishCount[fin] || 0) + 1;
 
             // Per-item stats
             (job.items || []).forEach(item => {
                 const iSqm = parseFloat(item.sqm) || 0;
-                // Colour
                 const col = item.color || job.color || 'Unknown';
                 colourCount[col] = (colourCount[col] || 0) + iSqm;
-                // Profile
-                const prof = item.mld || item.desc || 'Unknown';
+
+                // FIX 1: Use item.mld (moulded profile) for Moulded items, "Flat" for others
+                const isMoulded = (item.fm || '').toLowerCase() === 'moulded';
+                const prof = isMoulded ? (item.mld || 'Moulded') : 'Flat Panel';
                 profileCount[prof] = (profileCount[prof] || 0) + iSqm;
+
+                // FIX 4: base code litres from paint formula
+                const paintLitres = iSqm * 0.2; // 0.2L per sqm
+                const formula = getFormula(col);
+                if (formula && formula.whiteBase && formula.whiteBase.length > 0) {
+                    // Distribute litres across base codes proportionally (or just attribute all to first code)
+                    formula.whiteBase.forEach(b => {
+                        const baseCode = b.code || 'Unknown';
+                        baseCodeLitres[baseCode] = (baseCodeLitres[baseCode] || 0) + paintLitres;
+                    });
+                } else {
+                    // No formula linked - attribute to colour name
+                    baseCodeLitres[`(no formula) ${col}`] = (baseCodeLitres[`(no formula) ${col}`] || 0) + paintLitres;
+                }
             });
-            // Fallback if no items: use job colour
+
             if (!job.items || job.items.length === 0) {
                 const col = job.color || 'Unknown';
                 colourCount[col] = (colourCount[col] || 0) + sqm;
+                const formula = getFormula(col);
+                const paintLitres = sqm * 0.2;
+                if (formula && formula.whiteBase && formula.whiteBase.length > 0) {
+                    formula.whiteBase.forEach(b => {
+                        baseCodeLitres[b.code||'Unknown'] = (baseCodeLitres[b.code||'Unknown'] || 0) + paintLitres;
+                    });
+                }
             }
         });
 
-        // Sort monthly chronologically
         const months = Object.keys(monthlyData).sort((a,b) => new Date('1 ' + a) - new Date('1 ' + b));
-
-        // Top colours & profiles
-        const topColours = Object.entries(colourCount).sort((a,b)=>b[1]-a[1]).slice(0,8);
-        const topProfiles = Object.entries(profileCount).sort((a,b)=>b[1]-a[1]).slice(0,8);
+        const topColours = Object.entries(colourCount).sort((a,b)=>b[1]-a[1]).slice(0,10);
+        const topProfiles = Object.entries(profileCount).sort((a,b)=>b[1]-a[1]).slice(0,10);
         const topClients = Object.entries(clientCount).sort((a,b)=>b[1]-a[1]).slice(0,6);
         const finishes = Object.entries(finishCount).sort((a,b)=>b[1]-a[1]);
+        const baseCodes = Object.entries(baseCodeLitres).sort((a,b)=>b[1]-a[1]);
 
-        // Chart colour palette
+        // FIX 2: undercoat SQM = totalSqm * 0.4
+        const undercoatSqm = (totalSqm * 0.4).toFixed(1);
+
         const palette = ['#2196f3','#4caf50','#ff9800','#9c27b0','#f44336','#00bcd4','#ff5722','#607d8b','#3f51b5','#8bc34a'];
 
         const html = `
         <div id="reportsPrintArea">
 
-        <!-- KPI cards -->
-        <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:18px;">
-            ${kpiCard('🏗️', 'Jobs Completed', jobs.length, '#2196f3')}
-            ${kpiCard('📐', 'Total SQM', totalSqm.toFixed(1) + ' m²', '#4caf50')}
-            ${kpiCard('🚪', 'Total Parts', totalParts, '#ff9800')}
-            ${kpiCard('🎨', 'Colours Used', Object.keys(colourCount).length, '#9c27b0')}
+        <!-- KPI cards - 5 across -->
+        <div style="display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-bottom:18px;">
+            ${kpiCard('🏗️', 'Jobs', jobs.length, '#2196f3')}
+            ${kpiCard('📐', 'Total SQM', totalSqm.toFixed(1) + 'm²', '#4caf50')}
+            ${kpiCard('🚪', 'Parts', totalParts, '#ff9800')}
+            ${kpiCard('🎨', 'Colours', Object.keys(colourCount).length, '#9c27b0')}
+            ${kpiCard('🪣', 'Undercoat SQM', undercoatSqm + 'm²', '#795548')}
         </div>
 
         <!-- Row 1: Monthly SQM line chart + Finish donut -->
         <div style="display:grid; grid-template-columns:2fr 1fr; gap:14px; margin-bottom:18px;">
             <div class="report-card">
                 <div class="report-card-title">📈 Monthly SQM Completed</div>
-                <canvas id="chartMonthlySqm" height="140"></canvas>
+                <canvas id="chartMonthlySqm" height="130"></canvas>
             </div>
             <div class="report-card">
                 <div class="report-card-title">✨ By Finish</div>
-                <canvas id="chartFinish" height="140"></canvas>
-                <div id="finishLegend" style="margin-top:6px; font-size:10px;"></div>
+                <canvas id="chartFinish" height="130"></canvas>
             </div>
         </div>
 
-        <!-- Row 2: Top Colours bar + Top Profiles bar -->
+        <!-- Row 2: Top Colours + Top Profiles -->
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:18px;">
             <div class="report-card">
                 <div class="report-card-title">🎨 Top Colours by SQM</div>
-                <canvas id="chartColours" height="180"></canvas>
+                <canvas id="chartColours" height="200"></canvas>
             </div>
             <div class="report-card">
-                <div class="report-card-title">🚪 Top Profiles by SQM</div>
-                <canvas id="chartProfiles" height="180"></canvas>
+                <div class="report-card-title">🚪 Top Door Profiles by SQM</div>
+                <canvas id="chartProfiles" height="200"></canvas>
             </div>
         </div>
 
-        <!-- Row 3: Jobs per client + Monthly jobs bar -->
+        <!-- Row 3: Base code litres (FIX 4) + Client SQM -->
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:18px;">
             <div class="report-card">
-                <div class="report-card-title">👥 SQM by Client</div>
-                <canvas id="chartClients" height="160"></canvas>
+                <div class="report-card-title">🪣 Paint Base Required (litres)</div>
+                <div style="font-size:10px; color:#888; margin-bottom:8px;">Based on 0.2L/m² from paint formulas</div>
+                <canvas id="chartBaseCodes" height="170"></canvas>
+                <table style="width:100%; border-collapse:collapse; font-size:10px; margin-top:10px;">
+                    <thead><tr style="background:#f0f0f0;"><th style="padding:4px 6px; text-align:left;">Base Code</th><th style="padding:4px 6px; text-align:right;">Litres</th></tr></thead>
+                    <tbody>${baseCodes.map((b,i)=>`<tr style="background:${i%2?'#fafafa':'#fff'}"><td style="padding:4px 6px; font-family:monospace; font-weight:900;">${b[0]}</td><td style="padding:4px 6px; text-align:right; font-weight:900;">${b[1].toFixed(2)}L</td></tr>`).join('')||'<tr><td colspan="2" style="padding:8px; color:#999; text-align:center;">Link paint formulas to colours to see base data</td></tr>'}</tbody>
+                </table>
             </div>
             <div class="report-card">
+                <div class="report-card-title">👥 SQM by Client</div>
+                <canvas id="chartClients" height="170"></canvas>
+            </div>
+        </div>
+
+        <!-- Row 4: Monthly jobs bar -->
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:18px;">
+            <div class="report-card">
                 <div class="report-card-title">📅 Jobs per Month</div>
-                <canvas id="chartMonthlyJobs" height="160"></canvas>
+                <canvas id="chartMonthlyJobs" height="150"></canvas>
+            </div>
+            <div class="report-card" style="display:flex; flex-direction:column; justify-content:center; align-items:center; background:linear-gradient(135deg,#e8f5e9,#f3e5f5);">
+                <div style="font-size:13px; font-weight:900; color:#555; margin-bottom:12px; text-transform:uppercase;">🪣 Undercoat Summary</div>
+                <div style="font-size:36px; font-weight:900; color:#795548;">${undercoatSqm} m²</div>
+                <div style="font-size:11px; color:#888; margin-top:4px;">${totalSqm.toFixed(1)} m² paint × 0.4</div>
+                <div style="margin-top:14px; font-size:12px; color:#555; font-weight:700;">≈ ${(parseFloat(undercoatSqm)*0.2).toFixed(1)} L undercoat required</div>
             </div>
         </div>
 
@@ -10630,7 +10673,6 @@
 
         document.getElementById('reportsOutput').innerHTML = html;
 
-        // Add card styles if not present
         if (!document.getElementById('reportStyles')) {
             const s = document.createElement('style');
             s.id = 'reportStyles';
@@ -10644,11 +10686,37 @@
         requestAnimationFrame(() => {
             const co = (id) => document.getElementById(id)?.getContext('2d');
 
+            // FIX 3: datalabels plugin inline (show SQM value inside bar)
+            const datalabelPlugin = {
+                id: 'datalabels_inline',
+                afterDatasetsDraw(chart) {
+                    const ctx = chart.ctx;
+                    chart.data.datasets.forEach((ds, di) => {
+                        const meta = chart.getDatasetMeta(di);
+                        meta.data.forEach((bar, i) => {
+                            const val = ds.data[i];
+                            if (!val) return;
+                            const label = parseFloat(val).toFixed(1) + 'm²';
+                            ctx.save();
+                            ctx.fillStyle = '#fff';
+                            ctx.font = 'bold 9px sans-serif';
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'middle';
+                            const isHoriz = chart.options.indexAxis === 'y';
+                            const x = isHoriz ? bar.x - 20 : bar.x;
+                            const y = isHoriz ? bar.y : bar.y + 10;
+                            ctx.fillText(label, x, y);
+                            ctx.restore();
+                        });
+                    });
+                }
+            };
+
             // Monthly SQM line
             if (months.length && co('chartMonthlySqm')) {
                 new Chart(co('chartMonthlySqm'), { type:'line', data:{
                     labels: months,
-                    datasets:[{ label:'SQM', data: months.map(m=>monthlyData[m].sqm.toFixed(2)),
+                    datasets:[{ label:'SQM', data: months.map(m=>+monthlyData[m].sqm.toFixed(2)),
                         borderColor:'#2196f3', backgroundColor:'rgba(33,150,243,0.12)',
                         borderWidth:2.5, fill:true, tension:0.35, pointRadius:4, pointBackgroundColor:'#2196f3' }]
                 }, options:{ responsive:true, plugins:{legend:{display:false}}, scales:{ y:{ beginAtZero:true, ticks:{font:{size:10}} }, x:{ ticks:{font:{size:10}} } } }});
@@ -10662,31 +10730,51 @@
                 }, options:{ responsive:true, plugins:{ legend:{ position:'bottom', labels:{ font:{size:9}, boxWidth:10 } } } }});
             }
 
-            // Top colours bar (horizontal)
+            // Top colours bar (horizontal) - FIX 3: show SQM value in bar
             if (topColours.length && co('chartColours')) {
-                new Chart(co('chartColours'), { type:'bar', data:{
-                    labels: topColours.map(c=>c[0]),
-                    datasets:[{ data: topColours.map(c=>parseFloat(c[1].toFixed(2))),
-                        backgroundColor: palette, borderRadius:4 }]
-                }, options:{ indexAxis:'y', responsive:true, plugins:{legend:{display:false}},
-                    scales:{ x:{ beginAtZero:true, ticks:{font:{size:9}} }, y:{ ticks:{font:{size:9}} } } }});
+                new Chart(co('chartColours'), {
+                    type:'bar',
+                    plugins:[datalabelPlugin],
+                    data:{
+                        labels: topColours.map(c=>c[0]),
+                        datasets:[{ data: topColours.map(c=>+c[1].toFixed(2)),
+                            backgroundColor: palette, borderRadius:4 }]
+                    }, options:{ indexAxis:'y', responsive:true, plugins:{legend:{display:false}},
+                        scales:{ x:{ beginAtZero:true, ticks:{font:{size:9}} }, y:{ ticks:{font:{size:9}} } } }
+                });
             }
 
-            // Top profiles bar (horizontal)
+            // Top profiles bar (horizontal) - FIX 1: now shows real profile names
             if (topProfiles.length && co('chartProfiles')) {
-                new Chart(co('chartProfiles'), { type:'bar', data:{
-                    labels: topProfiles.map(p=>p[0]),
-                    datasets:[{ data: topProfiles.map(p=>parseFloat(p[1].toFixed(2))),
-                        backgroundColor: palette.slice(2), borderRadius:4 }]
-                }, options:{ indexAxis:'y', responsive:true, plugins:{legend:{display:false}},
-                    scales:{ x:{ beginAtZero:true, ticks:{font:{size:9}} }, y:{ ticks:{font:{size:9}} } } }});
+                new Chart(co('chartProfiles'), {
+                    type:'bar',
+                    plugins:[datalabelPlugin],
+                    data:{
+                        labels: topProfiles.map(p=>p[0]),
+                        datasets:[{ data: topProfiles.map(p=>+p[1].toFixed(2)),
+                            backgroundColor: palette.slice(2), borderRadius:4 }]
+                    }, options:{ indexAxis:'y', responsive:true, plugins:{legend:{display:false}},
+                        scales:{ x:{ beginAtZero:true, ticks:{font:{size:9}} }, y:{ ticks:{font:{size:9}} } } }
+                });
+            }
+
+            // FIX 4: Base codes bar
+            if (baseCodes.length && co('chartBaseCodes')) {
+                new Chart(co('chartBaseCodes'), { type:'bar', data:{
+                    labels: baseCodes.map(b=>b[0]),
+                    datasets:[{ data: baseCodes.map(b=>+b[1].toFixed(2)),
+                        backgroundColor:['#0d47a1','#1565c0','#1976d2','#1e88e5','#2196f3','#42a5f5','#64b5f6','#90caf9'],
+                        borderRadius:4 }]
+                }, options:{ responsive:true, plugins:{legend:{display:false},
+                    tooltip:{ callbacks:{ label: ctx => ctx.parsed.y.toFixed(2) + ' L' } }},
+                    scales:{ y:{ beginAtZero:true, ticks:{font:{size:9}, callback: v => v+'L'} }, x:{ ticks:{font:{size:9}} } } }});
             }
 
             // SQM by client bar
             if (topClients.length && co('chartClients')) {
                 new Chart(co('chartClients'), { type:'bar', data:{
                     labels: topClients.map(c=>c[0]),
-                    datasets:[{ data: topClients.map(c=>parseFloat(c[1].toFixed(2))),
+                    datasets:[{ data: topClients.map(c=>+c[1].toFixed(2)),
                         backgroundColor: palette.slice(1), borderRadius:4 }]
                 }, options:{ responsive:true, plugins:{legend:{display:false}},
                     scales:{ y:{ beginAtZero:true, ticks:{font:{size:9}} }, x:{ ticks:{font:{size:9}, maxRotation:30} } } }});
@@ -10696,7 +10784,7 @@
             if (months.length && co('chartMonthlyJobs')) {
                 new Chart(co('chartMonthlyJobs'), { type:'bar', data:{
                     labels: months,
-                    datasets:[{ label:'Jobs', data: months.map(m=>monthlyData[m].jobs),
+                    datasets:[{ data: months.map(m=>monthlyData[m].jobs),
                         backgroundColor:'rgba(76,175,80,0.7)', borderColor:'#4caf50', borderWidth:1.5, borderRadius:4 }]
                 }, options:{ responsive:true, plugins:{legend:{display:false}},
                     scales:{ y:{ beginAtZero:true, ticks:{stepSize:1, font:{size:10}} }, x:{ ticks:{font:{size:10}} } } }});
