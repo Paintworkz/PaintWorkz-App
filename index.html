@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.7.68 | Updated: 2026-03-04                       ║
+║  Version: v1.7.69 | Updated: 2026-03-04                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.7.68';
+    const CURRENT_VERSION = 'v1.7.69';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1208,7 +1208,7 @@
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.7.68</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.7.69</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -5440,7 +5440,7 @@
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.7.68';
+        const CURRENT_VERSION = 'v1.7.69';
         const CURRENT_DATE = '2026-02-28';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -10494,7 +10494,9 @@
         // ── Aggregate stats ──────────────────────────────────────────────────
         let totalSqm = 0, totalParts = 0;
         const colourCount = {}, profileCount = {}, clientCount = {}, monthlyData = {}, finishCount = {};
-        const baseCodeLitres = {}; // FIX 4: base code totals
+        const baseCodeLitres = {};
+        const unassignedColours = {};
+        const colourBaseMap = JSON.parse(localStorage.getItem('colourBaseMap') || '{}');
 
         jobs.forEach(job => {
             const sqm = parseFloat(job.totalSqm) || 0;
@@ -10525,18 +10527,20 @@
                 const prof = isMoulded ? (item.mld || 'Moulded') : 'Flat Panel';
                 profileCount[prof] = (profileCount[prof] || 0) + iSqm;
 
-                // FIX 4: base code litres from paint formula
-                const paintLitres = iSqm * 0.2; // 0.2L per sqm
+                // Base code litres from paint formula, or manual mapping
+                const paintLitres = iSqm * 0.2;
                 const formula = getFormula(col);
+                let resolvedBase = null;
                 if (formula && formula.whiteBase && formula.whiteBase.length > 0) {
-                    // Distribute litres across base codes proportionally (or just attribute all to first code)
-                    formula.whiteBase.forEach(b => {
-                        const baseCode = b.code || 'Unknown';
-                        baseCodeLitres[baseCode] = (baseCodeLitres[baseCode] || 0) + paintLitres;
-                    });
+                    resolvedBase = formula.whiteBase[0].code || null;
+                }
+                if (!resolvedBase && colourBaseMap[col]) {
+                    resolvedBase = colourBaseMap[col];
+                }
+                if (resolvedBase) {
+                    baseCodeLitres[resolvedBase] = (baseCodeLitres[resolvedBase] || 0) + paintLitres;
                 } else {
-                    // No formula linked - attribute to colour name
-                    baseCodeLitres[`(no formula) ${col}`] = (baseCodeLitres[`(no formula) ${col}`] || 0) + paintLitres;
+                    unassignedColours[col] = (unassignedColours[col] || 0) + paintLitres;
                 }
             });
 
@@ -10545,10 +10549,15 @@
                 colourCount[col] = (colourCount[col] || 0) + sqm;
                 const formula = getFormula(col);
                 const paintLitres = sqm * 0.2;
+                let resolvedBase2 = null;
                 if (formula && formula.whiteBase && formula.whiteBase.length > 0) {
-                    formula.whiteBase.forEach(b => {
-                        baseCodeLitres[b.code||'Unknown'] = (baseCodeLitres[b.code||'Unknown'] || 0) + paintLitres;
-                    });
+                    resolvedBase2 = formula.whiteBase[0].code || null;
+                }
+                if (!resolvedBase2 && colourBaseMap[col]) resolvedBase2 = colourBaseMap[col];
+                if (resolvedBase2) {
+                    baseCodeLitres[resolvedBase2] = (baseCodeLitres[resolvedBase2] || 0) + paintLitres;
+                } else {
+                    unassignedColours[col] = (unassignedColours[col] || 0) + paintLitres;
                 }
             }
         });
@@ -10559,6 +10568,7 @@
         const topClients = Object.entries(clientCount).sort((a,b)=>b[1]-a[1]).slice(0,6);
         const finishes = Object.entries(finishCount).sort((a,b)=>b[1]-a[1]);
         const baseCodes = Object.entries(baseCodeLitres).sort((a,b)=>b[1]-a[1]);
+        const unassignedCount = Object.keys(unassignedColours).length;
 
         // FIX 2: undercoat SQM = totalSqm * 0.4
         const undercoatSqm = (totalSqm * 0.4).toFixed(1);
@@ -10605,12 +10615,46 @@
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:18px;">
             <div class="report-card">
                 <div class="report-card-title">🪣 Paint Base Required (litres)</div>
-                <div style="font-size:10px; color:#888; margin-bottom:8px;">Based on 0.2L/m² from paint formulas</div>
-                <canvas id="chartBaseCodes" height="170"></canvas>
-                <table style="width:100%; border-collapse:collapse; font-size:10px; margin-top:10px;">
-                    <thead><tr style="background:#f0f0f0;"><th style="padding:4px 6px; text-align:left;">Base Code</th><th style="padding:4px 6px; text-align:right;">Litres</th></tr></thead>
-                    <tbody>${baseCodes.map((b,i)=>`<tr style="background:${i%2?'#fafafa':'#fff'}"><td style="padding:4px 6px; font-family:monospace; font-weight:900;">${b[0]}</td><td style="padding:4px 6px; text-align:right; font-weight:900;">${b[1].toFixed(2)}L</td></tr>`).join('')||'<tr><td colspan="2" style="padding:8px; color:#999; text-align:center;">Link paint formulas to colours to see base data</td></tr>'}</tbody>
+                <div style="font-size:10px; color:#888; margin-bottom:10px;">0.2L/m² • XB6930 = Clear Base &nbsp;|&nbsp; XB6931 = White Base</div>
+                <canvas id="chartBaseCodes" height="130"></canvas>
+
+                <!-- Resolved base totals table -->
+                <table style="width:100%; border-collapse:collapse; font-size:11px; margin-top:10px;">
+                    <thead><tr style="background:#0d47a1; color:#fff;">
+                        <th style="padding:6px 8px; text-align:left;">Base Code</th>
+                        <th style="padding:6px 8px; text-align:left;">Type</th>
+                        <th style="padding:6px 8px; text-align:right;">Litres</th>
+                    </tr></thead>
+                    <tbody>
+                    ${baseCodes.length ? baseCodes.map((b,i)=>{
+                        const label = b[0]==='XB6930'?'Clear Base':b[0]==='XB6931'?'White Base':'';
+                        return `<tr style="background:${i%2?'#f0f4ff':'#fff'}">
+                            <td style="padding:6px 8px; font-family:monospace; font-weight:900; font-size:13px;">${b[0]}</td>
+                            <td style="padding:6px 8px; color:#555;">${label}</td>
+                            <td style="padding:6px 8px; text-align:right; font-weight:900; font-size:14px; color:#0d47a1;">${b[1].toFixed(2)} L</td>
+                        </tr>`;}).join('') : '<tr><td colspan="3" style="padding:8px; color:#999; text-align:center; font-size:11px;">Assign base codes below to see totals</td></tr>'}
+                    </tbody>
                 </table>
+
+                <!-- Unassigned colours - let user assign to XB6930 or XB6931 -->
+                ${Object.keys(unassignedColours).length ? `
+                <div style="margin-top:14px; border-top:2px dashed #ff9800; padding-top:10px;">
+                    <div style="font-size:10px; font-weight:900; color:#e65100; margin-bottom:8px; text-transform:uppercase;">⚠️ Assign Base Code — ${Object.keys(unassignedColours).length} colour${Object.keys(unassignedColours).length>1?'s':''} not mapped yet</div>
+                    <table style="width:100%; border-collapse:collapse; font-size:11px;">
+                        <thead><tr style="background:#fff3e0;"><th style="padding:5px 8px; text-align:left;">Colour</th><th style="padding:5px 8px; text-align:right;">Litres</th><th style="padding:5px 8px; text-align:center;">Assign</th></tr></thead>
+                        <tbody>
+                        ${Object.entries(unassignedColours).sort((a,b)=>b[1]-a[1]).map(([col,ltr])=>`
+                            <tr style="border-bottom:1px solid #f0f0f0;">
+                                <td style="padding:5px 8px; font-weight:700;">${col}</td>
+                                <td style="padding:5px 8px; text-align:right;">${ltr.toFixed(2)}L</td>
+                                <td style="padding:5px 8px; text-align:center; white-space:nowrap;">
+                                    <button onclick="assignColourBase('${col.replace(/'/g,'\'')}','XB6930')" style="padding:3px 7px; background:#1565c0; color:#fff; border:none; border-radius:4px; font-weight:900; font-size:10px; cursor:pointer; margin-right:3px;">XB6930</button>
+                                    <button onclick="assignColourBase('${col.replace(/'/g,'\'')}','XB6931')" style="padding:3px 7px; background:#388e3c; color:#fff; border:none; border-radius:4px; font-weight:900; font-size:10px; cursor:pointer;">XB6931</button>
+                                </td>
+                            </tr>`).join('')}
+                        </tbody>
+                    </table>
+                </div>` : '<div style="margin-top:8px; font-size:10px; color:#4caf50; font-weight:700;">✓ All colours mapped to base codes</div>'}
             </div>
             <div class="report-card">
                 <div class="report-card-title">👥 SQM by Client</div>
@@ -10758,16 +10802,18 @@
                 });
             }
 
-            // FIX 4: Base codes bar
+            // Base codes bar chart
             if (baseCodes.length && co('chartBaseCodes')) {
+                const bcColors = baseCodes.map(b => b[0]==='XB6930' ? '#0d47a1' : b[0]==='XB6931' ? '#2e7d32' : '#607d8b');
                 new Chart(co('chartBaseCodes'), { type:'bar', data:{
-                    labels: baseCodes.map(b=>b[0]),
+                    labels: baseCodes.map(b=> b[0]==='XB6930' ? 'XB6930\nClear Base' : b[0]==='XB6931' ? 'XB6931\nWhite Base' : b[0]),
                     datasets:[{ data: baseCodes.map(b=>+b[1].toFixed(2)),
-                        backgroundColor:['#0d47a1','#1565c0','#1976d2','#1e88e5','#2196f3','#42a5f5','#64b5f6','#90caf9'],
-                        borderRadius:4 }]
+                        backgroundColor: bcColors, borderRadius:6, barThickness:50 }]
                 }, options:{ responsive:true, plugins:{legend:{display:false},
-                    tooltip:{ callbacks:{ label: ctx => ctx.parsed.y.toFixed(2) + ' L' } }},
-                    scales:{ y:{ beginAtZero:true, ticks:{font:{size:9}, callback: v => v+'L'} }, x:{ ticks:{font:{size:9}} } } }});
+                    tooltip:{ callbacks:{ label: ctx => ctx.parsed.y.toFixed(2) + ' L' } },
+                    datalabels_inline: false
+                    },
+                    scales:{ y:{ beginAtZero:true, ticks:{font:{size:10}, callback: v => v+' L'} }, x:{ ticks:{font:{size:11, weight:'bold'}} } } }});
             }
 
             // SQM by client bar
@@ -10830,6 +10876,13 @@
         </body></html>`);
         w.document.close();
         setTimeout(() => w.print(), 800);
+    }
+    function assignColourBase(colourName, baseCode) {
+        const map = JSON.parse(localStorage.getItem('colourBaseMap') || '{}');
+        map[colourName] = baseCode;
+        localStorage.setItem('colourBaseMap', JSON.stringify(map));
+        notify(`✓ ${colourName} → ${baseCode}`);
+        buildReports(); // Rebuild report with new mapping
     }
     // ===== END REPORTS ENGINE =====
 
