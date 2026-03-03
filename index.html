@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.7.64 | Updated: 2026-03-03                       ║
+║  Version: v1.7.65 | Updated: 2026-03-03                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.7.64';
+    const CURRENT_VERSION = 'v1.7.65';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -85,6 +85,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
     <title>PaintWorkz Pro</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" defer></script>
     <style>
         :root {
             --gold: linear-gradient(145deg, #d4af37, #f9f1b0, #aa841e);
@@ -393,8 +394,9 @@
             </div>
             
             <!-- Preview Container -->
-            <div id="pdfPreviewContainer" style="flex:1; overflow:auto; padding:15px; background:#e8e8e8; display:flex; justify-content:center; align-items:center; margin:0;">
-                <iframe id="pdfPreviewIframe" style="width:100%; height:100%; border:none; background:#fff; border-radius:4px; box-shadow:0 2px 8px rgba(0,0,0,0.1);"></iframe>
+            <div id="pdfPreviewContainer" style="flex:1; overflow:auto; padding:15px; background:#e8e8e8; display:flex; justify-content:center; align-items:flex-start; margin:0;">
+                <div id="pdfPageContainer" style="width:100%; display:flex; flex-direction:column; align-items:center; gap:12px; padding:10px 0;"></div>
+                <iframe id="pdfPreviewIframe" style="display:none;"></iframe>
             </div>
             
             <!-- Footer Buttons -->
@@ -1204,7 +1206,7 @@
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.7.64</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.7.65</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -5400,7 +5402,7 @@
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.7.64';
+        const CURRENT_VERSION = 'v1.7.65';
         const CURRENT_DATE = '2026-02-28';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -8788,15 +8790,17 @@
                     if (formula.whiteBase && formula.whiteBase.length > 0) {
                         formula.whiteBase.forEach((item, idx) => {
                             const code = item.code || '';
-                            let gramStr = String(item.grams || '0').trim();
-                            let grams = parseFloat(gramStr.replace(/[\s,]/g, '.'));
-                            grams = isNaN(grams) ? 0 : grams;
-                            
-                            // SCALE the grams
-                            const scaledGrams = grams * scaleFactor;
-                            runningTotal2 += scaledGrams;
-                            
-                            doc.text(`${code}: ${scaledGrams.toFixed(2)}g`, 30, boxY2);
+                            // Use altGrams if alt triggered, otherwise scale 1L grams by paintQty
+                            const usingBaseAlt2 = item.altCode && item.altThreshold && parseFloat(paintQty) >= item.altThreshold;
+                            let grams;
+                            if (usingBaseAlt2 && item.altGrams != null) {
+                                grams = parseFloat(item.altGrams) || 0; // already the full-qty weight
+                            } else {
+                                let gramStr = String(item.grams || '0').trim();
+                                grams = (parseFloat(gramStr.replace(/[\s,]/g, '.')) || 0) * scaleFactor;
+                            }
+                            runningTotal2 += grams;
+                            doc.text(`${usingBaseAlt2 ? item.altCode : code}: ${grams.toFixed(2)}g`, 30, boxY2);
                             doc.text(`${runningTotal2.toFixed(2)}g`, 140, boxY2);
                             boxY2 += 5;
                         });
@@ -8832,17 +8836,18 @@
                     
                     if (formula.colourants && formula.colourants.length > 0) {
                         formula.colourants.forEach((tint, idx) => {
-                            const code = tint.code || '';
-                            let gramStr = String(tint.amount || tint.grams || '0').trim();
-                            let grams = parseFloat(gramStr.replace(/[\s,]/g, '.'));
-                            grams = isNaN(grams) ? 0 : grams;
-                            
-                            // SCALE the grams
-                            const scaledGrams = grams * scaleFactor;
+                            const usingTintAlt2 = tint.altCode && tint.altThreshold && parseFloat(paintQty) >= tint.altThreshold;
+                            const displayCode = usingTintAlt2 ? tint.altCode : (tint.code || '');
+                            let grams;
+                            if (usingTintAlt2 && tint.altGrams != null) {
+                                grams = parseFloat(tint.altGrams) || 0; // already full-qty weight
+                            } else {
+                                let gramStr = String(tint.amount || tint.grams || '0').trim();
+                                grams = (parseFloat(gramStr.replace(/[\s,]/g, '.')) || 0) * scaleFactor;
+                            }
                             const name = tint.name || '';
-                            tinterRunningTotal2 += scaledGrams;
-                            
-                            doc.text(`${code}: ${scaledGrams.toFixed(2)}g ${name}`, 30, boxY2);
+                            tinterRunningTotal2 += grams;
+                            doc.text(`${displayCode}: ${grams.toFixed(2)}g ${name}`, 30, boxY2);
                             doc.text(`${tinterRunningTotal2.toFixed(2)}g`, 140, boxY2);
                             boxY2 += 5;
                             actualTinterCount2++;
@@ -8865,16 +8870,18 @@
                     
                     // TOTAL WEIGHT for scaled version
                     const totalBase = formula.whiteBase ? formula.whiteBase.reduce((sum, item) => {
-                        let grams = parseFloat(String(item.grams || '0').replace(/[\s,]/g, '.'));
-                        return sum + (isNaN(grams) ? 0 : grams);
+                        const ua = item.altCode && item.altThreshold && parseFloat(paintQty) >= item.altThreshold;
+                        const g = ua && item.altGrams != null ? parseFloat(item.altGrams)||0 : (parseFloat(String(item.grams||'0').replace(/[\s,]/g,'.'))||0) * scaleFactor;
+                        return sum + g;
                     }, 0) : 0;
                     
                     const totalTinters = formula.colourants ? formula.colourants.reduce((sum, item) => {
-                        let grams = parseFloat(String(item.amount || item.grams || '0').replace(/[\s,]/g, '.'));
-                        return sum + (isNaN(grams) ? 0 : grams);
+                        const ua = item.altCode && item.altThreshold && parseFloat(paintQty) >= item.altThreshold;
+                        const g = ua && item.altGrams != null ? parseFloat(item.altGrams)||0 : (parseFloat(String(item.amount||item.grams||'0').replace(/[\s,]/g,'.'))||0) * scaleFactor;
+                        return sum + g;
                     }, 0) : 0;
                     
-                    const totalWeight2 = (totalBase + totalTinters) * scaleFactor;
+                    const totalWeight2 = totalBase + totalTinters;
                     
                     doc.setFontSize(12);
                     doc.setFont(undefined, 'bold');
@@ -10312,17 +10319,22 @@
         const clientDB = JSON.parse(localStorage.getItem('clientDatabase') || '[]');
         const qNoSpace = q.replace(/\s/g, '');
 
-        // Search clients
-        clientDB.forEach(client => {
+        // Search clients - clientDatabase is an OBJECT keyed by ID; handle both legacy (phone/email) and new (mobile/landline/email1) field names
+        Object.values(clientDB).forEach(client => {
+            if (!client || typeof client !== 'object' || !client.name) return;
             const name = (client.name || '').toLowerCase();
-            const phone = ((client.phone || '') + (client.mobile || '')).toLowerCase().replace(/\s/g,'');
-            const email = (client.email || '').toLowerCase();
-            const addr = (client.address || '').toLowerCase();
-            if (name.includes(q) || phone.includes(qNoSpace) || email.includes(q) || addr.includes(q)) {
+            const phones = ((client.mobile||'') + (client.landline||'') + (client.phone||'')).toLowerCase().replace(/\s|-/g,'');
+            const emails = ((client.email1||'') + (client.email2||'') + (client.email||'')).toLowerCase();
+            const addr = ((client.address||'') + ' ' + (client.town||'') + ' ' + (client.postcode||'')).toLowerCase();
+            const notes = (client.notes||'').toLowerCase();
+            if (name.includes(q) || phones.includes(qNoSpace) || emails.includes(q) || addr.includes(q) || notes.includes(q)) {
+                const phone = client.mobile || client.landline || client.phone || '';
+                const email = client.email1 || client.email || '';
+                const location = [client.address, client.town].filter(Boolean).join(', ');
                 results.push({
                     type: 'client', icon: '👤',
-                    title: client.name || 'Unknown',
-                    subtitle: [client.phone || client.mobile, client.email, client.address].filter(Boolean).join('  ·  '),
+                    title: client.name,
+                    subtitle: [phone, email, location].filter(Boolean).join('  ·  '),
                     action: () => { closeGlobalSearch(); tab('admin'); setTimeout(() => switchAdminTab('clients'), 150); }
                 });
             }
@@ -10371,19 +10383,21 @@
             return;
         }
 
-        // Store results before rendering so onclick can reference them
-        window.searchResults = results;
-        container.innerHTML = results.slice(0, 30).map((r, i) => `
-            <div onclick="window.searchResults[${i}].action()" style="padding:12px 16px; border-bottom:1px solid #f0f0f0; cursor:pointer; display:flex; gap:12px; align-items:flex-start;"
+        // Store globally first, then render
+        window._gsResults = results;
+        const MAX = 30;
+        const shown = results.slice(0, MAX);
+        container.innerHTML = shown.map((r, i) => `
+            <div onclick="window._gsResults[${i}].action()" style="padding:12px 16px; border-bottom:1px solid #f0f0f0; cursor:pointer; display:flex; gap:12px; align-items:flex-start;"
                 onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background=''">
                 <span style="font-size:18px; flex-shrink:0; margin-top:2px;">${r.icon}</span>
                 <div style="flex:1; min-width:0;">
                     <div style="font-weight:900; font-size:13px; color:#000;">${r.title}</div>
                     <div style="font-size:11px; color:#888; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${r.subtitle || ''}</div>
                 </div>
-                <div style="font-size:9px; font-weight:900; color:#bbb; align-self:center; text-transform:uppercase;">${r.type}</div>
+                <span style="font-size:9px; font-weight:900; color:#bbb; align-self:center; text-transform:uppercase; margin-left:6px;">${r.type}</span>
             </div>
-        `).join('') + (results.length > 30 ? `<div style="padding:10px; text-align:center; color:#999; font-size:11px;">${results.length - 30} more — refine search</div>` : '');
+        `).join('') + (results.length > MAX ? `<div style="padding:10px; text-align:center; color:#999; font-size:11px;">${results.length - MAX} more — refine search</div>` : '');
     }
     // ===== END GLOBAL SEARCH =====
 
@@ -11969,16 +11983,55 @@
             spinner.style.display = 'block';
             document.getElementById('pdfPreviewTitle').textContent = title || 'PDF Preview';
             
-            iframe.src = pdfDataUri;
-            iframe.onload = () => { spinner.style.display = 'none'; };
-            
-            // Fallback: hide spinner after 3 seconds
-            setTimeout(() => { spinner.style.display = 'none'; }, 3000);
-            
             currentPDFData = pdfDataUri;
             currentPDFFilename = filename;
             
-            console.log('✓ PDF preview ready');
+            const pageContainer = document.getElementById('pdfPageContainer');
+            pageContainer.innerHTML = '';
+            
+            // Use pdf.js to render all pages as canvas (works on all devices/browsers)
+            const renderPDFPages = async () => {
+                try {
+                    const pdfJsLib = window.pdfjsLib || window['pdfjs-dist/build/pdf'];
+                    if (pdfJsLib) {
+                        pdfJsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                        const loadingTask = pdfJsLib.getDocument(pdfDataUri);
+                        const pdf = await loadingTask.promise;
+                        spinner.style.display = 'none';
+                        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                            const page = await pdf.getPage(pageNum);
+                            const containerWidth = pageContainer.parentElement.clientWidth - 30;
+                            const viewport = page.getViewport({ scale: 1 });
+                            const scale = Math.min(containerWidth / viewport.width, 2);
+                            const scaledViewport = page.getViewport({ scale });
+                            const canvas = document.createElement('canvas');
+                            canvas.width = scaledViewport.width;
+                            canvas.height = scaledViewport.height;
+                            canvas.style.cssText = 'box-shadow:0 2px 10px rgba(0,0,0,0.3); border-radius:4px; max-width:100%;';
+                            pageContainer.appendChild(canvas);
+                            await page.render({ canvasContext: canvas.getContext('2d'), viewport: scaledViewport }).promise;
+                        }
+                    } else {
+                        // Fallback: iframe
+                        iframe.style.display = 'block';
+                        iframe.style.width = '100%';
+                        iframe.style.height = '100%';
+                        iframe.src = pdfDataUri;
+                        spinner.style.display = 'none';
+                    }
+                } catch(e) {
+                    console.error('PDF render error:', e);
+                    // Fallback to iframe
+                    iframe.style.display = 'block';
+                    iframe.style.width = '100%';
+                    iframe.style.height = '100%';
+                    iframe.src = pdfDataUri;
+                    spinner.style.display = 'none';
+                }
+            };
+            renderPDFPages();
+            
+            console.log('✓ PDF preview rendering...');
         } catch(err) {
             console.error('❌ Error in showPDFPreview:', err);
         }
