@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.7.72 | Updated: 2026-03-04                       ║
+║  Version: v1.7.73 | Updated: 2026-03-04                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.7.72';
+    const CURRENT_VERSION = 'v1.7.73';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1208,7 +1208,7 @@
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.7.72</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.7.73</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -5440,7 +5440,7 @@
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.7.72';
+        const CURRENT_VERSION = 'v1.7.73';
         const CURRENT_DATE = '2026-02-28';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -10474,10 +10474,20 @@
         toDate.setHours(23,59,59);
 
         const history = JSON.parse(localStorage.getItem('jobHistory') || '[]');
-        const paintDB = typeof getPaintFormulas === 'function' ? getPaintFormulas() : [];
+        // Formulas are stored in 'paintFormulas' key (not paintFormulaDB)
+        // Also fall back to the in-memory paintDatabase global if available
+        const paintDB = (() => {
+            const fromStorage = JSON.parse(localStorage.getItem('paintFormulas') || '[]');
+            if (fromStorage.length > 0) return fromStorage;
+            if (Array.isArray(window.paintDatabase) && window.paintDatabase.length > 0) return window.paintDatabase;
+            return [];
+        })();
 
-        // Helper: find formula for a colour name
-        const getFormula = (colorName) => paintDB.find(f => f.color && f.color.toLowerCase() === (colorName||'').toLowerCase());
+        // Helper: find formula for a colour name (case-insensitive)
+        const getFormula = (colorName) => {
+            const q = (colorName || '').toLowerCase().trim();
+            return paintDB.find(f => (f.color || '').toLowerCase().trim() === q);
+        };
 
         // Filter jobs in range
         const jobs = history.filter(j => {
