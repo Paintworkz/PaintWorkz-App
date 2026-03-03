@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.7.62 | Updated: 2026-03-03                       ║
+║  Version: v1.7.63 | Updated: 2026-03-03                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.7.62';
+    const CURRENT_VERSION = 'v1.7.63';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -673,7 +673,7 @@
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:20px;">
                 <button onclick="generateA3Schedule(7)" style="padding:12px; background:#2196f3; color:#fff; border:none; border-radius:6px; font-weight:bold; font-size:12px; cursor:pointer;">📅 1 WEEK</button>
                 <button onclick="generateA3Schedule(30)" style="padding:12px; background:#ff9500; color:#fff; border:none; border-radius:6px; font-weight:bold; font-size:12px; cursor:pointer;">📅 1 MONTH</button>
-                <button onclick="generateA3Schedule(90)" style="padding:12px; background:#4caf50; color:#fff; border:none; border-radius:6px; font-weight:bold; font-size:12px; cursor:pointer;">📅 3 MONTHS</button>
+                <button onclick="generateA3Schedule(60)" style="padding:12px; background:#4caf50; color:#fff; border:none; border-radius:6px; font-weight:bold; font-size:12px; cursor:pointer;">📅 2 MONTHS</button>
                 <button onclick="generateA3Schedule(365)" style="padding:12px; background:#9c27b0; color:#fff; border:none; border-radius:6px; font-weight:bold; font-size:12px; cursor:pointer;">📅 1 YEAR</button>
             </div>
             
@@ -795,7 +795,7 @@
 </div>
 
 <header id="mainHeader" style="display:none;">
-    <div class="icon-btn" onclick="tab('history')">🔍</div>
+    <div class="icon-btn" onclick="openGlobalSearch()" title="Search jobs, clients, phone numbers...">🔍</div>
     <div class="logo-box" id="headerLogoBox" style="display:flex; align-items:center; justify-content:center; transition:all 0.3s ease;">
         <img id="headerLogoImg" src="" style="height:100%; max-width:95%; display:none; object-fit:contain;" alt="Company Logo">
         <span class="logo-text" id="headerLogoText" style="font-size:20px; font-weight:900; color:#d4af37; text-shadow:0 2px 4px rgba(0,0,0,0.5); letter-spacing:1px;">PaintWorkz</span>
@@ -1204,7 +1204,7 @@
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.7.62</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.7.63</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -1816,6 +1816,22 @@
             
         </div><!-- END scrollable card -->
     </div><!-- END #admin -->
+</div>
+
+<!-- GLOBAL SEARCH MODAL -->
+<div id="globalSearchModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:9000; justify-content:center; align-items:flex-start; padding-top:80px; box-sizing:border-box;">
+    <div style="background:#fff; border-radius:12px; width:92%; max-width:560px; box-shadow:0 10px 40px rgba(0,0,0,0.4); overflow:hidden;">
+        <div style="padding:14px 16px; border-bottom:1px solid #eee; display:flex; gap:10px; align-items:center;">
+            <span style="font-size:20px;">🔍</span>
+            <input id="globalSearchInput" type="text" placeholder="Search jobs, clients, phone, address, colour..." autofocus
+                style="flex:1; border:none; outline:none; font-size:16px; font-weight:600;"
+                oninput="runGlobalSearch(this.value)" onkeydown="if(event.key==='Escape')closeGlobalSearch()">
+            <button onclick="closeGlobalSearch()" style="border:none; background:none; font-size:22px; cursor:pointer; color:#999; line-height:1;">✕</button>
+        </div>
+        <div id="globalSearchResults" style="max-height:65vh; overflow-y:auto; padding:8px 0;">
+            <div style="padding:20px; text-align:center; color:#999; font-size:13px;">Start typing to search...</div>
+        </div>
+    </div>
 </div>
 
 <!-- WORKLOAD SUMMARY CONTAINER - Shows only in Schedule/Admin -->
@@ -5384,7 +5400,7 @@
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.7.62';
+        const CURRENT_VERSION = 'v1.7.63';
         const CURRENT_DATE = '2026-02-28';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -8369,7 +8385,7 @@
                             
                             grams = isNaN(grams) ? 0 : grams;
                             runningTotal += grams;
-                            let codeDisplay = usingBaseAlt ? code + ' ▲' : (item.altCode ? code + ' ▽' : code);
+                            let codeDisplay = usingBaseAlt ? code + ' [ALT]' : (item.altCode ? code + ' [s]' : code);
                             doc.text(`${codeDisplay}: ${grams.toFixed(2)}g`, 30, boxY);
                             doc.text(`${runningTotal.toFixed(2)}g`, 140, boxY);
                             boxY += 5;
@@ -8448,9 +8464,9 @@
                             // Show the code with alt indicator if switched
                             let codeDisplay = code;
                             if (usingAlt) {
-                                codeDisplay = code + ' ▲';  // ▲ = switched to large-qty code
+                                codeDisplay = code + ' [ALT]';  // switched to large-qty code
                             } else if (tint.altCode) {
-                                codeDisplay = code + ' ▽';  // ▽ = small qty code, alt exists
+                                codeDisplay = code + ' [s]';  // small qty code, alt available
                             }
                             doc.text(`${codeDisplay}: ${grams.toFixed(2)}g ${name}`, 30, boxY);
                             doc.text(`${tinterRunningTotal.toFixed(2)}g`, 140, boxY);
@@ -8481,7 +8497,7 @@
                         doc.setFontSize(7.5);
                         doc.setFont(undefined, 'normal');
                         doc.setTextColor(120, 120, 120);
-                        doc.text(`▽ = small qty code  |  ▲ = large qty code (switched at threshold for ${paintQty}L job)`, 25, boxY);
+                        doc.text(`[s] = small qty code  |  [ALT] = switched to large qty code (${paintQty}L job)`, 25, boxY);
                         doc.setTextColor(0, 0, 0);
                         boxY += 6;
                     }
@@ -8660,7 +8676,13 @@
                 doc.setFontSize(10);
                 doc.setFont(undefined, 'normal');
                 doc.setTextColor(200, 30, 30);
-                doc.text(`(Weights for ${paintQty} Litres of Paint - Job Requirement)`, 20, y2);
+                    const hasActivatedAlts = formula && formula.colourants && formula.colourants.some(t => t.altCode && t.altThreshold && parseFloat(paintQty) >= t.altThreshold);
+                    const altThresholdUsed = formula && formula.colourants && formula.colourants.find(t => t.altCode && t.altThreshold && parseFloat(paintQty) >= t.altThreshold);
+                    if (hasActivatedAlts && altThresholdUsed) {
+                        doc.text(`(Weights for ${paintQty}L - using ${altThresholdUsed.altThreshold}L alt codes)`, 20, y2);
+                    } else {
+                        doc.text(`(Weights for ${paintQty} Litres of Paint - Job Requirement)`, 20, y2);
+                    }
                 doc.setTextColor(0, 0, 0);
                 y2 += 8;
                 
@@ -10147,34 +10169,169 @@
             if (el.textContent.includes('Batch Print')) el.remove();
         });
         
-        // Generate forms in sequence with enough delay for each PDF to generate & download
+        // Generate all forms into a single merged PDF
         const totalForms = forms.length;
-        notify(`📦 Generating ${totalForms} form${totalForms > 1 ? 's' : ''}... they will download one by one`);
-        window.autoPrintMode = true;  // Enable batch download mode
+        notify(`📦 Generating ${totalForms} form${totalForms > 1 ? 's' : ''}...`);
         
-        forms.forEach((formData, index) => {
-            setTimeout(() => {
-                if (formData.func === 'genSupplyDocket') genSupplyDocket();
-                else if (formData.func === 'genMixingCard') genMixingCard();
-                else if (formData.func === 'genCoverSheet') genCoverSheet();
-                else if (formData.func === 'genShopLabel') genShopLabel();
-                else if (formData.func === 'genPaintOrder') genPaintOrder();
-                else if (formData.func === 'genEstimate') genEstimate();
-                else if (formData.func === 'genQuoteForm') genQuoteForm();
-                else if (formData.func === 'genInvoice') genInvoice();
-                
-                // After the last form, turn off batch mode
-                if (index === totalForms - 1) {
+        // Enable capture mode - generators will store pages into window.batchPdfPages instead of downloading
+        window.batchCapturing = true;
+        window.batchPdfPages = [];
+
+        const jobNum = (document.getElementById('jN') ? document.getElementById('jN').value : '') || 'batch';
+
+        // Run generators sequentially using promises
+        (async () => {
+            for (const formData of forms) {
+                await new Promise(resolve => {
                     setTimeout(() => {
-                        window.autoPrintMode = false;
-                        notify(`✅ Batch complete — ${totalForms} PDF${totalForms > 1 ? 's' : ''} downloaded`);
-                    }, 600);
+                        if (formData.func === 'genSupplyDocket') genSupplyDocket();
+                        else if (formData.func === 'genMixingCard') genMixingCard();
+                        else if (formData.func === 'genCoverSheet') genCoverSheet();
+                        else if (formData.func === 'genShopLabel') genShopLabel();
+                        else if (formData.func === 'genPaintOrder') genPaintOrder();
+                        else if (formData.func === 'genEstimate') genEstimate();
+                        else if (formData.func === 'genQuoteForm') genQuoteForm();
+                        else if (formData.func === 'genInvoice') genInvoice();
+                        setTimeout(resolve, 400);
+                    }, 0);
+                });
+            }
+
+            // Merge captured docs into one PDF
+            window.batchCapturing = false;
+            const pages = window.batchPdfPages || [];
+            if (pages.length === 0) {
+                notify('❌ No pages captured');
+                return;
+            }
+
+            const jsPDF = window.jspdf.jsPDF;
+            // Determine orientation from first page
+            const firstOri = pages[0].orientation || 'p';
+            const mergedDoc = new jsPDF(firstOri, 'mm', pages[0].pageSize || 'a4');
+
+            pages.forEach((page, idx) => {
+                if (idx > 0) {
+                    mergedDoc.addPage(page.pageSize || 'a4', page.orientation || 'p');
                 }
-            }, index * 800); // 800ms between each so downloads don't clash
-        });
+                // Add the page image
+                mergedDoc.addImage(page.imgData, 'JPEG', 0, 0, page.w, page.h);
+            });
+
+            mergedDoc.save(`${jobNum}_BatchPrint.pdf`);
+            window.batchPdfPages = [];
+            notify(`✅ Batch complete — ${pages.length} page${pages.length > 1 ? 's' : ''} in one PDF`);
+        })();
     }
 
-    function saveJob() { 
+    // ===== GLOBAL SEARCH =====
+    function openGlobalSearch() {
+        const modal = document.getElementById('globalSearchModal');
+        if (modal) {
+            modal.style.display = 'flex';
+            setTimeout(() => {
+                const inp = document.getElementById('globalSearchInput');
+                if (inp) { inp.value = ''; inp.focus(); }
+                document.getElementById('globalSearchResults').innerHTML = '<div style="padding:20px; text-align:center; color:#999; font-size:13px;">Start typing to search...</div>';
+            }, 50);
+        }
+    }
+
+    function closeGlobalSearch() {
+        const modal = document.getElementById('globalSearchModal');
+        if (modal) modal.style.display = 'none';
+    }
+
+    function runGlobalSearch(query) {
+        const q = (query || '').toLowerCase().trim();
+        const container = document.getElementById('globalSearchResults');
+        if (!q) {
+            container.innerHTML = '<div style="padding:20px; text-align:center; color:#999; font-size:13px;">Start typing to search...</div>';
+            return;
+        }
+
+        const results = [];
+        const jobHistory = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+        const clientDB = JSON.parse(localStorage.getItem('clientDatabase') || '[]');
+
+        // Search clients
+        clientDB.forEach(client => {
+            const name = (client.name || '').toLowerCase();
+            const phone = (client.phone || client.mobile || '').toLowerCase().replace(/\s/g,'');
+            const email = (client.email || '').toLowerCase();
+            const addr = (client.address || '').toLowerCase();
+            const qNoSpace = q.replace(/\s/g,'');
+            if (name.includes(q) || phone.includes(qNoSpace) || email.includes(q) || addr.includes(q)) {
+                results.push({
+                    type: 'client',
+                    icon: '👤',
+                    title: client.name || 'Unknown',
+                    subtitle: [client.phone || client.mobile, client.email, client.address].filter(Boolean).join('  |  '),
+                    action: () => { closeGlobalSearch(); tab('admin'); setTimeout(() => switchAdminTab('clients'), 100); }
+                });
+            }
+        });
+
+        // Search job history
+        jobHistory.forEach(job => {
+            const jobNum = (job.jobNum || '').toLowerCase();
+            const client = (job.client || '').toLowerCase();
+            const colour = (job.colour || job.color || '').toLowerCase();
+            const address = (job.address || '').toLowerCase();
+            const notes = (job.notes || '').toLowerCase();
+            if (jobNum.includes(q) || client.includes(q) || colour.includes(q) || address.includes(q) || notes.includes(q)) {
+                results.push({
+                    type: 'job',
+                    icon: '🔨',
+                    title: `Job #${job.jobNum || '?'} — ${job.client || 'Unknown'}`,
+                    subtitle: [job.colour || job.color, job.address, job.dateReceived].filter(Boolean).join('  |  '),
+                    action: () => {
+                        closeGlobalSearch();
+                        loadJobFromHistory(job.jobNum || job.id);
+                    }
+                });
+            }
+        });
+
+        // Search current job items (paint colours)
+        try {
+            const currentItems = window.items || [];
+            currentItems.forEach(item => {
+                const c = (item.color || item.colour || '').toLowerCase();
+                const b = (item.brand || '').toLowerCase();
+                if (c.includes(q) || b.includes(q)) {
+                    results.push({
+                        type: 'item',
+                        icon: '🎨',
+                        title: `${item.brand || ''} ${item.color || item.colour || ''}`.trim(),
+                        subtitle: 'Current job item',
+                        action: () => { closeGlobalSearch(); tab('measure'); }
+                    });
+                }
+            });
+        } catch(e) {}
+
+        if (results.length === 0) {
+            container.innerHTML = `<div style="padding:20px; text-align:center; color:#999; font-size:13px;">No results for "<strong>${query}</strong>"</div>`;
+            return;
+        }
+
+        container.innerHTML = results.slice(0, 30).map((r, i) => `
+            <div onclick="searchResults[${i}].action()" style="padding:12px 16px; border-bottom:1px solid #f0f0f0; cursor:pointer; display:flex; gap:12px; align-items:flex-start;"
+                onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background=''">
+                <span style="font-size:20px; flex-shrink:0;">${r.icon}</span>
+                <div>
+                    <div style="font-weight:900; font-size:13px; color:#000;">${r.title}</div>
+                    <div style="font-size:11px; color:#666; margin-top:2px;">${r.subtitle || ''}</div>
+                </div>
+            </div>
+        `).join('') + (results.length > 30 ? `<div style="padding:10px; text-align:center; color:#999; font-size:11px;">${results.length - 30} more results — refine your search</div>` : '');
+        
+        window.searchResults = results;
+    }
+    // ===== END GLOBAL SEARCH =====
+
+        function saveJob() { 
         try {
             saveData();
             saveJobToHistory(); // This will show its own notification
@@ -11698,18 +11855,43 @@
     function showPDFPreview(pdfDataUri, filename, title) {
         console.log('🔍 showPDFPreview called with:', filename);
         
-        // In batch mode: skip the modal entirely — just download the PDF directly
-        if (window.autoPrintMode === true) {
+        // In batch capture mode: extract all pages and store for merging
+        if (window.batchCapturing === true) {
             try {
-                const link = document.createElement('a');
-                link.href = pdfDataUri;
-                link.download = filename || 'document.pdf';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                console.log('📦 Batch download:', filename);
+                const jsPDF = window.jspdf.jsPDF;
+                // Load the PDF data and render each page to canvas, then store as image
+                const pdfBytes = atob(pdfDataUri.split(',')[1]);
+                const uint8 = new Uint8Array(pdfBytes.length);
+                for (let i = 0; i < pdfBytes.length; i++) uint8[i] = pdfBytes.charCodeAt(i);
+                const blob = new Blob([uint8], { type: 'application/pdf' });
+                const url = URL.createObjectURL(blob);
+                
+                pdfjsLib.getDocument(url).promise.then(pdf => {
+                    const renderAll = async () => {
+                        for (let pg = 1; pg <= pdf.numPages; pg++) {
+                            const page = await pdf.getPage(pg);
+                            const vp = page.getViewport({ scale: 2 });
+                            const canvas = document.createElement('canvas');
+                            canvas.width = vp.width;
+                            canvas.height = vp.height;
+                            const ctx = canvas.getContext('2d');
+                            await page.render({ canvasContext: ctx, viewport: vp }).promise;
+                            const isLandscape = vp.width > vp.height;
+                            const mmW = isLandscape ? 297 : 210;
+                            const mmH = isLandscape ? 210 : 297;
+                            window.batchPdfPages.push({
+                                imgData: canvas.toDataURL('image/jpeg', 0.92),
+                                w: mmW, h: mmH,
+                                orientation: isLandscape ? 'l' : 'p',
+                                pageSize: isLandscape ? 'a4' : 'a4'
+                            });
+                        }
+                        URL.revokeObjectURL(url);
+                    };
+                    renderAll();
+                }).catch(e => { console.error('PDF capture error:', e); URL.revokeObjectURL(url); });
             } catch(e) {
-                console.error('Batch download error:', e);
+                console.error('Batch capture error:', e);
             }
             return;
         }
