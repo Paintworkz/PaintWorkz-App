@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.7.71 | Updated: 2026-03-04                       ║
+║  Version: v1.7.72 | Updated: 2026-03-04                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.7.71';
+    const CURRENT_VERSION = 'v1.7.72';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1208,7 +1208,7 @@
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.7.71</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.7.72</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -5440,7 +5440,7 @@
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.7.71';
+        const CURRENT_VERSION = 'v1.7.72';
         const CURRENT_DATE = '2026-02-28';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -10495,7 +10495,6 @@
         let totalSqm = 0, totalParts = 0;
         const colourCount = {}, profileCount = {}, clientCount = {}, monthlyData = {}, finishCount = {};
         const baseCodeLitres = {};
-        const unassignedColours = {};
         let clearPaintLitres = 0;
 
         jobs.forEach(job => {
@@ -10528,22 +10527,17 @@
                 const prof = profName || ((item.fm||'').toLowerCase()==='moulded' ? 'Moulded' : 'Flat Panel');
                 profileCount[prof] = (profileCount[prof] || 0) + iSqm;
 
-                // Base code litres — auto from formula; clear paint tracked separately
+                // Base code litres — auto from formula whiteBase code; clear tracked separately
                 const paintLitres = iSqm * 0.2;
-                const isClear = col.toLowerCase().includes('clear');
-                if (isClear) {
+                if (col.toLowerCase().includes('clear')) {
                     clearPaintLitres += paintLitres;
                 } else {
                     const formula = getFormula(col);
-                    let resolvedBase = null;
-                    if (formula && formula.whiteBase && formula.whiteBase.length > 0) {
-                        resolvedBase = formula.whiteBase[0].code || null;
+                    const baseCode = formula && formula.whiteBase && formula.whiteBase.length > 0 ? (formula.whiteBase[0].code || null) : null;
+                    if (baseCode) {
+                        baseCodeLitres[baseCode] = (baseCodeLitres[baseCode] || 0) + paintLitres;
                     }
-                    if (resolvedBase) {
-                        baseCodeLitres[resolvedBase] = (baseCodeLitres[resolvedBase] || 0) + paintLitres;
-                    } else {
-                        unassignedColours[col] = (unassignedColours[col] || 0) + paintLitres;
-                    }
+                    // No formula = not counted (colour not yet in paint database)
                 }
             });
 
@@ -10551,17 +10545,12 @@
                 const col = job.color || 'Unknown';
                 colourCount[col] = (colourCount[col] || 0) + sqm;
                 const paintLitres = sqm * 0.2;
-                const isClear2 = col.toLowerCase().includes('clear');
-                if (isClear2) {
+                if (col.toLowerCase().includes('clear')) {
                     clearPaintLitres += paintLitres;
                 } else {
                     const formula = getFormula(col);
-                    let resolvedBase2 = formula && formula.whiteBase && formula.whiteBase.length > 0 ? (formula.whiteBase[0].code || null) : null;
-                    if (resolvedBase2) {
-                        baseCodeLitres[resolvedBase2] = (baseCodeLitres[resolvedBase2] || 0) + paintLitres;
-                    } else {
-                        unassignedColours[col] = (unassignedColours[col] || 0) + paintLitres;
-                    }
+                    const baseCode2 = formula && formula.whiteBase && formula.whiteBase.length > 0 ? (formula.whiteBase[0].code || null) : null;
+                    if (baseCode2) baseCodeLitres[baseCode2] = (baseCodeLitres[baseCode2] || 0) + paintLitres;
                 }
             }
         });
@@ -10571,8 +10560,8 @@
         const topProfiles = Object.entries(profileCount).sort((a,b)=>b[1]-a[1]).slice(0,10);
         const topClients = Object.entries(clientCount).sort((a,b)=>b[1]-a[1]).slice(0,6);
         const finishes = Object.entries(finishCount).sort((a,b)=>b[1]-a[1]);
-        const baseCodes = Object.entries(baseCodeLitres).sort((a,b)=>b[1]-a[1]);
-        const unassignedCount = Object.keys(unassignedColours).length;
+
+
 
         // FIX 2: undercoat SQM = totalSqm * 0.4
         const undercoatSqm = (totalSqm * 0.4).toFixed(1);
@@ -10615,7 +10604,7 @@
             </div>
         </div>
 
-        <!-- Row 3: Four-way totals summary -->
+        <!-- Row 3: Base totals summary — auto from formula base codes -->
         <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:18px;">
             <div class="report-card" style="background:linear-gradient(135deg,#e8f5e9,#c8e6c9); border:2px solid #388e3c; text-align:center; padding:16px 10px;">
                 <div style="font-size:10px; font-weight:900; color:#1b5e20; text-transform:uppercase; margin-bottom:8px;">🪣 Undercoat</div>
@@ -10625,16 +10614,16 @@
                 <div style="font-size:9px; color:#888; margin-top:2px;">paint SQM × 0.4</div>
             </div>
             <div class="report-card" style="background:linear-gradient(135deg,#e3f2fd,#bbdefb); border:2px solid #1565c0; text-align:center; padding:16px 10px;">
-                <div style="font-size:10px; font-weight:900; color:#0d47a1; text-transform:uppercase; margin-bottom:8px;">🔵 XB6930 Clear</div>
+                <div style="font-size:10px; font-weight:900; color:#0d47a1; text-transform:uppercase; margin-bottom:8px;">🔵 XB6930 Clear Base</div>
                 <div style="font-size:32px; font-weight:900; color:#0d47a1; line-height:1;">${(baseCodeLitres['XB6930']||0).toFixed(1)}</div>
                 <div style="font-size:12px; color:#1565c0; margin-top:2px;">litres</div>
-                <div style="font-size:9px; color:#777; margin-top:6px;">${unassignedCount>0?`<span style='color:#e65100'>⚠️ ${unassignedCount} unassigned</span>`:'✓ auto-resolved'}</div>
+                <div style="font-size:9px; color:#777; margin-top:6px;">from formula database</div>
             </div>
             <div class="report-card" style="background:linear-gradient(135deg,#f3e5f5,#e1bee7); border:2px solid #6a1b9a; text-align:center; padding:16px 10px;">
-                <div style="font-size:10px; font-weight:900; color:#4a148c; text-transform:uppercase; margin-bottom:8px;">⚪ XB6931 White</div>
+                <div style="font-size:10px; font-weight:900; color:#4a148c; text-transform:uppercase; margin-bottom:8px;">⚪ XB6931 White Base</div>
                 <div style="font-size:32px; font-weight:900; color:#6a1b9a; line-height:1;">${(baseCodeLitres['XB6931']||0).toFixed(1)}</div>
                 <div style="font-size:12px; color:#7b1fa2; margin-top:2px;">litres</div>
-                <div style="font-size:9px; color:#777; margin-top:6px;">✓ auto-resolved</div>
+                <div style="font-size:9px; color:#777; margin-top:6px;">from formula database</div>
             </div>
             <div class="report-card" style="background:linear-gradient(135deg,#fff8e1,#fff3e0); border:2px solid #e65100; text-align:center; padding:16px 10px;">
                 <div style="font-size:10px; font-weight:900; color:#bf360c; text-transform:uppercase; margin-bottom:8px;">🟡 Clear Paint</div>
@@ -10644,27 +10633,12 @@
             </div>
         </div>
 
-        <!-- Row 4: Client SQM + Assign unmatched colours -->
-        <div style="display:grid; grid-template-columns:${Object.keys(unassignedColours).length?'1fr 1fr':'1fr'}; gap:14px; margin-bottom:18px;">
+        <!-- Row 4: Client SQM -->
+        <div style="display:grid; grid-template-columns:1fr; gap:14px; margin-bottom:18px;">
             <div class="report-card">
                 <div class="report-card-title">👥 SQM by Client</div>
-                <canvas id="chartClients" height="170"></canvas>
+                <canvas id="chartClients" height="130"></canvas>
             </div>
-            ${Object.keys(unassignedColours).length ? `
-            <div class="report-card" style="border:2px solid #ff9800;">
-                <div class="report-card-title" style="color:#e65100;">⚠️ No Formula Linked — ${Object.keys(unassignedColours).length} colour${Object.keys(unassignedColours).length>1?'s':''}</div>
-                <div style="font-size:10px; color:#888; margin-bottom:8px;">Add these colours to the Paint Formula Database with their XB base code to auto-resolve.</div>
-                <table style="width:100%; border-collapse:collapse; font-size:11px;">
-                    <thead><tr style="background:#fff3e0;"><th style="padding:5px 8px; text-align:left;">Colour</th><th style="padding:5px 8px; text-align:right;">Litres needed</th></tr></thead>
-                    <tbody>
-                    ${Object.entries(unassignedColours).sort((a,b)=>b[1]-a[1]).map(([col,ltr],i)=>`
-                        <tr style="background:${i%2?'#fffdf5':'#fff'}; border-bottom:1px solid #f0f0f0;">
-                            <td style="padding:5px 8px; font-weight:700;">${col}</td>
-                            <td style="padding:5px 8px; text-align:right; font-weight:900; color:#e65100;">${ltr.toFixed(2)} L</td>
-                        </tr>`).join('')}
-                    </tbody>
-                </table>
-            </div>` : ''}
         </div>
 
         <!-- Row 5: Monthly jobs bar -->
@@ -10879,13 +10853,7 @@
         w.document.close();
         setTimeout(() => w.print(), 800);
     }
-    function assignColourBase(colourName, baseCode) {
-        const map = JSON.parse(localStorage.getItem('colourBaseMap') || '{}');
-        map[colourName] = baseCode;
-        localStorage.setItem('colourBaseMap', JSON.stringify(map));
-        notify(`✓ ${colourName} → ${baseCode}`);
-        buildReports(); // Rebuild report with new mapping
-    }
+
     // ===== END REPORTS ENGINE =====
 
 
