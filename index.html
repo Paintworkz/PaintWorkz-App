@@ -10474,16 +10474,22 @@
         toDate.setHours(23,59,59);
 
         const history = JSON.parse(localStorage.getItem('jobHistory') || '[]');
-        // Formulas are stored in 'paintFormulas' key (not paintFormulaDB)
-        // Also fall back to the in-memory paintDatabase global if available
+        // Load formulas — try all known keys + in-memory global
         const paintDB = (() => {
-            const fromStorage = JSON.parse(localStorage.getItem('paintFormulas') || '[]');
-            if (fromStorage.length > 0) return fromStorage;
+            const f1 = JSON.parse(localStorage.getItem('paintFormulas') || '[]');
+            if (f1.length > 0) return f1;
+            const f2 = JSON.parse(localStorage.getItem('paintFormulaDB') || '[]');
+            if (f2.length > 0) return f2;
             if (Array.isArray(window.paintDatabase) && window.paintDatabase.length > 0) return window.paintDatabase;
             return [];
         })();
 
-        // Helper: find formula for a colour name (case-insensitive)
+        console.log('REPORTS DEBUG - paintDB size:', paintDB.length);
+        if (paintDB.length > 0) {
+            console.log('  Formula colors:', paintDB.map(f=>f.color).join(', '));
+            console.log('  Sample whiteBase:', JSON.stringify(paintDB[0].whiteBase));
+        }
+
         const getFormula = (colorName) => {
             const q = (colorName || '').toLowerCase().trim();
             return paintDB.find(f => (f.color || '').toLowerCase().trim() === q);
@@ -10565,6 +10571,9 @@
             }
         });
 
+        console.log('REPORTS DEBUG - baseCodeLitres:', JSON.stringify(baseCodeLitres));
+        console.log('REPORTS DEBUG - clearPaintLitres:', clearPaintLitres);
+        console.log('REPORTS DEBUG - colourCount keys:', Object.keys(colourCount).join(', '));
         const months = Object.keys(monthlyData).sort((a,b) => new Date('1 ' + a) - new Date('1 ' + b));
         const topColours = Object.entries(colourCount).sort((a,b)=>b[1]-a[1]).slice(0,10);
         const topProfiles = Object.entries(profileCount).sort((a,b)=>b[1]-a[1]).slice(0,10);
@@ -10580,6 +10589,19 @@
 
         const html = `
         <div id="reportsPrintArea">
+
+        <!-- DEBUG PANEL - remove after fix -->
+        <div style="background:#111; color:#0f0; font-family:monospace; font-size:10px; padding:12px; border-radius:6px; margin-bottom:14px; white-space:pre-wrap; word-break:break-all;">
+<b style="color:#ff0;">🔍 BASE CODE DEBUG</b>
+paintDB size: ${paintDB.length}
+formula colours: ${paintDB.map(f=>f.color).join(' | ') || '(none)'}
+job colours found: ${Object.keys(colourCount).join(' | ') || '(none)'}
+XB6930 raw: ${baseCodeLitres['XB6930'] || 0}
+XB6931 raw: ${baseCodeLitres['XB6931'] || 0}
+clearPaint: ${clearPaintLitres}
+baseCodeLitres full: ${JSON.stringify(baseCodeLitres)}
+sample formula whiteBase: ${paintDB.length > 0 ? JSON.stringify(paintDB[0].whiteBase) : 'no formulas'}
+        </div>
 
         <!-- KPI cards - 5 across -->
         <div style="display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-bottom:18px;">
