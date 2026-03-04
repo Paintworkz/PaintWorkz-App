@@ -4105,6 +4105,26 @@ const firebaseConfig = {
         localStorage.setItem('currentJob', JSON.stringify(jobData));
     }
 
+    // ── Client Database helpers — defined early so initializeApp can use them ──
+    function getClientDatabase() {
+        const db = localStorage.getItem('clientDatabase');
+        return db ? JSON.parse(db) : {};
+    }
+
+    function saveClientDatabase(db) {
+        localStorage.setItem('clientDatabase', JSON.stringify(db));
+        try {
+            if (window.currentUser && window.firebaseDb && window.setDoc && window.doc) {
+                const ref = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'clientDatabase');
+                window.setDoc(ref, { clients: db, updated: new Date().toISOString() })
+                    .then(() => console.log('☁️ Client database synced to Firestore'))
+                    .catch(e => console.warn('⚠️ Firestore client save failed:', e));
+            }
+        } catch(e) {
+            console.warn('⚠️ Firestore client sync error:', e.message);
+        }
+    }
+
     // Populate client dropdown with unique clients from history
     function populateClientDropdown() {
         try {
@@ -11795,7 +11815,10 @@ const firebaseConfig = {
 </script>
 <script>
 // ── Service Worker Registration ──────────────────────────────
-if ('serviceWorker' in navigator) {
+// Only register on production (GitHub Pages) — skip on preview/dev domains
+const _swHost = window.location.hostname;
+const _swAllowed = _swHost.includes('github.io') || _swHost === 'localhost' || _swHost === '127.0.0.1';
+if ('serviceWorker' in navigator && _swAllowed) {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('./sw.js')
             .then(reg => {
@@ -13806,26 +13829,8 @@ if ('serviceWorker' in navigator) {
     }
     
     // ===== CLIENT DATABASE FUNCTIONS =====
-    function getClientDatabase() {
-        const db = localStorage.getItem('clientDatabase');
-        return db ? JSON.parse(db) : {};
-    }
-    
-    function saveClientDatabase(db) {
-        localStorage.setItem('clientDatabase', JSON.stringify(db));
-        // Sync to Firestore for cross-device access
-        try {
-            if (window.currentUser && window.firebaseDb && window.setDoc && window.doc) {
-                const ref = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'clientDatabase');
-                window.setDoc(ref, { clients: db, updated: new Date().toISOString() })
-                    .then(() => console.log('☁️ Client database synced to Firestore'))
-                    .catch(e => console.warn('⚠️ Firestore client save failed:', e));
-            }
-        } catch(e) {
-            console.warn('⚠️ Firestore client sync error:', e.message);
-        }
-    }
-    
+    // getClientDatabase / saveClientDatabase defined earlier in file
+
     function filterClientList() {
         const searchBox = document.getElementById('clientSearchBox');
         const searchTerm = searchBox.value.toLowerCase().trim();
