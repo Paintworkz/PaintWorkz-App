@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.7.77 | Updated: 2026-03-04                       ║
+║  Version: v1.7.78 | Updated: 2026-03-04                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.7.77';
+    const CURRENT_VERSION = 'v1.7.78';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1208,7 +1208,7 @@
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.7.77</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.7.78</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -5440,7 +5440,7 @@
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.7.77';
+        const CURRENT_VERSION = 'v1.7.78';
         const CURRENT_DATE = '2026-02-28';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -10542,7 +10542,7 @@
                 const prof = profName || ((item.fm||'').toLowerCase()==='moulded' ? 'Moulded' : 'Flat Panel');
                 profileCount[prof] = (profileCount[prof] || 0) + iSqm;
 
-                // Base code litres — auto from formula whiteBase code; clear tracked separately
+                // Base code litres — finish determines XB series, formula determines white vs clear
                 const paintLitres = iSqm * 0.2;
                 if (col.toLowerCase().includes('clear')) {
                     clearPaintLitres += paintLitres;
@@ -10550,8 +10550,22 @@
                     const formula = getFormula(col);
                     const _wb = formula ? (formula.whiteBase || formula.baseTinters || []) : [];
                     const baseEntry = _wb.find(b => (b.code||'').toUpperCase().startsWith('XB')) || _wb.find(b => (b.altCode||'').toUpperCase().startsWith('XB'));
-                    const baseCode = baseEntry ? ((baseEntry.code||'').toUpperCase().startsWith('XB') ? baseEntry.code : baseEntry.altCode) : null;
-                    if (baseCode) {
+                    const rawCode = baseEntry ? ((baseEntry.code||'').toUpperCase().startsWith('XB') ? baseEntry.code : baseEntry.altCode) : null;
+                    if (rawCode) {
+                        // Determine white vs clear from raw code (6930=white, 6931=clear; treat odd=clear, even=white)
+                        const isClear = ['XB6931','XB6911','XB6961'].includes(rawCode.toUpperCase()) ||
+                                        (rawCode.toUpperCase().startsWith('XB') && parseInt(rawCode.slice(-1)) % 2 === 1);
+                        // Map to correct series based on item finish
+                        const fin = (item.finish || job.finish || '').toLowerCase();
+                        let baseCode;
+                        if (fin === 'matt') {
+                            baseCode = isClear ? 'XB6911' : 'XB6910';
+                        } else if (fin === 'gloss') {
+                            baseCode = isClear ? 'XB6961' : 'XB6960';
+                        } else {
+                            // Satin, Semi Gloss, or unknown → use raw code as-is (satin series)
+                            baseCode = rawCode.toUpperCase();
+                        }
                         baseCodeLitres[baseCode] = (baseCodeLitres[baseCode] || 0) + paintLitres;
                     }
                     // No formula = not counted (colour not yet in paint database)
@@ -10568,8 +10582,21 @@
                     const formula = getFormula(col);
                     const _wb2 = formula ? (formula.whiteBase || formula.baseTinters || []) : [];
                     const baseEntry2 = _wb2.find(b => (b.code||'').toUpperCase().startsWith('XB')) || _wb2.find(b => (b.altCode||'').toUpperCase().startsWith('XB'));
-                    const baseCode2 = baseEntry2 ? ((baseEntry2.code||'').toUpperCase().startsWith('XB') ? baseEntry2.code : baseEntry2.altCode) : null;
-                    if (baseCode2) baseCodeLitres[baseCode2] = (baseCodeLitres[baseCode2] || 0) + paintLitres;
+                    const rawCode2 = baseEntry2 ? ((baseEntry2.code||'').toUpperCase().startsWith('XB') ? baseEntry2.code : baseEntry2.altCode) : null;
+                    if (rawCode2) {
+                        const isClear2 = ['XB6931','XB6911','XB6961'].includes(rawCode2.toUpperCase()) ||
+                                         (rawCode2.toUpperCase().startsWith('XB') && parseInt(rawCode2.slice(-1)) % 2 === 1);
+                        const fin2 = (job.finish || '').toLowerCase();
+                        let baseCode2;
+                        if (fin2 === 'matt') {
+                            baseCode2 = isClear2 ? 'XB6911' : 'XB6910';
+                        } else if (fin2 === 'gloss') {
+                            baseCode2 = isClear2 ? 'XB6961' : 'XB6960';
+                        } else {
+                            baseCode2 = rawCode2.toUpperCase();
+                        }
+                        baseCodeLitres[baseCode2] = (baseCodeLitres[baseCode2] || 0) + paintLitres;
+                    }
                 }
             }
         });
