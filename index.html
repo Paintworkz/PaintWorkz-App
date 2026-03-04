@@ -853,6 +853,9 @@ const firebaseConfig = {
 <!-- TOAST NOTIFICATION -->
 <div id="toast" style="display:none; position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#34c759; color:#fff; padding:12px 25px; border-radius:25px; font-weight:900; z-index:5000; font-size:11px; box-shadow:0 4px 12px rgba(52, 199, 89, 0.3); animation: slideUp 0.4s ease-out, slideDown 0.4s ease-in 2.6s forwards; white-space:nowrap;"></div>
 
+<!-- Emergency close button - always on top, press if any modal gets stuck -->
+<button id="emergencyCloseBtn" onclick="closeAllModals()" style="display:none; position:fixed; top:10px; right:10px; z-index:999999; background:#ff3b30; color:#fff; border:none; border-radius:50%; width:44px; height:44px; font-size:22px; font-weight:900; cursor:pointer; box-shadow:0 3px 12px rgba(255,59,48,0.5); line-height:1;">✕</button>
+
 <style>
 @keyframes slideUp {
     from {
@@ -2413,7 +2416,7 @@ const firebaseConfig = {
                   <button id="logoutBtn" onclick="logout()" style="background:#ff3b30; color:#fff; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; font-weight:900; margin-left:10px;">Logout</button>
                 `;
                 loadDataFromFirestore();
-                setTimeout(maybeShowOnboarding, 1200);
+                // Onboarding disabled - user has existing data
               } else {
                 window.currentUser = null;
                 document.getElementById('loginScreen').classList.remove('hidden');
@@ -11830,6 +11833,55 @@ const firebaseConfig = {
 
 </script>
 <script>
+// ── Global modal escape handler ───────────────────────────────
+// Pressing ESC or clicking a dark backdrop closes any open modal
+(function() {
+    const MODAL_IDS = [
+        'pdfPreviewModal','chargesModal','a3ScheduleModal','timelineModal',
+        'calendarModal','forgotPasswordModal','paintFormulaModal',
+        'globalSearchModal','onboardingWizard','aiChatModal'
+    ];
+
+    function closeAllModals() {
+        MODAL_IDS.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+        });
+        // Remove dynamically created modals
+        document.querySelectorAll('[id^="addClientModal-"],[id^="editClientModal-"],[id^="addOverlay-"],[id^="editOverlay-"]').forEach(el => el.remove());
+        updateEmergencyBtn();
+    }
+
+    function updateEmergencyBtn() {
+        const btn = document.getElementById('emergencyCloseBtn');
+        if (!btn) return;
+        const anyOpen = MODAL_IDS.some(id => {
+            const el = document.getElementById(id);
+            return el && el.style.display !== 'none' && el.style.display !== '';
+        }) || document.querySelector('[id^="addClientModal-"],[id^="editClientModal-"]');
+        btn.style.display = anyOpen ? 'block' : 'none';
+    }
+
+    // ESC key closes everything
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') closeAllModals();
+    });
+
+    // Clicking a dark overlay backdrop closes it
+    document.addEventListener('click', function(e) {
+        const target = e.target;
+        if (target && MODAL_IDS.includes(target.id)) {
+            target.style.display = 'none';
+            updateEmergencyBtn();
+        }
+    });
+
+    // Poll every second to show/hide emergency button
+    setInterval(updateEmergencyBtn, 1000);
+
+    window.closeAllModals = closeAllModals;
+})();
+
 // ── Service Worker Registration ──────────────────────────────
 // Only register on production (GitHub Pages) — skip on preview/dev domains
 const _swHost = window.location.hostname;
