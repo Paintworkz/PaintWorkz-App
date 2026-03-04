@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.7.85 | Updated: 2026-03-04                       ║
+║  Version: v1.7.87 | Updated: 2026-03-04                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.7.85';
+    const CURRENT_VERSION = 'v1.7.87';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1208,7 +1208,7 @@
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.7.85</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.7.87</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -1910,6 +1910,12 @@
                                 <button id="rStatusAll" onclick="setReportStatus('all')" style="padding:5px 8px; border:2px solid #2196f3; border-radius:5px; background:#2196f3; color:#fff; font-weight:900; font-size:10px; cursor:pointer;">ALL</button>
                                 <button id="rStatusActive" onclick="setReportStatus('active')" style="padding:5px 8px; border:2px solid #ddd; border-radius:5px; background:#fff; color:#666; font-weight:900; font-size:10px; cursor:pointer;">🔄 ACTIVE</button>
                                 <button id="rStatusCompleted" onclick="setReportStatus('completed')" style="padding:5px 8px; border:2px solid #ddd; border-radius:5px; background:#fff; color:#666; font-weight:900; font-size:10px; cursor:pointer;">✅ COMPLETED</button>
+                            </div>
+                            <div>
+                                <label style="font-size:9px; font-weight:900; color:#999; text-transform:uppercase; display:block; margin-bottom:3px;">👤 Filter by Client</label>
+                                <select id="rClientFilter" style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:5px; font-size:11px; font-weight:700; color:#333; background:#fff;" >
+                                    <option value="">— All Clients —</option>
+                                </select>
                             </div>
                             <div style="display:flex; gap:5px;">
                                 <button onclick="buildReports()" style="padding:6px 14px; border:none; border-radius:5px; background:#2196f3; color:#fff; font-weight:900; font-size:11px; cursor:pointer; flex:1;">▶ RUN</button>
@@ -5514,7 +5520,7 @@
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.7.85';
+        const CURRENT_VERSION = 'v1.7.87';
         const CURRENT_DATE = '2026-02-28';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -10524,6 +10530,7 @@
             document.getElementById('reportDateFrom').value = from.toISOString().slice(0,10);
             document.getElementById('reportDateTo').value = to.toISOString().slice(0,10);
         }
+        populateClientFilter();
     }
 
     function parseReportDate(str) {
@@ -10539,6 +10546,16 @@
     }
 
     let _reportStatusFilter = 'all'; // 'all' | 'active' | 'completed'
+    function populateClientFilter() {
+        // Populate client dropdown with unique clients from job history, keep current selection
+        const sel = document.getElementById('rClientFilter');
+        if (!sel) return;
+        const current = sel.value;
+        const history = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+        const clients = [...new Set(history.map(j => j.client || '').filter(Boolean))].sort();
+        sel.innerHTML = '<option value="">— All Clients —</option>' + clients.map(c => `<option value="${c}"${c===current?' selected':''}>${c}</option>`).join('');
+    }
+
     function setReportStatus(val) {
         _reportStatusFilter = val;
         ['all','active','completed'].forEach(k => {
@@ -10582,13 +10599,16 @@
             return paintDB.find(f => (f.color || '').toLowerCase().trim() === q);
         };
 
-        // Filter jobs in range + status
+        // Filter jobs in range + status + client
+        populateClientFilter();
+        const _clientFilter = (document.getElementById('rClientFilter')?.value || '').trim();
         const jobs = history.filter(j => {
             const d = parseReportDate(j.dateReceived) || new Date(j.timestamp || 0);
             if (d < fromDate || d > toDate) return false;
-            if (_reportStatusFilter === 'active') return !j.completed;
-            if (_reportStatusFilter === 'completed') return j.completed === true;
-            return true; // 'all'
+            if (_reportStatusFilter === 'active' && j.completed) return false;
+            if (_reportStatusFilter === 'completed' && !j.completed) return false;
+            if (_clientFilter && (j.client || '') !== _clientFilter) return false;
+            return true;
         });
 
         if (jobs.length === 0) {
@@ -10617,6 +10637,9 @@
             const sqm = parseFloat(job.totalSqm) || 0;
             const parts = parseInt(job.totalParts) || 0;
             totalSqm += sqm;
+            // Phase completion: if these tasks are ticked in schedule, skip those quantities
+            const _ucDone  = !!(job.phases && job.phases.undercoat);  // undercoat already applied
+            const _tcDone  = !!(job.phases && job.phases.topcoat);    // topcoat already applied
             totalParts += parts;
 
             const d = parseReportDate(job.dateReceived) || new Date(job.timestamp || 0);
@@ -10648,9 +10671,8 @@
                 const _crItem = _finItem === 'matt' ? matRate : _finItem === 'gloss' ? glsRate : satRate;
                 const paintLitres = iSqm / _crItem;
                 if (col.toLowerCase().includes('clear')) {
-                    const _clrLitres = iSqm / clrRate;
-                    clearPaintLitres += _clrLitres;
-                    clearSqm += iSqm;
+                    if (!_tcDone) { const _clrLitres = iSqm / clrRate; clearPaintLitres += _clrLitres; }
+                    if (!_ucDone) clearSqm += iSqm;
                 } else {
                     const formula = getFormula(col);
                     const _wb = formula ? (formula.whiteBase || formula.baseTinters || []) : [];
@@ -10671,7 +10693,7 @@
                             // Satin, Semi Gloss, or unknown → use raw code as-is (satin series)
                             baseCode = rawCode.toUpperCase();
                         }
-                        baseCodeLitres[baseCode] = (baseCodeLitres[baseCode] || 0) + paintLitres;
+                        if (!_tcDone) baseCodeLitres[baseCode] = (baseCodeLitres[baseCode] || 0) + paintLitres;
                     }
                     // No formula = not counted (colour not yet in paint database)
                 }
@@ -10684,9 +10706,8 @@
                 const _crJob = _finJob === 'matt' ? matRate : _finJob === 'gloss' ? glsRate : satRate;
                 const paintLitres = sqm / _crJob;
                 if (col.toLowerCase().includes('clear')) {
-                    const _clrLitres2 = sqm / clrRate;
-                    clearPaintLitres += _clrLitres2;
-                    clearSqm += sqm;
+                    if (!_tcDone) { const _clrLitres2 = sqm / clrRate; clearPaintLitres += _clrLitres2; }
+                    if (!_ucDone) clearSqm += sqm;
                 } else {
                     const formula = getFormula(col);
                     const _wb2 = formula ? (formula.whiteBase || formula.baseTinters || []) : [];
@@ -10704,7 +10725,7 @@
                         } else {
                             baseCode2 = rawCode2.toUpperCase();
                         }
-                        baseCodeLitres[baseCode2] = (baseCodeLitres[baseCode2] || 0) + paintLitres;
+                        if (!_tcDone) baseCodeLitres[baseCode2] = (baseCodeLitres[baseCode2] || 0) + paintLitres;
                     }
                 }
             }
@@ -10719,14 +10740,21 @@
 
 
         // Undercoat: coloured sqm uses ucRate, clear sqm uses ucClearRate
+        // ucPendingSqm excludes jobs where undercoat is already done (ticked in schedule)
+        const ucPendingSqm = jobs.reduce((acc, j) => {
+            if (j.phases && j.phases.undercoat) return acc; // already done
+            return acc + (parseFloat(j.totalSqm) || 0);
+        }, 0);
+        const colouredPendingSqm = ucPendingSqm - clearSqm;
         const colouredSqm  = totalSqm - clearSqm;
-        const undercoatSqm = totalSqm.toFixed(1);
-        const undercoatL   = (colouredSqm / ucRate).toFixed(1);
+        const undercoatSqm = ucPendingSqm.toFixed(1);
+        const undercoatL   = (colouredPendingSqm / ucRate).toFixed(1);
         const clearUcL     = (clearSqm / ucClearRate).toFixed(1);
 
         const palette = ['#2196f3','#4caf50','#ff9800','#9c27b0','#f44336','#00bcd4','#ff5722','#607d8b','#3f51b5','#8bc34a'];
 
-        const statusLabel = _reportStatusFilter === 'active' ? '🔄 Active Jobs Only' : _reportStatusFilter === 'completed' ? '✅ Completed Jobs Only' : '📋 All Jobs';
+        const _cfl = (document.getElementById('rClientFilter')?.value || '').trim();
+        const statusLabel = (_reportStatusFilter === 'active' ? '🔄 Active' : _reportStatusFilter === 'completed' ? '✅ Completed' : '📋 All Jobs') + (_cfl ? ' • 👤 ' + _cfl : '');
         const html = `
         <div id="reportsPrintArea">
         <div style="text-align:right; font-size:10px; font-weight:900; color:#2196f3; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">${statusLabel}</div>
@@ -10775,19 +10803,15 @@
           <!-- LEFT: All base rows stacked -->
           <div>
 
-            <!-- Undercoat — same 3-col grid as the base rows -->
-            <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:10px;">
-                <div class="report-card" style="background:linear-gradient(135deg,#e8f5e9,#c8e6c9); border:2px solid #388e3c; text-align:center; padding:12px 8px; min-height:100px; box-sizing:border-box;">
-                    <div style="font-size:9px; font-weight:900; color:#1b5e20; text-transform:uppercase; margin-bottom:4px;">🪣 Undercoat</div>
-                    <div style="font-size:24px; font-weight:900; color:#2e7d32; line-height:1.1;">${undercoatSqm}<span style="font-size:12px;"> m²</span></div>
-                    <div style="font-size:18px; font-weight:900; color:#555; margin-top:4px;">${undercoatL}<span style="font-size:11px; color:#666;"> L</span></div>
-                    <div style="font-size:9px; color:#888; margin-top:2px;">${ucRate} m²/L</div>
-                </div>
-                <div class="report-card" style="background:#f9f9f9; border:2px solid #ddd; text-align:center; padding:12px 8px; min-height:100px; box-sizing:border-box; display:flex; align-items:center; justify-content:center;">
-                    <div style="color:#ccc; font-size:11px; font-weight:900;">SATIN BASES ↓</div>
-                </div>
-                <div class="report-card" style="background:#f9f9f9; border:2px solid #ddd; text-align:center; padding:12px 8px; min-height:100px; box-sizing:border-box; display:flex; align-items:center; justify-content:center;">
-                    <div style="color:#ccc; font-size:11px; font-weight:900;">GLOSS / MATT ↓</div>
+            <!-- Undercoat — single full-width card -->
+            <div style="margin-bottom:10px;">
+                <div class="report-card" style="background:linear-gradient(135deg,#e8f5e9,#c8e6c9); border:2px solid #388e3c; text-align:center; padding:12px 16px; box-sizing:border-box; display:flex; align-items:center; justify-content:space-between;">
+                    <div>
+                        <div style="font-size:9px; font-weight:900; color:#1b5e20; text-transform:uppercase; margin-bottom:4px;">🪣 Undercoat</div>
+                        <div style="font-size:28px; font-weight:900; color:#2e7d32; line-height:1.1;">${undercoatSqm}<span style="font-size:13px;"> m²</span></div>
+                    </div>
+                    <div style="font-size:32px; font-weight:900; color:#555;">${undercoatL}<span style="font-size:14px; color:#666;"> L</span></div>
+                    <div style="font-size:10px; color:#888;">${ucRate} m²/L</div>
                 </div>
             </div>
 
@@ -10932,51 +10956,50 @@
             </div>
         </div>
 
-        <!-- Row 6: Job breakdown + Estimate chart -->
-        <div style="display:grid; grid-template-columns:3fr 2fr; gap:14px; margin-bottom:14px; align-items:start;">
-            <div class="report-card">
-                <div class="report-card-title">📋 Job Breakdown (${jobs.length} jobs)</div>
-                <div style="overflow-x:auto;">
-                <table style="width:100%; border-collapse:collapse; font-size:11px;">
-                    <thead><tr style="background:#2196f3; color:#fff;">
-                        <th style="padding:7px 8px; text-align:left;">Job #</th>
-                        <th style="padding:7px 8px; text-align:left;">Client</th>
-                        <th style="padding:7px 8px; text-align:left;">Job Name</th>
-                        <th style="padding:7px 8px; text-align:left;">Colour</th>
-                        <th style="padding:7px 8px; text-align:left;">Finish</th>
-                        <th style="padding:7px 8px; text-align:right;">Parts</th>
-                        <th style="padding:7px 8px; text-align:right;">SQM</th>
-                        <th style="padding:7px 8px; text-align:left;">Date</th>
-                    </tr></thead>
-                    <tbody>
-                    ${jobs.map((j,i)=>`<tr style="background:${i%2?'#f9f9f9':'#fff'}; border-bottom:1px solid #eee;">
-                        <td style="padding:6px 8px; font-weight:900;">${j.jobNum||'—'}</td>
-                        <td style="padding:6px 8px;">${j.client||'—'}</td>
-                        <td style="padding:6px 8px;">${j.jobName||'—'}</td>
-                        <td style="padding:6px 8px;">${j.color||'—'}</td>
-                        <td style="padding:6px 8px;">${j.finish||'—'}</td>
-                        <td style="padding:6px 8px; text-align:right;">${j.totalParts||0}</td>
-                        <td style="padding:6px 8px; text-align:right; font-weight:900;">${parseFloat(j.totalSqm||0).toFixed(2)}</td>
-                        <td style="padding:6px 8px;">${j.dateReceived||'—'}</td>
-                    </tr>`).join('')}
-                    </tbody>
-                    <tfoot><tr style="background:#e3f2fd; font-weight:900;">
-                        <td colspan="5" style="padding:7px 8px;">TOTALS</td>
-                        <td style="padding:7px 8px; text-align:right;">${totalParts}</td>
-                        <td style="padding:7px 8px; text-align:right;">${totalSqm.toFixed(2)}</td>
-                        <td></td>
-                    </tr></tfoot>
-                </table>
-                </div>
+        <!-- Row 6: Job breakdown full width -->
+        <div class="report-card" style="margin-bottom:14px;">
+            <div class="report-card-title">📋 Job Breakdown (${jobs.length} jobs)</div>
+            <div style="overflow-x:auto;">
+            <table style="width:100%; border-collapse:collapse; font-size:11px;">
+                <thead><tr style="background:#2196f3; color:#fff;">
+                    <th style="padding:7px 8px; text-align:left;">Job #</th>
+                    <th style="padding:7px 8px; text-align:left;">Client</th>
+                    <th style="padding:7px 8px; text-align:left;">Job Name</th>
+                    <th style="padding:7px 8px; text-align:left;">Colour</th>
+                    <th style="padding:7px 8px; text-align:left;">Finish</th>
+                    <th style="padding:7px 8px; text-align:right;">Parts</th>
+                    <th style="padding:7px 8px; text-align:right;">SQM</th>
+                    <th style="padding:7px 8px; text-align:left;">Date</th>
+                </tr></thead>
+                <tbody>
+                ${jobs.map((j,i)=>`<tr style="background:${i%2?'#f9f9f9':'#fff'}; border-bottom:1px solid #eee;">
+                    <td style="padding:6px 8px; font-weight:900;">${j.jobNum||'—'}</td>
+                    <td style="padding:6px 8px;">${j.client||'—'}</td>
+                    <td style="padding:6px 8px;">${j.jobName||'—'}</td>
+                    <td style="padding:6px 8px;">${j.color||'—'}</td>
+                    <td style="padding:6px 8px;">${j.finish||'—'}</td>
+                    <td style="padding:6px 8px; text-align:right;">${j.totalParts||0}</td>
+                    <td style="padding:6px 8px; text-align:right; font-weight:900;">${parseFloat(j.totalSqm||0).toFixed(2)}</td>
+                    <td style="padding:6px 8px;">${j.dateReceived||'—'}</td>
+                </tr>`).join('')}
+                </tbody>
+                <tfoot><tr style="background:#e3f2fd; font-weight:900;">
+                    <td colspan="5" style="padding:7px 8px;">TOTALS</td>
+                    <td style="padding:7px 8px; text-align:right;">${totalParts}</td>
+                    <td style="padding:7px 8px; text-align:right;">${totalSqm.toFixed(2)}</td>
+                    <td></td>
+                </tr></tfoot>
+            </table>
             </div>
-            <div class="report-card" style="display:flex; flex-direction:column;">
-                <div class="report-card-title">💰 Estimated Job Values</div>
-                <div style="position:relative; flex:1; min-height:350px;">
-                    <canvas id="chartEstimates" style="position:absolute; top:0; left:0; width:100%; height:100%;"></canvas>
-                </div>
-                <div style="font-size:9px; color:#888; margin-top:8px; text-align:center;">Based on SQM × $150/sqm — adjust rate in settings</div>
+        </div>
+
+        <!-- Row 7: Estimate chart full width -->
+        <div class="report-card" style="margin-bottom:14px;">
+            <div class="report-card-title">💰 Estimated Job Values <span style="font-size:9px; font-weight:400; color:#999;">(SQM × $150/sqm placeholder)</span></div>
+            <div style="position:relative; height:260px;">
+                <canvas id="chartEstimates" style="position:absolute; top:0; left:0; width:100%; height:100%;"></canvas>
             </div>
-        </div><!-- end row 6 grid -->
+        </div>
 
         </div><!-- end reportsPrintArea -->`;
 
