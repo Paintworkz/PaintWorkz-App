@@ -1,2 +1,1 @@
-mkdir .github
-mkdir .github\workflows
+
