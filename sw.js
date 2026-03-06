@@ -1,4 +1,4 @@
-const CACHE_NAME = 'paintworkz-v1.8.14';
+const CACHE_NAME = 'paintworkz-v1.8.16';
 const ASSETS = ['./', './index.html', './logo.png', './manifest.json'];
 
 self.addEventListener('install', e => {
