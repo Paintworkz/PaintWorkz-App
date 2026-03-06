@@ -2255,6 +2255,10 @@ const firebaseConfig = {
             
             <!-- Price Matrix Tab -->
             <div id="admin-tab-pricing-content" class="admin-tab-content" style="padding-top:12px;">
+                <h4 style="margin-top:0; margin-bottom:10px; font-weight:900;">Price Matrix
+                    <button onclick="syncAllFromFirebase()" style="margin-left:10px; background:#2196f3; color:#fff; border:none; padding:5px 12px; border-radius:4px; font-size:10px; font-weight:900; cursor:pointer;">☁️ Sync from Cloud</button>
+                    <button onclick="forcePushPricingToCloud()" style="margin-left:4px; background:#34c759; color:#fff; border:none; padding:5px 12px; border-radius:4px; font-size:10px; font-weight:900; cursor:pointer;">⬆️ Push to Cloud</button>
+                </h4>
                 <div id="admin-pricing-matrix" style="margin-top:15px;"></div>
             </div>
 
@@ -2275,6 +2279,7 @@ const firebaseConfig = {
                             <div style="display:flex; gap:5px;">
                                 <button onclick="reportQuick(7)" style="padding:5px 8px; border:none; border-radius:5px; background:#e3f2fd; color:#1565c0; font-weight:900; font-size:10px; cursor:pointer;">7D</button>
                                 <button onclick="reportQuick(30)" style="padding:5px 8px; border:none; border-radius:5px; background:#e3f2fd; color:#1565c0; font-weight:900; font-size:10px; cursor:pointer;">1M</button>
+                                <button onclick="reportQuick(60)" style="padding:5px 8px; border:none; border-radius:5px; background:#e3f2fd; color:#1565c0; font-weight:900; font-size:10px; cursor:pointer;">2M</button>
                                 <button onclick="reportQuick(90)" style="padding:5px 8px; border:none; border-radius:5px; background:#e3f2fd; color:#1565c0; font-weight:900; font-size:10px; cursor:pointer;">3M</button>
                                 <button onclick="reportQuick(365)" style="padding:5px 8px; border:none; border-radius:5px; background:#e3f2fd; color:#1565c0; font-weight:900; font-size:10px; cursor:pointer;">1Y</button>
                                 <button onclick="reportQuickAll()" style="padding:5px 8px; border:none; border-radius:5px; background:#e3f2fd; color:#1565c0; font-weight:900; font-size:10px; cursor:pointer;">ALL</button>
@@ -5026,9 +5031,9 @@ const firebaseConfig = {
             return;
         }
         
-        // Sync to Firebase
+        // Sync to Firebase — reset rate limiter so completion always pushes immediately
         if (window.syncJobsToFirebase) {
-            try { window.syncJobsToFirebase(); } catch(e) { console.error('Firebase sync error:', e); }
+            try { lastSyncTime = 0; lastSyncedData = ''; window.syncJobsToFirebase(); } catch(e) { console.error('Firebase sync error:', e); }
         }
         
         // Generate batch PDFs
@@ -6735,16 +6740,27 @@ const firebaseConfig = {
             
             // Build edge badges - SEPARATE and COLORED with LR/SR for SE mode
             let edgeBadgesHTML = '';
-            if (leftEdgeCount > 0) {
-                const leftLabel = it.mode === 'SE' ? 'LR' : 'L';
-                edgeBadgesHTML += `<span class="edge-pill" style="background:#f44336; color:#fff; font-weight:900; padding:2px 6px; border-radius:3px; font-size:10px;">${leftEdgeCount}${leftLabel}</span>`;
-            }
-            if (sideEdgeCount > 0) {
-                const sideLabel = it.mode === 'SE' ? 'SR' : 'S';
-                edgeBadgesHTML += `<span class="edge-pill" style="background:#2196f3; color:#fff; font-weight:900; padding:2px 6px; border-radius:3px; font-size:10px;">${sideEdgeCount}${sideLabel}</span>`;
-            }
-            if (leftEdgeCount === 0 && sideEdgeCount === 0) {
-                edgeBadgesHTML += `<span class="edge-pill" style="background:#eee; color:#999; padding:2px 6px; border-radius:3px; font-size:10px;">No edges</span>`;
+            if (it.mode === 'SE') {
+                // SE mode: E1=LR (Left Return), E2=RR (Right Return), E3/E4=short edges
+                const hasLR = it.e[0];  // E1
+                const hasRR = it.e[1];  // E2
+                const sideEdgeCount2 = (it.e[2]?1:0) + (it.e[3]?1:0);
+                if (hasLR) edgeBadgesHTML += `<span class="edge-pill" style="background:#f44336; color:#fff; font-weight:900; padding:2px 6px; border-radius:3px; font-size:10px;">1LR</span>`;
+                if (hasRR) edgeBadgesHTML += `<span class="edge-pill" style="background:#e91e63; color:#fff; font-weight:900; padding:2px 6px; border-radius:3px; font-size:10px;">1RR</span>`;
+                if (sideEdgeCount2 > 0) edgeBadgesHTML += `<span class="edge-pill" style="background:#2196f3; color:#fff; font-weight:900; padding:2px 6px; border-radius:3px; font-size:10px;">${sideEdgeCount2}SR</span>`;
+                if (!hasLR && !hasRR && sideEdgeCount2 === 0) edgeBadgesHTML += `<span class="edge-pill" style="background:#eee; color:#999; padding:2px 6px; border-radius:3px; font-size:10px;">No edges</span>`;
+            } else {
+                if (leftEdgeCount > 0) {
+                    const leftLabel = 'L';
+                    edgeBadgesHTML += `<span class="edge-pill" style="background:#f44336; color:#fff; font-weight:900; padding:2px 6px; border-radius:3px; font-size:10px;">${leftEdgeCount}${leftLabel}</span>`;
+                }
+                if (sideEdgeCount > 0) {
+                    const sideLabel = 'S';
+                    edgeBadgesHTML += `<span class="edge-pill" style="background:#2196f3; color:#fff; font-weight:900; padding:2px 6px; border-radius:3px; font-size:10px;">${sideEdgeCount}${sideLabel}</span>`;
+                }
+                if (leftEdgeCount === 0 && sideEdgeCount === 0) {
+                    edgeBadgesHTML += `<span class="edge-pill" style="background:#eee; color:#999; padding:2px 6px; border-radius:3px; font-size:10px;">No edges</span>`;
+                }
             }
             
             l.innerHTML += `<div class="part-label" style="border-left:5px solid ${clr}">
@@ -6864,6 +6880,17 @@ const firebaseConfig = {
                             <button onclick="setEditEdgeConfig(${index}, 'DS')" id="editEdge-DS" style="flex:1; padding:8px; background:${item.mode === 'DS' ? '#17a2b8' : '#f0f0f0'}; color:${item.mode === 'DS' ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">DS</button>
                             <button onclick="setEditEdgeConfig(${index}, 'Custom')" id="editEdge-Custom" style="flex:1; padding:8px; background:${item.mode === 'Custom' ? '#17a2b8' : '#f0f0f0'}; color:${item.mode === 'Custom' ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">CUSTOM</button>
                         </div>
+                    </div>
+
+                    <div style="margin-bottom:15px;" id="editEdgeBoxesRow">
+                        <label style="display:block; font-weight:900; margin-bottom:8px; font-size:12px; color:#666;">EDGES <span style="font-weight:400; color:#999; font-size:10px;">(SE mode: E1=LR, E2=RR)</span></label>
+                        <div style="display:flex; gap:6px;">
+                            <button onclick="toggleEditEdge(${index}, 0)" id="editE1" style="flex:1; padding:8px; background:${item.e[0] ? '#f44336' : '#f0f0f0'}; color:${item.e[0] ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">E1</button>
+                            <button onclick="toggleEditEdge(${index}, 1)" id="editE2" style="flex:1; padding:8px; background:${item.e[1] ? '#e91e63' : '#f0f0f0'}; color:${item.e[1] ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">E2</button>
+                            <button onclick="toggleEditEdge(${index}, 2)" id="editE3" style="flex:1; padding:8px; background:${item.e[2] ? '#2196f3' : '#f0f0f0'}; color:${item.e[2] ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">E3</button>
+                            <button onclick="toggleEditEdge(${index}, 3)" id="editE4" style="flex:1; padding:8px; background:${item.e[3] ? '#2196f3' : '#f0f0f0'}; color:${item.e[3] ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">E4</button>
+                        </div>
+                        <div style="font-size:9px; color:#999; margin-top:4px;">E1/E2 = long edges (${item.h}mm) &nbsp;|&nbsp; E3/E4 = short edges (${item.w}mm)</div>
                     </div>
                     
                     <div style="margin-bottom:15px;">
@@ -7038,12 +7065,30 @@ const firebaseConfig = {
 
     function setEditEdgeConfig(index, edgeConfig) {
         if (items[index]) {
-            items[index].mode = edgeConfig;       // mode is the real field used throughout the app
-            items[index].edgeConfig = edgeConfig; // keep in sync
+            items[index].mode = edgeConfig;
+            items[index].edgeConfig = edgeConfig;
+            // SE auto-selects E1 (LR) if no edges active
+            if (edgeConfig === 'SE' && !items[index].e.some(Boolean)) {
+                items[index].e[0] = true;
+                const e1btn = document.getElementById('editE1');
+                if (e1btn) { e1btn.style.background = '#f44336'; e1btn.style.color = '#fff'; }
+            }
             document.querySelectorAll('[id^="editEdge-"]').forEach(btn => {
                 btn.style.background = btn.id === `editEdge-${edgeConfig}` ? '#17a2b8' : '#f0f0f0';
                 btn.style.color = btn.id === `editEdge-${edgeConfig}` ? '#fff' : '#000';
             });
+        }
+    }
+
+    function toggleEditEdge(index, edgeIdx) {
+        if (!items[index]) return;
+        items[index].e[edgeIdx] = !items[index].e[edgeIdx];
+        const ids = ['editE1','editE2','editE3','editE4'];
+        const activeColors = ['#f44336','#e91e63','#2196f3','#2196f3'];
+        const btn = document.getElementById(ids[edgeIdx]);
+        if (btn) {
+            btn.style.background = items[index].e[edgeIdx] ? activeColors[edgeIdx] : '#f0f0f0';
+            btn.style.color = items[index].e[edgeIdx] ? '#fff' : '#000';
         }
     }
 
@@ -13435,36 +13480,41 @@ if ('serviceWorker' in navigator && _swAllowed) {
     }
 
     function printCurrentPDF() {
-        if (!currentPDFData) {
-            alert('No PDF to print');
-            return;
-        }
-        // Convert data URI to blob URL then open in new window and print
+        if (!currentPDFData) { alert('No PDF to print'); return; }
         try {
+            // Build blob URL
             const byteStr = atob(currentPDFData.split(',')[1]);
             const bytes = new Uint8Array(byteStr.length);
             for (let i = 0; i < byteStr.length; i++) bytes[i] = byteStr.charCodeAt(i);
             const blob = new Blob([bytes], { type: 'application/pdf' });
             const blobUrl = URL.createObjectURL(blob);
-            const printWin = window.open(blobUrl, '_blank');
-            if (printWin) {
-                printWin.addEventListener('load', () => {
-                    setTimeout(() => {
-                        printWin.print();
-                        URL.revokeObjectURL(blobUrl);
-                    }, 500);
-                });
-            } else {
-                // Popup blocked — fallback: open in same tab
-                window.location.href = blobUrl;
-            }
+
+            // Use a hidden iframe — no extra windows, no preview flash, works on desktop & mobile
+            let printFrame = document.getElementById('_pwPrintFrame');
+            if (printFrame) printFrame.remove();
+            printFrame = document.createElement('iframe');
+            printFrame.id = '_pwPrintFrame';
+            printFrame.style.cssText = 'position:fixed;width:0;height:0;border:none;top:-9999px;left:-9999px;';
+            printFrame.src = blobUrl;
+            document.body.appendChild(printFrame);
+            printFrame.onload = function() {
+                setTimeout(() => {
+                    try {
+                        printFrame.contentWindow.print();
+                    } catch(e) {
+                        // Fallback: open in new tab
+                        window.open(blobUrl, '_blank');
+                    }
+                    setTimeout(() => { URL.revokeObjectURL(blobUrl); }, 60000);
+                }, 500);
+            };
         } catch(e) {
             console.error('Print error:', e);
-            // Last resort fallback — open the data URI directly
-            const w = window.open('', '_blank');
-            w.document.write('<iframe src="' + currentPDFData + '" width="100%" height="100%" style="border:none;"></iframe>');
-            w.document.close();
-            setTimeout(() => w.print(), 1000);
+            // Last resort — direct download
+            const a = document.createElement('a');
+            a.href = currentPDFData;
+            a.download = 'PaintWorkz-Print.pdf';
+            a.click();
         }
     }
     
@@ -16196,7 +16246,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 }
             } catch(e) { console.warn('Client database load error:', e.message); }
 
-            // ── 4. Pricing Matrix ──────────────────────────────────
+            // ── 4. Pricing Matrix + Door Profiles ─────────────────
             try {
                 const mmRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'masterMatrix');
                 const mmSnap = await window.getDoc(mmRef);
@@ -16209,6 +16259,27 @@ if ('serviceWorker' in navigator && _swAllowed) {
                     }
                 }
             } catch(e) { console.warn('Pricing matrix load error:', e.message); }
+
+            // ── 5. Door Profiles ───────────────────────────────────
+            try {
+                const dpRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'config', 'doorProfiles');
+                const dpSnap = await window.getDoc(dpRef);
+                if (dpSnap.exists()) {
+                    const dpData = dpSnap.data();
+                    if (Array.isArray(dpData.doorProfiles) && dpData.doorProfiles.length > 0) {
+                        profiles = dpData.doorProfiles;
+                        localStorage.setItem('doorProfiles', JSON.stringify(profiles));
+                        // Also sync masterMatrix from profiles doc if available
+                        if (dpData.masterMatrix && typeof dpData.masterMatrix === 'object') {
+                            masterMatrix = dpData.masterMatrix;
+                            localStorage.setItem('masterMatrix', JSON.stringify(masterMatrix));
+                        }
+                        console.log('☁️ Door profiles loaded from Firestore:', profiles.length);
+                        try { if (typeof refreshLists === 'function') refreshLists(); } catch(e) {}
+                        try { if (typeof renderPricingMatrix === 'function') renderPricingMatrix(); } catch(e) {}
+                    }
+                }
+            } catch(e) { console.warn('Door profiles load error:', e.message); }
 
         } catch (err) {
             console.error('Error loading data from Firebase:', err);
@@ -16262,12 +16333,10 @@ if ('serviceWorker' in navigator && _swAllowed) {
                         const currentHistory = JSON.parse(localStorage.getItem('jobHistory')) || [];
                         if (JSON.stringify(currentHistory) !== JSON.stringify(jobs)) {
                             safeStorage.setJSON('jobHistory', jobs);
-                            
-                            // Only re-render if on history tab to avoid excessive re-renders
-                            const historySection = document.getElementById('history');
-                            if (historySection && historySection.classList.contains('active')) {
-                                renderHistory();
-                            }
+                            try { if (typeof renderHistory === 'function') renderHistory(); } catch(e) {}
+                            try { if (typeof renderScheduleCalendar === 'function') renderScheduleCalendar(); } catch(e) {}
+                            try { if (typeof renderAdminGanttChart === 'function') renderAdminGanttChart(); } catch(e) {}
+                            console.log('🔄 Real-time sync: jobs updated');
                         }
                     } catch (e) {
                         console.error('Error processing snapshot:', e);
@@ -16450,6 +16519,21 @@ if ('serviceWorker' in navigator && _swAllowed) {
         const ref = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'clientDatabase');
         window.setDoc(ref, { clients: db, updated: new Date().toISOString() })
             .then(() => notify(`✅ Pushed ${count} clients to cloud ☁️`))
+            .catch(e => notify('❌ Push failed: ' + e.message));
+    }
+
+    function forcePushPricingToCloud() {
+        if (!window.currentUser) { notify('❌ Not logged in'); return; }
+        if (!window.firebaseDb || !window.doc || !window.setDoc) { notify('❌ Firebase not ready'); return; }
+        const configDoc = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'config', 'doorProfiles');
+        window.setDoc(configDoc, {
+            doorProfiles: profiles,
+            masterMatrix: masterMatrix,
+            lastModified: new Date().toISOString(),
+            userId: window.currentUser.uid,
+            syncVersion: Date.now()
+        }, { merge: false })
+            .then(() => notify(`✅ Price matrix & door profiles pushed to cloud ☁️`))
             .catch(e => notify('❌ Push failed: ' + e.message));
     }
 
