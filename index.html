@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.8.5 | Updated: 2026-03-06                       ║
+║  Version: v1.8.6 | Updated: 2026-03-06                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.8.5';
+    const CURRENT_VERSION = 'v1.8.6';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1547,7 +1547,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.8.5</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.8.6</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -2073,7 +2073,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.8.5</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-06</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.8.6</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-06</span>
                     </p>
                 </div>
                         </div><!-- END admin-tab-general-content -->
@@ -5979,7 +5979,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.8.5'; // ← bump this on every release
+        const CURRENT_VERSION = 'v1.8.6'; // ← bump this on every release
         const CURRENT_DATE = '2026-03-06';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -15402,12 +15402,12 @@ if ('serviceWorker' in navigator && _swAllowed) {
     async function getAIResponse(userMessage, thinkingDiv, messagesDiv) {
         const apiKeys = JSON.parse(localStorage.getItem('apiKeys') || '{}');
         const geminiKey = apiKeys.gemini || '';
-        
+
         if (!geminiKey) {
             if (thinkingDiv && thinkingDiv.parentNode) thinkingDiv.remove();
             const msgDiv = document.createElement('div');
-            msgDiv.style.cssText = 'background:#fff3cd; color:#333; padding:10px 14px; border-radius:8px; max-width:280px; font-size:12px; line-height:1.5;';
-            msgDiv.innerHTML = '<strong>🤖 AI Assistant</strong><br>Add your Gemini API key in Admin → API Keys to enable the assistant.';
+            msgDiv.style.cssText = 'background:#fff3cd; color:#333; padding:10px 14px; border-radius:10px; font-size:12px; line-height:1.5;';
+            msgDiv.innerHTML = '<strong>🤖 AI</strong><br>No API key set. Go to Admin → API Keys → paste your Gemini key from <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:#6200ea;">aistudio.google.com</a>';
             messagesDiv.appendChild(msgDiv);
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
             return;
@@ -15415,54 +15415,69 @@ if ('serviceWorker' in navigator && _swAllowed) {
 
         try {
             const jobHistory = JSON.parse(localStorage.getItem('jobHistory') || '[]');
-            const recentJobs = jobHistory.slice(-5).map(j => `Job #${j.jobNum} - ${j.client} (${j.totalParts || 0} parts, ${j.completed ? 'completed' : 'active'})`).join('\n');
-            const systemCtx = `You are a helpful assistant for PaintWorkz Pro, a painting business management app. Recent jobs:\n${recentJobs}\n\nAnswer concisely and practically about painting, jobs, pricing, and business.`;
-            const body = JSON.stringify({
+            const recentJobs = jobHistory.slice(-5).map(j => `Job #${j.jobNum} - ${j.client} (${j.totalParts||0} parts, ${j.completed?'completed':'active'})`).join('\n');
+            const clientDB = JSON.parse(localStorage.getItem('clientDatabase') || '{}');
+            const clientNames = Object.values(clientDB).slice(0,15).map(c=>c.name).filter(Boolean).join(', ');
+
+            const systemCtx = `You are a helpful assistant for PaintWorkz Pro — an Australian painting and cabinet spray-painting business management app.
+
+Business context:
+- Jobs involve cabinet doors, drawer fronts, panels (flat and moulded), and custom parts
+- Finishes: satin, gloss, matt, 2-pac
+- Door profiles: Plain, Shaker, Shaker 45, Roundover, Beaded, Avalon, Quadrant, etc.
+- Colours reference Dulux, Taubmans, Feast Watson and custom mix codes
+- Pricing is per sqm based on door profile type and finish
+- Recent jobs: ${recentJobs || 'none yet'}
+- Known clients: ${clientNames || 'see client database'}
+
+Answer concisely and practically. Focus on painting, cabinet finishing, job pricing, measurements, and business operations.`;
+
+            // Use stable v1 endpoint — v1beta is being phased out for older models
+            const ENDPOINT = 'https://generativelanguage.googleapis.com/v1/models';
+            // Models in order: newest first. 2.0-flash is the primary free-tier workhorse model.
+            const models = ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-2.0-flash-exp'];
+            const reqBody = JSON.stringify({
                 contents: [{ parts: [{ text: systemCtx + '\n\nUser: ' + userMessage }] }],
-                generationConfig: { maxOutputTokens: 400, temperature: 0.7 }
+                generationConfig: { maxOutputTokens: 500, temperature: 0.7 }
             });
 
-            // Try models newest-to-oldest; gemini-2.0-flash-lite has the best free tier limits
-            const models = ['gemini-2.0-flash-exp', 'gemini-2.0-flash-lite', 'gemini-1.5-flash'];
             let text = null;
             let lastError = null;
             for (const model of models) {
                 try {
-                    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body
+                    const resp = await fetch(`${ENDPOINT}/${model}:generateContent?key=${geminiKey}`, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: reqBody
                     });
                     const data = await resp.json();
                     if (data.error) {
-                        const code = data.error.code;
-                        const msg = data.error.message || '';
-                        if (code === 429 || code === 404) { lastError = { code, msg, model }; continue; } // try next model
-                        throw new Error(`API Error ${code}: ${msg}`);
+                        const { code, message: msg = '' } = data.error;
+                        if (code === 429 || code === 404) { lastError = { code, msg, model }; continue; }
+                        throw new Error(`API ${code}: ${msg}`);
                     }
                     text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-                    if (text) break; // success
+                    if (text) break;
                 } catch(modelErr) {
-                    if (modelErr.message.startsWith('API Error')) throw modelErr; // hard error
+                    if (modelErr.message.startsWith('API ')) throw modelErr;
                     lastError = { msg: modelErr.message, model };
                 }
             }
+
             if (!text) {
-                if (lastError?.code === 429) {
-                    throw new Error(`Quota exceeded on all Gemini models.\n\nFix: Go to console.cloud.google.com → Billing → link a card to your project (no charge unless you use a LOT). This unlocks proper free tier limits.\n\nOr wait a minute and retry.`);
-                }
-                throw new Error(lastError?.msg || 'No response from AI — check your API key at aistudio.google.com');
+                if (lastError?.code === 429) throw new Error('Quota exceeded. Get a fresh free key at aistudio.google.com → API Keys (30 sec), paste in Admin → API Keys.');
+                if (lastError?.code === 404) throw new Error('All models returned 404. Your API key may have restrictions — check at aistudio.google.com → API Keys → Edit restrictions.');
+                throw new Error(lastError?.msg || 'No response — check API key in Admin → API Keys');
             }
+
             if (thinkingDiv && thinkingDiv.parentNode) thinkingDiv.remove();
             const msgDiv = document.createElement('div');
-            msgDiv.style.cssText = 'background:#f0f9f0; color:#333; padding:10px 14px; border-radius:8px; max-width:280px; font-size:12px; line-height:1.5;';
+            msgDiv.style.cssText = 'background:#f0f9f0; color:#333; padding:10px 14px; border-radius:10px; font-size:12px; line-height:1.6;';
             msgDiv.innerHTML = '<strong>🤖 AI</strong><br>' + text.replace(/\n/g, '<br>');
             messagesDiv.appendChild(msgDiv);
         } catch(e) {
             if (thinkingDiv && thinkingDiv.parentNode) thinkingDiv.remove();
             const msgDiv = document.createElement('div');
-            msgDiv.style.cssText = 'background:#ffebee; color:#333; padding:10px 14px; border-radius:8px; max-width:280px; font-size:12px;';
-            msgDiv.innerHTML = '<strong>🤖 AI</strong><br>Error: ' + e.message;
+            msgDiv.style.cssText = 'background:#ffebee; color:#333; padding:10px 14px; border-radius:10px; font-size:12px; line-height:1.5;';
+            msgDiv.innerHTML = '<strong>🤖 AI</strong><br>' + e.message.replace(/\n/g, '<br>');
             messagesDiv.appendChild(msgDiv);
         }
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
@@ -16882,4 +16897,4 @@ if ('serviceWorker' in navigator && _swAllowed) {
 
 </div> <!-- Close appContainer -->
 </body>
-</html>  
+</html>
