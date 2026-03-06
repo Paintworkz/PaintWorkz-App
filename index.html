@@ -316,6 +316,10 @@
         
         #toast { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); background: #222; color: #fff; padding: 12px 25px; border-radius: 30px; font-weight: 900; z-index: 3000; display: none; border: 1px solid var(--gs); animation: slideUp 0.3s ease-out; }
         @keyframes slideUp { from { opacity:0; transform: translateX(-50%) translateY(20px); } to { opacity:1; transform: translateX(-50%) translateY(0); } }
+        @keyframes sirenFlash { 0%,100% { background:#ff3b30; box-shadow:0 0 18px #ff3b3088; } 50% { background:#ff9500; box-shadow:0 0 18px #ff950088; } }
+        @keyframes sirenSpin { 0% { transform:rotate(-15deg); } 50% { transform:rotate(15deg); } 100% { transform:rotate(-15deg); } }
+        .siren-banner { animation: sirenFlash 0.6s ease-in-out infinite !important; }
+        .siren-icon { display:inline-block; animation: sirenSpin 0.6s ease-in-out infinite; font-size:24px; }
 
         .pl-meta { font-size:10px; font-weight:700; color:#666; margin-top:2px; }
 
@@ -814,12 +818,13 @@ const firebaseConfig = {
                     setTimeout(() => tryLoad(10), 500); // retry up to 10x every 400ms
                 }
                 
-                // Only set up real-time sync ONCE per session (DISABLED by default due to memory issues)
+                // Set up real-time sync so changes on one device appear on all others instantly
                 if (!window.realtimeSyncActive) {
-                    // Real-time sync disabled to prevent memory leaks
-                    // Users should manually refresh to get latest data from Firebase
-                    console.log('ℹ️ Real-time sync disabled (manual refresh recommended)');
-                    window.realtimeSyncActive = true;
+                    setTimeout(() => {
+                        if (typeof setupRealtimeSync === 'function') {
+                            setupRealtimeSync();
+                        }
+                    }, 1500);
                 }
             } else {
                 // Clean up listener when logging out
@@ -1681,9 +1686,10 @@ const firebaseConfig = {
                 <div id="api-keys-container" style="display:block;">
                 <p style="font-size:11px; color:#666; margin-bottom:15px;">Third-party integrations for accounting and external services</p>
                 <div style="display:grid; grid-template-columns:1fr; gap:15px; margin-bottom:20px;">
-                    <div style="padding:12px; background:#f0f9f0; border-radius:6px; border-left:4px solid #34c759;">
-                        <label style="display:block; font-weight:900; font-size:11px; color:#555; margin-bottom:4px;">🤖 AI Assistant</label>
-                        <p style="font-size:10px; color:#777; margin:0;">AI-powered paint advice and job assistance — coming in a future update.</p>
+                    <div style="padding:12px; background:#f0f4ff; border-radius:6px; border-left:4px solid #6200ea;">
+                        <label style="display:block; font-weight:900; font-size:11px; color:#555; margin-bottom:4px;">🤖 AI Assistant API Key (Gemini)</label>
+                        <input type="password" id="geminiApiKey" placeholder="Enter your Gemini API key" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box; margin-top:4px;">
+                        <p style="font-size:10px; color:#777; margin:6px 0 0 0;">Powers the 💬 AI chat button. Get a <strong>free</strong> key at <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:#6200ea; font-weight:900;">aistudio.google.com</a> → Get API Key → Create</p>
                         <div id="apiKeyStatus" style="display:none;"></div>
                     </div>
                     <div>
@@ -2083,7 +2089,7 @@ const firebaseConfig = {
                         <strong style="font-size:11px; color:#333;">PaintWorkz Pro — Terms of Service</strong><br>
                         <em style="font-size:9px; color:#999;">Last updated: 4 March 2026</em><br><br>
                         <strong>1. Acceptance</strong><br>By accessing or using PaintWorkz Pro you agree to these Terms. If you do not agree, do not use the App.<br><br>
-                        <strong>2. Ownership &amp; Intellectual Property</strong><br>PaintWorkz Pro is created and owned by Colin Bedford, trading as Paintworkz PTY LTD. All code, design, and content is the intellectual property of the Owner. Unauthorised copying, reverse engineering, or redistribution is strictly prohibited.<br><br>
+                        <strong>2. Ownership &amp; Intellectual Property</strong><br>PaintWorkz Pro is created and owned by Colin Bedford. All code, design, and content is the intellectual property of Colin Bedford. Unauthorised copying, reverse engineering, or redistribution is strictly prohibited.<br><br>
                         <strong>3. Licence</strong><br>A non-exclusive, non-transferable licence is granted to use the App solely for managing your painting business. This does not permit resale, sub-licensing, or redistribution of the App itself.<br><br>
                         <strong>4. Data &amp; Privacy</strong><br>Your data is stored in your Firebase account and local device storage. The Owner does not access, sell, or share your business data. You are responsible for maintaining backups.<br><br>
                         <strong>5. Disclaimer of Warranties</strong><br>The App is provided "as is" without warranty. No guarantees are made regarding uptime, data retention, or fitness for purpose. Use at your own risk.<br><br>
@@ -2255,11 +2261,14 @@ const firebaseConfig = {
             
             <!-- Price Matrix Tab -->
             <div id="admin-tab-pricing-content" class="admin-tab-content" style="padding-top:12px;">
-                <h4 style="margin-top:0; margin-bottom:10px; font-weight:900;">Price Matrix
-                    <button onclick="syncAllFromFirebase()" style="margin-left:10px; background:#2196f3; color:#fff; border:none; padding:5px 12px; border-radius:4px; font-size:10px; font-weight:900; cursor:pointer;">☁️ Sync from Cloud</button>
-                    <button onclick="forcePushPricingToCloud()" style="margin-left:4px; background:#34c759; color:#fff; border:none; padding:5px 12px; border-radius:4px; font-size:10px; font-weight:900; cursor:pointer;">⬆️ Push to Cloud</button>
-                </h4>
-                <div id="admin-pricing-matrix" style="margin-top:15px;"></div>
+                <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px; margin-bottom:14px;">
+                    <h4 style="margin:0; font-weight:900; flex-shrink:0;">Price Matrix</h4>
+                    <div style="display:flex; gap:5px; flex-shrink:0;">
+                        <button onclick="syncAllFromFirebase()" style="background:#2196f3; color:#fff; border:none; padding:6px 10px; border-radius:6px; font-size:10px; font-weight:900; cursor:pointer; white-space:nowrap;">☁️ Sync</button>
+                        <button onclick="forcePushPricingToCloud()" style="background:#34c759; color:#fff; border:none; padding:6px 10px; border-radius:6px; font-size:10px; font-weight:900; cursor:pointer; white-space:nowrap;">⬆️ Push</button>
+                    </div>
+                </div>
+                <div id="admin-pricing-matrix" style="margin-top:0;"></div>
             </div>
 
             <!-- Reports Tab -->
@@ -2734,8 +2743,6 @@ const firebaseConfig = {
         notify(`✓ AI Helper ${value ? 'enabled' : 'disabled'}`);
     }
     
-    // Gemini AI integration removed — AI assistant coming in future update
-    
     function setColourMatchSurcharge(value) {
         loadAdditionalCharges().colourMatchFlatRate = parseFloat(value) || 85;
         saveAdminSettings();
@@ -2808,7 +2815,12 @@ const firebaseConfig = {
     setTimeout(() => {
         loadAllFormButtonColors();
         
-        // Gemini API key removed — AI assistant coming in future update
+        // Restore saved Gemini API key into admin form
+        try {
+            const savedKeys = JSON.parse(localStorage.getItem('apiKeys') || '{}');
+            const geminiInput = document.getElementById('geminiApiKey');
+            if (geminiInput && savedKeys.gemini) geminiInput.value = savedKeys.gemini;
+        } catch(e) {}
     }, 500);
     
     // Load settings on app startup
@@ -4492,12 +4504,14 @@ const firebaseConfig = {
             timeline: getDefaultTimeline()  // Save current timeline settings with job
         };
         
-        
         // Get existing history
         let history = JSON.parse(localStorage.getItem('jobHistory')) || [];
         
         // Check if we're overwriting an existing job
         if (currentEditingJobIndex !== null) {
+            // Preserve the stable ID from existing job so Firebase doc key stays consistent
+            const existingJob = history[currentEditingJobIndex];
+            jobData.id = existingJob?.id || `job_${jobData.jobNum}_${Date.now()}`;
             if (confirm(`Overwrite existing job #${jobData.jobNum}?`)) {
                 history[currentEditingJobIndex] = jobData;
                 currentEditingJobIndex = null; // Reset for next job
@@ -4511,7 +4525,8 @@ const firebaseConfig = {
             const existingIdx = history.findIndex(j => j.jobNum === jobData.jobNum && j.dateReceived === jobData.dateReceived && j.client === jobData.client);
             
             if (existingIdx !== -1) {
-                // Job with same number, date, and client already exists - update it instead
+                // Job with same number, date, and client already exists - preserve its stable ID
+                jobData.id = history[existingIdx]?.id || `job_${jobData.jobNum}_${Date.now()}`;
                 if (confirm(`Job #${jobData.jobNum} already exists. Replace it?`)) {
                     history[existingIdx] = jobData;
                     notify('✓ Job Updated (duplicate prevented)');
@@ -4520,7 +4535,8 @@ const firebaseConfig = {
                     return;
                 }
             } else {
-                // New unique job
+                // New unique job — assign stable UUID for consistent Firebase doc key
+                jobData.id = `job_${jobData.jobNum}_${Date.now()}`;
                 history.unshift(jobData);
                 notify('✓ Job Saved');
                 addAdminAlert('JOB_SAVED', `✅ NEW JOB SAVED #${jobData.jobNum} • ${jobData.client}`, {jobNum: jobData.jobNum, client: jobData.client, totalParts: jobData.totalParts});
@@ -5082,14 +5098,9 @@ const firebaseConfig = {
             notify('🔄 Job reopened - now active again');
             showGlobalNotification(`🔄 JOB REOPENED #${job.jobNum}\n${job.client} • ${job.totalParts} parts`, '#fff3cd', '#ff9800');
             
-            // Sync to Firebase
+            // Sync to Firebase — force immediate push
             if (window.syncJobsToFirebase) {
-                try {
-                    window.syncJobsToFirebase();
-                    console.log('🔄 Synced to Firebase');
-                } catch(e) {
-                    console.error('Firebase sync error:', e);
-                }
+                try { lastSyncTime = 0; lastSyncedData = ''; window.syncJobsToFirebase(); } catch(e) { console.error('Firebase sync error:', e); }
             }
             
             notify('🔄 Job reopened - now active again');
@@ -5324,16 +5335,38 @@ const firebaseConfig = {
             message: `🎉 Job #${job.jobNum} (${job.jobName}) for ${job.client} has been COMPLETED. ${job.totalParts} parts, ${job.totalSqm} SQM (m²). PDFs generated.`
         };
         
-        // Store admin alerts in localStorage
         let adminAlerts = JSON.parse(localStorage.getItem('adminAlerts')) || [];
         adminAlerts.unshift(adminAlert);
-        adminAlerts = adminAlerts.slice(0, 100); // Keep last 100 alerts
+        adminAlerts = adminAlerts.slice(0, 100);
         localStorage.setItem('adminAlerts', JSON.stringify(adminAlerts));
-        
-        // In a real app, this would send to a server/notification service
-        
-        // Show toast-style notification
+        syncAdminAlertsToFirebase(adminAlerts);
         showAdminAlert(adminAlert.message);
+    }
+    
+    // Sync adminAlerts to/from Firebase so all devices see notifications
+    function syncAdminAlertsToFirebase(alerts) {
+        if (!window.currentUser || !window.firebaseDb || !window.doc || !window.setDoc) return;
+        try {
+            const ref = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'adminAlerts');
+            window.setDoc(ref, { alerts: alerts, updated: new Date().toISOString() }, { merge: false }).catch(() => {});
+        } catch(e) {}
+    }
+
+    async function loadAdminAlertsFromFirebase() {
+        if (!window.currentUser || !window.firebaseDb || !window.getDoc || !window.doc) return;
+        try {
+            const ref = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'adminAlerts');
+            const snap = await window.getDoc(ref);
+            if (snap.exists()) {
+                const data = snap.data();
+                if (Array.isArray(data.alerts) && data.alerts.length > 0) {
+                    localStorage.setItem('adminAlerts', JSON.stringify(data.alerts));
+                    console.log('☁️ Loaded', data.alerts.length, 'admin alerts from Firebase');
+                    try { if (typeof renderGlobalNotifications === 'function') renderGlobalNotifications(); } catch(e) {}
+                    try { if (typeof updateNotificationBadge === 'function') updateNotificationBadge(); } catch(e) {}
+                }
+            }
+        } catch(e) { console.warn('adminAlerts load error:', e.message); }
     }
     
     // Generic function for all notification types
@@ -5348,6 +5381,7 @@ const firebaseConfig = {
         adminAlerts.unshift(adminAlert);
         adminAlerts = adminAlerts.slice(0, 100);
         localStorage.setItem('adminAlerts', JSON.stringify(adminAlerts));
+        syncAdminAlertsToFirebase(adminAlerts);
         showAdminAlert(message);
     }
 
@@ -7152,7 +7186,7 @@ const firebaseConfig = {
     }
     
     // Show global notification in visible banner (on all tabs)
-    function showGlobalNotification(message, bgColor = '#ffebee', borderColor = '#ff3b30') {
+    function showGlobalNotification(message, bgColor = '#ffebee', borderColor = '#ff3b30', skipFirebase = false) {
         const banner = document.getElementById('globalNotificationsBanner');
         const notifList = document.getElementById('globalNotificationsList');
         
@@ -7161,7 +7195,25 @@ const firebaseConfig = {
             return;
         }
         
-        // Show banner
+        // Push to Firebase so ALL devices see it
+        if (!skipFirebase && window.currentUser && window.firebaseDb && window.doc && window.setDoc) {
+            try {
+                const notifRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'globalNotifications');
+                const notifData = {
+                    message, bgColor, borderColor,
+                    timestamp: new Date().toISOString(),
+                    id: Date.now()
+                };
+                // Get existing, add new, keep last 20
+                window.getDoc(notifRef).then(snap => {
+                    const existing = snap.exists() ? (snap.data().notifications || []) : [];
+                    const updated = [notifData, ...existing].slice(0, 20);
+                    window.setDoc(notifRef, { notifications: updated, lastUpdated: notifData.timestamp }, { merge: false });
+                }).catch(() => {});
+            } catch(e) {}
+        }
+        
+        // Show banner locally
         banner.style.display = 'block';
         
         const notifDiv = document.createElement('div');
@@ -7205,7 +7257,7 @@ const firebaseConfig = {
             }
         };
         
-        // Auto-dismiss after 8 seconds
+        // Auto-dismiss after 12 seconds
         setTimeout(() => {
             if (notifDiv.parentElement) {
                 notifDiv.remove();
@@ -7213,13 +7265,58 @@ const firebaseConfig = {
                     banner.style.display = 'none';
                 }
             }
-        }, 8000);
+        }, 12000);
         
         notifDiv.appendChild(messageSpan);
         notifDiv.appendChild(dismissBtn);
         notifList.appendChild(notifDiv);
         
         console.log('✅ Global notification shown:', message);
+    }
+
+    function showStockAlertNotification(alerts, skipFirebase = false) {
+        const banner = document.getElementById('globalNotificationsBanner');
+        const notifList = document.getElementById('globalNotificationsList');
+        if (!banner || !notifList) return;
+
+        // Push to Firebase so other devices get the siren too
+        if (!skipFirebase && window.currentUser && window.firebaseDb && window.doc && window.setDoc) {
+            try {
+                const stockRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'stockAlerts');
+                window.setDoc(stockRef, { alerts, timestamp: new Date().toISOString() }).catch(() => {});
+            } catch(e) {}
+        }
+
+        // Remove any existing stock alert notification
+        const existing = document.getElementById('stockAlertGlobalNotif');
+        if (existing) existing.remove();
+
+        const critical = alerts.filter(a => a.negative);
+        const low = alerts.filter(a => !a.negative);
+        const lines = [
+            ...critical.map(a => `🚨 ${a.label}: SHORT by ${Math.abs(a.remaining).toFixed(1)}L`),
+            ...low.map(a => `⚠️ ${a.label}: LOW — only ${a.onHand}L on hand`)
+        ].join('\n');
+
+        banner.style.display = 'block';
+        const notifDiv = document.createElement('div');
+        notifDiv.id = 'stockAlertGlobalNotif';
+        notifDiv.className = 'siren-banner';
+        notifDiv.style.cssText = `
+            border-radius: 8px; padding: 14px 16px; margin-bottom: 10px;
+            display: flex; justify-content: space-between; align-items: flex-start;
+            color: #fff; font-weight: 900; font-size: 13px; white-space: pre-line;
+        `;
+        const msgDiv = document.createElement('div');
+        msgDiv.style.flex = '1';
+        msgDiv.innerHTML = `<span class="siren-icon">🚨</span> PAINT STOCK ALERT\n${lines}`;
+        const btn = document.createElement('button');
+        btn.innerText = '✕';
+        btn.style.cssText = 'background:rgba(255,255,255,0.3); color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; font-weight:900; margin-left:8px; font-size:12px;';
+        btn.onclick = () => { notifDiv.remove(); if (notifList.children.length === 0) banner.style.display = 'none'; };
+        notifDiv.appendChild(msgDiv);
+        notifDiv.appendChild(btn);
+        notifList.insertBefore(notifDiv, notifList.firstChild);
     }
 
     function getProfilePrice(profileName) {
@@ -11681,6 +11778,18 @@ const firebaseConfig = {
                         <div style="font-size:10px; font-weight:900; color:${a.negative ? '#d32f2f' : '#e65100'}; margin-top:2px;">${a.negative ? 'SHORT' : 'LOW'} ${Math.abs(a.remaining).toFixed(1)}L</div>
                         <div style="font-size:9px; color:#888;">Hand: ${a.onHand}L / Need: ${a.needed}L</div>
                     </div>`).join('');
+                
+                // Fire global notification banner for stock alerts
+                if (alerts.length > 0) {
+                    showStockAlertNotification(alerts);
+                    // Also add to adminAlerts so it shows in notification panel on ALL devices
+                    const criticalItems = alerts.filter(a => a.negative).map(a => a.label).join(', ');
+                    const lowItems = alerts.filter(a => !a.negative).map(a => a.label).join(', ');
+                    let stockMsg = '🚨 PAINT STOCK ALERT: ';
+                    if (criticalItems) stockMsg += `SHORT — ${criticalItems}. `;
+                    if (lowItems) stockMsg += `LOW — ${lowItems}.`;
+                    addAdminAlert('STOCK_LOW', stockMsg.trim(), { stockAlerts: alerts.map(a => ({ label: a.label, onHand: a.onHand, needed: a.needed, negative: a.negative })) });
+                }
             }
 
             // Estimate chart — per-client SQM × flat rate
@@ -12516,9 +12625,9 @@ if ('serviceWorker' in navigator && _swAllowed) {
         history[jobIdx] = job;
         safeStorage.setJSON('jobHistory', history);
         
-        // Sync to Firebase in background (async)
+        // Sync to Firebase in background — bypass rate limiter so phase changes always push
         if (window.syncJobsToFirebase) {
-            setTimeout(() => window.syncJobsToFirebase(), 100);
+            setTimeout(() => { lastSyncTime = 0; lastSyncedData = ''; window.syncJobsToFirebase(); }, 100);
         }
         
         // Update workload summary ONLY (don't re-render entire schedule)
@@ -12564,6 +12673,9 @@ if ('serviceWorker' in navigator && _swAllowed) {
             } else if (alert.type === 'PROFILE_ADDED') {
                 typeLabel = '🚪 New Profile';
                 typeColor = '#ff9800';
+            } else if (alert.type === 'STOCK_LOW') {
+                typeLabel = '🚨 STOCK ALERT';
+                typeColor = '#ff3b30';
             } else {
                 typeLabel = alert.type;
             }
@@ -12746,16 +12858,16 @@ if ('serviceWorker' in navigator && _swAllowed) {
             job.phases[phaseKey] = !wasComplete;
             const isNowComplete = job.phases[phaseKey];
             
-            
             // Update in history
             history[jobIdx] = job;
             safeStorage.setJSON('jobHistory', history);
             
-            // Sync to Firebase
+            // Sync to Firebase — bypass rate limiter so phase changes ALWAYS push immediately
             if (window.syncJobsToFirebase) {
                 try {
+                    lastSyncTime = 0; lastSyncedData = '';
                     window.syncJobsToFirebase();
-                    console.log('🔄 Synced to Firebase');
+                    console.log('🔄 Phase change synced to Firebase');
                 } catch(e) {
                     console.error('Firebase sync error:', e);
                 }
@@ -12804,6 +12916,10 @@ if ('serviceWorker' in navigator && _swAllowed) {
         history[jobIdx] = job;
         safeStorage.setJSON('jobHistory', history);
         
+        // Sync to Firebase immediately — bypass rate limiter
+        if (window.syncJobsToFirebase) {
+            try { lastSyncTime = 0; lastSyncedData = ''; window.syncJobsToFirebase(); } catch(e) { console.error('Firebase sync error:', e); }
+        }
         
         // Generate PDFs and alert admins
         try {
@@ -15254,12 +15370,46 @@ if ('serviceWorker' in navigator && _swAllowed) {
     }
     
     async function getAIResponse(userMessage, thinkingDiv, messagesDiv) {
-        // AI integration coming in a future update
-        if (thinkingDiv && thinkingDiv.parentNode) thinkingDiv.remove();
-        const msgDiv = document.createElement('div');
-        msgDiv.style.cssText = 'background:#f0f9f0; color:#333; padding:10px 14px; border-radius:8px; max-width:280px; font-size:12px; line-height:1.5;';
-        msgDiv.innerHTML = '<strong>🤖 AI Assistant</strong><br>Full AI integration is coming in a future update. For now, refer to your pricing matrix and job history for guidance.';
-        messagesDiv.appendChild(msgDiv);
+        const apiKeys = JSON.parse(localStorage.getItem('apiKeys') || '{}');
+        const geminiKey = apiKeys.gemini || '';
+        
+        if (!geminiKey) {
+            if (thinkingDiv && thinkingDiv.parentNode) thinkingDiv.remove();
+            const msgDiv = document.createElement('div');
+            msgDiv.style.cssText = 'background:#fff3cd; color:#333; padding:10px 14px; border-radius:8px; max-width:280px; font-size:12px; line-height:1.5;';
+            msgDiv.innerHTML = '<strong>🤖 AI Assistant</strong><br>Add your Gemini API key in Admin → API Keys to enable the assistant.';
+            messagesDiv.appendChild(msgDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            return;
+        }
+
+        try {
+            const jobHistory = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+            const recentJobs = jobHistory.slice(-5).map(j => `Job #${j.jobNum} - ${j.client} (${j.totalParts || 0} parts, ${j.completed ? 'completed' : 'active'})`).join('\n');
+            const systemCtx = `You are a helpful assistant for PaintWorkz Pro, a painting business management app. Recent jobs:\n${recentJobs}\n\nAnswer concisely and practically about painting, jobs, pricing, and business.`;
+
+            const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: systemCtx + '\n\nUser: ' + userMessage }] }],
+                    generationConfig: { maxOutputTokens: 300, temperature: 0.7 }
+                })
+            });
+            const data = await resp.json();
+            const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'No response received.';
+            if (thinkingDiv && thinkingDiv.parentNode) thinkingDiv.remove();
+            const msgDiv = document.createElement('div');
+            msgDiv.style.cssText = 'background:#f0f9f0; color:#333; padding:10px 14px; border-radius:8px; max-width:280px; font-size:12px; line-height:1.5;';
+            msgDiv.innerHTML = '<strong>🤖 AI</strong><br>' + text.replace(/\n/g, '<br>');
+            messagesDiv.appendChild(msgDiv);
+        } catch(e) {
+            if (thinkingDiv && thinkingDiv.parentNode) thinkingDiv.remove();
+            const msgDiv = document.createElement('div');
+            msgDiv.style.cssText = 'background:#ffebee; color:#333; padding:10px 14px; border-radius:8px; max-width:280px; font-size:12px;';
+            msgDiv.innerHTML = '<strong>🤖 AI</strong><br>Error: ' + e.message;
+            messagesDiv.appendChild(msgDiv);
+        }
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }
     
@@ -15403,11 +15553,11 @@ if ('serviceWorker' in navigator && _swAllowed) {
     
     // ===== API KEY FUNCTIONS =====
     function saveApiKeys() {
-        const evicKey = ''; // Evic integration removed
+        const geminiKey = document.getElementById('geminiApiKey')?.value || '';
         const xeroKey = document.getElementById('xeroApiKey')?.value || '';
         
         const apiKeys = {
-
+            gemini: geminiKey,
             xero: xeroKey,
             savedAt: new Date().toLocaleString('en-AU')
         };
@@ -15419,12 +15569,10 @@ if ('serviceWorker' in navigator && _swAllowed) {
     
     function initializeApiKeysForm() {
         const saved = JSON.parse(localStorage.getItem('apiKeys')) || {};
-        
-        // Evic key load removed
-        
-        if (evicInput) evicInput.value = saved.evic || '';
+        const geminiInput = document.getElementById('geminiApiKey');
+        const xeroInput = document.getElementById('xeroApiKey');
+        if (geminiInput) geminiInput.value = saved.gemini || '';
         if (xeroInput) xeroInput.value = saved.xero || '';
-        
         console.log('✓ API keys form initialized');
     }
     
@@ -16208,7 +16356,10 @@ if ('serviceWorker' in navigator && _swAllowed) {
             const snapshot = await window.getDocs(jobsCollectionRef);
             const jobs = [];
             snapshot.forEach(doc => {
-                jobs.push({ ...doc.data(), id: doc.id });
+                const jobData = { ...doc.data(), id: doc.id };
+                // Ensure every job has a stable id matching its Firestore doc key
+                if (!jobData.id) jobData.id = doc.id;
+                jobs.push(jobData);
             });
             safeStorage.setJSON('jobHistory', jobs);
             fullHistory = jobs;
@@ -16284,6 +16435,9 @@ if ('serviceWorker' in navigator && _swAllowed) {
         } catch (err) {
             console.error('Error loading data from Firebase:', err);
         }
+
+        // ── 6. Admin Notifications ─────────────────────────────
+        try { await loadAdminAlertsFromFirebase(); } catch(e) {}
         
         // ── UI Refresh — repaint everything after all data is loaded ──
         try {
@@ -16292,6 +16446,10 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 if (typeof renderClientsList === 'function') renderClientsList();
                 if (typeof populateClientDropdown === 'function') populateClientDropdown();
                 if (typeof renderHistory === 'function') renderHistory();
+                if (typeof renderScheduleCalendar === 'function') renderScheduleCalendar();
+                if (typeof renderAdminGanttChart === 'function') renderAdminGanttChart();
+                if (typeof renderGlobalNotifications === 'function') renderGlobalNotifications();
+                if (typeof updateNotificationBadge === 'function') updateNotificationBadge();
                 console.log('✅ UI refreshed after Firebase data load');
             }, 200);
         } catch(e) {}
@@ -16302,54 +16460,99 @@ if ('serviceWorker' in navigator && _swAllowed) {
     window.loadAllDataFromFirebase = loadAllDataFromFirebase;
     window.loadPaintFormulasFromFirebase = loadPaintFormulasFromFirebase;
 
+    // ── Cross-device sync: reload from Firebase whenever app becomes visible ──────
+    // This is the key fix for phone not seeing completed jobs / schedule changes.
+    // When you switch back to the app tab/window on any device it forces a fresh pull.
+    let _lastVisibilityLoad = 0;
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden && window.currentUser) {
+            const now = Date.now();
+            if (now - _lastVisibilityLoad > 15000) { // max once per 15s
+                _lastVisibilityLoad = now;
+                console.log('👁 App visible — syncing from Firebase...');
+                try { loadAllDataFromFirebase(); } catch(e) {}
+            }
+        }
+    });
+    // Also sync every 60 seconds while app is open
+    setInterval(() => {
+        if (!document.hidden && window.currentUser) {
+            try { loadAllDataFromFirebase(); } catch(e) {}
+        }
+    }, 60000);
+
     // Set up real-time listener for jobs
     function setupRealtimeSync() {
-        // Guard: Only set up once
-        if (window.realtimeSyncActive) {
-            console.log('⚠️ Real-time sync already active, skipping duplicate setup');
+        if (window.realtimeSyncActive) return;
+        if (!window.currentUser || !window.firebaseDb) {
+            console.warn('setupRealtimeSync: not ready');
             return;
         }
-        
-        if (!window.currentUser) {
-            console.warn('setupRealtimeSync: No current user');
-            return;
-        }
-        
         try {
             console.log('🔄 Setting up real-time sync listener...');
-            const userDocRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid);
-            const jobsCollectionRef = window.collection(userDocRef, 'jobs');
-            
-            // Store the unsubscribe function so we can clean up later
-            window.realtimeSyncUnsubscribe = window.onSnapshot(jobsCollectionRef, 
+            const jobsCollectionRef = window.collection(
+                window.doc(window.firebaseDb, 'users', window.currentUser.uid), 'jobs'
+            );
+            window.realtimeSyncActive = true;
+            window.realtimeSyncUnsubscribe = window.onSnapshot(jobsCollectionRef,
                 snapshot => {
                     try {
                         const jobs = [];
-                        snapshot.forEach(doc => {
-                            jobs.push({ ...doc.data(), id: doc.id });
+                        snapshot.forEach(d => {
+                            const jobData = { ...d.data(), id: d.id };
+                            jobs.push(jobData);
                         });
-                        
-                        // Only update if data actually changed
-                        const currentHistory = JSON.parse(localStorage.getItem('jobHistory')) || [];
-                        if (JSON.stringify(currentHistory) !== JSON.stringify(jobs)) {
+                        const sortKey = j => (j.jobNum || '') + '|' + (j.dateReceived || '');
+                        const sorted = arr => JSON.stringify([...arr].sort((a,b) => sortKey(a).localeCompare(sortKey(b))));
+                        const local = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+                        if (sorted(jobs) !== sorted(local)) {
                             safeStorage.setJSON('jobHistory', jobs);
+                            console.log('🔄 Real-time: jobs updated from cloud');
                             try { if (typeof renderHistory === 'function') renderHistory(); } catch(e) {}
                             try { if (typeof renderScheduleCalendar === 'function') renderScheduleCalendar(); } catch(e) {}
                             try { if (typeof renderAdminGanttChart === 'function') renderAdminGanttChart(); } catch(e) {}
-                            console.log('🔄 Real-time sync: jobs updated');
+                            try { if (typeof renderJobTasks === 'function') renderJobTasks(); } catch(e) {}
                         }
-                    } catch (e) {
-                        console.error('Error processing snapshot:', e);
-                    }
-                }, 
+                    } catch(e) { console.error('Snapshot handler error:', e); }
+                },
                 error => {
                     console.error('Realtime sync error:', error);
+                    window.realtimeSyncActive = false;
                 }
             );
-            
+
+            // ── Cross-device global notifications ──────────────────────
+            let _lastNotifTs = new Date().toISOString();
+            const _notifRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'globalNotifications');
+            window.onSnapshot(_notifRef, snap => {
+                if (!snap.exists()) return;
+                const notifs = snap.data().notifications || [];
+                let gotNew = false;
+                notifs.forEach(n => {
+                    if (n.timestamp > _lastNotifTs) {
+                        showGlobalNotification(n.message, n.bgColor, n.borderColor, true);
+                        gotNew = true;
+                    }
+                });
+                if (gotNew && notifs.length > 0) _lastNotifTs = notifs[0].timestamp;
+            });
+
+            // ── Cross-device stock alert notifications ──────────────────
+            const _stockRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'stockAlerts');
+            let _lastStockTs = new Date().toISOString();
+            window.onSnapshot(_stockRef, snap => {
+                if (!snap.exists()) return;
+                const d = snap.data();
+                if (d.timestamp > _lastStockTs && d.alerts && d.alerts.length > 0) {
+                    _lastStockTs = d.timestamp;
+                    showStockAlertNotification(d.alerts, true); // skipFirebase=true
+                }
+            });
+
             console.log('✓ Real-time sync listener established');
-        } catch (e) {
+        } catch(e) {
             console.error('setupRealtimeSync error:', e);
+            window.realtimeSyncActive = false;
         }
     }
 
