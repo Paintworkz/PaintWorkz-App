@@ -2002,9 +2002,9 @@ const firebaseConfig = {
                 <p style="font-size:11px; color:#666; margin-bottom:15px;">Third-party integrations for accounting and external services</p>
                 <div style="display:grid; grid-template-columns:1fr; gap:15px; margin-bottom:20px;">
                     <div style="padding:12px; background:#f0f4ff; border-radius:6px; border-left:4px solid #6200ea;">
-                        <label style="display:block; font-weight:900; font-size:11px; color:#555; margin-bottom:4px;">🤖 AI Assistant API Key (Gemini)</label>
-                        <input type="password" id="geminiApiKey" placeholder="Enter your Gemini API key" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box; margin-top:4px;">
-                        <p style="font-size:10px; color:#777; margin:6px 0 4px 0;">Get a key at <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:#6200ea; font-weight:900;">aistudio.google.com</a> → Get API Key → Create</p>
+                        <label style="display:block; font-weight:900; font-size:11px; color:#555; margin-bottom:4px;">🤖 AI Assistant API Key (Claude)</label>
+                        <input type="password" id="geminiApiKey" placeholder="Enter your Anthropic API key (sk-ant-...)" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box; margin-top:4px;">
+                        <p style="font-size:10px; color:#777; margin:6px 0 4px 0;">Get a key at <a href="https://console.anthropic.com/api-keys" target="_blank" style="color:#6200ea; font-weight:900;">console.anthropic.com</a></p>
                         <div style="background:#fff3cd; border-left:3px solid #ff9500; padding:6px 8px; border-radius:4px; font-size:10px; color:#555; line-height:1.5;">
                             ⚠️ <strong>If you get quota errors:</strong> Go to <a href="https://console.cloud.google.com/billing" target="_blank" style="color:#6200ea;">Google Cloud Console</a> → enable billing on your project. Gemini free tier is very limited without billing (even $0 spend — just needs a card linked).
                         </div>
@@ -15930,13 +15930,13 @@ if ('serviceWorker' in navigator && _swAllowed) {
     
     async function getAIResponse(userMessage, thinkingDiv, messagesDiv) {
         const apiKeys = JSON.parse(localStorage.getItem('apiKeys') || '{}');
-        const geminiKey = apiKeys.gemini || '';
+        const claudeKey = apiKeys.gemini || ''; // stored under 'gemini' key for backwards compat
 
-        if (!geminiKey) {
+        if (!claudeKey || !claudeKey.startsWith('sk-ant-')) {
             if (thinkingDiv && thinkingDiv.parentNode) thinkingDiv.remove();
             const msgDiv = document.createElement('div');
             msgDiv.style.cssText = 'background:#fff3cd; color:#333; padding:10px 14px; border-radius:10px; font-size:12px; line-height:1.5;';
-            msgDiv.innerHTML = '<strong>🤖 AI</strong><br>No API key set. Go to Admin → API Keys → paste your Gemini key from <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:#6200ea;">aistudio.google.com</a>';
+            msgDiv.innerHTML = '<strong>🤖 AI</strong><br>No API key set. Go to Admin → Global Settings → API Keys → paste your Anthropic key (starts with sk-ant-)';
             messagesDiv.appendChild(msgDiv);
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
             return;
@@ -15944,76 +15944,62 @@ if ('serviceWorker' in navigator && _swAllowed) {
 
         try {
             const jobHistory = JSON.parse(localStorage.getItem('jobHistory') || '[]');
-            const recentJobs = jobHistory.slice(-5).map(j => `Job #${j.jobNum} - ${j.client} (${j.totalParts||0} parts, ${j.completed?'completed':'active'})`).join('\n');
+            const recentJobs = jobHistory.slice(-5).map(j => `Job #${j.jobNum} - ${j.client} (${j.totalParts||0} parts, ${j.completed?'completed':'active'})`).join(', ');
             const clientDB = JSON.parse(localStorage.getItem('clientDatabase') || '{}');
             const clientNames = Object.values(clientDB).slice(0,15).map(c=>c.name).filter(Boolean).join(', ');
+            const companySettings = JSON.parse(localStorage.getItem('companySettings') || '{}');
 
-            const systemCtx = `You are a helpful assistant for PaintWorkz Pro — an Australian painting and cabinet spray-painting business management app.
+            const systemPrompt = `You are a helpful assistant for PaintWorkz Pro — an Australian painting and cabinet spray-painting business management app used by ${companySettings.name || 'a painting contractor'}.
 
 Business context:
 - Jobs involve cabinet doors, drawer fronts, panels (flat and moulded), and custom parts
-- Finishes: satin, gloss, matt, 2-pac
+- Finishes: satin, gloss, matt, semi-gloss, 2-pac
 - Door profiles: Plain, Shaker, Shaker 45, Roundover, Beaded, Avalon, Quadrant, etc.
 - Colours reference Dulux, Taubmans, Feast Watson and custom mix codes
 - Pricing is per sqm based on door profile type and finish
 - Recent jobs: ${recentJobs || 'none yet'}
 - Known clients: ${clientNames || 'see client database'}
 
-Answer concisely and practically. Focus on painting, cabinet finishing, job pricing, measurements, and business operations.`;
+Answer concisely and practically. Focus on painting, cabinet finishing, job pricing, measurements, and business operations. Keep answers short and to the point.`;
 
-            // Each model maps to the correct endpoint version it's available on
-            const modelList = [
-                { model: 'gemini-1.5-flash',      ver: 'v1' },
-                { model: 'gemini-1.5-flash-8b',   ver: 'v1' },
-                { model: 'gemini-1.5-pro',        ver: 'v1' },
-                { model: 'gemini-2.0-flash',      ver: 'v1beta' },
-            ];
-            const reqBody = JSON.stringify({
-                contents: [{ parts: [{ text: systemCtx + '\n\nUser: ' + userMessage }] }],
-                generationConfig: { maxOutputTokens: 500, temperature: 0.7 }
+            const response = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': claudeKey,
+                    'anthropic-version': '2023-06-01',
+                    'anthropic-dangerous-direct-browser-access': 'true'
+                },
+                body: JSON.stringify({
+                    model: 'claude-haiku-4-5-20251001',
+                    max_tokens: 500,
+                    system: systemPrompt,
+                    messages: [{ role: 'user', content: userMessage }]
+                })
             });
 
-            let text = null;
-            let lastError = null;
-            for (const { model, ver } of modelList) {
-                try {
-                    const url = `https://generativelanguage.googleapis.com/${ver}/models/${model}:generateContent?key=${geminiKey}`;
-                    const resp = await fetch(url, {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: reqBody
-                    });
-                    const data = await resp.json();
-                    if (data.error) {
-                        const { code, message: msg = '' } = data.error;
-                        if (code === 429 || code === 404) { lastError = { code, msg, model }; continue; }
-                        throw new Error(`API ${code}: ${msg}`);
-                    }
-                    text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-                    if (text) break;
-                } catch(modelErr) {
-                    if (modelErr.message.startsWith('API ')) throw modelErr;
-                    lastError = { msg: modelErr.message, model };
-                }
-            }
+            const data = await response.json();
 
-            if (!text) {
-                if (lastError?.code === 429) throw new Error('Daily quota reached — resets at midnight. Try again tomorrow or get a new key at aistudio.google.com');
-                if (lastError?.code === 404) throw new Error('API key not working. Go to aistudio.google.com → Get API Key → create a fresh key → paste in Admin → API Keys');
-                throw new Error(lastError?.msg || 'No response — check API key in Admin → API Keys');
-            }
+            if (data.error) throw new Error(data.error.message || 'API error');
+
+            const text = data.content?.[0]?.text;
+            if (!text) throw new Error('No response from AI');
 
             if (thinkingDiv && thinkingDiv.parentNode) thinkingDiv.remove();
             const msgDiv = document.createElement('div');
             msgDiv.style.cssText = 'background:#f0f9f0; color:#333; padding:10px 14px; border-radius:10px; font-size:12px; line-height:1.6;';
-            msgDiv.innerHTML = '<strong>🤖 AI</strong><br>' + text.replace(/\n/g, '<br>');
+            msgDiv.innerHTML = '<strong>🤖 AI</strong><br>' + text.split('\n').join('<br>')
             messagesDiv.appendChild(msgDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
         } catch(e) {
             if (thinkingDiv && thinkingDiv.parentNode) thinkingDiv.remove();
             const msgDiv = document.createElement('div');
-            msgDiv.style.cssText = 'background:#ffebee; color:#333; padding:10px 14px; border-radius:10px; font-size:12px; line-height:1.5;';
-            msgDiv.innerHTML = '<strong>🤖 AI</strong><br>' + e.message.replace(/\n/g, '<br>');
+            msgDiv.style.cssText = 'background:#fff0f0; color:#333; padding:10px 14px; border-radius:10px; font-size:12px;';
+            msgDiv.innerHTML = '<strong>🤖 AI</strong><br>Error: ' + e.message;
             messagesDiv.appendChild(msgDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
-        messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }
     
     // Load defaults on page load
