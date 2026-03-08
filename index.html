@@ -944,6 +944,30 @@ const firebaseConfig = {
                     window.signOut(auth).catch(() => {});
                     return;
                 }
+
+                // ── User-change detection (runs BEFORE initializeApp) ──────────────
+                // If a different user logs in, wipe their stale localStorage so they
+                // don't see the previous user's clients, formulas, settings, etc.
+                const lastUid = localStorage.getItem('pw_last_uid');
+                if (lastUid && lastUid !== user.uid) {
+                    const userScopedKeys = [
+                        'clientDatabase','jobHistory','paintFormulas','masterMatrix',
+                        'doorProfiles','companySettings','companyLogo','headerLogoBase64',
+                        'headerLogo','adminAlerts','appColors','paintBrands',
+                        'additionalCharges','defaultTimeline','adminSettings',
+                        'pw_onboarded','currentJob'
+                    ];
+                    userScopedKeys.forEach(k => localStorage.removeItem(k));
+                    // Also reset the in-memory paintDatabase so the new user
+                    // doesn't inherit the previous user's formulas
+                    if (typeof paintDatabase !== 'undefined') {
+                        try { paintDatabase = []; } catch(e) {}
+                    }
+                    console.log('🔄 User changed — cleared stale data for:', user.email);
+                }
+                localStorage.setItem('pw_last_uid', user.uid);
+                // ── End user-change detection ──────────────────────────────────────
+
                 // Apply pro locks now that we know who the user is
                 setTimeout(() => { if (typeof window.applyProLocks === 'function') window.applyProLocks(); }, 300);
                 const loginScreen = document.getElementById('loginScreen');
@@ -2655,23 +2679,6 @@ const firebaseConfig = {
             // Firebase is ready, set up auth listener
             window.onAuthStateChanged((user) => {
               if (user) {
-                // ── User-change detection: clear stale data if a DIFFERENT user logs in ──
-                const lastUid = localStorage.getItem('pw_last_uid');
-                if (lastUid && lastUid !== user.uid) {
-                    // Different user — wipe user-specific localStorage keys so they
-                    // don't see the previous user's clients, jobs, settings, etc.
-                    const userScopedKeys = [
-                        'clientDatabase','jobHistory','paintFormulas','masterMatrix',
-                        'doorProfiles','companySettings','companyLogo','headerLogoBase64',
-                        'headerLogo','adminAlerts','appColors','paintBrands',
-                        'additionalCharges','defaultTimeline','adminSettings',
-                        'pw_onboarded','currentJob'
-                    ];
-                    userScopedKeys.forEach(k => localStorage.removeItem(k));
-                    console.log('🔄 Different user detected — cleared stale localStorage for:', user.email);
-                }
-                localStorage.setItem('pw_last_uid', user.uid);
-                // ── End user-change detection ──────────────────────────────────────────
                 window.currentUser = user;
                 document.getElementById('loginScreen').classList.add('hidden');
                 document.getElementById('userInfo').innerHTML = `
@@ -3464,8 +3471,11 @@ const firebaseConfig = {
             }
         }
         
-        // Default example formula
-        const defaults = [
+        // Default example formula — only seed if this looks like the owner's session
+        // (i.e. we already have a known UID stored, meaning the owner has logged in before).
+        // New users get an empty formula list; their data loads from Firestore on auth.
+        const isKnownSession = !!localStorage.getItem('pw_last_uid');
+        const defaults = isKnownSession ? [
             {
                 id: 'lexicon-690-30',
                 brand: 'Evic',
@@ -3494,12 +3504,14 @@ const firebaseConfig = {
                 totalWeight: 1384.09,
                 notes: '3 tinters'
             }
-        ];
+        ] : []; // No defaults for a fresh/unknown session — Firestore will load the real data
         
         defaults.forEach((f, idx) => {
             const tinterCount = (f.colourants || []).length;
         });
-        localStorage.setItem('paintFormulas', JSON.stringify(defaults));
+        if (defaults.length > 0) {
+            localStorage.setItem('paintFormulas', JSON.stringify(defaults));
+        }
         return defaults;
     })();
 
@@ -17085,7 +17097,17 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                         localStorage.setItem('paintFormulas', JSON.stringify(paintDatabase));
                         console.log('☁️ Loaded', paintDatabase.length, 'paint formulas from Firestore');
                         try { if (typeof renderPaintFormulaList === 'function') renderPaintFormulaList(); } catch(e) {}
+                    } else {
+                        // Firestore doc exists but empty — clear stale data
+                        paintDatabase = [];
+                        localStorage.removeItem('paintFormulas');
+                        console.log('☁️ Paint formulas empty in Firestore — cleared for this user');
                     }
+                } else {
+                    // No Firestore record — new user, clear any stale data
+                    paintDatabase = [];
+                    localStorage.removeItem('paintFormulas');
+                    console.log('☁️ No paint formulas in Firestore for this user — cleared');
                 }
             } catch(e) { console.warn('Paint formula load error:', e.message); }
 
