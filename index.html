@@ -291,7 +291,18 @@
 
         .p-card { flex:1; background:#fff; border:2px solid #ddd; border-radius:8px; padding:8px 2px; text-align:center; font-weight:900; font-size:9px; color:#444; display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer; transition:all 0.2s; touch-action:manipulation; -webkit-tap-highlight-color:transparent; font-family:inherit; -webkit-appearance:none; appearance:none; outline:none; user-select:none; -webkit-user-select:none; }
         .p-card.active { border-color:var(--gs); background:#fff9e6; color:#000; }
-        .p-card svg { width:22px; height:22px; stroke: currentColor; fill:none; stroke-width:2; }
+        .p-card svg { width:22px; height:22px; stroke: currentColor; fill:none; stroke-width:2; pointer-events:none; }
+        /* CRITICAL iOS FIX: SVG children intercept touches and don't bubble on iOS Safari.
+           pointer-events:none on ALL SVGs inside any interactive element forces
+           the touch to pass through to the parent button/div. */
+        button svg, a svg, [onclick] svg, .icon-btn svg, .edge-box svg,
+        .fm-opt svg, .nav-btn svg, .sub-btn svg, .form-card svg,
+        .filter-btn svg, .add-main-btn svg { pointer-events: none; }
+        /* Also block pointer events on any text/span/img inside buttons that could intercept */
+        button *, [onclick] > * { pointer-events: none; }
+        /* Re-enable for inputs and interactables that need to work inside buttons */
+        button input, button select, button textarea,
+        [onclick] input, [onclick] select, [onclick] textarea { pointer-events: auto; }
         #pP.active { background:var(--panel-clr); color:#fff; border-color:var(--panel-clr); }
         #pD.active { background:var(--door-clr); color:#fff; border-color:var(--door-clr); }
         #pDr.active { background:var(--drawer-clr); color:#fff; border-color:var(--drawer-clr); }
@@ -4755,23 +4766,46 @@ const firebaseConfig = {
     
     function loadHeaderLogo() {
         const headerLogo = localStorage.getItem('headerLogo');
-        const logoImg = document.getElementById('headerLogoImg');
+        const logoImg  = document.getElementById('headerLogoImg');
         const logoText = document.getElementById('headerLogoText');
-        
-        if (headerLogo && logoImg) {
-            try {
-                logoImg.src = headerLogo;
-                logoImg.style.display = 'block';
-                if (logoText) logoText.style.display = 'none';
-                console.log('✓ Header logo loaded');
-            } catch(e) {
-                console.warn('Error loading header logo:', e);
+
+        // Apply from localStorage immediately (fast, works offline)
+        function applyLogo(dataUrl) {
+            if (dataUrl && logoImg) {
+                try {
+                    logoImg.src = dataUrl;
+                    logoImg.style.display = 'block';
+                    if (logoText) logoText.style.display = 'none';
+                } catch(e) {
+                    if (logoText) logoText.style.display = 'block';
+                    if (logoImg) logoImg.style.display = 'none';
+                }
+            } else {
                 if (logoText) logoText.style.display = 'block';
                 if (logoImg) logoImg.style.display = 'none';
             }
-        } else {
-            if (logoText) logoText.style.display = 'block';
-            if (logoImg) logoImg.style.display = 'none';
+        }
+
+        applyLogo(headerLogo);
+
+        // Also fetch from Firebase so logo appears on all devices
+        if (window.currentUser && window.firebaseDb && window.doc && window.getDoc) {
+            try {
+                const logoRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'companyBranding');
+                window.getDoc(logoRef).then(snap => {
+                    if (snap.exists()) {
+                        const d = snap.data();
+                        if (d.headerLogo) {
+                            localStorage.setItem('headerLogo', d.headerLogo);
+                            applyLogo(d.headerLogo);
+                            console.log('☁️ Header logo loaded from Firebase');
+                        }
+                        if (d.companyLogo) {
+                            localStorage.setItem('companyLogo', d.companyLogo);
+                        }
+                    }
+                }).catch(e => console.warn('Logo Firebase load:', e.message));
+            } catch(e) {}
         }
     }
     
@@ -16187,8 +16221,23 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             const file = headerLogoInput.files[0];
             const reader = new FileReader();
             reader.onload = (e) => {
-                localStorage.setItem('headerLogo', e.target.result);
-                console.log('✓ Header logo saved');
+                const logoData = e.target.result;
+                localStorage.setItem('headerLogo', logoData);
+                console.log('✓ Header logo saved to localStorage');
+                // Also save to Firebase for cross-device sync
+                if (window.currentUser && window.firebaseDb && window.doc && window.setDoc) {
+                    try {
+                        const companyLogo = localStorage.getItem('companyLogo') || '';
+                        const brandRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'companyBranding');
+                        window.setDoc(brandRef, {
+                            headerLogo: logoData,
+                            companyLogo: companyLogo,
+                            updatedAt: new Date().toISOString()
+                        }, { merge: true })
+                        .then(() => console.log('☁️ Logo saved to Firebase'))
+                        .catch(e => console.warn('Logo Firebase save failed:', e.message));
+                    } catch(e) {}
+                }
                 checkComplete();
             };
             reader.onerror = (e) => {
@@ -16847,7 +16896,19 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
     // Login function
     function handleLogin() {
         if (!window.firebaseAuth || !window.signInWithEmailAndPassword) {
-            alert('Firebase not ready yet, please wait a moment and try again');
+            // Firebase module still loading (common on iOS slow connections) - retry up to 3 times
+            let retries = 0;
+            const retryInterval = setInterval(() => {
+                retries++;
+                if (window.firebaseAuth && window.signInWithEmailAndPassword) {
+                    clearInterval(retryInterval);
+                    handleLogin(); // retry now it's ready
+                } else if (retries >= 6) {
+                    clearInterval(retryInterval);
+                    const errorDiv = document.getElementById('loginError');
+                    if (errorDiv) { errorDiv.textContent = 'Connection slow — please check internet and try again'; errorDiv.style.display = 'block'; }
+                }
+            }, 500);
             return;
         }
 
@@ -17176,6 +17237,19 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
 
         // ── 6. Admin Notifications ─────────────────────────────
         try { await loadAdminAlertsFromFirebase(); } catch(e) {}
+
+        // ── 7. Company Branding (logo — cross-device sync) ─────
+        try {
+            const brandRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'companyBranding');
+            const brandSnap = await window.getDoc(brandRef);
+            if (brandSnap.exists()) {
+                const bd = brandSnap.data();
+                if (bd.headerLogo)  localStorage.setItem('headerLogo',  bd.headerLogo);
+                if (bd.companyLogo) localStorage.setItem('companyLogo', bd.companyLogo);
+                if ((bd.headerLogo || bd.companyLogo) && typeof loadHeaderLogo === 'function') loadHeaderLogo();
+                console.log('☁️ Company branding synced from Firebase');
+            }
+        } catch(e) { console.warn('Branding load:', e.message); }
         
         // ── UI Refresh — repaint everything after all data is loaded ──
         try {
@@ -17499,66 +17573,5 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
 
 </script>
 
-<!-- ============================================================
-     TOUCH DIAGNOSTIC — REMOVE BEFORE FINAL DEPLOY
-     Shows a red dot + element info wherever you tap on mobile.
-     Tap anywhere 5 times fast to dismiss.
-     ============================================================ -->
-<div id="touchDiag" style="position:fixed;top:0;left:0;right:0;z-index:9999999;background:rgba(0,0,0,0.82);color:#fff;font-size:11px;font-family:monospace;padding:8px 10px;line-height:1.5;pointer-events:none;display:block;">
-  <b style="color:#ffd60a;">🔍 TOUCH DIAGNOSTIC ON</b> — tap any button to see what's intercepting it<br>
-  <span id="touchDiagInfo">Waiting for tap...</span>
-</div>
-<div id="touchDot" style="position:fixed;width:24px;height:24px;background:red;border-radius:50%;border:2px solid #fff;pointer-events:none;z-index:9999998;display:none;transform:translate(-50%,-50%);"></div>
-<script>
-(function() {
-    var tapCount = 0;
-    var diagEl = document.getElementById('touchDiag');
-    var dotEl  = document.getElementById('touchDot');
-    var infoEl = document.getElementById('touchDiagInfo');
-
-    document.addEventListener('touchstart', function(e) {
-        var t = e.touches[0];
-        var x = t.clientX, y = t.clientY;
-
-        // Show red dot
-        dotEl.style.left = x + 'px';
-        dotEl.style.top  = y + 'px';
-        dotEl.style.display = 'block';
-
-        // Find element at touch point (temporarily hide dot so it doesn't self-report)
-        dotEl.style.display = 'none';
-        var el = document.elementFromPoint(x, y);
-        dotEl.style.display = 'block';
-
-        // Build info string
-        var info = '';
-        if (el) {
-            var tag  = el.tagName;
-            var id   = el.id   ? '#' + el.id   : '';
-            var cls  = el.className && typeof el.className === 'string' ? '.' + el.className.trim().replace(/\s+/g,'.') : '';
-            var zIdx = window.getComputedStyle(el).zIndex;
-            var pos  = window.getComputedStyle(el).position;
-            var vis  = window.getComputedStyle(el).visibility;
-            var pe   = window.getComputedStyle(el).pointerEvents;
-            var disp = window.getComputedStyle(el).display;
-            info = tag + id + cls + '\n'
-                 + 'position:' + pos + '  z-index:' + zIdx + '\n'
-                 + 'visibility:' + vis + '  pointer-events:' + pe + '\n'
-                 + 'display:' + disp;
-        } else {
-            info = '(no element found at touch point)';
-        }
-
-        infoEl.textContent = info;
-
-        // Tap 5 times fast to dismiss
-        tapCount++;
-        if (tapCount >= 5) {
-            diagEl.style.display = 'none';
-            dotEl.style.display  = 'none';
-        }
-    }, true); // capture phase — fires BEFORE anything else
-})();
-</script>
 </body>
 </html>
