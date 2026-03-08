@@ -279,7 +279,7 @@
 
         .bubble-row { display: flex; gap: 6px; margin: 8px 0; }
         .fm-row { display:flex; background:#eee; border-radius:8px; padding:4px; margin-bottom:10px; height: 50px; align-items: center; box-sizing: border-box; }
-        .fm-opt { flex:1; text-align:center; height: 42px; line-height: 42px; font-weight:900; font-size:12px; border-radius:6px; color:#aaa; cursor:pointer; transition:all 0.2s; touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
+        .fm-opt { flex:1; text-align:center; height: 42px; line-height: 42px; font-weight:900; font-size:12px; border-radius:6px; color:#999; cursor:pointer; transition:all 0.2s; touch-action:manipulation; -webkit-tap-highlight-color:transparent; user-select:none; }
         .fm-opt.active { background:#fff; color:#000; box-shadow:0 2px 4px rgba(0,0,0,0.1); }
         
         .bubble-unit { flex: 1; background: #fff; border: 1px solid #ccc; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 50px; box-sizing: border-box; }
@@ -893,6 +893,12 @@ const firebaseConfig = {
             app = initializeApp(firebaseConfig);
             auth = getAuth(app);
             db = getFirestore(app);
+            // Session persistence: auth clears when tab/browser closes
+            // Prevents Colin's account auto-logging in on fresh devices
+            try {
+                const { setPersistence, browserSessionPersistence } = await import('https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js');
+                await setPersistence(auth, browserSessionPersistence);
+            } catch(pe) {}
             console.log('✓ Firebase initialized successfully');
         } catch(fbError) {
             console.log('ℹ️ Firebase note (non-critical):', fbError.message);
@@ -2732,14 +2738,6 @@ const firebaseConfig = {
             // Firebase is ready, set up auth listener
             window.onAuthStateChanged((user) => {
               if (user) {
-                // Only auto-login if user explicitly logged in this browser session
-                // This prevents Colin's cached session bleeding through to other users
-                const explicitLogin = sessionStorage.getItem('pw_explicit_login');
-                if (!explicitLogin) {
-                    // Cached session detected — sign out and show login screen
-                    window.signOut(window.firebaseAuth).catch(() => {});
-                    return;
-                }
                 window.currentUser = user;
                 document.getElementById('loginScreen').classList.add('hidden');
                 document.getElementById('userInfo').innerHTML = `
@@ -4864,25 +4862,33 @@ const firebaseConfig = {
             // iOS Safari sometimes ignores onclick on non-anchor/button elements
             // and can be slow on buttons too - touchend is instant
             setTimeout(() => {
+                // Bind all measure tab interactive elements via touchstart
+                // touchstart fires instantly before iOS scroll detection
                 const touchMap = {
                     'pP': () => setP('Panel'),
                     'pD': () => setP('Door'),
                     'pDr': () => setP('Drawer'),
                     'pC': () => setP('Custom'),
                     'fm-flat': () => setFM('Flat'),
-                    'fm-mould': () => setFM('Moulded')
+                    'fm-mould': () => setFM('Moulded'),
+                    'mSS': () => setM('SS'),
+                    'mDS': () => setM('DS'),
+                    'mSE': () => setM('SE'),
+                    'E1': (e) => tE(document.getElementById('E1')),
+                    'E2': (e) => tE(document.getElementById('E2')),
+                    'E3': (e) => tE(document.getElementById('E3')),
+                    'E4': (e) => tE(document.getElementById('E4')),
                 };
                 Object.entries(touchMap).forEach(([id, fn]) => {
                     const el = document.getElementById(id);
                     if (el) {
-                        el.addEventListener('touchend', (e) => {
+                        el.addEventListener('touchstart', (e) => {
                             e.preventDefault();
-                            e.stopPropagation();
-                            fn();
+                            fn(e);
                         }, { passive: false });
                     }
                 });
-                console.log('✓ iOS touch handlers bound to p-cards');
+                console.log('✓ iOS touchstart handlers bound to all measure tab buttons');
             }, 500);
         } catch(e) {
             console.error('Error during app initialization:', e);
@@ -16835,7 +16841,6 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             document.getElementById('loginEmail').value = '';
             document.getElementById('loginPassword').value = '';
             // Mark this as an explicit login so onAuthStateChanged allows it
-            sessionStorage.setItem('pw_explicit_login', '1');
             // Exit staff mode if active
             window.staffMode = false;
             sessionStorage.removeItem('staffMode');
@@ -16930,7 +16935,6 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                 errorDiv.style.display = 'none';
                 document.getElementById('loginEmail').value = '';
                 document.getElementById('loginPassword').value = '';
-                sessionStorage.setItem('pw_explicit_login', '1');
                 notify('Account created! You are now logged in.');
             })
             .catch(error => {
