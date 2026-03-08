@@ -2869,7 +2869,7 @@ const firebaseConfig = {
     let items = [], mode = 'SS', pType = 'Panel', fmState = 'Flat', currentPanelFilter = 'all', currentColorFilter = '';
     
     // RESTORED MASTER LISTS
-    let clients = ["Demo Client", "Sample Kitchens", "Test Joinery", "Walk in Client"];
+    let clients = []; // legacy array — clients now come from clientDatabase (Firebase) only
     
     // ========== GLOBAL ADMIN SETTINGS MODULE (v1.5.3+) ==========
     // Non-intrusive, modular configuration for:
@@ -4605,7 +4605,7 @@ const firebaseConfig = {
             const seen = new Set();
             const allClients = [];
             
-            // 1. Get free from Google AI Studio → client database (authoritative source)
+            // 1. Client database (authoritative source)
             const db = getClientDatabase();
             Object.values(db).forEach(client => {
                 if (client.name && !seen.has(client.name.toLowerCase())) {
@@ -4614,20 +4614,12 @@ const firebaseConfig = {
                 }
             });
             
-            // 2. Get free from Google AI Studio → job history (catch any missing clients)
+            // 2. Job history (catch any clients not yet in the database)
             const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
             history.forEach(job => {
                 if (job.client && !seen.has(job.client.toLowerCase())) {
                     allClients.push(job.client);
                     seen.add(job.client.toLowerCase());
-                }
-            });
-            
-            // 3. Get free from Google AI Studio → hardcoded clients array (legacy support)
-            clients.forEach(client => {
-                if (client && !seen.has(client.toLowerCase())) {
-                    allClients.push(client);
-                    seen.add(client.toLowerCase());
                 }
             });
             
@@ -4651,23 +4643,8 @@ const firebaseConfig = {
     
     // Initialize app on page load
     function initializeDefaultClients() {
-        const db = getClientDatabase();
-        
-        // Only populate defaults if database is completely empty
-        // AND we are not about to load from Firestore (i.e. no user logged in yet)
-        // This prevents fake defaults from clobbering real Firestore data on iOS
-        if (Object.keys(db).length === 0 && !window.currentUser) {
-            const defaultClients = {
-                'client-001': { id: 'client-001', name: 'Residential Properties', email: 'contact@residentialprops.com.au', phone: '(03) 8000 1234', address: '123 Main Street, Melbourne VIC 3000', createdDate: new Date().toISOString(), notes: 'Regular residential cabinet refurbishment' },
-                'client-002': { id: 'client-002', name: 'Commercial Kitchens & Fit-out', email: 'sales@commkitchens.com.au', phone: '(03) 8001 5678', address: '456 Business Ave, Docklands VIC 3008', createdDate: new Date().toISOString(), notes: 'Commercial kitchen cabinet spraying specialist' },
-                'client-003': { id: 'client-003', name: 'Interior Design Studio', email: 'projects@interiordesignco.com.au', phone: '(03) 8002 9012', address: '789 Creative Way, Collingwood VIC 3066', createdDate: new Date().toISOString(), notes: 'High-end residential cabinet refinishing' },
-                'client-004': { id: 'client-004', name: 'Hotel & Hospitality Group', email: 'maintenance@hotelgroup.com.au', phone: '(03) 8003 3456', address: '321 Luxury Lane, South Yarra VIC 3141', createdDate: new Date().toISOString(), notes: 'Luxury hotel cabinet maintenance & refurbishment' },
-                'client-005': { id: 'client-005', name: 'Builders & Developers', email: 'enquiry@buildersdev.com.au', phone: '(03) 8004 7890', address: '654 Construction St, Footscray VIC 3011', createdDate: new Date().toISOString(), notes: 'New build property kitchen & wardrobe cabinets' }
-            };
-            
-            saveClientDatabase(defaultClients);
-            console.log('✓ Default clients populated to database');
-        }
+        // New users start with an empty client database.
+        // Real clients are loaded from Firebase after login via loadAllDataFromFirebase().
     }
     
     function loadHeaderLogo() {
