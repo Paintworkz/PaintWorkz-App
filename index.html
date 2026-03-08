@@ -916,6 +916,7 @@ const firebaseConfig = {
         // Auth functions
         window.createUserWithEmailAndPassword = (email, password) => createUserWithEmailAndPassword(auth, email, password);
         window.signInWithEmailAndPassword = (email, password) => signInWithEmailAndPassword(auth, email, password);
+        window.signOut = (authInstance) => signOut(authInstance || auth);
         window.signOut = () => signOut(auth);
         window.sendPasswordResetEmail = (email) => sendPasswordResetEmail(auth, email);
         window.reauthenticateWithCredential = reauthenticateWithCredential;
@@ -2723,14 +2724,21 @@ const firebaseConfig = {
             // Firebase is ready, set up auth listener
             window.onAuthStateChanged((user) => {
               if (user) {
+                // Only auto-login if user explicitly logged in this browser session
+                // This prevents Colin's cached session bleeding through to other users
+                const explicitLogin = sessionStorage.getItem('pw_explicit_login');
+                if (!explicitLogin) {
+                    // Cached session detected — sign out and show login screen
+                    window.signOut(window.firebaseAuth).catch(() => {});
+                    return;
+                }
                 window.currentUser = user;
                 document.getElementById('loginScreen').classList.add('hidden');
                 document.getElementById('userInfo').innerHTML = `
                   <span style="font-weight:900;">👤 ${user.email.split('@')[0]}</span>
-                  <button id="logoutBtn" onclick="logout()" style="background:#ff3b30; color:#fff; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; font-weight:900; margin-left:10px;">Logout</button>
+                  <button id="logoutBtn" onclick="logout()" style="background:#ff3b30; color:#fff; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; font-weight:900; font-size:11px; border-radius:6px;">LOGOUT</button>
                 `;
                 loadDataFromFirestore();
-                // Onboarding disabled - user has existing data
               } else {
                 window.currentUser = null;
                 document.getElementById('loginScreen').classList.remove('hidden');
@@ -2827,6 +2835,7 @@ const firebaseConfig = {
     }
     // ── End onboarding ─────────────────────────────────────────
     function logout() {
+        sessionStorage.removeItem('pw_explicit_login');
       window.signOut().then(() => {
       });
     }
@@ -16791,6 +16800,8 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             if (errorDiv) errorDiv.style.display = 'none';
             document.getElementById('loginEmail').value = '';
             document.getElementById('loginPassword').value = '';
+            // Mark this as an explicit login so onAuthStateChanged allows it
+            sessionStorage.setItem('pw_explicit_login', '1');
             // Exit staff mode if active
             window.staffMode = false;
             sessionStorage.removeItem('staffMode');
