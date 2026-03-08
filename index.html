@@ -924,7 +924,10 @@ const firebaseConfig = {
         window.signInWithEmailAndPassword = (email, password) => signInWithEmailAndPassword(auth, email, password);
         window.signOut = (authInstance) => signOut(authInstance || auth);
         window.signOut = () => signOut(auth);
-        window.sendPasswordResetEmail = (email) => sendPasswordResetEmail(auth, email);
+        window.sendPasswordResetEmail = (email) => sendPasswordResetEmail(auth, email, {
+            url: 'https://paintworkz.github.io/PaintWorkz-App/',
+            handleCodeInApp: true
+        });
         window.confirmPasswordReset = (oobCode, newPassword) => confirmPasswordReset(auth, oobCode, newPassword);
         window.verifyPasswordResetCode = (oobCode) => verifyPasswordResetCode(auth, oobCode);
         window.reauthenticateWithCredential = reauthenticateWithCredential;
@@ -4813,6 +4816,73 @@ const firebaseConfig = {
         'residential properties','commercial kitchens & fit-out','interior design studio',
         'hotel & hospitality group','builders & developers'
     ]);
+
+    // ── Demo data for new (non-owner) users ──────────────────────────────────
+    // Seeds a small, neutral set of demo clients, one paint formula, and basic
+    // door profiles so new users can try entering a job straight away.
+    // Only runs when the user has no Firestore data (first login on a fresh account).
+    // Does NOT run for the owner account.
+    function seedDemoDataForNewUser() {
+        if (!window.currentUser) return;
+        if (window.currentUser.email === OWNER_EMAIL) return; // Owner manages their own data
+
+        // --- Demo Clients ---
+        const existingClients = getClientDatabase();
+        if (Object.keys(existingClients).length === 0) {
+            const demoClients = {
+                'demo-client-001': { id:'demo-client-001', name:'Sample Kitchens',   phone:'', email:'', address:'', notes:'Demo client — replace with your own', createdDate: new Date().toISOString() },
+                'demo-client-002': { id:'demo-client-002', name:'Test Cabinetry Co', phone:'', email:'', address:'', notes:'Demo client — replace with your own', createdDate: new Date().toISOString() },
+                'demo-client-003': { id:'demo-client-003', name:'Demo Joinery',      phone:'', email:'', address:'', notes:'Demo client — replace with your own', createdDate: new Date().toISOString() },
+                'demo-client-004': { id:'demo-client-004', name:'Walk in Client',    phone:'', email:'', address:'', notes:'',                                    createdDate: new Date().toISOString() }
+            };
+            saveClientDatabase(demoClients);
+            try { if (typeof populateClientDropdown === 'function') populateClientDropdown(); } catch(e) {}
+            try { if (typeof renderClientsList === 'function') renderClientsList(); } catch(e) {}
+            console.log('🌱 Demo clients seeded for new user');
+        }
+
+        // --- Demo Paint Formula ---
+        const existingFormulas = JSON.parse(localStorage.getItem('paintFormulas') || '[]');
+        if (!Array.isArray(existingFormulas) || existingFormulas.length === 0) {
+            const demoFormulas = [{
+                id: 'demo-lexicon-001',
+                brand: 'Dulux',
+                color: 'Lexicon Quarter',
+                product: '690 30% XTint Poly',
+                code: 'DEMO001',
+                evicCode: 'DEMO001',
+                baseType: '690 30% XTint Poly',
+                baseColor: 'White',
+                version: 'Demo Formula — replace with your own',
+                finishes: ['Satin'],
+                baseSize: 1,
+                whiteBase: [{ code: 'ITE003', grams: 7.47 }, { code: 'XB6930', grams: 1359.04 }],
+                colourants: [{ code: 'ITE303', amount: 5.88 }, { code: 'ITE306', amount: 5.95 }],
+                totalWeight: 1378.34,
+                notes: 'Demo formula — add your own via Database > Paint'
+            }];
+            paintDatabase = demoFormulas;
+            localStorage.setItem('paintFormulas', JSON.stringify(demoFormulas));
+            try { if (typeof renderPaintFormulaList === 'function') renderPaintFormulaList(); } catch(e) {}
+            console.log('🌱 Demo paint formula seeded for new user');
+        }
+
+        // --- Demo Door Profiles ---
+        const existingProfiles = JSON.parse(localStorage.getItem('doorProfiles') || '[]');
+        if (!Array.isArray(existingProfiles) || existingProfiles.length === 0) {
+            const demoProfiles = [
+                { name:'Shaker',        profile:'Shaker',        pricePerSqm:125, minCharge:10 },
+                { name:'Flat Panel',    profile:'Flat',          pricePerSqm:110, minCharge:8  },
+                { name:'2 Pac Shaker',  profile:'Shaker',        pricePerSqm:145, minCharge:12 },
+                { name:'Routed Panel',  profile:'Routed',        pricePerSqm:135, minCharge:10 },
+                { name:'Slab Door',     profile:'Slab',          pricePerSqm:100, minCharge:8  }
+            ];
+            localStorage.setItem('doorProfiles', JSON.stringify(demoProfiles));
+            try { if (typeof refreshLists === 'function') refreshLists(); } catch(e) {}
+            console.log('🌱 Demo door profiles seeded for new user');
+        }
+    }
+    // ── End demo seed ─────────────────────────────────────────────────────────
 
     function initializeDefaultClients() {
         // For new users: start empty. Clients are added via Admin > Clients.
@@ -17073,14 +17143,31 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             return;
         }
         
+        // Set flag BEFORE calling createUserWithEmailAndPassword so the
+        // onAuthStateChanged security guard doesn't immediately sign them back out
+        sessionStorage.setItem('pw_explicit_login', '1');
+
         window.createUserWithEmailAndPassword(email, password)
             .then(() => {
                 errorDiv.style.display = 'none';
                 document.getElementById('loginEmail').value = '';
                 document.getElementById('loginPassword').value = '';
                 notify('Account created! You are now logged in.');
+                // Show the app (same as handleLogin's showApp)
+                const ls  = document.getElementById('loginScreen');
+                const app = document.getElementById('appContainer');
+                const mh  = document.getElementById('mainHeader');
+                const mn  = document.getElementById('mainNavTabs');
+                if (ls)  ls.style.display  = 'none';
+                if (app) app.style.display = 'block';
+                if (mh)  mh.style.display  = 'flex';
+                if (mn)  mn.style.display  = 'flex';
+                if (typeof initializeApp === 'function') {
+                    try { setTimeout(() => initializeApp(), 50); } catch(e) {}
+                }
             })
             .catch(error => {
+                sessionStorage.removeItem('pw_explicit_login'); // clear flag on failure
                 errorDiv.textContent = error.message;
                 errorDiv.style.display = 'block';
             });
@@ -17290,7 +17377,16 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                         console.log('☁️ Door profiles loaded from Firestore:', profiles.length);
                         try { if (typeof refreshLists === 'function') refreshLists(); } catch(e) {}
                         try { if (typeof renderPricingMatrix === 'function') renderPricingMatrix(); } catch(e) {}
+                    } else {
+                        // Firestore doc exists but empty — seed demo profiles for new user
+                        seedDemoDataForNewUser();
                     }
+                } else {
+                    // No Firestore record — new user, clear stale data and seed demo content
+                    localStorage.removeItem('doorProfiles');
+                    localStorage.removeItem('masterMatrix');
+                    console.log('☁️ No door profiles in Firestore for this user — cleared');
+                    seedDemoDataForNewUser();
                 }
             } catch(e) { console.warn('Door profiles load error:', e.message); }
 
