@@ -1322,7 +1322,7 @@ const firebaseConfig = {
             <div style="display:flex; gap:8px; margin-bottom: 8px;">
                 <div style="flex:2">
                     <label>Client</label>
-                    <select id="cli"><option value="">-- Select or type client --</option></select>
+                    <select id="cli"><option value="" selected>-- Select or type client --</option></select>
                 </div>
                 <div style="flex:1">
                     <label>Date Received</label>
@@ -4709,13 +4709,14 @@ const firebaseConfig = {
             allClients.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
             
             // Clear and rebuild dropdown
-            clientSelect.innerHTML = '<option value="">-- Select or type client --</option>';
+            clientSelect.innerHTML = '<option value="" selected>-- Select or type client --</option>';
             allClients.forEach(client => {
                 const option = document.createElement('option');
                 option.value = client;
                 option.textContent = client;
                 clientSelect.appendChild(option);
             });
+            clientSelect.value = ''; // Always reset to placeholder after rebuild
             
         } catch(e) {
             console.error('Error populating client dropdown:', e);
@@ -4858,6 +4859,31 @@ const firebaseConfig = {
             }
             
             console.log('✓ App initialized - measure sheet cleared, clients loaded');
+
+            // iOS touch fix - bind touchend directly to p-cards and fm-opts
+            // iOS Safari sometimes ignores onclick on non-anchor/button elements
+            // and can be slow on buttons too - touchend is instant
+            setTimeout(() => {
+                const touchMap = {
+                    'pP': () => setP('Panel'),
+                    'pD': () => setP('Door'),
+                    'pDr': () => setP('Drawer'),
+                    'pC': () => setP('Custom'),
+                    'fm-flat': () => setFM('Flat'),
+                    'fm-mould': () => setFM('Moulded')
+                };
+                Object.entries(touchMap).forEach(([id, fn]) => {
+                    const el = document.getElementById(id);
+                    if (el) {
+                        el.addEventListener('touchend', (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            fn();
+                        }, { passive: false });
+                    }
+                });
+                console.log('✓ iOS touch handlers bound to p-cards');
+            }, 500);
         } catch(e) {
             console.error('Error during app initialization:', e);
             console.warn('App continuing despite initialization error - some elements may not be ready yet');
@@ -16904,6 +16930,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                 errorDiv.style.display = 'none';
                 document.getElementById('loginEmail').value = '';
                 document.getElementById('loginPassword').value = '';
+                sessionStorage.setItem('pw_explicit_login', '1');
                 notify('Account created! You are now logged in.');
             })
             .catch(error => {
