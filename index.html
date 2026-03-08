@@ -4665,26 +4665,37 @@ const firebaseConfig = {
 
     function initializeDefaultClients() {
         // For new users: start empty. Clients are added via Admin > Clients.
-        // For the owner account: restore the full client list if the database is empty
-        // or was accidentally seeded with demo data by a previous deploy.
+        // For the owner account: MERGE the full OWNER_CLIENT_LIST into the database,
+        // preserving any existing client records (phone/email/notes etc).
         if (!window.currentUser) return;
         if (window.currentUser.email !== OWNER_EMAIL) return;
 
         const db = getClientDatabase();
-        const names = Object.values(db).map(c => (c.name || '').toLowerCase());
-        const isEmpty = names.length === 0;
-        const isDemoOnly = names.length > 0 && names.every(n => DEMO_CLIENT_NAMES.has(n));
 
-        if (!isEmpty && !isDemoOnly) return; // already has real data
+        // Build a set of existing client names (lowercase) for fast lookup
+        const existingNames = new Set(
+            Object.values(db).map(c => (c.name || '').toLowerCase())
+        );
 
-        // Seed owner's full client list
-        const restored = {};
-        OWNER_CLIENT_LIST.forEach((name, i) => {
-            const id = 'client-owner-' + String(i + 1).padStart(3, '0');
-            restored[id] = { id, name, email: '', phone: '', address: '', notes: '', createdDate: new Date().toISOString() };
+        // Remove any stale demo clients
+        Object.keys(db).forEach(id => {
+            if (DEMO_CLIENT_NAMES.has((db[id].name || '').toLowerCase())) {
+                delete db[id];
+            }
         });
-        saveClientDatabase(restored);
-        console.log('✓ Owner client list restored:', OWNER_CLIENT_LIST.length, 'clients');
+
+        // Merge in any OWNER_CLIENT_LIST names that aren't already present
+        let added = 0;
+        OWNER_CLIENT_LIST.forEach((name, i) => {
+            if (!existingNames.has(name.toLowerCase())) {
+                const id = 'client-owner-' + String(i + 1).padStart(3, '0');
+                db[id] = { id, name, email: '', phone: '', address: '', notes: '', createdDate: new Date().toISOString() };
+                added++;
+            }
+        });
+
+        saveClientDatabase(db);
+        console.log(`✓ Owner client list merged: ${added} new clients added, ${Object.keys(db).length} total`);
         // Refresh all client UI immediately
         try { if (typeof populateClientDropdown === 'function') populateClientDropdown(); } catch(e) {}
         try { if (typeof renderDB === 'function') renderDB(); } catch(e) {}
@@ -17070,11 +17081,13 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                     if (cdData.clients && typeof cdData.clients === 'object' && Object.keys(cdData.clients).length > 0) {
                         localStorage.setItem('clientDatabase', JSON.stringify(cdData.clients));
                         console.log('☁️ Client database loaded from Firestore:', Object.keys(cdData.clients).length, 'clients');
-                        // Refresh UI - use correct function names
-                        try { if (typeof renderClientsList === 'function') renderClientsList(); } catch(e) {}
-                        try { if (typeof populateClientDropdown === 'function') populateClientDropdown(); } catch(e) {}
                     }
                 }
+                // Always run owner merge AFTER Firebase data is in localStorage
+                try { if (typeof initializeDefaultClients === 'function') initializeDefaultClients(); } catch(e) {}
+                // Refresh UI
+                try { if (typeof renderClientsList === 'function') renderClientsList(); } catch(e) {}
+                try { if (typeof populateClientDropdown === 'function') populateClientDropdown(); } catch(e) {}
             } catch(e) { console.warn('Client database load error:', e.message); }
 
             // ── 4. Pricing Matrix + Door Profiles ─────────────────
