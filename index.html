@@ -865,7 +865,7 @@ window.addEventListener('unhandledrejection', function(e) {
     <!-- Firebase SDK - Modern Modular Approach -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
-        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, reauthenticateWithCredential, EmailAuthProvider, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js";
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, reauthenticateWithCredential, EmailAuthProvider, sendPasswordResetEmail, confirmPasswordReset, verifyPasswordResetCode } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js";
         import { getFirestore, collection, doc, setDoc, addDoc, getDoc, onSnapshot, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
         
         // ─────────────────────────────────────────────────────────────────
@@ -925,6 +925,8 @@ const firebaseConfig = {
         window.signOut = (authInstance) => signOut(authInstance || auth);
         window.signOut = () => signOut(auth);
         window.sendPasswordResetEmail = (email) => sendPasswordResetEmail(auth, email);
+        window.confirmPasswordReset = (oobCode, newPassword) => confirmPasswordReset(auth, oobCode, newPassword);
+        window.verifyPasswordResetCode = (oobCode) => verifyPasswordResetCode(auth, oobCode);
         window.reauthenticateWithCredential = reauthenticateWithCredential;
         window.EmailAuthProvider = EmailAuthProvider;
         
@@ -1308,6 +1310,42 @@ const firebaseConfig = {
     </div>
 </div>
 
+
+<!-- ── Password Reset Completion Screen ─────────────────────────────────────
+     Shown instead of the login screen when Firebase redirects back with
+     ?mode=resetPassword&oobCode=xxx in the URL.
+     Hidden by default — checkPasswordResetMode() shows it on page load.
+──────────────────────────────────────────────────────────────────────── -->
+<div id="resetPasswordScreen" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:linear-gradient(135deg, #d4af37, #f9f1b0); z-index:10001; flex-direction:column; align-items:center; justify-content:center; padding:20px;">
+    <div style="background:#fff; border-radius:20px; padding:30px; width:100%; max-width:400px; box-shadow:0 10px 40px rgba(0,0,0,0.3);">
+        <div style="text-align:center; margin-bottom:25px;">
+            <h1 style="margin:0; color:#d4af37; font-size:32px;">🎨 PaintWorkz</h1>
+            <p style="color:#666; margin:10px 0 0; font-size:14px;" id="resetScreenSubtitle">Set your new password</p>
+        </div>
+        <div id="resetScreenForm">
+            <p style="font-size:13px; color:#555; margin:0 0 16px; text-align:center;" id="resetScreenEmail"></p>
+            <input type="password" id="newPasswordInput" placeholder="New password (min 6 characters)"
+                style="width:100%; padding:15px; border:2px solid #ddd; border-radius:10px; font-size:15px; box-sizing:border-box; margin-bottom:12px;"
+                onkeydown="if(event.key==='Enter') submitNewPassword()">
+            <input type="password" id="confirmPasswordInput" placeholder="Confirm new password"
+                style="width:100%; padding:15px; border:2px solid #ddd; border-radius:10px; font-size:15px; box-sizing:border-box; margin-bottom:16px;"
+                onkeydown="if(event.key==='Enter') submitNewPassword()">
+            <div id="resetScreenMsg" style="font-size:13px; font-weight:700; margin-bottom:12px; min-height:18px; text-align:center;"></div>
+            <button onclick="submitNewPassword()" id="resetSubmitBtn"
+                style="width:100%; background:#d4af37; border:none; padding:15px; border-radius:10px; font-weight:900; font-size:16px; cursor:pointer;">
+                SET NEW PASSWORD
+            </button>
+        </div>
+        <div id="resetScreenSuccess" style="display:none; text-align:center;">
+            <div style="font-size:48px; margin-bottom:16px;">✅</div>
+            <p style="font-size:16px; font-weight:900; color:#333; margin:0 0 8px;">Password updated!</p>
+            <p style="font-size:13px; color:#666; margin:0 0 20px;">You can now log in with your new password.</p>
+            <button onclick="goToLogin()" style="width:100%; background:#d4af37; border:none; padding:15px; border-radius:10px; font-weight:900; font-size:16px; cursor:pointer;">
+                GO TO LOGIN
+            </button>
+        </div>
+    </div>
+</div>
 
 <!-- Forgot Password Modal -->
 <div id="forgotPasswordModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.6); z-index:10001; align-items:center; justify-content:center; padding:20px;">
@@ -2800,6 +2838,87 @@ const firebaseConfig = {
         const modal = document.getElementById('forgotPasswordModal');
         if (modal) modal.style.display = 'none';
     }
+    // ── Password Reset Completion ────────────────────────────────────────────
+    // Called on page load to detect Firebase's ?mode=resetPassword&oobCode=xxx URL.
+    // If present, hides the login screen and shows the new-password form instead.
+    function checkPasswordResetMode() {
+        const params = new URLSearchParams(window.location.search);
+        const mode = params.get('mode');
+        const oobCode = params.get('oobCode');
+        if (mode !== 'resetPassword' || !oobCode) return; // Normal login — do nothing
+
+        // Hide login screen, show reset screen
+        const loginScreen = document.getElementById('loginScreen');
+        const resetScreen = document.getElementById('resetPasswordScreen');
+        if (loginScreen) loginScreen.style.display = 'none';
+        if (resetScreen) resetScreen.style.display = 'flex';
+
+        // Verify the code is still valid and get the associated email
+        function attemptVerify() {
+            if (typeof window.verifyPasswordResetCode !== 'function') {
+                setTimeout(attemptVerify, 200); // Firebase not ready yet — wait
+                return;
+            }
+            window.verifyPasswordResetCode(oobCode)
+                .then(email => {
+                    const el = document.getElementById('resetScreenEmail');
+                    if (el) el.textContent = 'Resetting password for: ' + email;
+                    window._resetOobCode = oobCode; // Store for submitNewPassword
+                })
+                .catch(err => {
+                    const subtitle = document.getElementById('resetScreenSubtitle');
+                    const form = document.getElementById('resetScreenForm');
+                    const msg = document.getElementById('resetScreenMsg');
+                    if (subtitle) subtitle.textContent = 'Link expired or already used';
+                    if (form) form.innerHTML = `
+                        <p style="text-align:center; color:#999; font-size:13px; margin:0 0 20px;">
+                            This password reset link has expired or already been used.<br><br>
+                            Please request a new one from the login screen.
+                        </p>
+                        <button onclick="goToLogin()" style="width:100%; background:#d4af37; border:none; padding:15px; border-radius:10px; font-weight:900; font-size:16px; cursor:pointer;">
+                            BACK TO LOGIN
+                        </button>`;
+                });
+        }
+        attemptVerify();
+    }
+
+    function submitNewPassword() {
+        const oobCode = window._resetOobCode;
+        const newPw = (document.getElementById('newPasswordInput')?.value || '');
+        const confirmPw = (document.getElementById('confirmPasswordInput')?.value || '');
+        const msg = document.getElementById('resetScreenMsg');
+
+        if (!oobCode) { if(msg) msg.innerHTML = '<span style="color:red;">Reset code missing. Please request a new link.</span>'; return; }
+        if (newPw.length < 6) { if(msg) msg.innerHTML = '<span style="color:red;">Password must be at least 6 characters.</span>'; return; }
+        if (newPw !== confirmPw) { if(msg) msg.innerHTML = '<span style="color:red;">Passwords don\'t match.</span>'; return; }
+
+        const btn = document.getElementById('resetSubmitBtn');
+        if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+        if (msg) msg.innerHTML = '';
+
+        window.confirmPasswordReset(oobCode, newPw)
+            .then(() => {
+                document.getElementById('resetScreenForm').style.display = 'none';
+                document.getElementById('resetScreenSuccess').style.display = 'block';
+                // Clean the oobCode from the URL so it can't be reused
+                window.history.replaceState({}, document.title, window.location.pathname);
+                window._resetOobCode = null;
+            })
+            .catch(err => {
+                if (btn) { btn.disabled = false; btn.textContent = 'SET NEW PASSWORD'; }
+                if (msg) msg.innerHTML = '<span style="color:red;">❌ ' + err.message + '</span>';
+            });
+    }
+
+    function goToLogin() {
+        const resetScreen = document.getElementById('resetPasswordScreen');
+        const loginScreen = document.getElementById('loginScreen');
+        if (resetScreen) resetScreen.style.display = 'none';
+        if (loginScreen) loginScreen.style.display = 'flex';
+    }
+    // ── End Password Reset Completion ────────────────────────────────────────
+
     function sendResetEmail() {
         const email = (document.getElementById('resetEmail')?.value || '').trim();
         const msg = document.getElementById('resetMsg');
@@ -4538,6 +4657,9 @@ const firebaseConfig = {
     }
 
     window.onload = () => { 
+        // Check if Firebase redirected here for a password reset
+        checkPasswordResetMode();
+
         // Show copyright as popup notification (auto-dismiss after 4 seconds)
         notify('⚖️ PaintWorkz Pro © 2026 Colin Bedford | Unauthorized use prohibited', 4000);
         
