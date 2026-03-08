@@ -1,4 +1,4 @@
-<!--   
+<!-- 
 ╔════════════════════════════════════════════════════════════════╗
 ║                                                                ║
 ║  ⚖️  OWNERSHIP NOTICE - HARDLOCKED                             ║
@@ -4641,10 +4641,54 @@ const firebaseConfig = {
         }
     }
     
-    // Initialize app on page load
+    // The canonical client list for the owner account.
+    // Only used to seed/restore the owner's clientDatabase if it is empty or contains only demo data.
+    const OWNER_CLIENT_LIST = [
+        "ABM","Absolute Kitchens","Advanced Cabinetry","AKC Kitchens","Braw Creative","Brian Moloney",
+        "Cabinets & Stone","Cabinets by Michael","Chooka","CKK","Clover Doors","Complete Style Joinery",
+        "Concept 2 Reality","Coronet Kitchens","Create a Kitchen","Creative Cabinetry","Cutting Edge Joinery",
+        "Driscolls Joinery","Evolution Kitchens and Joinery","Geoff Frost Builders","GM Cabinets",
+        "Grampians Joinery","Grovedale Kitchens","Gunning Concepts","Hamilton Sheetmetal","Harris Cabinets",
+        "Howe Kitchens & Joinery","Hy-Craft","Jardines Cabinets","Joinery by Jarrod","Jonassons",
+        "Kingston Kabinets","Kitchens U Build","Kyle Hendy","Leighton Park","Matthews Joinery",
+        "Ocean Grove Joinery","Onshore","R J Walter","Richardson Joinery","Schier Cabinet Makers",
+        "Snaauws Kitchens","SRT Cabinetry","Stawell Joinery","Stephensons Kitchens","T&J Kitchens",
+        "Tony Lambert Kitchens","Total Kitchen Solutions","Trendset Kitchens","Troy Turner","Ultrabuild",
+        "VG Cabinets","VJS Geelong","VJS Shepparton","Walk in Client","Westend Cabinetry"
+    ];
+
+    // Known demo client names seeded by a previous deploy — used to detect stale data
+    const DEMO_CLIENT_NAMES = new Set([
+        'residential properties','commercial kitchens & fit-out','interior design studio',
+        'hotel & hospitality group','builders & developers'
+    ]);
+
     function initializeDefaultClients() {
-        // New users start with an empty client database.
-        // Real clients are loaded from Firebase after login via loadAllDataFromFirebase().
+        // For new users: start empty. Clients are added via Admin > Clients.
+        // For the owner account: restore the full client list if the database is empty
+        // or was accidentally seeded with demo data by a previous deploy.
+        if (!window.currentUser) return;
+        if (window.currentUser.email !== OWNER_EMAIL) return;
+
+        const db = getClientDatabase();
+        const names = Object.values(db).map(c => (c.name || '').toLowerCase());
+        const isEmpty = names.length === 0;
+        const isDemoOnly = names.length > 0 && names.every(n => DEMO_CLIENT_NAMES.has(n));
+
+        if (!isEmpty && !isDemoOnly) return; // already has real data
+
+        // Seed owner's full client list
+        const restored = {};
+        OWNER_CLIENT_LIST.forEach((name, i) => {
+            const id = 'client-owner-' + String(i + 1).padStart(3, '0');
+            restored[id] = { id, name, email: '', phone: '', address: '', notes: '', createdDate: new Date().toISOString() };
+        });
+        saveClientDatabase(restored);
+        console.log('✓ Owner client list restored:', OWNER_CLIENT_LIST.length, 'clients');
+        // Refresh all client UI immediately
+        try { if (typeof populateClientDropdown === 'function') populateClientDropdown(); } catch(e) {}
+        try { if (typeof renderDB === 'function') renderDB(); } catch(e) {}
+        try { if (typeof renderClientsList === 'function') renderClientsList(); } catch(e) {}
     }
     
     function loadHeaderLogo() {
@@ -6717,7 +6761,6 @@ const firebaseConfig = {
     // DATABASE OPS
     function renderDB() {
         console.log(`📋 renderDB() called`);
-        console.log(`  profiles array:`, profiles);
         
         const cL = document.getElementById('list-clients'); 
         if (!cL) {
@@ -6725,8 +6768,28 @@ const firebaseConfig = {
             return;
         }
         cL.innerHTML = '';
-        clients.sort().forEach((c, i) => { 
-            cL.innerHTML += `<div class="db-item"><span>${c}</span></div>`; 
+
+        // Read from clientDatabase (authoritative) + jobHistory (fallback)
+        const seen = new Set();
+        const allNames = [];
+        const db = getClientDatabase();
+        Object.values(db).forEach(c => {
+            if (c.name && !seen.has(c.name.toLowerCase())) {
+                allNames.push(c.name);
+                seen.add(c.name.toLowerCase());
+            }
+        });
+        // Also catch clients from job history not yet in the database
+        const hist = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+        hist.forEach(job => {
+            if (job.client && !seen.has(job.client.toLowerCase())) {
+                allNames.push(job.client);
+                seen.add(job.client.toLowerCase());
+            }
+        });
+        allNames.sort((a,b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+        allNames.forEach(name => {
+            cL.innerHTML += `<div class="db-item"><span>${name}</span></div>`;
         });
         
         const pL = document.getElementById('list-profiles'); 
@@ -8018,8 +8081,9 @@ const firebaseConfig = {
             
 
             doc.setFontSize(32);
-            doc.setTextColor(0, 0, 0);
+            doc.setTextColor(..._pdfHeaderColor('Estimate PDF Header'));
             doc.text('ESTIMATE', x, y);
+            doc.setTextColor(0, 0, 0);
             y += 15;
             
             // Company details
@@ -8396,8 +8460,9 @@ const firebaseConfig = {
             
 
             doc.setFontSize(32);
-            doc.setTextColor(0, 0, 0);
+            doc.setTextColor(..._pdfHeaderColor('Invoice PDF Header'));
             doc.text('INVOICE', x, y);
+            doc.setTextColor(0, 0, 0);
             y += 15;
             
             // Company details
@@ -8774,7 +8839,7 @@ const firebaseConfig = {
             
 
             doc.setFontSize(32);
-            doc.setTextColor(0, 0, 0);
+            doc.setTextColor(..._pdfHeaderColor('Quote PDF Header'));
             doc.text('QUOTE', x, y);
             doc.setTextColor(0, 0, 0); // Reset to black
             y += 15;
@@ -9152,8 +9217,9 @@ const firebaseConfig = {
         // DOUBLED header size
         doc.setFontSize(32);
         doc.setFont(undefined, 'bold');
-        doc.setTextColor(0, 0, 0);
+        doc.setTextColor(..._pdfHeaderColor('Supply Docket PDF Header'));
         doc.text('SUPPLY DOCKET', x, y);
+        doc.setTextColor(0, 0, 0);
         y += 14;
         
         // ===== COMPANY DETAILS (LARGER) =====
@@ -9441,8 +9507,9 @@ const firebaseConfig = {
                 // ===== TITLE =====
                 doc.setFontSize(28);
                 doc.setFont(undefined, 'bold');
-                doc.setTextColor(0, 0, 0);
+                doc.setTextColor(..._pdfHeaderColor('Mixing Card PDF Header'));
                 doc.text('MIXING CARD', 20, y);
+                doc.setTextColor(0, 0, 0);
                 y += 12;
                 
                 // ===== PAINT INFO BOX - SIMPLE BLACK TEXT ON WHITE TO SAVE INK =====
@@ -13648,15 +13715,14 @@ if ('serviceWorker' in navigator && _swAllowed) {
         'SE Mode Text': '#d4af37',
         '1LR Edge Active': '#34c759',
         '2SR Edge Active': '#34c759',
-        'Estimate Form Header': '#2196f3',
-        'Quote Form Header': '#ff9500',
-        'Invoice Form Header': '#34c759',
-        'Mixing Card Header': '#2196f3',
-        'Supply Docket Header': '#2196f3',
-        'Cover Sheet Header': '#ff9800',
-        'A3 Schedule Header': '#d4af37',
-        'Shop Label Header': '#212121',
-        'Batch Print Button': '#9c27b0'
+        'Estimate PDF Header': '#2196f3',
+        'Quote PDF Header': '#ff9500',
+        'Invoice PDF Header': '#34c759',
+        'Mixing Card PDF Header': '#9c27b0',
+        'Supply Docket PDF Header': '#2196f3',
+        'Cover Sheet PDF Header': '#ff9800',
+        'A3 Schedule PDF Header': '#d4af37',
+        'Shop Label PDF Header': '#212121',
     };
     
     const colorDescriptions = {
@@ -13691,20 +13757,27 @@ if ('serviceWorker' in navigator && _swAllowed) {
         'SE Mode Text': '🟨 SE (Single Edge) mode text color when SELECTED',
         '1LR Edge Active': '🟢 1LR (One Left/Right) edge checkbox active color when CHECKED',
         '2SR Edge Active': '🟢 2SR (Two Side Right) edge checkbox active color when CHECKED',
-        'Estimate Form Header': '📋 Estimate form header & title color',
-        'Quote Form Header': '💬 Quote form header & title color',
-        'Invoice Form Header': '💰 Invoice form header & title color',
-        'Mixing Card Header': '🎨 Mixing card title & header color',
-        'Supply Docket Header': '📦 Supply docket header color',
-        'Cover Sheet Header': '📄 Cover sheet title & header color',
-        'A3 Schedule Header': '📅 A3 schedule title color',
-        'Shop Label Header': '🏷️ Shop label title color',
-        'Batch Print Button': '📦 Batch Print form card button color in Forms tab'
+        'Estimate PDF Header': '📋 Estimate PDF — header bar & title colour',
+        'Quote PDF Header': '💬 Quote PDF — header bar & title colour',
+        'Invoice PDF Header': '💰 Invoice PDF — header bar & title colour',
+        'Mixing Card PDF Header': '🧪 Mixing Card PDF — header bar colour',
+        'Supply Docket PDF Header': '📦 Supply Docket PDF — header bar colour',
+        'Cover Sheet PDF Header': '📄 Cover Sheet PDF — header bar colour',
+        'A3 Schedule PDF Header': '📅 A3 Schedule PDF — header bar colour',
+        'Shop Label PDF Header': '🏷️ Shop Label PDF — header bar colour',
     };
     
     // Initialize appColors globally - must be accessible from all functions
     window.appColors = JSON.parse(localStorage.getItem('appColors')) || {};
     
+    // Remove any stale form-header keys that are now managed by the Form Button Colours section
+    const _staleKeys = [
+        'Estimate Form Header','Quote Form Header','Invoice Form Header','Mixing Card Header',
+        'Supply Docket Header','Cover Sheet Header','A3 Schedule Header','Shop Label Header',
+        'Batch Print Button','Paint Order Button','Warning Orange'
+    ];
+    _staleKeys.forEach(k => { delete window.appColors[k]; });
+
     // Merge in any missing default colors (handles updates when new colors are added)
     Object.keys(defaultColors).forEach(key => {
         if (!window.appColors.hasOwnProperty(key)) {
@@ -13842,80 +13915,31 @@ if ('serviceWorker' in navigator && _swAllowed) {
     }
     
     function applyFormButtonColors() {
-        // Estimate
-        const estimateBtn = document.getElementById('form-estimate');
-        if (estimateBtn) {
-            const estimateColor = window.appColors['Estimate Form Header'] || '#2196f3';
-            estimateBtn.style.background = estimateColor;
-            estimateBtn.style.borderColor = estimateColor;
-        }
-        
-        // Supply Docket
-        const supplyBtn = document.getElementById('form-supply');
-        if (supplyBtn) {
-            const supplyColor = window.appColors['Supply Docket Header'] || '#2196f3';
-            supplyBtn.style.background = supplyColor;
-            supplyBtn.style.borderColor = supplyColor;
-        }
-        
-        // Mixing Card
-        const mixingBtn = document.getElementById('form-mixing');
-        if (mixingBtn) {
-            const mixingColor = window.appColors['Mixing Card Header'] || '#2196f3';
-            mixingBtn.style.background = mixingColor;
-            mixingBtn.style.borderColor = mixingColor;
-        }
-        
-        // Invoice
-        const invoiceBtn = document.getElementById('form-invoice');
-        if (invoiceBtn) {
-            const invoiceColor = window.appColors['Invoice Form Header'] || '#34c759';
-            invoiceBtn.style.background = invoiceColor;
-            invoiceBtn.style.borderColor = invoiceColor;
-        }
-        
-        // Quote Form
-        const quoteBtn = document.getElementById('form-quote');
-        if (quoteBtn) {
-            const quoteColor = window.appColors['Quote Form Header'] || '#ff9500';
-            quoteBtn.style.background = quoteColor;
-            quoteBtn.style.borderColor = quoteColor;
-        }
-        
-        // Cover Sheet
-        const coverBtn = document.getElementById('form-cover');
-        if (coverBtn) {
-            const coverColor = window.appColors['Cover Sheet Header'] || '#ff9800';
-            coverBtn.style.background = coverColor;
-            coverBtn.style.borderColor = coverColor;
-        }
-        
-        // Shop Label
-        const labelBtn = document.getElementById('form-label');
-        if (labelBtn) {
-            const labelColor = window.appColors['Shop Label Header'] || '#212121';
-            labelBtn.style.background = labelColor;
-            labelBtn.style.borderColor = labelColor;
-        }
-        
-        // A3 Schedule
-        const a3Btn = document.getElementById('form-a3schedule');
-        if (a3Btn) {
-            const a3Color = window.appColors['A3 Schedule Header'] || '#4caf50';
-            a3Btn.style.background = a3Color;
-            a3Btn.style.borderColor = a3Color;
-        }
-        
-        // Batch Print
-        const batchBtn = document.getElementById('form-batch');
-        if (batchBtn) {
-            const batchColor = window.appColors['Batch Print Button'] || '#9c27b0';
-            batchBtn.style.background = batchColor;
-            batchBtn.style.borderColor = batchColor;
-        }
+        // Apply saved form button colours (from Admin > Colours > Form Button Colours)
+        // These are stored per-button in localStorage as form-{id}_color
+        const map = [
+            { id: 'form-paint-order',  def: '#e8f5e9' },
+            { id: 'form-estimate',     def: '#ede7f6' },
+            { id: 'form-quote',        def: '#fff3cd' },
+            { id: 'form-mixing',       def: '#f3e5f5' },
+            { id: 'form-supply',       def: '#e3f2fd' },
+            { id: 'form-label',        def: '#e0f2f1' },
+            { id: 'form-invoice',      def: '#f0f8ff' },
+            { id: 'form-cover',        def: '#fce4ec' },
+            { id: 'form-a3schedule',   def: '#fff8e1' },
+            { id: 'form-batch',        def: '#f3e5f5' },
+        ];
+        map.forEach(({ id, def }) => {
+            const btn = document.getElementById(id);
+            if (!btn) return;
+            const saved = localStorage.getItem(id + '_color');
+            const color = (saved && /^#[0-9A-Fa-f]{6}$/.test(saved)) ? saved : def;
+            btn.style.background = color;
+            btn.style.borderColor = color;
+        });
     }
-    
-    function applyAppColors() {
+
+        function applyAppColors() {
         const root = document.documentElement;
         
         // Apply all colors from appColors to corresponding CSS variables
@@ -13942,6 +13966,17 @@ if ('serviceWorker' in navigator && _swAllowed) {
     
     // Apply colors on page load
     applyAppColors();
+
+    // Helper: convert #rrggbb to [r,g,b] for jsPDF setTextColor/setFillColor
+    function _hexRgb(hex) {
+        const h = (hex || '#000000').replace('#','');
+        return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
+    }
+    // Get PDF header colour for a given form type from appColors
+    function _pdfHeaderColor(formKey) {
+        const c = (window.appColors && window.appColors[formKey]) || '#000000';
+        return _hexRgb(c);
+    }
     // Initialize tinter + base code rows on page load
     setTimeout(() => {
         if (document.getElementById('tintersRows')) clearTinterRows();
