@@ -2655,6 +2655,23 @@ const firebaseConfig = {
             // Firebase is ready, set up auth listener
             window.onAuthStateChanged((user) => {
               if (user) {
+                // ── User-change detection: clear stale data if a DIFFERENT user logs in ──
+                const lastUid = localStorage.getItem('pw_last_uid');
+                if (lastUid && lastUid !== user.uid) {
+                    // Different user — wipe user-specific localStorage keys so they
+                    // don't see the previous user's clients, jobs, settings, etc.
+                    const userScopedKeys = [
+                        'clientDatabase','jobHistory','paintFormulas','masterMatrix',
+                        'doorProfiles','companySettings','companyLogo','headerLogoBase64',
+                        'headerLogo','adminAlerts','appColors','paintBrands',
+                        'additionalCharges','defaultTimeline','adminSettings',
+                        'pw_onboarded','currentJob'
+                    ];
+                    userScopedKeys.forEach(k => localStorage.removeItem(k));
+                    console.log('🔄 Different user detected — cleared stale localStorage for:', user.email);
+                }
+                localStorage.setItem('pw_last_uid', user.uid);
+                // ── End user-change detection ──────────────────────────────────────────
                 window.currentUser = user;
                 document.getElementById('loginScreen').classList.add('hidden');
                 document.getElementById('userInfo').innerHTML = `
@@ -17081,7 +17098,15 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                     if (cdData.clients && typeof cdData.clients === 'object' && Object.keys(cdData.clients).length > 0) {
                         localStorage.setItem('clientDatabase', JSON.stringify(cdData.clients));
                         console.log('☁️ Client database loaded from Firestore:', Object.keys(cdData.clients).length, 'clients');
+                    } else {
+                        // Firestore doc exists but is empty — ensure localStorage is also empty
+                        localStorage.removeItem('clientDatabase');
+                        console.log('☁️ Client database empty in Firestore — cleared localStorage');
                     }
+                } else {
+                    // No Firestore client data for this user — clear any stale data from a previous user
+                    localStorage.removeItem('clientDatabase');
+                    console.log('☁️ No client database in Firestore for this user — localStorage cleared');
                 }
                 // Always run owner merge AFTER Firebase data is in localStorage
                 try { if (typeof initializeDefaultClients === 'function') initializeDefaultClients(); } catch(e) {}
