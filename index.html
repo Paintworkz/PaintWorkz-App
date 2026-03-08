@@ -21,7 +21,7 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.8.22 | Updated: 2026-03-08                       ║
+║  Version: v1.8.22 | Updated: 2026-03-06                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
@@ -197,8 +197,10 @@
             overflow-x: auto;
             border-bottom: 1px solid #333;
             height: var(--nav-h);
+            touch-action: pan-x;
+            -webkit-overflow-scrolling: touch;
         }
-        .nav-btn { flex:1; min-width:70px; padding:0; height:var(--nav-h); line-height:var(--nav-h); color:#888; text-align:center; font-weight:900; font-size:10px; text-transform:uppercase; border:none; background:0 0; cursor:pointer; transition:all 0.2s; pointer-events:auto; z-index:100; position:relative; }
+        .nav-btn { flex:1; min-width:70px; padding:0; height:var(--nav-h); line-height:var(--nav-h); color:#888; text-align:center; font-weight:900; font-size:10px; text-transform:uppercase; border:none; background:0 0; cursor:pointer; transition:all 0.2s; pointer-events:auto; z-index:100; position:relative; touch-action:manipulation; -webkit-tap-highlight-color:transparent; user-select:none; -webkit-user-select:none; }
         .nav-btn.active { color:#fff; border-bottom:4px solid var(--gs); background:#111; }
         
         /* ===== MOBILE RESPONSIVE DESIGN ===== */
@@ -6740,17 +6742,18 @@ const firebaseConfig = {
         document.getElementById(t).classList.add('active');
         document.getElementById('btn-' + t).classList.add('active');
 
-        // FIX: iOS Safari ignores display:none on fixed children — they still intercept touches.
-        // Explicitly show/hide fixed sub-navs with visibility + pointer-events on every tab switch.
-        const dbNav = document.getElementById('db-sub-nav');
+        // iOS SAFARI FIX: position:fixed elements inside display:none parents still
+        // intercept touch events on iOS. Explicitly control visibility + pointer-events
+        // on ALL fixed sub-navs every time any tab is switched.
+        const dbNav    = document.getElementById('db-sub-nav');
         const adminNav = document.getElementById('admin-sub-nav');
         if (dbNav) {
-            dbNav.style.visibility = (t === 'db') ? 'visible' : 'hidden';
-            dbNav.style.pointerEvents = (t === 'db') ? 'auto' : 'none';
+            dbNav.style.visibility    = (t === 'db')    ? 'visible' : 'hidden';
+            dbNav.style.pointerEvents = (t === 'db')    ? 'auto'    : 'none';
         }
         if (adminNav) {
-            adminNav.style.visibility = (t === 'admin') ? 'visible' : 'hidden';
-            adminNav.style.pointerEvents = (t === 'admin') ? 'auto' : 'none';
+            adminNav.style.visibility    = (t === 'admin') ? 'visible' : 'hidden';
+            adminNav.style.pointerEvents = (t === 'admin') ? 'auto'    : 'none';
         }
         
         // Restore container width when leaving admin pricing tab
@@ -17406,13 +17409,18 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
     // Attach tab navigation event listeners (run immediately and on DOMContentLoaded for safety)
     function attachTabListeners() {
         document.querySelectorAll('[data-tab]').forEach(btn => {
+            // click handler (desktop + fallback)
             btn.addEventListener('click', function(e) {
                 e.preventDefault();
                 const tabName = this.getAttribute('data-tab');
-                if (typeof tab === 'function') {
-                    tab(tabName);
-                }
+                if (typeof tab === 'function') tab(tabName);
             });
+            // touchstart handler — fires instantly on iOS, no 300ms delay
+            btn.addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                const tabName = this.getAttribute('data-tab');
+                if (typeof tab === 'function') tab(tabName);
+            }, { passive: false });
         });
     }
     
