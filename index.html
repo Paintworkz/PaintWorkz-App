@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.8.23 | Updated: 2026-03-09                       ║
+║  Version: v1.8.24 | Updated: 2026-03-09                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.8.23';
+    const CURRENT_VERSION = 'v1.8.24';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -947,28 +947,32 @@ const firebaseConfig = {
                     return;
                 }
 
-                // ── User-change detection (runs BEFORE initializeApp) ──────────────
-                // If a different user logs in, wipe their stale localStorage so they
-                // don't see the previous user's clients, formulas, settings, etc.
+                // ── Session isolation: clear user-scoped data on every login ──────
+                // We always clear user-specific localStorage and in-memory variables
+                // before Firestore loads. This prevents any user from ever seeing
+                // another user's clients, formulas, door profiles, etc.
+                // Firestore (user-scoped by UID) repopulates the correct data.
                 const lastUid = localStorage.getItem('pw_last_uid');
-                if (lastUid && lastUid !== user.uid) {
-                    const userScopedKeys = [
-                        'clientDatabase','jobHistory','paintFormulas','masterMatrix',
-                        'doorProfiles','companySettings','companyLogo','headerLogoBase64',
-                        'headerLogo','adminAlerts','appColors','paintBrands',
-                        'additionalCharges','defaultTimeline','adminSettings',
-                        'pw_onboarded','currentJob'
-                    ];
-                    userScopedKeys.forEach(k => localStorage.removeItem(k));
-                    // Also reset the in-memory paintDatabase so the new user
-                    // doesn't inherit the previous user's formulas
-                    if (typeof paintDatabase !== 'undefined') {
-                        try { paintDatabase = []; } catch(e) {}
-                    }
-                    console.log('🔄 User changed — cleared stale data for:', user.email);
+                const userScopedKeys = [
+                    'clientDatabase','jobHistory','paintFormulas','masterMatrix',
+                    'doorProfiles','companySettings','companyLogo','headerLogoBase64',
+                    'headerLogo','adminAlerts','appColors','paintBrands',
+                    'additionalCharges','defaultTimeline','adminSettings',
+                    'pw_onboarded','currentJob'
+                ];
+                userScopedKeys.forEach(k => localStorage.removeItem(k));
+                // Reset in-memory variables immediately so dropdowns are empty
+                // while Firestore loads the correct data for this user
+                try { if (typeof paintDatabase !== 'undefined') paintDatabase = []; } catch(e) {}
+                try { if (typeof profiles !== 'undefined') profiles = []; } catch(e) {}
+                try { if (typeof items !== 'undefined') items = []; } catch(e) {}
+                if (lastUid !== user.uid) {
+                    console.log('🔄 User changed — cleared stale data, loading for:', user.email);
+                } else {
+                    console.log('🔒 Session isolated — cleared localStorage, reloading from Firestore for:', user.email);
                 }
                 localStorage.setItem('pw_last_uid', user.uid);
-                // ── End user-change detection ──────────────────────────────────────
+                // ── End session isolation ──────────────────────────────────────────
 
                 // Apply pro locks now that we know who the user is
                 setTimeout(() => { if (typeof window.applyProLocks === 'function') window.applyProLocks(); }, 300);
@@ -1799,7 +1803,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.8.23</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.8.24</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -2443,7 +2447,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.8.23</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.8.24</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
                     </p>
                 </div>
                         </div><!-- END admin-tab-general-content -->
@@ -2616,7 +2620,7 @@ const firebaseConfig = {
         <div id="footerVersionDisplay" style="display:none; font-size:10px; color:#d4af37; font-weight:900;">⚖️ PaintWorkz Pro © 2026</div>
     </div>
     <div class="footer-item"><div class="footer-label">PARTS</div><div class="footer-val" id="tQ">0</div></div>
-    <div class="icon-btn" onclick="handleLogout()" title="Logout" style="color:#ff3b30; font-size:24px; cursor:pointer; margin-right:15px;">🚪</div>
+    <div class="icon-btn" onclick="logout()" title="Logout" style="color:#ff3b30; font-size:24px; cursor:pointer; margin-right:15px;">🚪</div>
 </div>
 
 <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
@@ -2717,6 +2721,14 @@ const firebaseConfig = {
             // Firebase is ready, set up auth listener
             window.onAuthStateChanged((user) => {
               if (user) {
+                // ── Security guard: same as module-level handler ──
+                // Must have explicitly logged in this session — no silent restore
+                const explicitLogin = sessionStorage.getItem('pw_explicit_login');
+                if (!explicitLogin) {
+                    // Cached Firebase session but no explicit login — ignore here,
+                    // the module-level handler will sign them out
+                    return;
+                }
                 window.currentUser = user;
                 document.getElementById('loginScreen').classList.add('hidden');
                 document.getElementById('userInfo').innerHTML = `
@@ -2838,86 +2850,28 @@ const firebaseConfig = {
         const modal = document.getElementById('forgotPasswordModal');
         if (modal) modal.style.display = 'none';
     }
-    // ── Password Reset Completion ────────────────────────────────────────────
-    // Called on page load to detect Firebase's ?mode=resetPassword&oobCode=xxx URL.
-    // If present, hides the login screen and shows the new-password form instead.
+    // Password reset is handled by Firebase's own hosted page.
+    // When the user clicks the reset link in their email, Firebase resets their
+    // password, then redirects here. We don't try to handle the oobCode ourselves
+    // (it's already been consumed). Just ensure the login screen shows normally.
     function checkPasswordResetMode() {
         const params = new URLSearchParams(window.location.search);
         const mode = params.get('mode');
-        const oobCode = params.get('oobCode');
-        if (mode !== 'resetPassword' || !oobCode) return; // Normal login — do nothing
-
-        // Hide login screen, show reset screen
-        const loginScreen = document.getElementById('loginScreen');
-        const resetScreen = document.getElementById('resetPasswordScreen');
-        if (loginScreen) loginScreen.style.display = 'none';
-        if (resetScreen) resetScreen.style.display = 'flex';
-
-        // Verify the code is still valid and get the associated email
-        function attemptVerify() {
-            if (typeof window.verifyPasswordResetCode !== 'function') {
-                setTimeout(attemptVerify, 200); // Firebase not ready yet — wait
-                return;
-            }
-            window.verifyPasswordResetCode(oobCode)
-                .then(email => {
-                    const el = document.getElementById('resetScreenEmail');
-                    if (el) el.textContent = 'Resetting password for: ' + email;
-                    window._resetOobCode = oobCode; // Store for submitNewPassword
-                })
-                .catch(err => {
-                    const subtitle = document.getElementById('resetScreenSubtitle');
-                    const form = document.getElementById('resetScreenForm');
-                    const msg = document.getElementById('resetScreenMsg');
-                    if (subtitle) subtitle.textContent = 'Link expired or already used';
-                    if (form) form.innerHTML = `
-                        <p style="text-align:center; color:#999; font-size:13px; margin:0 0 20px;">
-                            This password reset link has expired or already been used.<br><br>
-                            Please request a new one from the login screen.
-                        </p>
-                        <button onclick="goToLogin()" style="width:100%; background:#d4af37; border:none; padding:15px; border-radius:10px; font-weight:900; font-size:16px; cursor:pointer;">
-                            BACK TO LOGIN
-                        </button>`;
-                });
+        if (!mode) return;
+        // Clean the URL so oobCode params don't linger
+        window.history.replaceState({}, document.title, window.location.pathname);
+        // If arriving after a successful reset, show a friendly message on login screen
+        if (mode === 'resetPassword') {
+            setTimeout(() => {
+                const errorDiv = document.getElementById('loginError');
+                if (errorDiv) {
+                    errorDiv.textContent = '✅ Password reset! Log in with your new password.';
+                    errorDiv.style.color = 'green';
+                    errorDiv.style.display = 'block';
+                }
+            }, 500);
         }
-        attemptVerify();
     }
-
-    function submitNewPassword() {
-        const oobCode = window._resetOobCode;
-        const newPw = (document.getElementById('newPasswordInput')?.value || '');
-        const confirmPw = (document.getElementById('confirmPasswordInput')?.value || '');
-        const msg = document.getElementById('resetScreenMsg');
-
-        if (!oobCode) { if(msg) msg.innerHTML = '<span style="color:red;">Reset code missing. Please request a new link.</span>'; return; }
-        if (newPw.length < 6) { if(msg) msg.innerHTML = '<span style="color:red;">Password must be at least 6 characters.</span>'; return; }
-        if (newPw !== confirmPw) { if(msg) msg.innerHTML = '<span style="color:red;">Passwords don\'t match.</span>'; return; }
-
-        const btn = document.getElementById('resetSubmitBtn');
-        if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
-        if (msg) msg.innerHTML = '';
-
-        window.confirmPasswordReset(oobCode, newPw)
-            .then(() => {
-                document.getElementById('resetScreenForm').style.display = 'none';
-                document.getElementById('resetScreenSuccess').style.display = 'block';
-                // Clean the oobCode from the URL so it can't be reused
-                window.history.replaceState({}, document.title, window.location.pathname);
-                window._resetOobCode = null;
-            })
-            .catch(err => {
-                if (btn) { btn.disabled = false; btn.textContent = 'SET NEW PASSWORD'; }
-                if (msg) msg.innerHTML = '<span style="color:red;">❌ ' + err.message + '</span>';
-            });
-    }
-
-    function goToLogin() {
-        const resetScreen = document.getElementById('resetPasswordScreen');
-        const loginScreen = document.getElementById('loginScreen');
-        if (resetScreen) resetScreen.style.display = 'none';
-        if (loginScreen) loginScreen.style.display = 'flex';
-    }
-    // ── End Password Reset Completion ────────────────────────────────────────
 
     function sendResetEmail() {
         const email = (document.getElementById('resetEmail')?.value || '').trim();
@@ -4876,12 +4830,9 @@ const firebaseConfig = {
         const existingProfiles = JSON.parse(localStorage.getItem('doorProfiles') || '[]');
         if (!Array.isArray(existingProfiles) || existingProfiles.length === 0) {
             const demoProfiles = [
-                { name:'Shaker',        profile:'Shaker',        pricePerSqm:125, minCharge:10 },
-                { name:'Flat Panel',    profile:'Flat',          pricePerSqm:110, minCharge:8  },
-                { name:'2 Pac Shaker',  profile:'Shaker',        pricePerSqm:145, minCharge:12 },
-                { name:'Routed Panel',  profile:'Routed',        pricePerSqm:135, minCharge:10 },
-                { name:'Slab Door',     profile:'Slab',          pricePerSqm:100, minCharge:8  }
+                'Plain (101)', 'Shaker (401)', 'Shaker 45 (402)', 'Bevelled Edge (104)', 'Custom'
             ];
+            profiles = demoProfiles; // update in-memory variable too
             localStorage.setItem('doorProfiles', JSON.stringify(demoProfiles));
             try { if (typeof refreshLists === 'function') refreshLists(); } catch(e) {}
             console.log('🌱 Demo door profiles seeded for new user');
@@ -6762,7 +6713,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.8.23'; // ← bump this on every release
+        const CURRENT_VERSION = 'v1.8.24'; // ← bump this on every release
         const CURRENT_DATE = '2026-03-09';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
