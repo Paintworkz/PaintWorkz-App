@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.8.21 | Updated: 2026-03-06                       ║
+║  Version: v1.8.22 | Updated: 2026-03-08                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.8.21';
+    const CURRENT_VERSION = 'v1.8.22';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -287,7 +287,7 @@
 
         #prof-select { height: 50px !important; margin: 0; }
 
-        .p-card { flex:1; background:#fff; border:2px solid #ddd; border-radius:8px; padding:8px 2px; text-align:center; font-weight:900; font-size:9px; color:#444; display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer; transition:all 0.2s; touch-action:manipulation; -webkit-tap-highlight-color:transparent; font-family:inherit; -webkit-appearance:none; appearance:none; outline:none; }
+        .p-card { flex:1; background:#fff; border:2px solid #ddd; border-radius:8px; padding:8px 2px; text-align:center; font-weight:900; font-size:9px; color:#444; display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer; transition:all 0.2s; touch-action:manipulation; -webkit-tap-highlight-color:transparent; font-family:inherit; -webkit-appearance:none; appearance:none; outline:none; user-select:none; -webkit-user-select:none; }
         .p-card.active { border-color:var(--gs); background:#fff9e6; color:#000; }
         .p-card svg { width:22px; height:22px; stroke: currentColor; fill:none; stroke-width:2; }
         #pP.active { background:var(--panel-clr); color:#fff; border-color:var(--panel-clr); }
@@ -936,6 +936,14 @@ const firebaseConfig = {
         onAuthStateChanged(auth, user => {
             window.currentUser = user;
             if (user) {
+                // SECURITY GUARD: only open app if user explicitly logged in this session
+                // Prevents auto-open on shared devices or cached sessions
+                const explicitLogin = sessionStorage.getItem('pw_explicit_login');
+                if (!explicitLogin) {
+                    // Firebase has a cached session but no explicit login this tab - sign out
+                    window.signOut(auth).catch(() => {});
+                    return;
+                }
                 // Apply pro locks now that we know who the user is
                 setTimeout(() => { if (typeof window.applyProLocks === 'function') window.applyProLocks(); }, 300);
                 const loginScreen = document.getElementById('loginScreen');
@@ -1376,16 +1384,16 @@ const firebaseConfig = {
             
             <label>Part Type</label>
             <div class="bubble-row">
-                <button type="button" id="pP" class="p-card active" onclick="setP('Panel')">
+                <button type="button" id="pP" class="p-card active" ontouchstart="event.preventDefault();setP('Panel')" onclick="setP('Panel')">
                     <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"></rect></svg>PANEL
                 </button>
-                <button type="button" id="pD" class="p-card" onclick="setP('Door')">
+                <button type="button" id="pD" class="p-card" ontouchstart="event.preventDefault();setP('Door')" onclick="setP('Door')">
                     <svg viewBox="0 0 24 24"><path d="M5 3h14v18H5V3zm10 9v1"></path></svg>DOOR
                 </button>
-                <button type="button" id="pDr" class="p-card" onclick="setP('Drawer')">
+                <button type="button" id="pDr" class="p-card" ontouchstart="event.preventDefault();setP('Drawer')" onclick="setP('Drawer')">
                     <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="6" rx="1"></rect><rect x="3" y="13" width="18" height="6" rx="1"></rect></svg>DRAWER
                 </button>
-                <button type="button" id="pC" class="p-card" onclick="setP('Custom')">
+                <button type="button" id="pC" class="p-card" ontouchstart="event.preventDefault();setP('Custom')" onclick="setP('Custom')">
                     <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>CUSTOM
                 </button>
             </div>
@@ -1394,8 +1402,8 @@ const firebaseConfig = {
             <input type="text" id="desc" placeholder="e.g. Pantry Door Left" style="text-transform: uppercase;">
 
             <div class="fm-row">
-                <div id="fm-flat" class="fm-opt active" onclick="setFM('Flat')">FLAT</div>
-                <div id="fm-mould" class="fm-opt" onclick="setFM('Moulded')">MOULDED</div>
+                <div id="fm-flat" class="fm-opt active" ontouchstart="event.preventDefault();setFM('Flat')" onclick="setFM('Flat')">FLAT</div>
+                <div id="fm-mould" class="fm-opt" ontouchstart="event.preventDefault();setFM('Moulded')" onclick="setFM('Moulded')">MOULDED</div>
             </div>
 
             <div class="bubble-row">
@@ -1499,7 +1507,7 @@ const firebaseConfig = {
     </div>
 
     <div id="db" class="view-section">
-        <div class="sub-nav" style="position:fixed; top:calc(var(--header-h) + var(--safe-top) + var(--nav-h)); left:0; right:0; background:#fff; z-index:99; border-bottom:2px solid var(--gs); padding:10px 15px; display:flex; gap:10px; border-radius:0; margin-bottom:0;">
+        <div id="db-sub-nav" class="sub-nav" style="position:fixed; top:calc(var(--header-h) + var(--safe-top) + var(--nav-h)); left:0; right:0; background:#fff; z-index:99; border-bottom:2px solid var(--gs); padding:10px 15px; display:flex; gap:10px; border-radius:0; margin-bottom:0; visibility:hidden; pointer-events:none;">
             <button class="sub-btn active" id="sub-btn-clients" onclick="subTab('clients')">CLIENTS</button>
             <button class="sub-btn" id="sub-btn-profiles" onclick="subTab('profiles')">DOOR PROFILES</button>
             <button class="sub-btn" id="sub-btn-paint" onclick="subTab('paint')">PAINT</button>
@@ -1709,7 +1717,7 @@ const firebaseConfig = {
     <div id="admin" class="view-section" style="flex-direction:column; height:calc(100vh - var(--header-h) - var(--safe-top)); padding-top:0 !important; padding-bottom:0 !important; box-sizing:border-box;">
         
         <!-- Admin Sub-Tabs - Fixed below main tabs -->
-        <div class="sub-nav" style="margin-bottom:0px; position:fixed; top:calc(var(--header-h) + var(--safe-top) + var(--nav-h)); left:0; right:0; background:#fff; z-index:200; border-bottom:2px solid var(--gs); padding:8px 15px; display:flex; gap:10px; border-radius:0;">
+        <div id="admin-sub-nav" class="sub-nav" style="margin-bottom:0px; position:fixed; top:calc(var(--header-h) + var(--safe-top) + var(--nav-h)); left:0; right:0; background:#fff; z-index:200; border-bottom:2px solid var(--gs); padding:8px 15px; display:flex; gap:10px; border-radius:0; visibility:hidden; pointer-events:none;">
             <button class="sub-btn active" onclick="switchAdminTab('general')" id="admin-tab-general">General Settings</button>
             <button class="sub-btn" onclick="switchAdminTab('colours')" id="admin-tab-colours">Colours</button>
             <button class="sub-btn" onclick="switchAdminTab('clients')" id="admin-tab-clients">Clients</button>
@@ -1729,7 +1737,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.8.21</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.8.22</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -2373,7 +2381,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.8.21</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-06</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.8.22</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-06</span>
                     </p>
                 </div>
                         </div><!-- END admin-tab-general-content -->
@@ -2786,6 +2794,7 @@ const firebaseConfig = {
       } else {
         window.signInWithEmailAndPassword(email, password)
           .then(result => {
+            sessionStorage.setItem('pw_explicit_login', '1');
             errorDiv.innerHTML = '✅ Logged in successfully!';
             document.getElementById('loginEmail').value = '';
             document.getElementById('loginPassword').value = '';
@@ -6576,7 +6585,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.8.21'; // ← bump this on every release
+        const CURRENT_VERSION = 'v1.8.22'; // ← bump this on every release
         const CURRENT_DATE = '2026-03-06';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -6730,6 +6739,19 @@ const firebaseConfig = {
         document.querySelectorAll('.view-section, .nav-btn').forEach(x => x.classList.remove('active'));
         document.getElementById(t).classList.add('active');
         document.getElementById('btn-' + t).classList.add('active');
+
+        // FIX: iOS Safari ignores display:none on fixed children — they still intercept touches.
+        // Explicitly show/hide fixed sub-navs with visibility + pointer-events on every tab switch.
+        const dbNav = document.getElementById('db-sub-nav');
+        const adminNav = document.getElementById('admin-sub-nav');
+        if (dbNav) {
+            dbNav.style.visibility = (t === 'db') ? 'visible' : 'hidden';
+            dbNav.style.pointerEvents = (t === 'db') ? 'auto' : 'none';
+        }
+        if (adminNav) {
+            adminNav.style.visibility = (t === 'admin') ? 'visible' : 'hidden';
+            adminNav.style.pointerEvents = (t === 'admin') ? 'auto' : 'none';
+        }
         
         // Restore container width when leaving admin pricing tab
         if (t !== 'admin') {
@@ -16841,6 +16863,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             document.getElementById('loginEmail').value = '';
             document.getElementById('loginPassword').value = '';
             // Mark this as an explicit login so onAuthStateChanged allows it
+            sessionStorage.setItem('pw_explicit_login', '1');
             // Exit staff mode if active
             window.staffMode = false;
             sessionStorage.removeItem('staffMode');
