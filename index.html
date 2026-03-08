@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.8.24 | Updated: 2026-03-09                       ║
+║  Version: v1.8.25 | Updated: 2026-03-09                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.8.24';
+    const CURRENT_VERSION = 'v1.8.25';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -924,7 +924,10 @@ const firebaseConfig = {
         window.signInWithEmailAndPassword = (email, password) => signInWithEmailAndPassword(auth, email, password);
         window.signOut = (authInstance) => signOut(authInstance || auth);
         window.signOut = () => signOut(auth);
-        window.sendPasswordResetEmail = (email) => sendPasswordResetEmail(auth, email);
+        window.sendPasswordResetEmail = (email) => sendPasswordResetEmail(auth, email, {
+            url: 'https://paintworkz.github.io/PaintWorkz-App/',
+            handleCodeInApp: true
+        });
         window.confirmPasswordReset = (oobCode, newPassword) => confirmPasswordReset(auth, oobCode, newPassword);
         window.verifyPasswordResetCode = (oobCode) => verifyPasswordResetCode(auth, oobCode);
         window.reauthenticateWithCredential = reauthenticateWithCredential;
@@ -1803,7 +1806,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.8.24</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.8.25</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -2447,7 +2450,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.8.24</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.8.25</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
                     </p>
                 </div>
                         </div><!-- END admin-tab-general-content -->
@@ -2850,28 +2853,81 @@ const firebaseConfig = {
         const modal = document.getElementById('forgotPasswordModal');
         if (modal) modal.style.display = 'none';
     }
-    // Password reset is handled by Firebase's own hosted page.
-    // When the user clicks the reset link in their email, Firebase resets their
-    // password, then redirects here. We don't try to handle the oobCode ourselves
-    // (it's already been consumed). Just ensure the login screen shows normally.
+    // ── Password Reset Completion ─────────────────────────────────────────────
+    // Firebase sends the user to paintworkz.github.io/PaintWorkz-App/?mode=resetPassword&oobCode=xxx
+    // We detect that on load, skip the login screen, and show a new-password form.
     function checkPasswordResetMode() {
         const params = new URLSearchParams(window.location.search);
         const mode = params.get('mode');
-        if (!mode) return;
-        // Clean the URL so oobCode params don't linger
-        window.history.replaceState({}, document.title, window.location.pathname);
-        // If arriving after a successful reset, show a friendly message on login screen
-        if (mode === 'resetPassword') {
-            setTimeout(() => {
-                const errorDiv = document.getElementById('loginError');
-                if (errorDiv) {
-                    errorDiv.textContent = '✅ Password reset! Log in with your new password.';
-                    errorDiv.style.color = 'green';
-                    errorDiv.style.display = 'block';
-                }
-            }, 500);
+        const oobCode = params.get('oobCode');
+        if (mode !== 'resetPassword' || !oobCode) return;
+
+        // Hide login, show reset screen
+        const loginScreen = document.getElementById('loginScreen');
+        const resetScreen = document.getElementById('resetPasswordScreen');
+        if (loginScreen) loginScreen.style.display = 'none';
+        if (resetScreen) resetScreen.style.display = 'flex';
+
+        // Verify code is still valid and get the associated email
+        function attemptVerify() {
+            if (typeof window.verifyPasswordResetCode !== 'function') {
+                setTimeout(attemptVerify, 200);
+                return;
+            }
+            window.verifyPasswordResetCode(oobCode)
+                .then(email => {
+                    const el = document.getElementById('resetScreenEmail');
+                    if (el) el.textContent = 'Resetting password for: ' + email;
+                    window._resetOobCode = oobCode;
+                })
+                .catch(() => {
+                    const form = document.getElementById('resetScreenForm');
+                    const subtitle = document.getElementById('resetScreenSubtitle');
+                    if (subtitle) subtitle.textContent = 'Link expired or already used';
+                    if (form) form.innerHTML = `
+                        <p style="text-align:center;color:#999;font-size:13px;margin:0 0 20px;">
+                            This reset link has expired or already been used.<br><br>
+                            Please request a new one from the login screen.
+                        </p>
+                        <button onclick="goToLogin()" style="width:100%;background:#d4af37;border:none;padding:15px;border-radius:10px;font-weight:900;font-size:16px;cursor:pointer;">
+                            BACK TO LOGIN
+                        </button>`;
+                });
         }
+        attemptVerify();
     }
+
+    function submitNewPassword() {
+        const oobCode = window._resetOobCode;
+        const newPw   = (document.getElementById('newPasswordInput')?.value || '');
+        const confirm = (document.getElementById('confirmPasswordInput')?.value || '');
+        const msg     = document.getElementById('resetScreenMsg');
+        if (!oobCode)          { if(msg) msg.innerHTML = '<span style="color:red;">Reset code missing — please request a new link.</span>'; return; }
+        if (newPw.length < 6)  { if(msg) msg.innerHTML = '<span style="color:red;">Password must be at least 6 characters.</span>'; return; }
+        if (newPw !== confirm)  { if(msg) msg.innerHTML = '<span style="color:red;">Passwords don\'t match.</span>'; return; }
+        const btn = document.getElementById('resetSubmitBtn');
+        if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+        if (msg) msg.innerHTML = '';
+        window.confirmPasswordReset(oobCode, newPw)
+            .then(() => {
+                document.getElementById('resetScreenForm').style.display = 'none';
+                document.getElementById('resetScreenSuccess').style.display = 'block';
+                window.history.replaceState({}, document.title, window.location.pathname);
+                window._resetOobCode = null;
+            })
+            .catch(err => {
+                if (btn) { btn.disabled = false; btn.textContent = 'SET NEW PASSWORD'; }
+                if (msg) msg.innerHTML = '<span style="color:red;">❌ ' + err.message + '</span>';
+            });
+    }
+
+    function goToLogin() {
+        const resetScreen = document.getElementById('resetPasswordScreen');
+        const loginScreen = document.getElementById('loginScreen');
+        if (resetScreen) resetScreen.style.display = 'none';
+        if (loginScreen) loginScreen.style.display = 'flex';
+    }
+    // ── End Password Reset Completion ─────────────────────────────────────────
 
     function sendResetEmail() {
         const email = (document.getElementById('resetEmail')?.value || '').trim();
@@ -6713,7 +6769,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.8.24'; // ← bump this on every release
+        const CURRENT_VERSION = 'v1.8.25'; // ← bump this on every release
         const CURRENT_DATE = '2026-03-09';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
