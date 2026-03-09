@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.8.41 | Updated: 2026-03-09                       ║
+║  Version: v1.8.42 | Updated: 2026-03-09                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.8.41';
+    const CURRENT_VERSION = 'v1.8.42';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1806,7 +1806,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.8.41</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.8.42</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -2374,7 +2374,7 @@ const firebaseConfig = {
                                 <div style="color:#e57373;">✗ Supply dockets</div>
                                 <div style="color:#e57373;">✗ Quotes/invoices</div>
                             </div>
-                            <div style="margin-top:10px; text-align:center; font-size:9px; color:#666; padding:5px; border:1px solid #444; border-radius:6px;">Always free</div>
+                            <div style="margin-top:10px; text-align:center; font-size:9px; color:#666; padding:5px; border:1px solid #444; border-radius:6px;" id="freeJobCounter">Always free</div>
                         </div>
                         <!-- SOLO -->
                         <div style="background:#2c2c2e; border-radius:10px; padding:12px 8px; border:1px solid #555; display:flex; flex-direction:column;">
@@ -2469,7 +2469,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.8.41</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.8.42</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
                     </p>
                 </div>
                         </div><!-- END admin-tab-general-content -->
@@ -2757,22 +2757,41 @@ const firebaseConfig = {
         return window.currentPlan || 'free';
     }
 
-    function canCreateJobs()    { const p = getPlan(); return p === 'owner' || p === 'pro' || p === 'solo'; }
+    const FREE_JOB_LIMIT = 3;
+
+    function getFreeJobCount() {
+        const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
+        return history.length;
+    }
+
+    function freeJobLimitReached() {
+        if (getPlan() !== 'free') return false;
+        return getFreeJobCount() >= FREE_JOB_LIMIT;
+    }
+
+    function canCreateJobs() {
+        const p = getPlan();
+        if (p === 'owner' || p === 'pro' || p === 'solo') return true;
+        return !freeJobLimitReached(); // free users can create up to FREE_JOB_LIMIT jobs
+    }
     function canUseSupplyDocs() { const p = getPlan(); return p === 'owner' || p === 'pro' || p === 'solo'; }
     function canUseFinancials() { const p = getPlan(); return p === 'owner' || p === 'pro'; }
     function canUsePricing()    { const p = getPlan(); return p === 'owner' || p === 'pro'; }
     function canUseReports()    { const p = getPlan(); return p === 'owner' || p === 'pro'; }
 
-    window.getPlan         = getPlan;
-    window.canCreateJobs   = canCreateJobs;
+    window.getPlan          = getPlan;
+    window.canCreateJobs    = canCreateJobs;
     window.canUseSupplyDocs = canUseSupplyDocs;
     window.canUseFinancials = canUseFinancials;
+    window.freeJobLimitReached = freeJobLimitReached;
 
     // Show upgrade modal for free users trying to do paid actions
     function showUpgradePrompt(feature) {
-        const msg = feature === 'solo'
-            ? 'Creating and editing jobs requires a\n\n💼 Solo Plan — $49/mo\n\nUpgrade at paintworkzpro.com.au/pricing'
-            : 'This feature requires a\n\n⭐ Pro Plan — $99/mo\n\nUpgrade at paintworkzpro.com.au/pricing';
+        const msg = feature === 'job-limit'
+            ? `You've used all ${FREE_JOB_LIMIT} free jobs 🎉\n\nUpgrade to Solo to save unlimited jobs.\n\n💼 Solo Plan — $49/mo`
+            : feature === 'solo'
+            ? 'This feature requires a\n\n💼 Solo Plan — $49/mo'
+            : 'This feature requires a\n\n⭐ Pro Plan — $99/mo';
         if (confirm(msg + '\n\nOpen pricing page now?')) {
             window.open('https://paintworkzpro.com.au/#pricing', '_blank');
         }
@@ -2791,68 +2810,79 @@ const firebaseConfig = {
         // ── FREE PLAN: Lock measure tab inputs & ADD PART button ─────────────
         const measureInputIds = ['h','w','desc','dRec','jNm','jN'];
         const addPartBtn = document.querySelector('.add-main-btn');
-        if (!hasSolo) {
-            // Lock all measure inputs
+        const limitReached = freeJobLimitReached();
+        const isFree = (plan === 'free');
+
+        if (isFree && limitReached) {
+            // Job limit hit — lock everything
             measureInputIds.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) { el.readOnly = true; el.style.background = '#f5f5f5'; el.style.color = '#999'; }
             });
-            // Lock ADD PART button
-            if (addPartBtn) {
-                addPartBtn.disabled = true;
-                addPartBtn.style.opacity = '0.4';
-                addPartBtn.style.cursor = 'not-allowed';
-                addPartBtn.title = 'Upgrade to Solo to add parts';
-            }
-            // Lock client/colour dropdowns
+            if (addPartBtn) { addPartBtn.disabled = true; addPartBtn.style.opacity = '0.4'; addPartBtn.style.cursor = 'not-allowed'; }
             ['clientSel','colorSel','finishSel'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) { el.disabled = true; el.style.background = '#f5f5f5'; }
             });
         } else {
+            // Free under limit OR paid plan — unlock
             measureInputIds.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) { el.readOnly = false; el.style.background = ''; el.style.color = ''; }
             });
-            if (addPartBtn) { addPartBtn.disabled = false; addPartBtn.style.opacity = ''; addPartBtn.style.cursor = ''; addPartBtn.title = ''; }
+            if (addPartBtn) { addPartBtn.disabled = false; addPartBtn.style.opacity = ''; addPartBtn.style.cursor = ''; }
             ['clientSel','colorSel','finishSel'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) { el.disabled = false; el.style.background = ''; }
             });
         }
 
-        // ── FREE PLAN: show view-only banner ─────────────────────────────────
+        // ── FREE PLAN: show job count banner ─────────────────────────────────
         let freeBanner = document.getElementById('freePlanBanner');
-        if (!hasSolo) {
+        if (isFree) {
+            const jobCount = getFreeJobCount();
+            const remaining = Math.max(0, FREE_JOB_LIMIT - jobCount);
             if (!freeBanner) {
                 freeBanner = document.createElement('div');
                 freeBanner.id = 'freePlanBanner';
                 freeBanner.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:9999;background:#1a1a2e;border-top:2px solid #d4af37;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;';
+                document.body.appendChild(freeBanner);
+            }
+            if (limitReached) {
                 freeBanner.innerHTML = `
                     <div style="font-size:12px;color:#fff;">
-                        <span style="color:#d4af37;font-weight:900;">Free Plan</span> — view &amp; print only.
-                        Upgrade to create and edit jobs.
+                        <span style="color:#d4af37;font-weight:900;">Free Plan</span> — 
+                        <span style="color:#ff6b6b;font-weight:900;">Job limit reached (${FREE_JOB_LIMIT}/${FREE_JOB_LIMIT})</span>. Upgrade to save more jobs.
                     </div>
                     <button onclick="window.open('https://paintworkzpro.com.au/#pricing','_blank')"
                         style="background:#d4af37;color:#000;border:none;padding:7px 16px;border-radius:6px;font-weight:900;font-size:11px;cursor:pointer;white-space:nowrap;">
                         Upgrade →
                     </button>`;
-                document.body.appendChild(freeBanner);
-            }
-            // Lock save button
-            const saveBtn = document.querySelector('.icon-btn[onclick="saveJob()"]');
-            if (saveBtn) {
-                saveBtn.style.opacity = '0.3';
-                saveBtn.style.pointerEvents = 'none';
-                saveBtn.title = 'Upgrade to Solo to save jobs';
+            } else {
+                freeBanner.innerHTML = `
+                    <div style="font-size:12px;color:#fff;">
+                        <span style="color:#d4af37;font-weight:900;">Free Plan</span> — 
+                        ${jobCount}/${FREE_JOB_LIMIT} jobs used. <span style="color:#aaa;">${remaining} remaining.</span>
+                    </div>
+                    <button onclick="window.open('https://paintworkzpro.com.au/#pricing','_blank')"
+                        style="background:#3a3a3c;color:#fff;border:none;padding:7px 16px;border-radius:6px;font-weight:900;font-size:11px;cursor:pointer;white-space:nowrap;">
+                        Upgrade →
+                    </button>`;
             }
         } else {
             if (freeBanner) freeBanner.remove();
-            const saveBtn = document.querySelector('.icon-btn[onclick="saveJob()"]');
-            if (saveBtn) { saveBtn.style.opacity = ''; saveBtn.style.pointerEvents = ''; }
         }
 
-        // ── SUPPLY DOCKETS lock (free plan) ──────────────────────────────────
+        // ── Update free job counter in settings card ─────────────────────────
+        const freeCounter = document.getElementById('freeJobCounter');
+        if (freeCounter && isFree) {
+            const jobCount = getFreeJobCount();
+            freeCounter.textContent = `${jobCount} / ${FREE_JOB_LIMIT} jobs used`;
+            freeCounter.style.color = jobCount >= FREE_JOB_LIMIT ? '#ff6b6b' : '#aaa';
+            freeCounter.style.borderColor = jobCount >= FREE_JOB_LIMIT ? '#ff6b6b' : '#444';
+        }
+
+        // ── SUPPLY DOCKETS lock (Solo+) ───────────────────────────────────────
         const supplyFormIds = ['form-supply','form-order','form-covsheet','form-shop'];
         supplyFormIds.forEach(id => {
             const el = document.getElementById(id);
@@ -6987,7 +7017,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.8.41'; // ← bump this on every release
+        const CURRENT_VERSION = 'v1.8.42'; // ← bump this on every release
         const CURRENT_DATE = '2026-03-09';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -13136,9 +13166,9 @@ if ('serviceWorker' in navigator && _swAllowed) {
 
 
         function saveJob() { 
-        // FREE PLAN GATE — cannot create or edit jobs
-        if (!canCreateJobs()) {
-            showUpgradePrompt('solo');
+        // FREE PLAN GATE — check job limit
+        if (freeJobLimitReached()) {
+            showUpgradePrompt('job-limit');
             return;
         }
         try {
