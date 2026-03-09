@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.8.42 | Updated: 2026-03-09                       ║
+║  Version: v1.8.43 | Updated: 2026-03-09                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.8.42';
+    const CURRENT_VERSION = 'v1.8.43';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -978,7 +978,11 @@ const firebaseConfig = {
                 // ── End session isolation ──────────────────────────────────────────
 
                 // Apply pro locks now that we know who the user is
-                setTimeout(() => { if (typeof window.applyProLocks === 'function') window.applyProLocks(); }, 300);
+                setTimeout(() => {
+                    if (typeof window.applyProLocks === 'function') window.applyProLocks();
+                    if (typeof window.checkActivePromo === 'function') window.checkActivePromo();
+                    if (typeof window.initPromoPanel === 'function') window.initPromoPanel();
+                }, 300);
                 const loginScreen = document.getElementById('loginScreen');
                 const appContainer = document.getElementById('appContainer');
                 if (loginScreen) loginScreen.style.display = 'none';
@@ -1806,7 +1810,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.8.42</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.8.43</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -2469,9 +2473,81 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.8.42</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.8.43</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
                     </p>
                 </div>
+                <!-- ── PROMO CODE REDEMPTION (all users) ────────────────────── -->
+                <hr style="margin:20px 0; border:none; border-top:1px solid #ddd;">
+                <div style="margin-bottom:20px;">
+                    <h4 style="margin:0 0 4px 0; font-weight:900; font-size:13px; color:#333;">🎟️ Promo / Referral Code</h4>
+                    <p style="font-size:11px; color:#666; margin-bottom:12px;">Enter a promo or referral code to unlock features or claim your free month.</p>
+                    <div style="display:flex; gap:8px;">
+                        <input id="promoCodeInput" type="text" placeholder="e.g. MATE-AB12 or DEMO-XY99"
+                            style="flex:1; padding:10px 12px; border:1px solid #ddd; border-radius:8px; font-size:12px; font-weight:900; text-transform:uppercase; letter-spacing:1px;">
+                        <button onclick="redeemPromoCode()"
+                            style="background:#d4af37; color:#000; border:none; padding:10px 18px; border-radius:8px; font-weight:900; font-size:12px; cursor:pointer; white-space:nowrap;">
+                            Redeem →
+                        </button>
+                    </div>
+                    <div id="promoCodeStatus" style="margin-top:8px; font-size:11px; display:none;"></div>
+                    <div id="activePromoDisplay" style="margin-top:10px; display:none;"></div>
+                </div>
+
+                <!-- ── OWNER CODE GENERATOR (owner only) ────────────────────── -->
+                <div id="ownerPromoPanel" style="display:none; margin-bottom:20px;">
+                    <hr style="margin:0 0 20px 0; border:none; border-top:2px solid #d4af37;">
+                    <h4 style="margin:0 0 4px 0; font-weight:900; font-size:13px; color:#d4af37;">🔑 Owner — Code Generator</h4>
+                    <p style="font-size:11px; color:#666; margin-bottom:12px;">Generate promo and referral codes. Codes are stored in Firestore.</p>
+
+                    <div style="background:#1c1c1e; border-radius:10px; padding:14px; margin-bottom:12px;">
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
+                            <div>
+                                <label style="font-size:10px; color:#aaa; font-weight:900; display:block; margin-bottom:4px;">CODE TYPE</label>
+                                <select id="promoType" style="width:100%; padding:8px; border-radius:6px; border:1px solid #444; background:#2c2c2e; color:#fff; font-size:12px; font-weight:900;">
+                                    <option value="demo">DEMO — Full Pro (7 days)</option>
+                                    <option value="referral">REFERRAL — 1 month Solo free</option>
+                                    <option value="promo">PROMO — Custom plan/duration</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="font-size:10px; color:#aaa; font-weight:900; display:block; margin-bottom:4px;">MAX USES</label>
+                                <input id="promoMaxUses" type="number" value="1" min="1" max="999"
+                                    style="width:100%; padding:8px; border-radius:6px; border:1px solid #444; background:#2c2c2e; color:#fff; font-size:12px; box-sizing:border-box;">
+                            </div>
+                        </div>
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;" id="promoCustomRow" style="display:none;">
+                            <div>
+                                <label style="font-size:10px; color:#aaa; font-weight:900; display:block; margin-bottom:4px;">PLAN LEVEL</label>
+                                <select id="promoPlan" style="width:100%; padding:8px; border-radius:6px; border:1px solid #444; background:#2c2c2e; color:#fff; font-size:12px; font-weight:900;">
+                                    <option value="solo">Solo</option>
+                                    <option value="pro">Pro</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="font-size:10px; color:#aaa; font-weight:900; display:block; margin-bottom:4px;">DURATION (DAYS)</label>
+                                <input id="promoDays" type="number" value="7" min="1" max="365"
+                                    style="width:100%; padding:8px; border-radius:6px; border:1px solid #444; background:#2c2c2e; color:#fff; font-size:12px; box-sizing:border-box;">
+                            </div>
+                        </div>
+                        <div style="display:flex; gap:8px; align-items:center;">
+                            <input id="promoCodePreview" type="text" placeholder="Code will appear here..."
+                                style="flex:1; padding:8px 12px; border-radius:6px; border:1px solid #555; background:#2c2c2e; color:#d4af37; font-size:13px; font-weight:900; letter-spacing:2px;" readonly>
+                            <button onclick="generatePromoCode()"
+                                style="background:#2c2c2e; color:#d4af37; border:1px solid #d4af37; padding:8px 14px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer; white-space:nowrap;">
+                                🎲 Generate
+                            </button>
+                            <button onclick="savePromoCode()"
+                                style="background:#d4af37; color:#000; border:none; padding:8px 14px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer; white-space:nowrap;">
+                                💾 Save
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Active codes list -->
+                    <h5 style="font-size:11px; font-weight:900; color:#aaa; margin:0 0 8px 0; text-transform:uppercase; letter-spacing:1px;">Active Codes</h5>
+                    <div id="promoCodesList" style="font-size:11px; color:#aaa;">Loading...</div>
+                </div>
+
                         </div><!-- END admin-tab-general-content -->
             
             <!-- Colours Tab -->
@@ -2944,6 +3020,224 @@ const firebaseConfig = {
     }
     window.applyProLocks = applyProLocks;
     window.isOwner = isOwner;
+
+    // ── PROMO CODE SYSTEM ─────────────────────────────────────────────────────
+
+    // Show/hide owner panel based on login
+    function initPromoPanel() {
+        const panel = document.getElementById('ownerPromoPanel');
+        if (panel) panel.style.display = isOwner() ? 'block' : 'none';
+        if (isOwner()) loadPromoCodesList();
+        checkActivePromo();
+
+        // Show/hide custom row based on type
+        const typeSelect = document.getElementById('promoType');
+        if (typeSelect) {
+            typeSelect.addEventListener('change', () => {
+                const customRow = document.getElementById('promoCustomRow');
+                if (customRow) customRow.style.display = typeSelect.value === 'promo' ? 'grid' : 'none';
+            });
+        }
+    }
+    window.initPromoPanel = initPromoPanel;
+
+    // Generate a random code string
+    function generatePromoCode() {
+        const type = document.getElementById('promoType')?.value || 'demo';
+        const prefix = type === 'demo' ? 'DEMO' : type === 'referral' ? 'MATE' : 'PROMO';
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        let code = prefix + '-';
+        for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)];
+        const input = document.getElementById('promoCodePreview');
+        if (input) input.value = code;
+        return code;
+    }
+    window.generatePromoCode = generatePromoCode;
+
+    // Save code to Firestore
+    async function savePromoCode() {
+        if (!isOwner()) return;
+        const code = document.getElementById('promoCodePreview')?.value?.trim();
+        if (!code) { notify('Generate a code first'); return; }
+
+        const type = document.getElementById('promoType')?.value || 'demo';
+        const maxUses = parseInt(document.getElementById('promoMaxUses')?.value || '1');
+
+        let plan = 'pro', days = 7;
+        if (type === 'demo')     { plan = 'pro';  days = 7; }
+        if (type === 'referral') { plan = 'solo'; days = 31; }
+        if (type === 'promo')    {
+            plan = document.getElementById('promoPlan')?.value || 'pro';
+            days = parseInt(document.getElementById('promoDays')?.value || '7');
+        }
+
+        try {
+            const ref = window.doc(window.firebaseDb, 'promoCodes', code);
+            await window.setDoc(ref, {
+                code, type, plan, days, maxUses,
+                uses: 0,
+                usedBy: [],
+                createdAt: Date.now(),
+                createdBy: window.currentUser.email,
+                active: true
+            });
+            notify(`✓ Code saved: ${code}`);
+            document.getElementById('promoCodePreview').value = '';
+            loadPromoCodesList();
+        } catch(e) {
+            console.error('[Promo] Save error:', e);
+            notify('Error saving code — check Firestore rules');
+        }
+    }
+    window.savePromoCode = savePromoCode;
+
+    // Load and display all codes (owner only)
+    async function loadPromoCodesList() {
+        const container = document.getElementById('promoCodesList');
+        if (!container || !isOwner()) return;
+        try {
+            const snap = await window.getDocs(window.collection(window.firebaseDb, 'promoCodes'));
+            if (snap.empty) { container.innerHTML = '<p style="color:#555; font-size:11px;">No codes yet.</p>'; return; }
+
+            let html = '<div style="display:flex; flex-direction:column; gap:6px;">';
+            snap.forEach(d => {
+                const c = d.data();
+                const expiry = c.active ? '' : ' <span style="color:#ff6b6b;">[EXPIRED]</span>';
+                html += `<div style="background:#2c2c2e; border-radius:8px; padding:10px 12px; display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                    <div>
+                        <span style="color:#d4af37; font-weight:900; letter-spacing:1px; font-size:12px;">${c.code}</span>${expiry}
+                        <span style="color:#666; font-size:10px; margin-left:8px;">${c.type} · ${c.plan} · ${c.days}d · ${c.uses}/${c.maxUses} uses</span>
+                    </div>
+                    <button onclick="deletePromoCode('${c.code}')"
+                        style="background:none; border:none; color:#ff6b6b; font-size:16px; cursor:pointer; padding:0 4px;" title="Delete code">×</button>
+                </div>`;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        } catch(e) {
+            container.innerHTML = '<p style="color:#ff6b6b; font-size:11px;">Error loading codes.</p>';
+        }
+    }
+    window.loadPromoCodesList = loadPromoCodesList;
+
+    // Delete a code (owner only)
+    async function deletePromoCode(code) {
+        if (!isOwner()) return;
+        if (!confirm(`Delete code ${code}?`)) return;
+        try {
+            await window.deleteDoc(window.doc(window.firebaseDb, 'promoCodes', code));
+            notify(`✓ Code deleted: ${code}`);
+            loadPromoCodesList();
+        } catch(e) { notify('Error deleting code'); }
+    }
+    window.deletePromoCode = deletePromoCode;
+
+    // Redeem a code (any user)
+    async function redeemPromoCode() {
+        const input = document.getElementById('promoCodeInput');
+        const status = document.getElementById('promoCodeStatus');
+        const code = input?.value?.trim().toUpperCase();
+        if (!code) { showPromoStatus('Enter a code first', 'error'); return; }
+        if (!window.currentUser) { showPromoStatus('You must be logged in to redeem a code', 'error'); return; }
+
+        showPromoStatus('Checking code...', 'info');
+
+        try {
+            const ref = window.doc(window.firebaseDb, 'promoCodes', code);
+            const snap = await window.getDoc(ref);
+
+            if (!snap.exists()) { showPromoStatus('❌ Code not found', 'error'); return; }
+
+            const data = snap.data();
+            if (!data.active) { showPromoStatus('❌ This code has expired', 'error'); return; }
+            if (data.uses >= data.maxUses) { showPromoStatus('❌ This code has already been fully used', 'error'); return; }
+            if (data.usedBy && data.usedBy.includes(window.currentUser.uid)) {
+                showPromoStatus('❌ You have already used this code', 'error'); return;
+            }
+
+            // Apply promo to user's Firestore record
+            const expiresAt = Date.now() + (data.days * 24 * 60 * 60 * 1000);
+            const userRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid);
+            await window.setDoc(userRef, {
+                promoCode: code,
+                promoPlan: data.plan,
+                promoExpiresAt: expiresAt,
+                promoType: data.type
+            }, { merge: true });
+
+            // Update code usage
+            const newUsedBy = [...(data.usedBy || []), window.currentUser.uid];
+            const newUses = data.uses + 1;
+            await window.setDoc(ref, {
+                uses: newUses,
+                usedBy: newUsedBy,
+                active: newUses < data.maxUses
+            }, { merge: true });
+
+            // Apply plan immediately in this session
+            window.currentPlan = data.plan;
+            applyProLocks();
+            checkActivePromo();
+
+            const expiryDate = new Date(expiresAt).toLocaleDateString('en-AU');
+            showPromoStatus(`✅ Code applied! ${data.plan.toUpperCase()} access unlocked until ${expiryDate}`, 'success');
+            if (input) input.value = '';
+            if (isOwner()) loadPromoCodesList();
+
+        } catch(e) {
+            console.error('[Promo] Redeem error:', e);
+            showPromoStatus('❌ Error redeeming code — try again', 'error');
+        }
+    }
+    window.redeemPromoCode = redeemPromoCode;
+
+    function showPromoStatus(msg, type) {
+        const el = document.getElementById('promoCodeStatus');
+        if (!el) return;
+        el.style.display = 'block';
+        el.style.color = type === 'success' ? '#34c759' : type === 'error' ? '#ff6b6b' : '#aaa';
+        el.textContent = msg;
+    }
+
+    // Check if user has an active promo and apply it
+    async function checkActivePromo() {
+        if (!window.currentUser || !window.firebaseDb) return;
+        try {
+            const ref = window.doc(window.firebaseDb, 'users', window.currentUser.uid);
+            const snap = await window.getDoc(ref);
+            if (!snap.exists()) return;
+            const data = snap.data();
+
+            const display = document.getElementById('activePromoDisplay');
+
+            if (data.promoExpiresAt && data.promoPlan) {
+                const now = Date.now();
+                if (now < data.promoExpiresAt) {
+                    // Active promo — apply it
+                    if (!isOwner()) window.currentPlan = data.promoPlan;
+                    const daysLeft = Math.ceil((data.promoExpiresAt - now) / (24 * 60 * 60 * 1000));
+                    const expiryDate = new Date(data.promoExpiresAt).toLocaleDateString('en-AU');
+                    if (display) {
+                        display.style.display = 'block';
+                        display.innerHTML = `<div style="background:#1a2e1a; border:1px solid #34c759; border-radius:8px; padding:10px 12px; font-size:11px; color:#34c759;">
+                            ✅ <strong>${data.promoPlan.toUpperCase()} promo active</strong> — ${daysLeft} day${daysLeft !== 1 ? 's' : ''} remaining (expires ${expiryDate})
+                            ${data.promoCode ? `<span style="color:#666; margin-left:6px;">Code: ${data.promoCode}</span>` : ''}
+                        </div>`;
+                    }
+                    applyProLocks();
+                } else {
+                    // Promo expired — clear it
+                    await window.setDoc(ref, { promoPlan: null, promoExpiresAt: null }, { merge: true });
+                    if (display) display.style.display = 'none';
+                }
+            } else {
+                if (display) display.style.display = 'none';
+            }
+        } catch(e) { console.error('[Promo] checkActivePromo error:', e); }
+    }
+    window.checkActivePromo = checkActivePromo;
+
+    // ── END PROMO CODE SYSTEM ─────────────────────────────────────────────────
     // ────────────────────────────────────────────────────────────────
     console.log('%c⚖️  COPYRIGHT & OWNERSHIP NOTICE ⚖️ ', 'background:#ff6b6b;color:#fff;font-weight:900;padding:10px;border-radius:4px;');
     console.log('%cPaintWorkz Pro - Designed & Owned by Colin Bedford', 'color:#ff6b6b;font-weight:900;font-size:14px;');
@@ -7017,7 +7311,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.8.42'; // ← bump this on every release
+        const CURRENT_VERSION = 'v1.8.43'; // ← bump this on every release
         const CURRENT_DATE = '2026-03-09';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -14051,7 +14345,9 @@ if ('serviceWorker' in navigator && _swAllowed) {
     }
     
     function switchAdminTab(tab) {
-        
+        if (tab === 'general' && typeof window.initPromoPanel === 'function') {
+            setTimeout(window.initPromoPanel, 100);
+        }
         
         
         // Check if admin view is visible
