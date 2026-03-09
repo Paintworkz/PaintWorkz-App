@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.8.40 | Updated: 2026-03-09                       ║
+║  Version: v1.8.41 | Updated: 2026-03-09                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.8.40';
+    const CURRENT_VERSION = 'v1.8.41';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1806,7 +1806,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.8.40</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.8.41</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -2469,7 +2469,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.8.40</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.8.41</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
                     </p>
                 </div>
                         </div><!-- END admin-tab-general-content -->
@@ -2744,28 +2744,143 @@ const firebaseConfig = {
     function isOwner() {
         return window.currentUser && window.currentUser.email === OWNER_EMAIL;
     }
-    function applyProLocks() {
-        // CRITICAL: Only apply locks once we KNOW who the user is.
-        // If currentUser is null (auth not yet resolved), do nothing — 
-        // overlays default to display:none so owner is never blocked.
-        if (!window.currentUser) return;
-        const owner = isOwner();
-        console.log('[PaintWorkz] applyProLocks — email:', window.currentUser.email, '| owner:', owner);
 
-        // Reports + Pricing overlays: show for non-owners only
-        ['reportsProLock','pricingProLock'].forEach(id => {
+    // ── PLAN SYSTEM ──────────────────────────────────────────────────────────
+    // Plans: 'owner' | 'pro' | 'solo' | 'free'
+    // Stored in Firestore under users/{uid}/subscription.plan
+    // Set locally on login via window.currentPlan
+    // Owner always bypasses everything.
+    window.currentPlan = 'free'; // default until Firestore confirms
+
+    function getPlan() {
+        if (isOwner()) return 'owner';
+        return window.currentPlan || 'free';
+    }
+
+    function canCreateJobs()    { const p = getPlan(); return p === 'owner' || p === 'pro' || p === 'solo'; }
+    function canUseSupplyDocs() { const p = getPlan(); return p === 'owner' || p === 'pro' || p === 'solo'; }
+    function canUseFinancials() { const p = getPlan(); return p === 'owner' || p === 'pro'; }
+    function canUsePricing()    { const p = getPlan(); return p === 'owner' || p === 'pro'; }
+    function canUseReports()    { const p = getPlan(); return p === 'owner' || p === 'pro'; }
+
+    window.getPlan         = getPlan;
+    window.canCreateJobs   = canCreateJobs;
+    window.canUseSupplyDocs = canUseSupplyDocs;
+    window.canUseFinancials = canUseFinancials;
+
+    // Show upgrade modal for free users trying to do paid actions
+    function showUpgradePrompt(feature) {
+        const msg = feature === 'solo'
+            ? 'Creating and editing jobs requires a\n\n💼 Solo Plan — $49/mo\n\nUpgrade at paintworkzpro.com.au/pricing'
+            : 'This feature requires a\n\n⭐ Pro Plan — $99/mo\n\nUpgrade at paintworkzpro.com.au/pricing';
+        if (confirm(msg + '\n\nOpen pricing page now?')) {
+            window.open('https://paintworkzpro.com.au/#pricing', '_blank');
+        }
+    }
+    window.showUpgradePrompt = showUpgradePrompt;
+
+    function applyProLocks() {
+        if (!window.currentUser) return;
+        const plan = getPlan();
+        const owner = (plan === 'owner');
+        const hasSolo = canCreateJobs();
+        const hasPro  = canUseFinancials();
+
+        console.log('[PaintWorkz] applyProLocks — plan:', plan);
+
+        // ── FREE PLAN: Lock measure tab inputs & ADD PART button ─────────────
+        const measureInputIds = ['h','w','desc','dRec','jNm','jN'];
+        const addPartBtn = document.querySelector('.add-main-btn');
+        if (!hasSolo) {
+            // Lock all measure inputs
+            measureInputIds.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) { el.readOnly = true; el.style.background = '#f5f5f5'; el.style.color = '#999'; }
+            });
+            // Lock ADD PART button
+            if (addPartBtn) {
+                addPartBtn.disabled = true;
+                addPartBtn.style.opacity = '0.4';
+                addPartBtn.style.cursor = 'not-allowed';
+                addPartBtn.title = 'Upgrade to Solo to add parts';
+            }
+            // Lock client/colour dropdowns
+            ['clientSel','colorSel','finishSel'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) { el.disabled = true; el.style.background = '#f5f5f5'; }
+            });
+        } else {
+            measureInputIds.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) { el.readOnly = false; el.style.background = ''; el.style.color = ''; }
+            });
+            if (addPartBtn) { addPartBtn.disabled = false; addPartBtn.style.opacity = ''; addPartBtn.style.cursor = ''; addPartBtn.title = ''; }
+            ['clientSel','colorSel','finishSel'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) { el.disabled = false; el.style.background = ''; }
+            });
+        }
+
+        // ── FREE PLAN: show view-only banner ─────────────────────────────────
+        let freeBanner = document.getElementById('freePlanBanner');
+        if (!hasSolo) {
+            if (!freeBanner) {
+                freeBanner = document.createElement('div');
+                freeBanner.id = 'freePlanBanner';
+                freeBanner.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:9999;background:#1a1a2e;border-top:2px solid #d4af37;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;';
+                freeBanner.innerHTML = `
+                    <div style="font-size:12px;color:#fff;">
+                        <span style="color:#d4af37;font-weight:900;">Free Plan</span> — view &amp; print only.
+                        Upgrade to create and edit jobs.
+                    </div>
+                    <button onclick="window.open('https://paintworkzpro.com.au/#pricing','_blank')"
+                        style="background:#d4af37;color:#000;border:none;padding:7px 16px;border-radius:6px;font-weight:900;font-size:11px;cursor:pointer;white-space:nowrap;">
+                        Upgrade →
+                    </button>`;
+                document.body.appendChild(freeBanner);
+            }
+            // Lock save button
+            const saveBtn = document.querySelector('.icon-btn[onclick="saveJob()"]');
+            if (saveBtn) {
+                saveBtn.style.opacity = '0.3';
+                saveBtn.style.pointerEvents = 'none';
+                saveBtn.title = 'Upgrade to Solo to save jobs';
+            }
+        } else {
+            if (freeBanner) freeBanner.remove();
+            const saveBtn = document.querySelector('.icon-btn[onclick="saveJob()"]');
+            if (saveBtn) { saveBtn.style.opacity = ''; saveBtn.style.pointerEvents = ''; }
+        }
+
+        // ── SUPPLY DOCKETS lock (free plan) ──────────────────────────────────
+        const supplyFormIds = ['form-supply','form-order','form-covsheet','form-shop'];
+        supplyFormIds.forEach(id => {
             const el = document.getElementById(id);
-            if (el) el.style.display = owner ? 'none' : 'flex';
+            if (!el) return;
+            if (!hasSolo) {
+                el.style.pointerEvents = 'none';
+                el.style.opacity = '0.4';
+                if (!el.querySelector('.card-lock-badge')) {
+                    const badge = document.createElement('div');
+                    badge.className = 'card-lock-badge';
+                    badge.innerHTML = '🔒 <span style="font-size:10px;font-weight:900;color:#fff;">SOLO</span>';
+                    badge.style.cssText = 'position:absolute;top:6px;right:8px;font-size:14px;pointer-events:none;display:flex;align-items:center;gap:3px;background:rgba(0,0,0,0.7);padding:3px 7px;border-radius:12px;border:1px solid #888;';
+                    el.style.position = 'relative';
+                    el.appendChild(badge);
+                }
+            } else {
+                el.style.pointerEvents = ''; el.style.opacity = '';
+                const badge = el.querySelector('.card-lock-badge');
+                if (badge) badge.remove();
+            }
         });
 
-        // Forms tab: free cards always open, lock only financial cards for non-owners
-        // FREE: Supply Docket, Mixing Card, Paint Order, Shop Label, Cover Sheet, A3 Schedule
-        // PRO:  Estimate, Quote, Invoice, Batch Print
+        // ── PRO FORMS lock (estimate/quote/invoice/batch) ────────────────────
         const proFormIds = ['form-estimate','form-quote','form-invoice','form-batch'];
         proFormIds.forEach(id => {
             const el = document.getElementById(id);
             if (!el) return;
-            if (!owner) {
+            if (!hasPro) {
                 el.style.pointerEvents = 'none';
                 el.style.opacity = '0.5';
                 if (!el.querySelector('.card-lock-badge')) {
@@ -2777,20 +2892,25 @@ const firebaseConfig = {
                     el.appendChild(badge);
                 }
             } else {
-                el.style.pointerEvents = '';
-                el.style.opacity = '';
+                el.style.pointerEvents = ''; el.style.opacity = '';
                 const badge = el.querySelector('.card-lock-badge');
                 if (badge) badge.remove();
             }
         });
 
-        // Nav/sub-tab lock icons — clean for owner, show 🔒 for others
+        // ── Reports + Pricing overlays ───────────────────────────────────────
+        ['reportsProLock','pricingProLock'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = hasPro ? 'none' : 'flex';
+        });
+
+        // ── Nav/sub-tab lock icons ────────────────────────────────────────────
         const formsNavBtn = document.getElementById('btn-forms');
-        if (formsNavBtn) formsNavBtn.textContent = owner ? 'Forms' : 'Forms 🔒';
+        if (formsNavBtn) formsNavBtn.textContent = hasPro ? 'Forms' : (hasSolo ? 'Forms 🔒' : 'Forms 🔒');
         const reportsBtn = document.getElementById('admin-tab-reports');
-        if (reportsBtn) reportsBtn.innerHTML = owner ? '📊 Reports' : '📊 Reports 🔒';
+        if (reportsBtn) reportsBtn.innerHTML = hasPro ? '📊 Reports' : '📊 Reports 🔒';
         const pricingBtn = document.getElementById('admin-tab-pricing');
-        if (pricingBtn) pricingBtn.innerHTML = owner ? 'Price Matrix' : 'Price Matrix 🔒';
+        if (pricingBtn) pricingBtn.innerHTML = hasPro ? 'Price Matrix' : 'Price Matrix 🔒';
     }
     window.applyProLocks = applyProLocks;
     window.isOwner = isOwner;
@@ -5673,6 +5793,10 @@ const firebaseConfig = {
         const job = history[index];
         
         if (!job) return;
+
+        // FREE PLAN: allow viewing but lock editing via isJobViewMode staying true
+        // and save button already locked by applyProLocks
+        const viewOnly = !canCreateJobs();
         
         console.log('📂 LOADING JOB FROM HISTORY - Index:', index);
         console.log('  Job object items count:', job.items ? job.items.length : 'NO ITEMS PROPERTY');
@@ -6863,7 +6987,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.8.40'; // ← bump this on every release
+        const CURRENT_VERSION = 'v1.8.41'; // ← bump this on every release
         const CURRENT_DATE = '2026-03-09';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -7454,6 +7578,7 @@ const firebaseConfig = {
     }
 
     function addPart() {
+        if (!canCreateJobs()) { showUpgradePrompt('solo'); return; }
         const h = document.getElementById('h').value;
         const w = document.getElementById('w').value;
         const prof = document.getElementById('prof-select').value;
@@ -13011,6 +13136,11 @@ if ('serviceWorker' in navigator && _swAllowed) {
 
 
         function saveJob() { 
+        // FREE PLAN GATE — cannot create or edit jobs
+        if (!canCreateJobs()) {
+            showUpgradePrompt('solo');
+            return;
+        }
         try {
             saveData();
             saveJobToHistory(); // This will show its own notification
