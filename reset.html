@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reset Your Password — PaintWorkz Pro</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎨</text></svg>">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root { --gold: #d4af37; --gold-light: #e8c84a; --bg: #0f0f0f; --card: #1a1a1a; --border: #2a2a2a; --text: #f0f0f0; --muted: #888; }
+    body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; }
+    .logo { font-size: 13px; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; color: var(--gold); margin-bottom: 40px; opacity: 0.8; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 18px; padding: 40px 36px; max-width: 420px; width: 100%; text-align: center; box-shadow: 0 24px 60px rgba(0,0,0,0.5); }
+    .icon { font-size: 52px; margin-bottom: 20px; display: block; }
+    h1 { font-size: 22px; font-weight: 900; margin-bottom: 10px; color: var(--text); }
+    .subtitle { font-size: 14px; color: var(--muted); line-height: 1.6; margin-bottom: 32px; }
+    .btn { display: inline-block; background: var(--gold); color: #000; font-weight: 900; font-size: 15px; padding: 16px 36px; border-radius: 12px; text-decoration: none; cursor: pointer; border: none; width: 100%; transition: background 0.15s, transform 0.1s; letter-spacing: 0.3px; }
+    .btn:hover { background: var(--gold-light); transform: translateY(-1px); }
+    .state { display: none; }
+    .state.active { display: block; }
+    .error-icon { font-size: 48px; margin-bottom: 16px; display: block; }
+    .error-msg { font-size: 13px; color: #e57373; background: rgba(229,115,115,0.08); border: 1px solid rgba(229,115,115,0.2); border-radius: 8px; padding: 12px 16px; margin-bottom: 24px; line-height: 1.5; }
+    .btn-secondary { display: inline-block; background: transparent; color: var(--gold); font-weight: 700; font-size: 13px; padding: 10px 24px; border-radius: 10px; text-decoration: none; border: 1px solid var(--gold); width: 100%; margin-top: 12px; cursor: pointer; }
+    .footer-note { margin-top: 28px; font-size: 11px; color: var(--muted); line-height: 1.6; }
+    .footer-note a { color: var(--gold); text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="logo">🎨 PaintWorkz Pro</div>
+  <div class="card">
+
+    <!-- VALID STATE: show button only — NO Firebase API calls on load -->
+    <div id="stateValid" class="state active">
+      <span class="icon">🔐</span>
+      <h1>Reset Your Password</h1>
+      <p class="subtitle">Click the button below to securely set a new password for your PaintWorkz Pro account.</p>
+      <button class="btn" onclick="goToApp()">Set New Password →</button>
+    </div>
+
+    <!-- INVALID/MISSING CODE STATE -->
+    <div id="stateInvalid" class="state">
+      <span class="error-icon">⚠️</span>
+      <h1>Invalid Reset Link</h1>
+      <p class="error-msg" id="errorMsg">This password reset link is missing required information. Please request a new reset link from the app.</p>
+      <a href="https://paintworkz.github.io/PaintWorkz-App/" class="btn">Back to PaintWorkz Pro</a>
+      <a href="https://paintworkzpro.com.au" class="btn-secondary">Visit Website</a>
+    </div>
+
+  </div>
+  <div class="footer-note">
+    Having trouble? <a href="mailto:support@paintworkzpro.com.au">Contact support</a><br>
+    <a href="https://paintworkzpro.com.au/privacy.html">Privacy Policy</a> · <a href="https://paintworkzpro.com.au/terms.html">Terms of Service</a>
+  </div>
+
+  <script>
+    // ── WHY THIS PAGE EXISTS ────────────────────────────────────────────────
+    // Email security scanners (Apple Mail, Outlook Safe Links) pre-fetch links
+    // in emails to check for phishing/malware. If we called Firebase's
+    // verifyPasswordResetCode() on page load, the scanner would consume the
+    // one-time oobCode BEFORE the user ever clicks, making it "expired".
+    //
+    // This page does NOTHING with Firebase on load — it only reads URL params
+    // and displays a button. Scanners can load HTML but cannot click buttons.
+    // When the real user clicks, we forward them to the app WITH the oobCode
+    // still intact. The app then handles the actual Firebase password reset.
+    // ───────────────────────────────────────────────────────────────────────
+
+    (function () {
+      const params  = new URLSearchParams(window.location.search);
+      const mode    = params.get('mode');
+      const oobCode = params.get('oobCode');
+      const apiKey  = params.get('apiKey');
+      const lang    = params.get('lang') || 'en';
+
+      if (mode !== 'resetPassword' || !oobCode) {
+        document.getElementById('stateValid').classList.remove('active');
+        document.getElementById('stateInvalid').classList.add('active');
+        document.getElementById('errorMsg').textContent = !oobCode
+          ? 'This link is missing the reset code. Please go back to the app and request a new password reset link.'
+          : 'This does not appear to be a password reset link. Please request a new one from the app.';
+        return;
+      }
+
+      window._resetParams = { oobCode, apiKey, lang };
+    })();
+
+    function goToApp() {
+      if (!window._resetParams) return;
+      const { oobCode, apiKey, lang } = window._resetParams;
+      const appBase = 'https://paintworkz.github.io/PaintWorkz-App/';
+      window.location.href = appBase
+        + '?mode=resetPassword'
+        + '&oobCode=' + encodeURIComponent(oobCode)
+        + (apiKey ? '&apiKey=' + encodeURIComponent(apiKey) : '')
+        + '&lang=' + encodeURIComponent(lang);
+    }
+  </script>
+</body>
+</html>
