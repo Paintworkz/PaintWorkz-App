@@ -168,14 +168,21 @@
 
     <script>
         const p = new URLSearchParams(window.location.search);
-        const job     = p.get('job')     || '';
-        const client  = p.get('client')  || '';
-        const colour  = p.get('colour')  || '';    // current page colour
-        const colours = p.get('colours') || colour; // all job colours
-        const parts   = p.get('parts')   || '';
-        const finish  = p.get('finish')  || '';
-        const type    = p.get('type')    || '';    // Satin / Gloss etc
-        const profiles = p.get('profiles') || '';
+        const job      = p.get('job')      || '';
+        const client   = p.get('client')   || '';
+        const finish   = p.get('finish')   || '';
+
+        // colours|parts|profiles|type are pipe-separated per colour
+        // e.g. colours=Lexicon|Vivid White  parts=12|8  profiles=Shaker|Plain  types=Satin|Gloss
+        const coloursRaw  = p.get('colours')  || p.get('colour') || '';
+        const partsRaw    = p.get('parts')    || '';
+        const profilesRaw = p.get('profiles') || '';
+        const typesRaw    = p.get('types')    || p.get('type') || '';
+
+        const colourList  = coloursRaw.split('|').map(c => c.trim()).filter(Boolean);
+        const partsList   = partsRaw.split('|').map(c => c.trim());
+        const profilesList= profilesRaw.split('|').map(c => c.trim());
+        const typesList   = typesRaw.split('|').map(c => c.trim());
 
         const el = document.getElementById('content');
 
@@ -186,49 +193,47 @@
                 <div style="font-size:12px;">Scan a PaintWorkz shop label QR code to view job details.</div>
             </div>`;
         } else {
-            const colourList = colours.split(',').map(c => c.trim()).filter(Boolean);
-
-            el.innerHTML = `
+            // Header card
+            let html = `
                 <div class="card">
                     <div class="card-title">📋 Job Details</div>
                     <div class="job-number">Job #${job}</div>
                     <div class="job-client">${client}</div>
-
-                    ${colourList.length ? `
-                    <div class="row">
-                        <div class="row-label">🎨 Colour${colourList.length > 1 ? 's' : ''}</div>
-                        <div class="row-value">${colourList.map(c => `<span class="colour-chip">${c}</span>`).join('')}</div>
-                    </div>` : ''}
-
-                    ${type ? `
-                    <div class="row">
-                        <div class="row-label">✨ Finish</div>
-                        <div class="row-value"><span class="finish-badge">${type}</span></div>
-                    </div>` : ''}
-
-                    ${parts ? `
-                    <div class="row">
-                        <div class="row-label">🚪 Parts</div>
-                        <div class="row-value">${parts}</div>
-                    </div>` : ''}
-
-                    ${profiles ? `
-                    <div class="row">
-                        <div class="row-label">📐 Profiles</div>
-                        <div class="row-value">${profiles}</div>
-                    </div>` : ''}
-
-                    ${finish ? `
-                    <div class="row">
+                    ${finish ? `<div class="row">
                         <div class="row-label">📅 Scheduled Finish</div>
                         <div class="row-value">${finish}</div>
                     </div>` : ''}
-                </div>
+                </div>`;
 
-                <a class="open-btn" href="https://paintworkz.github.io/PaintWorkz-App/">
-                    Open PaintWorkz App →
-                </a>
-            `;
+            // One card per colour
+            colourList.forEach((colour, i) => {
+                const pts      = partsList[i]    || '';
+                const profs    = profilesList[i] || '';
+                const finType  = typesList[i]    || '';
+                html += `
+                <div class="card" style="border-color:#555; margin-bottom:12px;">
+                    <div class="card-title" style="color:#fff;">🎨 Colour ${colourList.length > 1 ? (i + 1) + ' of ' + colourList.length : ''}</div>
+                    <div class="row">
+                        <div class="row-label">Colour</div>
+                        <div class="row-value"><span class="colour-chip">${colour}</span></div>
+                    </div>
+                    ${finType ? `<div class="row">
+                        <div class="row-label">✨ Finish</div>
+                        <div class="row-value"><span class="finish-badge">${finType}</span></div>
+                    </div>` : ''}
+                    ${pts ? `<div class="row">
+                        <div class="row-label">🚪 Parts</div>
+                        <div class="row-value">${pts}</div>
+                    </div>` : ''}
+                    ${profs ? `<div class="row">
+                        <div class="row-label">📐 Profiles</div>
+                        <div class="row-value">${profs}</div>
+                    </div>` : ''}
+                </div>`;
+            });
+
+            html += `<a class="open-btn" href="https://paintworkz.github.io/PaintWorkz-App/">Open PaintWorkz App →</a>`;
+            el.innerHTML = html;
         }
     </script>
 </body>
