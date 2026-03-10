@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.8.43 | Updated: 2026-03-09                       ║
+║  Version: v1.8.44 | Updated: 2026-03-09                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.8.43';
+    const CURRENT_VERSION = 'v1.8.44';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1810,7 +1810,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.8.43</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.8.44</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -2473,7 +2473,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.8.43</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.8.44</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
                     </p>
                 </div>
                 <!-- ── PROMO CODE REDEMPTION (all users) ────────────────────── -->
@@ -3207,13 +3207,21 @@ const firebaseConfig = {
             const snap = await window.getDoc(ref);
             if (!snap.exists()) return;
             const data = snap.data();
-
             const display = document.getElementById('activePromoDisplay');
 
-            if (data.promoExpiresAt && data.promoPlan) {
+            if (data.promoExpiresAt && data.promoPlan && data.promoCode) {
                 const now = Date.now();
-                if (now < data.promoExpiresAt) {
-                    // Active promo — apply it
+
+                // ── Verify code still exists and is active in Firestore ──────
+                let codeStillValid = false;
+                try {
+                    const codeRef = window.doc(window.firebaseDb, 'promoCodes', data.promoCode);
+                    const codeSnap = await window.getDoc(codeRef);
+                    codeStillValid = codeSnap.exists(); // if deleted by owner, this is false
+                } catch(e) { codeStillValid = false; }
+
+                if (now < data.promoExpiresAt && codeStillValid) {
+                    // Active and valid — apply it
                     if (!isOwner()) window.currentPlan = data.promoPlan;
                     const daysLeft = Math.ceil((data.promoExpiresAt - now) / (24 * 60 * 60 * 1000));
                     const expiryDate = new Date(data.promoExpiresAt).toLocaleDateString('en-AU');
@@ -3226,9 +3234,14 @@ const firebaseConfig = {
                     }
                     applyProLocks();
                 } else {
-                    // Promo expired — clear it
-                    await window.setDoc(ref, { promoPlan: null, promoExpiresAt: null }, { merge: true });
+                    // Expired OR code was deleted/revoked by owner — clear it
+                    await window.setDoc(ref, { promoPlan: null, promoExpiresAt: null, promoCode: null }, { merge: true });
+                    if (!isOwner()) window.currentPlan = 'free';
                     if (display) display.style.display = 'none';
+                    applyProLocks();
+                    if (!codeStillValid && data.promoCode) {
+                        console.log('[Promo] Code revoked by owner — access removed');
+                    }
                 }
             } else {
                 if (display) display.style.display = 'none';
@@ -7311,7 +7324,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.8.43'; // ← bump this on every release
+        const CURRENT_VERSION = 'v1.8.44'; // ← bump this on every release
         const CURRENT_DATE = '2026-03-09';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
