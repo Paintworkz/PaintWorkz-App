@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.8.76 | Updated: 2026-03-09                       ║
+║  Version: v1.8.77 | Updated: 2026-03-09                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.8.76';
+    const CURRENT_VERSION = 'v1.8.77';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -414,6 +414,34 @@
         .pw-section-label { font-size:9px; font-weight:900; color:#888; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px; padding:2px 2px; }
         .pw-fullwidth { width:100%; box-sizing:border-box; }
         #onboardingWizard .ob-btn { width:100%; border:none; padding:14px; border-radius:10px; font-weight:900; font-size:15px; cursor:pointer; }
+
+        /* ── Guided Tour ─────────────────────────────────────── */
+        #tourOverlay {
+            position:fixed; inset:0; z-index:99990; pointer-events:none;
+        }
+        #tourSpotlight {
+            position:fixed; z-index:99991; border-radius:12px;
+            box-shadow: 0 0 0 9999px rgba(0,0,0,0.72);
+            transition: all 0.35s cubic-bezier(.4,0,.2,1);
+            pointer-events:none;
+        }
+        #tourCard {
+            position:fixed; z-index:99992; background:#1c1c1e;
+            border:2px solid #d4af37; border-radius:16px;
+            padding:20px; width:min(320px, 90vw);
+            box-shadow:0 8px 32px rgba(0,0,0,0.6);
+            transition: all 0.35s cubic-bezier(.4,0,.2,1);
+            font-family:-apple-system,sans-serif;
+        }
+        #tourCard .t-step  { font-size:10px; font-weight:900; color:#d4af37; letter-spacing:1.5px; margin-bottom:8px; }
+        #tourCard .t-title { font-size:16px; font-weight:900; color:#fff; margin-bottom:8px; }
+        #tourCard .t-body  { font-size:12px; color:#ccc; line-height:1.6; margin-bottom:16px; }
+        #tourCard .t-btns  { display:flex; gap:8px; }
+        #tourCard .t-skip  { flex:0 0 auto; background:none; border:1px solid #444; color:#888; padding:8px 14px; border-radius:8px; font-size:11px; font-weight:900; cursor:pointer; }
+        #tourCard .t-next  { flex:1; background:#d4af37; border:none; color:#000; padding:10px; border-radius:8px; font-size:13px; font-weight:900; cursor:pointer; }
+        #tourProgress { display:flex; gap:6px; margin-bottom:14px; }
+        #tourProgress span { flex:1; height:3px; border-radius:2px; background:#333; transition:background 0.3s; }
+        #tourProgress span.done { background:#d4af37; }
 
         .job-name-text { color: #000; }
         @media (prefers-color-scheme: dark) { body:not([data-theme="light"]) .job-name-text { color: #f2f2f7 !important; } }
@@ -1276,7 +1304,8 @@ const firebaseConfig = {
                     📅 <strong>Schedule</strong> — Track job phases<br>
                     ⚙️ <strong>Admin</strong> → <strong>Reports</strong> — Business analytics
                 </div>
-                <button onclick="closeOnboarding()" style="width:100%; background:#d4af37; border:none; padding:14px; border-radius:10px; font-weight:900; font-size:15px; cursor:pointer;">Start Using PaintWorkz Pro ✓</button>
+                <button onclick="closeOnboarding(); setTimeout(startTour, 400);" style="width:100%; background:#d4af37; border:none; padding:14px; border-radius:10px; font-weight:900; font-size:15px; cursor:pointer;">🗺️ Show Me Around →</button>
+                <button onclick="closeOnboarding()" style="width:100%; background:none; border:1px solid #ddd; color:#999; padding:10px; border-radius:10px; font-weight:700; font-size:13px; cursor:pointer; margin-top:8px;">Skip — I'll explore myself</button>
             </div>
         </div>
     </div>
@@ -1817,7 +1846,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.8.76</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.8.77</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -2549,7 +2578,8 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.8.76</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.8.77</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
+                        <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                     </p>
                 </div>
 
@@ -5527,10 +5557,65 @@ const firebaseConfig = {
             const demoProfiles = [
                 'Plain (101)', 'Shaker (401)', 'Shaker 45 (402)', 'Bevelled Edge (104)', 'Custom'
             ];
-            profiles = demoProfiles; // update in-memory variable too
+            profiles = demoProfiles;
             localStorage.setItem('doorProfiles', JSON.stringify(demoProfiles));
             try { if (typeof refreshLists === 'function') refreshLists(); } catch(e) {}
             console.log('🌱 Demo door profiles seeded for new user');
+        }
+
+        // --- Demo Jobs ---
+        const existingJobs = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+        if (existingJobs.length === 0) {
+            const today = new Date();
+            const fmt = d => d.toLocaleDateString('en-AU');
+            const iso = d => d.toISOString();
+            const d1 = new Date(today); d1.setDate(today.getDate() - 14);
+            const d2 = new Date(today); d2.setDate(today.getDate() - 7);
+            const d3 = new Date(today); d3.setDate(today.getDate() - 2);
+
+            const demoJobs = [
+                {
+                    id: 'demo-job-001', jobNum: '1001', jobName: 'Kitchen & Pantry',
+                    client: 'Sample Kitchens', dateReceived: fmt(d1),
+                    brand: 'Dulux', color: 'Lexicon Quarter', finish: 'Satin', code: 'DEMO001',
+                    totalSqm: '18.450', totalParts: '24', completed: true,
+                    completedDate: fmt(d2),
+                    timestamp: iso(d1),
+                    items: [
+                        { type:'Door', fm:'Flat', prof:'Shaker (401)', desc:'Kitchen Door', w:450, h:720, qty:8, sqm:2.592, color:'Lexicon Quarter', finish:'Satin', brand:'Dulux', sides:'SS', e1:false, e2:false, e3:false, e4:false },
+                        { type:'Door', fm:'Flat', prof:'Shaker (401)', desc:'Pantry Door', w:500, h:2100, qty:2, sqm:2.100, color:'Lexicon Quarter', finish:'Satin', brand:'Dulux', sides:'SS', e1:false, e2:false, e3:false, e4:false },
+                        { type:'Panel', fm:'Flat', prof:'Plain (101)', desc:'Side Panel', w:600, h:720, qty:4, sqm:1.728, color:'Lexicon Quarter', finish:'Satin', brand:'Dulux', sides:'SS', e1:false, e2:false, e3:false, e4:false },
+                        { type:'Drawer', fm:'Flat', prof:'Plain (101)', desc:'Drawer Front', w:450, h:180, qty:10, sqm:0.810, color:'Lexicon Quarter', finish:'Satin', brand:'Dulux', sides:'SS', e1:false, e2:false, e3:false, e4:false },
+                    ]
+                },
+                {
+                    id: 'demo-job-002', jobNum: '1002', jobName: 'Master & Ensuite Vanity',
+                    client: 'Test Cabinetry Co', dateReceived: fmt(d2),
+                    brand: 'Dulux', color: 'Vivid White', finish: 'Satin', code: 'DEMO002',
+                    totalSqm: '9.240', totalParts: '14', completed: false,
+                    timestamp: iso(d2),
+                    items: [
+                        { type:'Door', fm:'Flat', prof:'Plain (101)', desc:'Vanity Door', w:400, h:680, qty:6, sqm:1.632, color:'Vivid White', finish:'Satin', brand:'Dulux', sides:'SS', e1:false, e2:false, e3:false, e4:false },
+                        { type:'Drawer', fm:'Flat', prof:'Plain (101)', desc:'Drawer Front', w:760, h:180, qty:4, sqm:0.547, color:'Vivid White', finish:'Satin', brand:'Dulux', sides:'SS', e1:false, e2:false, e3:false, e4:false },
+                        { type:'Panel', fm:'Flat', prof:'Plain (101)', desc:'End Panel', w:550, h:720, qty:4, sqm:1.584, color:'Vivid White', finish:'Satin', brand:'Dulux', sides:'SS', e1:false, e2:false, e3:false, e4:false },
+                    ]
+                },
+                {
+                    id: 'demo-job-003', jobNum: '1003', jobName: 'Wardrobe & Laundry',
+                    client: 'Demo Joinery', dateReceived: fmt(d3),
+                    brand: 'Dulux', color: 'Hog Bristle', finish: 'Satin', code: 'DEMO003',
+                    totalSqm: '12.800', totalParts: '18', completed: false,
+                    timestamp: iso(d3),
+                    items: [
+                        { type:'Door', fm:'Moulded', prof:'Shaker (401)', desc:'Wardrobe Door', w:500, h:2100, qty:8, sqm:8.400, color:'Hog Bristle', finish:'Satin', brand:'Dulux', sides:'SS', e1:false, e2:false, e3:false, e4:false },
+                        { type:'Door', fm:'Flat', prof:'Plain (101)', desc:'Laundry Door', w:550, h:720, qty:4, sqm:1.584, color:'Hog Bristle', finish:'Satin', brand:'Dulux', sides:'SS', e1:false, e2:false, e3:false, e4:false },
+                        { type:'Drawer', fm:'Flat', prof:'Plain (101)', desc:'Laundry Drawer', w:500, h:180, qty:6, sqm:0.540, color:'Hog Bristle', finish:'Satin', brand:'Dulux', sides:'SS', e1:false, e2:false, e3:false, e4:false },
+                    ]
+                }
+            ];
+            safeStorage.setJSON('jobHistory', demoJobs);
+            try { if (typeof renderHistory === 'function') renderHistory(); } catch(e) {}
+            console.log('🌱 Demo jobs seeded for new user');
         }
     }
     // ── End demo seed ─────────────────────────────────────────────────────────
@@ -7416,7 +7501,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.8.76'; // ← bump this on every release
+        const CURRENT_VERSION = 'v1.8.77'; // ← bump this on every release
         const CURRENT_DATE = '2026-03-09';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -18707,6 +18792,178 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             .catch(e => notify('❌ Push failed: ' + e.message));
     }
 
+</script>
+
+<!-- ── GUIDED TOUR ──────────────────────────────────────────────────── -->
+<div id="tourOverlay" style="display:none;"></div>
+<div id="tourSpotlight" style="display:none;"></div>
+<div id="tourCard" style="display:none;">
+    <div id="tourProgress"></div>
+    <div class="t-step" id="tourStep"></div>
+    <div class="t-title" id="tourTitle"></div>
+    <div class="t-body" id="tourBody"></div>
+    <div class="t-btns">
+        <button class="t-skip" onclick="endTour()">Skip Tour</button>
+        <button class="t-next" id="tourNextBtn" onclick="tourNext()">Next →</button>
+    </div>
+</div>
+
+<script>
+const TOUR_STEPS = [
+    {
+        target: 'btn-measure',
+        title: '📐 Measure Tab',
+        body: 'This is where you build a job. Enter client name, job number, and add all the doors, panels and drawers for the job.',
+        position: 'bottom'
+    },
+    {
+        target: 'cli',
+        title: '👤 Client Name',
+        body: 'Select your client from the dropdown or type a new name. Clients are saved to your database automatically.',
+        position: 'bottom'
+    },
+    {
+        target: 'jN',
+        title: '🔢 Job Number',
+        body: 'Enter a job number. The app auto-increments from your last job — you can override it anytime.',
+        position: 'bottom'
+    },
+    {
+        target: 'pP',
+        title: '🚪 Part Type',
+        body: 'Choose the part type — Door, Panel, Drawer, or Custom. The measure sheet adjusts to suit each type.',
+        position: 'bottom'
+    },
+    {
+        target: 'addPartBtn',
+        title: '➕ Adding Parts',
+        body: 'Once you\'ve entered the dimensions, hit ADD PART. Repeat for each different size. Use quantity for multiples of the same size.',
+        position: 'top'
+    },
+    {
+        target: 'saveJobBtn',
+        title: '💾 Save the Job',
+        body: 'Hit SAVE JOB to save to your history and sync to the cloud. You can reload it anytime from the History tab.',
+        position: 'top'
+    },
+    {
+        target: 'btn-history',
+        title: '📋 History Tab',
+        body: 'All your saved jobs live here. Tap any job to reload it, mark it complete, or generate PDFs from it.',
+        position: 'bottom'
+    },
+    {
+        target: 'btn-forms',
+        title: '📄 Forms Tab',
+        body: 'Generate professional PDFs from the current job — estimates, quotes, invoices, shop labels and more.',
+        position: 'bottom'
+    },
+    {
+        target: 'btn-admin',
+        title: '⚙️ Admin Tab',
+        body: 'Set up your business details, pricing matrix, paint colours, and view reports. Start here to customise the app for your shop.',
+        position: 'bottom'
+    }
+];
+
+let _tourStep = 0;
+let _tourActive = false;
+
+function startTour() {
+    _tourStep = 0;
+    _tourActive = true;
+    // Make sure we're on measure tab
+    if (typeof tab === 'function') tab('measure');
+    document.getElementById('tourOverlay').style.display = 'block';
+    document.getElementById('tourSpotlight').style.display = 'block';
+    document.getElementById('tourCard').style.display = 'block';
+    showTourStep(_tourStep);
+    localStorage.setItem('pw_tour_done', '1');
+}
+
+function showTourStep(idx) {
+    if (idx >= TOUR_STEPS.length) { endTour(); return; }
+    const step = TOUR_STEPS[idx];
+    const total = TOUR_STEPS.length;
+
+    // Progress bar
+    let prog = '';
+    for (let i = 0; i < total; i++) prog += `<span class="${i <= idx ? 'done' : ''}"></span>`;
+    document.getElementById('tourProgress').innerHTML = prog;
+
+    document.getElementById('tourStep').textContent = `STEP ${idx + 1} OF ${total}`;
+    document.getElementById('tourTitle').textContent = step.title;
+    document.getElementById('tourBody').textContent = step.body;
+    document.getElementById('tourNextBtn').textContent = idx === total - 1 ? '✓ Done' : 'Next →';
+
+    // Spotlight target element
+    const el = document.getElementById(step.target);
+    const spotlight = document.getElementById('tourSpotlight');
+    const card = document.getElementById('tourCard');
+
+    if (el) {
+        const r = el.getBoundingClientRect();
+        const pad = 8;
+        spotlight.style.left   = (r.left - pad) + 'px';
+        spotlight.style.top    = (r.top - pad) + 'px';
+        spotlight.style.width  = (r.width + pad * 2) + 'px';
+        spotlight.style.height = (r.height + pad * 2) + 'px';
+
+        // Position card above or below
+        const cardW = Math.min(320, window.innerWidth * 0.9);
+        let cardLeft = r.left + r.width / 2 - cardW / 2;
+        cardLeft = Math.max(12, Math.min(cardLeft, window.innerWidth - cardW - 12));
+        card.style.width = cardW + 'px';
+        card.style.left = cardLeft + 'px';
+
+        if (step.position === 'bottom' || r.top < 200) {
+            card.style.top = (r.bottom + pad + 12) + 'px';
+            card.style.bottom = 'auto';
+        } else {
+            card.style.bottom = (window.innerHeight - r.top + pad + 12) + 'px';
+            card.style.top = 'auto';
+        }
+    } else {
+        // Fallback — centre of screen, no spotlight
+        spotlight.style.display = 'none';
+        card.style.top = '50%';
+        card.style.left = '50%';
+        card.style.transform = 'translate(-50%, -50%)';
+    }
+}
+
+function tourNext() {
+    _tourStep++;
+    // Switch to correct tab for certain steps
+    if (TOUR_STEPS[_tourStep]?.target === 'btn-history') {
+        // just highlight nav, no tab switch
+    }
+    if (_tourStep >= TOUR_STEPS.length) { endTour(); return; }
+    showTourStep(_tourStep);
+}
+
+function endTour() {
+    _tourActive = false;
+    document.getElementById('tourOverlay').style.display = 'none';
+    document.getElementById('tourSpotlight').style.display = 'none';
+    const card = document.getElementById('tourCard');
+    card.style.display = 'none';
+    card.style.transform = '';
+    notify('✓ Tour complete — you\'re ready to go!');
+}
+
+// Auto-start tour for new users (once only)
+function maybeStartTour() {
+    if (localStorage.getItem('pw_tour_done')) return;
+    if (!localStorage.getItem('pw_onboarded')) return; // Wait until onboarding done
+    setTimeout(() => startTour(), 800);
+}
+
+// Expose globally
+window.startTour = startTour;
+window.tourNext = tourNext;
+window.endTour = endTour;
+window.maybeStartTour = maybeStartTour;
 </script>
 </body>
 </html>
