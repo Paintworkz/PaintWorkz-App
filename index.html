@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.8.88 | Updated: 2026-03-09                       ║
+║  Version: v1.8.89 | Updated: 2026-03-09                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.8.88';
+    const CURRENT_VERSION = 'v1.8.89';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1854,7 +1854,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.8.88</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.8.89</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -2587,7 +2587,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.8.88</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.8.89</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                     </p>
                 </div>
@@ -3834,9 +3834,9 @@ const firebaseConfig = {
         }
         
         // Update BOTH inputs to match
-        const suffix = buttonId.replace('form-', '').replace(/-/g, '_').toUpperCase();
-        const colorPickerId = buttonId.replace('form-', '') + '_picker';
-        const colorCodeId = buttonId.replace('form-', '') + '_code';
+        const safeId = buttonId.replace('form-', '').replace(/-/g, '_');
+        const colorPickerId = safeId + '_picker';
+        const colorCodeId   = safeId + '_code';
         
         const picker = document.getElementById(colorPickerId);
         const code = document.getElementById(colorCodeId);
@@ -3891,8 +3891,8 @@ const firebaseConfig = {
                     localStorage.setItem(buttonId + '_color', saved);
                     const btn = document.getElementById(buttonId);
                     if (btn) { btn.style.background = saved; btn.style.borderColor = saved; }
-                    const picker = document.getElementById(buttonId.replace('form-', '') + '_picker');
-                    const code = document.getElementById(buttonId.replace('form-', '') + '_code');
+                    const picker = document.getElementById(buttonId.replace('form-', '').replace(/-/g, '_') + '_picker');
+                    const code = document.getElementById(buttonId.replace('form-', '').replace(/-/g, '_') + '_code');
                     if (picker) picker.value = saved;
                     if (code) code.value = saved;
                 }
@@ -7542,7 +7542,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.8.88'; // ← bump this on every release
+        const CURRENT_VERSION = 'v1.8.89'; // ← bump this on every release
         const CURRENT_DATE = '2026-03-09';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -19134,7 +19134,6 @@ function showTourStep(idx) {
     const step = TOUR_STEPS[idx];
     const total = TOUR_STEPS.length;
 
-    // Progress bar
     let prog = '';
     for (let i = 0; i < total; i++) prog += `<span class="${i <= idx ? 'done' : ''}"></span>`;
     document.getElementById('tourProgress').innerHTML = prog;
@@ -19143,51 +19142,61 @@ function showTourStep(idx) {
     document.getElementById('tourBody').textContent = step.body;
     document.getElementById('tourNextBtn').textContent = idx === total - 1 ? '✓ Done' : 'Next →';
 
-    // Spotlight
     const el = document.getElementById(step.target);
     const spotlight = document.getElementById('tourSpotlight');
     const card = document.getElementById('tourCard');
-
-    // Reset
     card.style.transform = '';
-    spotlight.style.display = 'block';
 
-    if (el) {
-        // Scroll element into view first
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    function _pos() {
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        const cardW = Math.min(310, vw - 24);
+        const cardH = card.offsetHeight || 220;
+        const pad = 8;
 
-        setTimeout(() => {
+        if (el) {
             const r = el.getBoundingClientRect();
-            const pad = 8;
-            spotlight.style.left   = (r.left - pad) + 'px';
-            spotlight.style.top    = (r.top - pad) + 'px';
-            spotlight.style.width  = (r.width + pad * 2) + 'px';
+            spotlight.style.display = 'block';
+            spotlight.style.left   = Math.max(0, r.left - pad) + 'px';
+            spotlight.style.top    = Math.max(0, r.top  - pad) + 'px';
+            spotlight.style.width  = (r.width  + pad * 2) + 'px';
             spotlight.style.height = (r.height + pad * 2) + 'px';
 
-            const cardW = Math.min(320, window.innerWidth * 0.9);
+            // Horizontal: centre on element, clamp to screen edges
             let cardLeft = r.left + r.width / 2 - cardW / 2;
-            cardLeft = Math.max(12, Math.min(cardLeft, window.innerWidth - cardW - 12));
-            card.style.width = cardW + 'px';
-            card.style.left = cardLeft + 'px';
+            cardLeft = Math.max(12, Math.min(cardLeft, vw - cardW - 12));
 
-            const spaceBelow = window.innerHeight - r.bottom;
-            const spaceAbove = r.top;
-
-            if (step.position === 'bottom' || spaceBelow > 200 || spaceAbove < 200) {
-                card.style.top = (r.bottom + pad + 12) + 'px';
-                card.style.bottom = 'auto';
+            // Vertical: place below if room, else above, always clamp inside viewport
+            const belowTop = r.bottom + pad + 12;
+            const aboveTop = r.top - pad - 12 - cardH;
+            let cardTop;
+            if (belowTop + cardH <= vh - 12) {
+                cardTop = belowTop;
+            } else if (aboveTop >= 12) {
+                cardTop = aboveTop;
             } else {
-                card.style.bottom = (window.innerHeight - r.top + pad + 12) + 'px';
-                card.style.top = 'auto';
+                // Not enough room above or below — pin to bottom of screen
+                cardTop = Math.max(12, vh - cardH - 12);
             }
-        }, 60);
+
+            card.style.width  = cardW + 'px';
+            card.style.left   = cardLeft + 'px';
+            card.style.top    = cardTop + 'px';
+            card.style.bottom = 'auto';
+        } else {
+            spotlight.style.display = 'none';
+            card.style.width  = cardW + 'px';
+            card.style.left   = (vw / 2 - cardW / 2) + 'px';
+            card.style.top    = Math.max(12, vh / 2 - cardH / 2) + 'px';
+            card.style.bottom = 'auto';
+        }
+    }
+
+    if (el) {
+        el.scrollIntoView({ behavior: 'instant', block: 'center' });
+        setTimeout(_pos, 150);
     } else {
-        spotlight.style.display = 'none';
-        card.style.top = '50%';
-        card.style.left = '50%';
-        card.style.bottom = 'auto';
-        card.style.transform = 'translate(-50%, -50%)';
-        card.style.width = '300px';
+        setTimeout(_pos, 150);
     }
 }
 
