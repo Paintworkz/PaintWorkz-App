@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.8.93 | Updated: 2026-03-09                       ║
+║  Version: v1.8.94 | Updated: 2026-03-09                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.8.93';
+    const CURRENT_VERSION = 'v1.8.94';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1883,7 +1883,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.8.93</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.8.94</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -2118,8 +2118,13 @@ const firebaseConfig = {
                                     <div style="font-size:10px; color:#888; margin-top:4px; text-align:center;">Alert triggers when any base drops below this level</div>
                                 </div>
                             </div>
-                            <!-- Paint Base Cost per Litre -->
-                            <div style="background:#e8f5e9; border:2px solid #4caf50; border-radius:8px; padding:12px; margin-bottom:6px;">
+                            <!-- Paint Base Cost per Litre — Pro only -->
+                            <div id="paintBaseCostProSection" style="background:#e8f5e9; border:2px solid #4caf50; border-radius:8px; padding:12px; margin-bottom:6px; position:relative;">
+                                <div id="paintBaseCostProLock" style="display:none; position:absolute; inset:0; background:rgba(0,0,0,0.7); border-radius:8px; z-index:10; flex-direction:column; align-items:center; justify-content:center; padding:12px; text-align:center;">
+                                    <div style="font-size:22px;">🔒</div>
+                                    <div style="font-size:11px; font-weight:900; color:#d4af37; margin:4px 0;">Pro Feature</div>
+                                    <div style="font-size:10px; color:#ccc;">Paint cost analysis is included in the Pro plan.</div>
+                                </div>
                                 <label style="font-size:11px; font-weight:900; color:#1b5e20; display:block; margin-bottom:8px;">💵 Paint Base Cost ($/litre) — used in Reports profit analysis</label>
                                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
                                     <div>
@@ -2646,7 +2651,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.8.93</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.8.94</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                     </p>
                 </div>
@@ -3171,6 +3176,9 @@ const firebaseConfig = {
             const el = document.getElementById(id);
             if (el) el.style.display = hasPro ? 'none' : 'flex';
         });
+        // Paint base cost inputs — Pro only
+        const bcLock = document.getElementById('paintBaseCostProLock');
+        if (bcLock) bcLock.style.display = hasPro ? 'none' : 'flex';
 
         // ── Nav/sub-tab lock icons ────────────────────────────────────────────
         const formsNavBtn = document.getElementById('btn-forms');
@@ -7602,7 +7610,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.8.93'; // ← bump this on every release
+        const CURRENT_VERSION = 'v1.8.94'; // ← bump this on every release
         const CURRENT_DATE = '2026-03-09';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -13084,17 +13092,38 @@ const firebaseConfig = {
 
         const _cfl = (document.getElementById('rClientFilter')?.value || '').trim();
         const statusLabel = (_reportStatusFilter === 'active' ? '🔄 Active' : _reportStatusFilter === 'completed' ? '✅ Completed' : '📋 All Jobs') + (_cfl ? ' • 👤 ' + _cfl : '');
+        // Pre-calc estimated value and paint cost for KPI row
+        const _estCosts = getBaseCosts();
+        let _totalEstVal = 0;
+        let _totalPaintCost = 0;
+        jobs.forEach(job => {
+            let jobVal = 0;
+            if (job.items && job.items.length > 0) {
+                job.items.forEach(item => { try { jobVal += (calculateLinePrice(item).lineCost || 0); } catch(e) {} });
+            } else { jobVal = (parseFloat(job.totalSqm) || 0) * 125; }
+            _totalEstVal += jobVal;
+        });
+        Object.keys(baseCodeLitres).forEach(k => {
+            _totalPaintCost += (baseCodeLitres[k] || 0) * (_estCosts[k] || 0);
+        });
+        _totalPaintCost += clearPaintLitres * (_estCosts['CLEAR'] || 0);
+        const _grossProfit = _totalEstVal - _totalPaintCost;
+        const _fmtKpi = v => v >= 1000 ? '$' + (v/1000).toFixed(1) + 'k' : '$' + Math.round(v).toLocaleString();
+
         const html = `
         <div id="reportsPrintArea">
         <div style="text-align:right; font-size:10px; font-weight:900; color:#2196f3; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">${statusLabel}</div>
 
-        <!-- KPI cards - 5 across -->
-        <div style="display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-bottom:18px;">
+        <!-- KPI cards - up to 8 across -->
+        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(100px,1fr)); gap:10px; margin-bottom:18px;">
             ${kpiCard('🏗️', 'Jobs', jobs.length, '#2196f3')}
             ${kpiCard('📐', 'Total SQM', totalSqm.toFixed(1) + 'm²', '#4caf50')}
             ${kpiCard('🚪', 'Parts', totalParts, '#ff9800')}
             ${kpiCard('🎨', 'Colours', Object.keys(colourCount).length, '#9c27b0')}
             ${kpiCard('🪣', 'Undercoat SQM', undercoatSqm + 'm²', '#795548')}
+            ${_totalEstVal > 0 ? kpiCard('💰', 'Est. Revenue', _fmtKpi(_totalEstVal), '#1565c0') : ''}
+            ${_totalPaintCost > 0 ? kpiCard('🎨', 'Paint Cost', _fmtKpi(_totalPaintCost), '#e53935') : ''}
+            ${(_totalEstVal > 0 && _totalPaintCost > 0) ? kpiCard('📈', 'Gross Margin', _fmtKpi(_grossProfit), _grossProfit >= 0 ? '#2e7d32' : '#c62828') : ''}
         </div>
 
         <!-- Row 1: Monthly SQM line chart + Finish donut -->
@@ -13643,7 +13672,9 @@ const firebaseConfig = {
                                 chart.data.datasets.forEach((ds,di)=>{
                                     chart.getDatasetMeta(di).data.forEach((bar,i)=>{
                                         const val=ds.data[i]; if(!val) return;
-                                        const lbl='$'+(val>=1000?(val/1000).toFixed(1)+'k':val.toFixed(0));
+                                        const k=bcLabels[i];
+                                        const costVal=(val*(costs[k]||0));
+                                        const lbl=val.toFixed(1)+'L'+(costs[k]?' $'+costVal.toFixed(0):'');
                                         ctx2.save(); ctx2.fillStyle='#fff'; ctx2.font='bold 9px sans-serif';
                                         ctx2.textAlign='right'; ctx2.textBaseline='middle';
                                         ctx2.fillText(lbl, bar.x-5, bar.y); ctx2.restore();
@@ -13651,13 +13682,19 @@ const firebaseConfig = {
                                 });
                             }
                         };
+                        // litres per base code as bar, cost as label
+                        const bcLitres = bcLabels.map(k => +(baseCodeLitres[k]||0).toFixed(2));
                         new Chart(bcCtx.getContext('2d'), { type:'bar', plugins:[bcLabelPlugin], data:{
                             labels: bcLabels,
-                            datasets:[{ label:'Paint Cost ($)', data:bcVals, backgroundColor:'#ff7043', borderRadius:6, borderSkipped:false }]
+                            datasets:[{ label:'Litres', data:bcLitres, backgroundColor:'#ff7043', borderRadius:6, borderSkipped:false }]
                         }, options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
-                            plugins:{ legend:{display:false}, tooltip:{callbacks:{label:c=>'  $'+c.raw.toFixed(2)+' ('+((baseCodeLitres[bcLabels[c.dataIndex]]||0).toFixed(1))+'L)' }} },
+                            plugins:{ legend:{display:false}, tooltip:{callbacks:{label:c=>{
+                                const k=bcLabels[c.dataIndex];
+                                const cost=(c.raw*(costs[k]||0));
+                                return '  '+c.raw.toFixed(1)+'L'+(costs[k]?' — $'+cost.toFixed(2)+' cost':'');
+                            }}} },
                             scales:{
-                                x:{ beginAtZero:true, ticks:{font:{size:10,weight:'700'}, callback:v=>'$'+(v>=1000?(v/1000).toFixed(0)+'k':v)}, grid:{color:'#f0f0f0'} },
+                                x:{ beginAtZero:true, ticks:{font:{size:10,weight:'700'}, callback:v=>v.toFixed(0)+'L'}, grid:{color:'#f0f0f0'} },
                                 y:{ ticks:{font:{size:11,weight:'700'}} }
                             }
                         }});
@@ -13833,18 +13870,43 @@ const firebaseConfig = {
             costClear:      g('st_costClear')
         };
         localStorage.setItem('pwStockSettings', JSON.stringify(st));
+        // Sync to Firestore
+        if (window.currentUser && window.firebaseDb) {
+            try {
+                const ref = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'stockSettings');
+                window.setDoc(ref, { ...st, lastUpdated: new Date().toISOString() }, { merge: false })
+                    .then(() => console.log('☁️ Stock settings synced'))
+                    .catch(e => console.warn('Stock settings Firestore sync failed:', e));
+            } catch(e) { console.warn('Stock settings Firestore error:', e); }
+        }
         notify('✓ Stock settings saved');
     }
     function loadStockSettings() {
         const st = JSON.parse(localStorage.getItem('pwStockSettings') || '{}');
-        const set = (id, key, def) => { const el = document.getElementById(id); if (el) el.value = st[key] !== undefined && st[key] !== 0 ? st[key] : (def || ''); };
-        set('st_alertLevel',    'alertLevel',    15);
-        set('st_costSatinWhite','costSatinWhite','');
-        set('st_costSatinClear','costSatinClear','');
-        set('st_costMattWhite', 'costMattWhite', '');
-        set('st_costGlossWhite','costGlossWhite','');
-        set('st_costUC',        'costUC',        '');
-        set('st_costClear',     'costClear',     '');
+        const applyToUI = (data) => {
+            const set = (id, key, def) => { const el = document.getElementById(id); if (el) el.value = data[key] !== undefined && data[key] !== 0 ? data[key] : (def || ''); };
+            set('st_alertLevel',    'alertLevel',    15);
+            set('st_costSatinWhite','costSatinWhite','');
+            set('st_costSatinClear','costSatinClear','');
+            set('st_costMattWhite', 'costMattWhite', '');
+            set('st_costGlossWhite','costGlossWhite','');
+            set('st_costUC',        'costUC',        '');
+            set('st_costClear',     'costClear',     '');
+        };
+        applyToUI(st);
+        // Also pull from Firestore if online
+        if (window.currentUser && window.firebaseDb) {
+            try {
+                const ref = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'stockSettings');
+                window.getDoc(ref).then(snap => {
+                    if (snap.exists()) {
+                        const data = snap.data();
+                        localStorage.setItem('pwStockSettings', JSON.stringify(data));
+                        applyToUI(data);
+                    }
+                }).catch(e => console.warn('Stock settings Firestore load error:', e));
+            } catch(e) { console.warn('Stock settings Firestore error:', e); }
+        }
     }
     // Helper: read base cost per litre from stock settings
     function getBaseCosts() {
@@ -19450,9 +19512,12 @@ function endTour() {
 
 // Auto-start tour for new users (once only)
 function maybeStartTour() {
+    // Don't show if already completed or explicitly skipped
     if (localStorage.getItem('pw_tour_done')) return;
-    if (!localStorage.getItem('pw_onboarded')) return;
-    setTimeout(() => startTour(), 800);
+    // Don't show on very first login before demo jobs have loaded
+    const hist = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+    if (hist.length === 0) return; // Wait for demo jobs to load first
+    setTimeout(() => startTour(), 1000);
 }
 
 // Expose globally
