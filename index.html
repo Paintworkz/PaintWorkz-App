@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.8.83 | Updated: 2026-03-09                       ║
+║  Version: v1.8.84 | Updated: 2026-03-09                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.8.83';
+    const CURRENT_VERSION = 'v1.8.84';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -984,10 +984,6 @@ const firebaseConfig = {
                 }
 
                 // ── Session isolation: clear user-scoped data on every login ──────
-                // We always clear user-specific localStorage and in-memory variables
-                // before Firestore loads. This prevents any user from ever seeing
-                // another user's clients, formulas, door profiles, etc.
-                // Firestore (user-scoped by UID) repopulates the correct data.
                 const lastUid = localStorage.getItem('pw_last_uid');
                 const userScopedKeys = [
                     'clientDatabase','jobHistory','paintFormulas','masterMatrix',
@@ -996,18 +992,20 @@ const firebaseConfig = {
                     'additionalCharges','defaultTimeline','adminSettings',
                     'pw_onboarded','currentJob'
                 ];
+                // Always clear on login - if another user's tab writes these back,
+                // Firestore will overwrite with the correct user's data
                 userScopedKeys.forEach(k => localStorage.removeItem(k));
-                // Reset in-memory variables immediately so dropdowns are empty
-                // while Firestore loads the correct data for this user
+                // Also clear any stale data from other UIDs
+                if (lastUid && lastUid !== user.uid) {
+                    userScopedKeys.forEach(k => localStorage.removeItem(`${lastUid}_${k}`));
+                    console.log('🔄 User changed — cleared stale data for old UID:', lastUid);
+                }
+                // Reset in-memory variables immediately
                 try { if (typeof paintDatabase !== 'undefined') paintDatabase = []; } catch(e) {}
                 try { if (typeof profiles !== 'undefined') profiles = []; } catch(e) {}
                 try { if (typeof items !== 'undefined') items = []; } catch(e) {}
                 try { if (typeof clientDatabase !== 'undefined') clientDatabase = []; } catch(e) {}
-                if (lastUid !== user.uid) {
-                    console.log('🔄 User changed — cleared stale data, loading for:', user.email);
-                } else {
-                    console.log('🔒 Session isolated — cleared localStorage, reloading from Firestore for:', user.email);
-                }
+                try { if (typeof history !== 'undefined') history = []; } catch(e) {}
                 localStorage.setItem('pw_last_uid', user.uid);
                 // ── End session isolation ──────────────────────────────────────────
 
@@ -1846,7 +1844,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.8.83</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.8.84</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -2578,7 +2576,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.8.83</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.8.84</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                     </p>
                 </div>
@@ -7524,7 +7522,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.8.83'; // ← bump this on every release
+        const CURRENT_VERSION = 'v1.8.84'; // ← bump this on every release
         const CURRENT_DATE = '2026-03-09';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -17235,16 +17233,26 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             const file = logoInput.files[0];
             const reader = new FileReader();
             reader.onload = (e) => {
-                localStorage.setItem('companyLogo', e.target.result);
-                // Sync to Firestore so it loads on all devices
-                if (window.currentUser && window.firebaseDb) {
-                    try {
+                // Compress image before saving to stay under Firestore 1MB limit
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const MAX = 300;
+                    const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+                    canvas.width = Math.round(img.width * scale);
+                    canvas.height = Math.round(img.height * scale);
+                    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                    const compressed = canvas.toDataURL('image/jpeg', 0.7);
+                    localStorage.setItem('companyLogo', compressed);
+                    if (window.currentUser && window.firebaseDb) {
                         const ref = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'logos');
-                        window.setDoc(ref, { companyLogo: e.target.result, lastUpdated: new Date().toISOString() }, { merge: true });
-                    } catch(e2) { console.warn('Logo Firestore sync error:', e2); }
-                }
-                console.log('✓ Company logo saved');
-                checkComplete();
+                        window.setDoc(ref, { companyLogo: compressed, lastUpdated: new Date().toISOString() }, { merge: true })
+                            .then(() => console.log('☁️ Company logo synced to Firestore'))
+                            .catch(err => { console.error('❌ Logo Firestore save failed:', err); showGlobalNotification('⚠️ Logo saved locally but cloud sync failed', '#fff3cd', '#ff9500'); });
+                    }
+                    checkComplete();
+                };
+                img.src = e.target.result;
             };
             reader.onerror = (e) => { console.error('❌ Error reading company logo:', e); checkComplete(); };
             reader.readAsDataURL(file);
@@ -17255,16 +17263,28 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             const file = headerLogoInput.files[0];
             const reader = new FileReader();
             reader.onload = (e) => {
-                localStorage.setItem('headerLogo', e.target.result);
-                // Sync to Firestore so it loads on all devices
-                if (window.currentUser && window.firebaseDb) {
-                    try {
+                // Compress image before saving to stay under Firestore 1MB limit
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const MAX_W = 600, MAX_H = 200;
+                    const scale = Math.min(1, MAX_W / img.width, MAX_H / img.height);
+                    canvas.width = Math.round(img.width * scale);
+                    canvas.height = Math.round(img.height * scale);
+                    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                    const compressed = canvas.toDataURL('image/jpeg', 0.8);
+                    localStorage.setItem('headerLogo', compressed);
+                    if (window.currentUser && window.firebaseDb) {
                         const ref = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'logos');
-                        window.setDoc(ref, { headerLogo: e.target.result, lastUpdated: new Date().toISOString() }, { merge: true });
-                    } catch(e2) { console.warn('Logo Firestore sync error:', e2); }
-                }
-                console.log('✓ Header logo saved');
-                checkComplete();
+                        window.setDoc(ref, { headerLogo: compressed, lastUpdated: new Date().toISOString() }, { merge: true })
+                            .then(() => { console.log('☁️ Header logo synced to Firestore'); loadHeaderLogo(); })
+                            .catch(err => { console.error('❌ Header logo Firestore save failed:', err); showGlobalNotification('⚠️ Logo saved locally but cloud sync failed', '#fff3cd', '#ff9500'); loadHeaderLogo(); });
+                    } else {
+                        loadHeaderLogo();
+                    }
+                    checkComplete();
+                };
+                img.src = e.target.result;
             };
             reader.onerror = (e) => { console.error('❌ Error reading header logo:', e); checkComplete(); };
             reader.readAsDataURL(file);
