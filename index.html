@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.8.77 | Updated: 2026-03-09                       ║
+║  Version: v1.8.79 | Updated: 2026-03-09                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.8.77';
+    const CURRENT_VERSION = 'v1.8.79';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1846,7 +1846,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.8.77</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.8.79</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -2578,7 +2578,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.8.77</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.8.79</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                     </p>
                 </div>
@@ -3481,8 +3481,28 @@ const firebaseConfig = {
     // ── End onboarding ─────────────────────────────────────────
     function logout() {
         sessionStorage.removeItem('pw_explicit_login');
-      window.signOut().then(() => {
-      });
+        // Unsubscribe realtime listener before signing out
+        if (window.realtimeSyncUnsubscribe) {
+            try { window.realtimeSyncUnsubscribe(); } catch(e) {}
+            window.realtimeSyncUnsubscribe = null;
+        }
+        window.realtimeSyncActive = false;
+        // Clear all user-scoped data from localStorage immediately
+        const userScopedKeys = [
+            'clientDatabase','jobHistory','paintFormulas','masterMatrix',
+            'doorProfiles','companySettings','companyLogo','headerLogoBase64',
+            'headerLogo','adminAlerts','appColors','paintBrands',
+            'additionalCharges','defaultTimeline','adminSettings',
+            'pw_onboarded','currentJob','pw_last_uid'
+        ];
+        userScopedKeys.forEach(k => localStorage.removeItem(k));
+        // Reset in-memory variables
+        try { if (typeof history !== 'undefined') history = []; } catch(e) {}
+        try { if (typeof fullHistory !== 'undefined') fullHistory = []; } catch(e) {}
+        try { if (typeof items !== 'undefined') items = []; } catch(e) {}
+        try { if (typeof paintDatabase !== 'undefined') paintDatabase = []; } catch(e) {}
+        try { if (typeof profiles !== 'undefined') profiles = []; } catch(e) {}
+        window.signOut().then(() => {});
     }
 
     function showForgotPassword() {
@@ -7501,7 +7521,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.8.77'; // ← bump this on every release
+        const CURRENT_VERSION = 'v1.8.79'; // ← bump this on every release
         const CURRENT_DATE = '2026-03-09';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -9032,7 +9052,7 @@ const firebaseConfig = {
             // Get company settings
             const companySettings = JSON.parse(localStorage.getItem('companySettings')) || {
                 name: 'Your Business Name',
-                address: '17 West Boundary Road, Hamilton 3300 VIC',
+                address: '',
                 phone: '',
                 email: ''
             };
@@ -9411,7 +9431,7 @@ const firebaseConfig = {
             // Get company settings
             const companySettings = JSON.parse(localStorage.getItem('companySettings')) || {
                 name: 'Your Business Name',
-                address: '17 West Boundary Road, Hamilton 3300 VIC',
+                address: '',
                 phone: '',
                 email: ''
             };
@@ -9790,7 +9810,7 @@ const firebaseConfig = {
             // Get company settings
             const companySettings = JSON.parse(localStorage.getItem('companySettings')) || {
                 name: 'Your Business Name',
-                address: '17 West Boundary Road, Hamilton 3300 VIC',
+                address: '',
                 phone: '',
                 email: ''
             };
@@ -10170,7 +10190,7 @@ const firebaseConfig = {
         // Get company settings from localStorage or use defaults
         const companySettings = JSON.parse(localStorage.getItem('companySettings')) || {
             name: 'Your Business Name',
-            address: '17 West Boundary Road, Hamilton 3300 VIC',
+            address: '',
             phone: '',
             email: ''
         };
@@ -11360,10 +11380,11 @@ const firebaseConfig = {
                 const subtitleX = headerX + (headerWidth - subtitleWidth) / 2;
                 doc.text(subtitleText, subtitleX, headerY + 19);
                 
-                const addressText = '17 West Boundary Rd, Hamilton 3300 VIC';
+                const _csAddr = JSON.parse(localStorage.getItem('companySettings') || '{}');
+                const addressText = _csAddr.address || '';
                 const addressWidth = doc.getTextWidth(addressText);
                 const addressX = headerX + (headerWidth - addressWidth) / 2;
-                doc.text(addressText, addressX, headerY + 25);
+                if (addressText) doc.text(addressText, addressX, headerY + 25);
                 
                 y += headerHeight + 10;
                 
@@ -11753,9 +11774,10 @@ const firebaseConfig = {
             
             doc.setFontSize(8);
             doc.setFont(undefined, 'normal');
-            doc.text('17 West Boundary Road Hamilton 3300', pageWidth / 2, yPos + 13, { align: 'center' });
-            doc.text('Phone: 0438803032', pageWidth / 2, yPos + 16, { align: 'center' });
-            const _csf = JSON.parse(localStorage.getItem('companySettings') || '{}'); if (_csf.email) doc.text('Email: ' + _csf.email, pageWidth / 2, yPos + 19, { align: 'center' });
+            const _csf = JSON.parse(localStorage.getItem('companySettings') || '{}');
+            if (_csf.address) doc.text(_csf.address, pageWidth / 2, yPos + 13, { align: 'center' });
+            if (_csf.phone) doc.text('Phone: ' + _csf.phone, pageWidth / 2, yPos + 16, { align: 'center' });
+            if (_csf.email) doc.text('Email: ' + _csf.email, pageWidth / 2, yPos + 19, { align: 'center' });
             
             yPos = 32;
             doc.setDrawColor(0);
@@ -17245,7 +17267,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
     function initializeCompanyDetailsForm() {
         const defaults = {
             name: 'Your Business Name',
-            address: '17 West Boundary Road, Hamilton 3300 VIC',
+            address: '',
             phone: '',
             email: ''
         };
