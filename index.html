@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.9.01 | Updated: 2026-03-09                       ║
+║  Version: v1.9.02 | Updated: 2026-03-09                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.9.01';
+    const CURRENT_VERSION = 'v1.9.02';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1888,7 +1888,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.9.01</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.9.02</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -2674,7 +2674,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.9.01</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.9.02</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);startTour();" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -7635,7 +7635,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.9.01'; // ← bump this on every release
+        const CURRENT_VERSION = 'v1.9.02'; // ← bump this on every release
         const CURRENT_DATE = '2026-03-09';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -9157,159 +9157,178 @@ const firebaseConfig = {
         const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
         const cs = JSON.parse(localStorage.getItem('companySettings') || '{}');
 
-        // Use live masterMatrix variable (in scope from pricing tab) or fall back to localStorage
+        // Use live masterMatrix or fall back to localStorage
         let matrix = (typeof masterMatrix !== 'undefined' && Object.keys(masterMatrix).length > 0)
             ? masterMatrix
             : JSON.parse(localStorage.getItem('masterMatrix') || '{}');
 
         if (!matrix || Object.keys(matrix).length === 0) {
-            notify('⚠️ No pricing data found — open Price Matrix tab first to load your prices.');
+            notify('⚠️ No pricing data found — open Price Matrix tab first.');
             return;
         }
 
-        const pw = 210, ph = 297;
-        const lm = 14, rm = pw - 14;
+        // Sort tiers numerically: Tier 1, Tier 2 … Other last
+        const tierOrder = Object.keys(matrix).sort((a, b) => {
+            const na = parseInt(a.replace(/\D/g,'')) || 999;
+            const nb = parseInt(b.replace(/\D/g,'')) || 999;
+            return na - nb;
+        });
+
+        const pw = 210, ph = 297, lm = 14, rm = pw - 14;
         let y = 0;
 
-        // ── Header bar ──────────────────────────────────────────────────
+        // ── Header ───────────────────────────────────────────────────────
         doc.setFillColor(20, 20, 20);
-        doc.rect(0, 0, pw, 28, 'F');
+        doc.rect(0, 0, pw, 30, 'F');
 
-        // Logo
-        const logoData = localStorage.getItem('pw_logo_' + (window.currentUser?.uid || ''));
-        if (logoData) {
-            try { doc.addImage(logoData, 'JPEG', lm, 4, 20, 20, undefined, 'FAST'); } catch(e) {}
+        const logoB64 = window.currentCompanyLogo || localStorage.getItem('companyLogo');
+        let nameX = lm;
+        if (logoB64) {
+            try {
+                doc.addImage(logoB64, 'PNG', lm, 3, 24, 24, undefined, 'FAST');
+                nameX = lm + 27;
+            } catch(e) {
+                try { doc.addImage(logoB64, 'JPEG', lm, 3, 24, 24, undefined, 'FAST'); nameX = lm + 27; } catch(e2) {}
+            }
         }
-        const nameX = logoData ? lm + 23 : lm;
-        doc.setFont('helvetica','bold');
-        doc.setFontSize(14);
-        doc.setTextColor(212, 175, 55);
-        doc.text(cs.name || 'PaintWorkz Pro', nameX, 12);
-        doc.setFontSize(8);
-        doc.setTextColor(180, 180, 180);
-        const details = [cs.phone, cs.email, cs.address].filter(Boolean).join('  ·  ');
-        if (details) doc.text(details, nameX, 18);
-        doc.setFont('helvetica','bold');
-        doc.setFontSize(16);
-        doc.setTextColor(255, 255, 255);
+        doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(212,175,55);
+        doc.text(cs.name || 'PaintWorkz Pro', nameX, 11);
+        doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(170,170,170);
+        const det = [cs.phone, cs.email, cs.address].filter(Boolean).join('  ·  ');
+        if (det) doc.text(det, nameX, 17);
+
+        doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(255,255,255);
         doc.text('2PAC PAINT LIST', rm, 12, { align:'right' });
-        doc.setFontSize(8);
-        doc.setTextColor(150, 150, 150);
-        doc.text(new Date().toLocaleDateString('en-AU', { day:'2-digit', month:'long', year:'numeric' }), rm, 18, { align:'right' });
+        doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(140,140,140);
+        doc.text(new Date().toLocaleDateString('en-AU',{day:'2-digit',month:'long',year:'numeric'}), rm, 18, { align:'right' });
 
-        y = 34;
+        y = 36;
 
-        // ── Standard colours note ────────────────────────────────────────
-        doc.setFillColor(245, 245, 245);
-        doc.roundedRect(lm, y, rm - lm, 20, 2, 2, 'F');
-        doc.setFont('helvetica','bold');
-        doc.setFontSize(8);
-        doc.setTextColor(30, 30, 30);
-        doc.text('Standard Colours:', lm + 3, y + 6);
-        doc.setFont('helvetica','normal');
-        doc.setTextColor(60, 60, 60);
-        const stdColours = 'Dulux Vivid White, Dulux Natural White, Dulux Lexicon Qtr, Dulux White on White, Dulux Antique White USA, Polytec Classic White, Laminex Polar White, Dulux Black.';
-        const stdLines = doc.splitTextToSize(stdColours, rm - lm - 6);
-        doc.text(stdLines, lm + 3, y + 11);
-        doc.setFontSize(7.5);
-        doc.setTextColor(100, 100, 100);
-        doc.text('Standard colours priced as below. Light/white outside standard +5%  ·  Dark colours outside standard +15%  ·  Intricate moulded profiles +5%', lm + 3, y + 18);
+        // ── Standard colours note ─────────────────────────────────────────
+        doc.setFillColor(248,248,248); doc.setDrawColor(220,220,220); doc.setLineWidth(0.3);
+        doc.roundedRect(lm, y, rm-lm, 16, 2, 2, 'FD');
+        doc.setFont('helvetica','bold'); doc.setFontSize(7.5); doc.setTextColor(30,30,30);
+        doc.text('Standard Colours:', lm+3, y+5.5);
+        doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(60,60,60);
+        const stdTxt = 'Dulux Vivid White · Dulux Natural White · Dulux Lexicon Qtr · Dulux White on White · Dulux Antique White USA · Polytec Classic White · Laminex Polar White · Dulux Black';
+        doc.text(doc.splitTextToSize(stdTxt, rm-lm-6), lm+3, y+10);
 
-        y += 25;
+        y += 20;
 
-        // ── Pricing table ────────────────────────────────────────────────
-        const colW  = [13, 54, 22, 22, 24, 22, 24];
-        const headers = ['Group','Profile','Matt','Satin','Semi-Gloss','Gloss','Clear'];
-        const colX = [lm];
-        colW.forEach((w,i) => colX.push(colX[i] + w));
-        const rowH = 7.5;
-
-        // Header
-        doc.setFillColor(20, 20, 20);
-        doc.rect(lm, y, rm - lm, rowH, 'F');
-        headers.forEach((h, i) => {
-            doc.setFont('helvetica','bold');
-            doc.setFontSize(8);
-            doc.setTextColor(212, 175, 55);
-            doc.text(h, colX[i] + colW[i] / 2, y + 5, { align:'center' });
+        // Surcharge chips
+        const chips = ['Light/white (outside standard) +5%','Dark colours (outside standard) +15%','Intricate moulded profiles +5%'];
+        const cw0 = (rm-lm) / chips.length;
+        chips.forEach((txt,i) => {
+            doc.setFillColor(i===1?255:250, i===1?248:250, i===1?235:248);
+            doc.roundedRect(lm + i*cw0 + 1, y, cw0-2, 8, 1.5, 1.5, 'F');
+            doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(80,60,20);
+            doc.text(txt, lm + i*cw0 + cw0/2, y+5, {align:'center'});
         });
-        y += rowH;
 
-        const tierNums  = { 'Tier 1':'1','Tier 2':'2','Tier 3':'3','Tier 4':'4','Tier 5':'5','Other':'—' };
-        const tierAccents = { 'Tier 1':[33,150,243],'Tier 2':[76,175,80],'Tier 3':[255,152,0],'Tier 4':[156,39,176],'Tier 5':[244,67,54],'Other':[158,158,158] };
-        const tierBg      = { 'Tier 1':[235,244,255],'Tier 2':[235,250,238],'Tier 3':[255,249,235],'Tier 4':[248,235,255],'Tier 5':[255,235,235],'Other':[245,245,245] };
+        y += 12;
+
+        // ── Pricing table ─────────────────────────────────────────────────
+        const cW = [13, 56, 21, 21, 21, 21, 28];  // Group|Profile|Matt|Satin|Semi-Gloss|Gloss|Clear
+        const hdrs = ['Group','Profile','Matt','Satin','Semi-Gloss','Gloss','Clear'];
+        const cX = [lm]; cW.forEach((w,i) => cX.push(cX[i]+w));
+        const rH = 7.2;
+
+        // Header row
+        doc.setFillColor(22,22,22); doc.rect(lm, y, rm-lm, rH, 'F');
+        hdrs.forEach((h,i) => {
+            doc.setFont('helvetica','bold'); doc.setFontSize(7.5); doc.setTextColor(212,175,55);
+            doc.text(h, cX[i]+cW[i]/2, y+4.8, {align:'center'});
+        });
+        y += rH;
+
+        const tierNums   = {'Tier 1':'1','Tier 2':'2','Tier 3':'3','Tier 4':'4','Tier 5':'5','Other':'—'};
+        const tierAccent = {'Tier 1':[33,150,243],'Tier 2':[76,175,80],'Tier 3':[255,152,0],'Tier 4':[156,39,176],'Tier 5':[244,67,54],'Other':[120,120,120]};
+        const tierBg     = {'Tier 1':[235,244,255],'Tier 2':[235,250,238],'Tier 3':[255,249,235],'Tier 4':[248,235,255],'Tier 5':[255,235,235],'Other':[245,245,245]};
         let rowIdx = 0;
 
-        Object.keys(matrix).forEach(tierName => {
+        tierOrder.forEach(tierName => {
             Object.keys(matrix[tierName]).forEach(code => {
                 const row = matrix[tierName][code];
                 if (!Array.isArray(row)) return;
                 const [name, matt, satin, semiG, gloss, clear] = row;
-                const bg = rowIdx % 2 === 0 ? (tierBg[tierName] || [248,248,248]) : [255,255,255];
-                doc.setFillColor(...bg);
-                doc.rect(lm, y, rm - lm, rowH, 'F');
+                const bg = rowIdx%2===0 ? (tierBg[tierName]||[248,248,248]) : [255,255,255];
+                doc.setFillColor(...bg); doc.rect(lm, y, rm-lm, rH, 'F');
+                const ac = tierAccent[tierName]||[120,120,120];
+                doc.setFillColor(...ac); doc.rect(lm, y, 1.5, rH, 'F');
+                doc.setDrawColor(218,218,218); doc.setLineWidth(0.2);
+                doc.line(lm, y+rH, rm, y+rH);
 
-                // Tier accent bar on left
-                const ac = tierAccents[tierName] || [120,120,120];
-                doc.setFillColor(...ac);
-                doc.rect(lm, y, 1.2, rowH, 'F');
-
-                // Bottom divider
-                doc.setDrawColor(220,220,220); doc.setLineWidth(0.2);
-                doc.line(lm, y + rowH, rm, y + rowH);
-
-                const fmt = v => (v && v > 0) ? '$' + v : '—';
-                const vals = [ tierNums[tierName]||'—', name, fmt(matt), fmt(satin), fmt(semiG), fmt(gloss), fmt(clear) ];
-                vals.forEach((v, i) => {
-                    doc.setFont('helvetica', i === 1 ? 'bold' : 'normal');
-                    doc.setFontSize(8);
-                    doc.setTextColor(i === 1 ? 20 : (i >= 2 ? 30 : 80), i === 1 ? 20 : 60, i === 1 ? 20 : 60);
-                    doc.text(String(v), colX[i] + colW[i] / 2, y + 5, { align:'center' });
+                const fmt = v => (v && Number(v)>0) ? '$'+v : '—';
+                const vals = [tierNums[tierName]||'—', name, fmt(matt), fmt(satin), fmt(semiG), fmt(gloss), fmt(clear)];
+                vals.forEach((v,i) => {
+                    doc.setFont('helvetica', i===1?'bold':'normal');
+                    doc.setFontSize(7.8);
+                    doc.setTextColor(i===1?20:50, i===1?20:50, i===1?20:50);
+                    doc.text(String(v), cX[i]+cW[i]/2, y+4.8, {align:'center'});
                 });
-
-                y += rowH; rowIdx++;
-                if (y > ph - 50) { doc.addPage(); y = 14; }
+                y += rH; rowIdx++;
+                if (y > ph-55) { doc.addPage(); y=14; }
             });
         });
 
         y += 5;
+        if (y > ph-50) { doc.addPage(); y=14; }
 
-        // ── Clear Coat box ───────────────────────────────────────────────
-        if (y > ph - 35) { doc.addPage(); y = 14; }
-        doc.setFillColor(20, 20, 20);
-        doc.roundedRect(lm, y, rm - lm, 12, 2, 2, 'F');
-        doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(212,175,55);
-        doc.text('CLEAR COAT', lm + 4, y + 5);
-        doc.setFont('helvetica','normal'); doc.setTextColor(255,255,255);
-        const clearItems = ['Flat — $100/m²','Moulded — $110/m²','Capping — $40/m²','Benchtop — $160/m²'];
-        const cw2 = (rm - lm - 32) / clearItems.length;
-        clearItems.forEach((item, i) => doc.text(item, lm + 32 + i * cw2, y + 5));
+        // ── Clear Coat box ────────────────────────────────────────────────
+        doc.setFillColor(22,22,22); doc.roundedRect(lm, y, rm-lm, 11, 2, 2, 'F');
+        doc.setFont('helvetica','bold'); doc.setFontSize(7.5); doc.setTextColor(212,175,55);
+        doc.text('CLEAR COAT', lm+4, y+4.5);
+        doc.setFont('helvetica','normal'); doc.setTextColor(220,220,220);
+        // Read clear price from matrix (use first available clear price > 0)
+        let clearPrice = 110;
+        tierOrder.forEach(t => { Object.values(matrix[t]).forEach(r => { if(Array.isArray(r) && Number(r[5])>0) clearPrice = Number(r[5]); }); });
+        const clearItems = ['Flat — $'+clearPrice+'/m²', 'Moulded — $'+clearPrice+'/m²', 'Benchtop — $160/m²'];
+        const ciW = (rm-lm-36) / clearItems.length;
+        clearItems.forEach((item,i) => {
+            doc.text(item, lm+36 + i*ciW, y+4.5);
+        });
+        doc.setFont('helvetica','italic'); doc.setFontSize(6.5); doc.setTextColor(160,160,160);
+        doc.text('All clear coat prices per m²', rm, y+8.5, {align:'right'});
 
-        y += 16;
+        y += 15;
+        if (y > ph-52) { doc.addPage(); y=14; }
 
-        // ── Delivery box ─────────────────────────────────────────────────
-        if (y < ph - 32) {
-            doc.setFillColor(250,250,250); doc.setDrawColor(220,220,220); doc.setLineWidth(0.3);
-            doc.roundedRect(lm, y, rm - lm, 20, 2, 2, 'FD');
-            doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(30,30,30);
-            doc.text('PICK UP / DELIVERY', lm + 4, y + 6);
-            doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(60,60,60);
-            ['Warrnambool Region — $90 + GST',
-             'Geelong Region & Mt Gambier — $110 + GST',
-             'Ballarat Region — $160 + GST',
-             'Multiple drops in a region — split cartage cost applies.'
-            ].forEach((line, i) => doc.text('· ' + line, lm + 4, y + 11 + i * 3.8));
-        }
+        // ── Delivery box ──────────────────────────────────────────────────
+        const deliveryLines = [
+            'Warrnambool Region — $90 + GST',
+            'Geelong Region & Mt Gambier — $110 + GST',
+            'Ballarat Region — $160 + GST',
+            'Multiple drops in a region — split cartage cost applies.'
+        ];
+        const boxH = 8 + deliveryLines.length * 4.2;
+        doc.setFillColor(250,250,250); doc.setDrawColor(210,210,210); doc.setLineWidth(0.3);
+        doc.roundedRect(lm, y, rm-lm, boxH, 2, 2, 'FD');
+        doc.setFont('helvetica','bold'); doc.setFontSize(7.5); doc.setTextColor(30,30,30);
+        doc.text('PICK UP / DELIVERY', lm+4, y+5.5);
+        doc.setFont('helvetica','normal'); doc.setFontSize(7.2); doc.setTextColor(60,60,60);
+        deliveryLines.forEach((line,i) => doc.text('· '+line, lm+4, y+10 + i*4.2));
+
+        y += boxH + 6;
+        if (y > ph-28) { doc.addPage(); y=14; }
+
+        // ── Disclaimer note ───────────────────────────────────────────────
+        const noteLines = [
+            'For any profile not on this list, contact us for an estimate.',
+            'Paintworkz reserves the right to charge additional costs if supplied products are in poor condition.'
+        ];
+        const noteH = 6 + noteLines.length * 4.5;
+        doc.setFillColor(255,251,235); doc.setDrawColor(200,170,30); doc.setLineWidth(0.3);
+        doc.roundedRect(lm, y, rm-lm, noteH, 2, 2, 'FD');
+        doc.setFont('helvetica','italic'); doc.setFontSize(7.2); doc.setTextColor(90,70,10);
+        noteLines.forEach((line,i) => doc.text('* '+line, lm+4, y+5.5 + i*4.5));
 
         // ── Footer ────────────────────────────────────────────────────────
-        doc.setFillColor(20,20,20);
-        doc.rect(0, ph - 10, pw, 10, 'F');
-        doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(150,150,150);
-        doc.text('All prices are per m² and exclude GST. Prices subject to change without notice.', pw/2, ph - 5, { align:'center' });
+        doc.setFillColor(22,22,22); doc.rect(0, ph-10, pw, 10, 'F');
+        doc.setFont('helvetica','normal'); doc.setFontSize(6.8); doc.setTextColor(140,140,140);
+        doc.text('All prices are per m² and exclude GST. Prices subject to change without notice.', pw/2, ph-5, {align:'center'});
 
-        // ── Show preview instead of downloading ───────────────────────────
-        const pdfBlob = doc.output('blob');
-        const blobUrl = URL.createObjectURL(pdfBlob);
+        // ── Preview ───────────────────────────────────────────────────────
+        const blobUrl = URL.createObjectURL(doc.output('blob'));
         showPDFPreview(blobUrl, 'Price List');
     }
     window.genPriceListPDF = genPriceListPDF;
