@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.9.29 | Updated: 2026-03-09                       ║
+║  Version: v1.9.30 | Updated: 2026-03-09                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.9.29';
+    const CURRENT_VERSION = 'v1.9.30';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1839,6 +1839,18 @@ const firebaseConfig = {
                 <div id="form-batch" class="form-card" onclick="openBatchPrintModal()" style="background:#f3e5f5; border-color:#9c27b0;"><h4>📦 Batch Print</h4><p>Select & print multiple</p></div>
             </div>
         </div>
+
+        <!-- CHARGES HISTORY PANEL — Pro/Admin only -->
+        <div id="chargesHistoryPanel" class="card" style="display:none; margin-top:8px; background:#1e1600; border:2px solid #d4af37; border-radius:10px; padding:12px 14px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <div style="font-size:11px; font-weight:900; color:#d4af37; letter-spacing:0.5px;">CHARGES HISTORY</div>
+                <button onclick="clearJobCharges()" style="border:none; background:#ff3b30; color:#fff; border-radius:4px; padding:3px 10px; font-size:9px; font-weight:900; cursor:pointer;">CLEAR</button>
+            </div>
+            <div id="chargesHistoryRows" style="font-size:11px; color:#f5d87a; line-height:1.7;"></div>
+            <div style="margin-top:10px; padding-top:8px; border-top:1px solid #4a3500; font-size:10px; color:#888;">
+                Charges auto-apply to next Estimate / Quote / Invoice generated for this job.
+            </div>
+        </div>
     </div>
 
     <div id="history" class="view-section">
@@ -1923,7 +1935,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.9.29</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.9.30</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -2705,7 +2717,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.9.29</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.9.30</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);startTour();" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -6539,8 +6551,8 @@ const firebaseConfig = {
         setTimeout(() => {
             tab('measure');
             render();
-            // Show charges banner with full history
-            showChargesRecallBanner(job.lastCharges, job.chargesHistory);
+            // Refresh charges panel on forms tab
+            try { renderChargesHistoryPanel(); } catch(e) {}
         }, 300);
         notify('✓ Job Loaded - View Only (changes can be saved)');
     }
@@ -7698,7 +7710,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.9.29'; // ← bump this on every release
+        const CURRENT_VERSION = 'v1.9.30'; // ← bump this on every release
         const CURRENT_DATE = '2026-03-09';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -7891,6 +7903,11 @@ const firebaseConfig = {
         // Populate paint brands dropdown when Measure tab is opened
         if (t === 'measure') {
             setTimeout(() => populatePaintBrandsDropdown(), 100);
+        }
+
+        // Render charges history panel when forms tab opens
+        if (t === 'forms') {
+            setTimeout(function(){ try { renderChargesHistoryPanel(); } catch(e){} }, 100);
         }
         
         // Refresh paint formula list when database tab opened (fixes iOS not showing formulas)
@@ -16493,20 +16510,8 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 }
             } catch(saveErr) { console.warn('Could not save charges:', saveErr); }
 
-            // Show recall banner immediately — pass full history so all entries show
-            try {
-                var histForBanner = [];
-                var histCheck = JSON.parse(localStorage.getItem('jobHistory') || '[]');
-                var jnBanner = document.getElementById('jN') ? document.getElementById('jN').value : '';
-                var idxBanner = (currentEditingJobIndex !== null && currentEditingJobIndex >= 0) ? currentEditingJobIndex :
-                    histCheck.findIndex(function(j){ return String(j.jobNum)===String(jnBanner); });
-                if (idxBanner >= 0 && histCheck[idxBanner] && histCheck[idxBanner].chargesHistory) {
-                    histForBanner = histCheck[idxBanner].chargesHistory;
-                } else {
-                    histForBanner = [chargesSnapshot];
-                }
-                showChargesRecallBanner(chargesSnapshot, histForBanner);
-            } catch(e) {}
+            // Panel will re-render on Forms tab
+            try { renderChargesHistoryPanel(); } catch(e) {}
 
             // Close modal (this sets pendingFormType = null)
             closeChargesModal();
@@ -16590,6 +16595,84 @@ if ('serviceWorker' in navigator && _swAllowed) {
                (date ? '<span style="color:#888; font-size:10px; margin-left:6px;">' + date + '</span>' : '') + '</div>' +
                '<div style="color:#d4af37; font-weight:900; font-size:12px; white-space:nowrap; margin-left:8px;">' + total + '</div></div>';
     }
+
+    function renderChargesHistoryPanel() {
+        var panel = document.getElementById('chargesHistoryPanel');
+        var rowsEl = document.getElementById('chargesHistoryRows');
+        if (!panel || !rowsEl) return;
+
+        // Pro/admin only
+        if (!canAccessPro()) { panel.style.display = 'none'; return; }
+
+        // Get charges for current job
+        var jobNum = document.getElementById('jN') ? document.getElementById('jN').value : '';
+        var history = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+        var targetIdx = (currentEditingJobIndex !== null && currentEditingJobIndex >= 0)
+            ? currentEditingJobIndex
+            : history.findIndex(function(j){ return String(j.jobNum) === String(jobNum); });
+
+        var charges = null;
+        if (targetIdx >= 0 && history[targetIdx]) {
+            charges = history[targetIdx].chargesHistory || (history[targetIdx].lastCharges ? [history[targetIdx].lastCharges] : null);
+        }
+        // Also check in-memory snapshot for jobs not yet saved
+        if (!charges && window._lastChargesSnapshot) {
+            charges = [window._lastChargesSnapshot];
+        }
+
+        if (!charges || charges.length === 0) {
+            panel.style.display = 'none';
+            return;
+        }
+
+        panel.style.display = 'block';
+        var sorted = charges.slice().sort(function(a,b){ return (b.appliedAt||'') > (a.appliedAt||'') ? 1 : -1; });
+        var html = '';
+        sorted.forEach(function(c) {
+            var parts = [];
+            if (c.totalColourSurcharge > 0) parts.push('Colour $' + c.totalColourSurcharge.toFixed(2));
+            if (c.deliveryCharge > 0) parts.push('Delivery ' + (c.deliveryRegionLabel||'') + ' $' + c.deliveryCharge.toFixed(2));
+            if (c.courierCost > 0) parts.push('Freight $' + c.courierCost.toFixed(2));
+            if (c.otherRows && c.otherRows.length > 0) {
+                c.otherRows.forEach(function(r){ if(r.amount>0) parts.push(r.desc+' $'+r.amount.toFixed(2)); });
+            } else if (c.otherChargeAmount > 0) {
+                parts.push('Other $' + c.otherChargeAmount.toFixed(2));
+            }
+            var date = c.appliedAt ? new Date(c.appliedAt).toLocaleDateString('en-AU') : '';
+            var total = c.totalWithCharges ? '$' + c.totalWithCharges.toFixed(2) : '?';
+            var label = (c.formType || 'DOC').toUpperCase();
+            html += '<div style="display:flex; justify-content:space-between; align-items:baseline; padding:5px 0; border-bottom:1px solid #3a2a00;">' +
+                '<div style="flex:1;">' +
+                '<span style="background:#d4af37; color:#000; font-size:9px; font-weight:900; padding:2px 6px; border-radius:3px; margin-right:6px;">' + label + '</span>' +
+                '<span style="color:#f5d87a;">' + (parts.join(' + ') || 'Charges') + '</span>' +
+                (date ? ' <span style="color:#666; font-size:10px;">(' + date + ')</span>' : '') +
+                '</div>' +
+                '<div style="color:#d4af37; font-weight:900; font-size:13px; margin-left:8px; white-space:nowrap;">' + total + '</div>' +
+                '</div>';
+        });
+        rowsEl.innerHTML = html;
+    }
+    window.renderChargesHistoryPanel = renderChargesHistoryPanel;
+
+    function clearJobCharges() {
+        if (!confirm('Clear all charges history for this job?')) return;
+        var jobNum = document.getElementById('jN') ? document.getElementById('jN').value : '';
+        var history = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+        var targetIdx = (currentEditingJobIndex !== null && currentEditingJobIndex >= 0)
+            ? currentEditingJobIndex
+            : history.findIndex(function(j){ return String(j.jobNum) === String(jobNum); });
+        if (targetIdx >= 0) {
+            delete history[targetIdx].lastCharges;
+            delete history[targetIdx].chargesHistory;
+            safeStorage.setJSON('jobHistory', history);
+            try { if (window.pwDB) window.pwDB.saveJob(history[targetIdx]); } catch(e) {}
+        }
+        window._lastChargesSnapshot = null;
+        if (window.appliedCharges) window.appliedCharges.lastSnapshot = null;
+        renderChargesHistoryPanel();
+        notify('Charges cleared');
+    }
+    window.clearJobCharges = clearJobCharges;
 
     function showChargesRecallBanner(lastCharges, chargesHistory) {
         // Remove existing
