@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.9.27 | Updated: 2026-03-09                       ║
+║  Version: v1.9.28 | Updated: 2026-03-09                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.9.27';
+    const CURRENT_VERSION = 'v1.9.28';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1923,7 +1923,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.9.27</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.9.28</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -2705,7 +2705,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.9.27</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.9.28</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);startTour();" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -6175,15 +6175,16 @@ const firebaseConfig = {
         // ── Attach any pending charges snapshot to the job we just built ─────
         var snap = window._lastChargesSnapshot || (window.appliedCharges && window.appliedCharges.lastSnapshot);
         if (snap) {
-            // Find the job we just placed in history (match by jobNum + timestamp proximity)
             var savedJobNum = jobData.jobNum;
             for (var si = 0; si < history.length; si++) {
-                if (history[si].jobNum === savedJobNum) {
+                if (String(history[si].jobNum) === String(savedJobNum)) {
                     if (!history[si].chargesHistory) history[si].chargesHistory = [];
-                    // Only add if not already there
                     var alreadyHas = history[si].chargesHistory.some(function(c) { return c.appliedAt === snap.appliedAt; });
                     if (!alreadyHas) history[si].chargesHistory.push(snap);
                     history[si].lastCharges = snap;
+                    // Update jobData reference so IndexedDB gets it too
+                    jobData.lastCharges = snap;
+                    jobData.chargesHistory = history[si].chargesHistory;
                     console.log('Charges attached to saved job #' + savedJobNum);
                     break;
                 }
@@ -7697,7 +7698,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.9.27'; // ← bump this on every release
+        const CURRENT_VERSION = 'v1.9.28'; // ← bump this on every release
         const CURRENT_DATE = '2026-03-09';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -16448,7 +16449,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
             const currentCharges = { ...appliedCharges };
             console.log('✓ Charges stored:', currentCharges);
 
-            // ── STORE charges snapshot for saveJob to pick up ───────────────
+            // ── SAVE charges snapshot immediately ────────────────────────────
             try {
                 var totalEl = document.getElementById('summaryTotalCharge');
                 var total = totalEl ? (parseFloat(totalEl.textContent) || 0) : 0;
@@ -16465,11 +16466,35 @@ if ('serviceWorker' in navigator && _swAllowed) {
                     otherChargeAmount: currentCharges.otherChargeAmount || 0,
                     gstRate: currentCharges.gstRate || 0.10
                 };
-                // Park it — saveJob reads this regardless of whether job exists yet
+                // Always park for saveJob to pick up later (new jobs not yet in history)
                 appliedCharges.lastSnapshot = chargesSnapshot;
                 window._lastChargesSnapshot = chargesSnapshot;
-                console.log('Charges snapshot parked, total=' + total);
-            } catch(saveErr) { console.warn('Could not store charges snapshot:', saveErr); }
+
+                // Also save directly to localStorage NOW — don't wait for saveJob
+                var history = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+                var currentJobNum = document.getElementById('jN') ? document.getElementById('jN').value : '';
+                var targetIdx = -1;
+                // Prefer index from recalled job, fall back to job number match
+                if (currentEditingJobIndex !== null && currentEditingJobIndex >= 0 && currentEditingJobIndex < history.length) {
+                    targetIdx = currentEditingJobIndex;
+                } else if (currentJobNum) {
+                    targetIdx = history.findIndex(function(j) { return String(j.jobNum) === String(currentJobNum); });
+                }
+                if (targetIdx >= 0) {
+                    if (!history[targetIdx].chargesHistory) history[targetIdx].chargesHistory = [];
+                    history[targetIdx].chargesHistory.push(chargesSnapshot);
+                    history[targetIdx].lastCharges = chargesSnapshot;
+                    localStorage.setItem('jobHistory', JSON.stringify(history));
+                    // Update IndexedDB too
+                    try { if (window.pwDB) window.pwDB.saveJob(history[targetIdx]); } catch(e) {}
+                    console.log('Charges saved directly to job #' + currentJobNum + ' at idx=' + targetIdx);
+                } else {
+                    console.log('Job not in history yet — charges parked for when job is saved');
+                }
+            } catch(saveErr) { console.warn('Could not save charges:', saveErr); }
+
+            // Show recall banner immediately so user can see charges were applied
+            try { showChargesRecallBanner(chargesSnapshot); } catch(e) {}
 
             // Close modal (this sets pendingFormType = null)
             closeChargesModal();
@@ -16571,7 +16596,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
         if (!banner || banner.style.display === 'none') return;
         var workload = document.getElementById('workloadSummaryContainer');
         var workloadH = (workload && workload.style.display !== 'none') ? (workload.offsetHeight || 70) : 0;
-        var footerH = 44; // fixed footer bar
+        var footerH = 80; // sticky-footer is 80px
         banner.style.bottom = (footerH + workloadH) + 'px';
         // Push body up enough to not hide content behind banner+workload+footer
         document.body.style.paddingBottom = (footerH + workloadH + (banner.offsetHeight || 44) + 8) + 'px';
