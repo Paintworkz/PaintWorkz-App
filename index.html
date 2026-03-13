@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.9.14 | Updated: 2026-03-09                       ║
+║  Version: v1.9.15 | Updated: 2026-03-09                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.9.14';
+    const CURRENT_VERSION = 'v1.9.15';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -200,9 +200,12 @@
             overflow-x: hidden;
             border-bottom: 1px solid #333;
             height: var(--nav-h);
-            width: 100%;
+            width: 100vw;
+            max-width: 100vw;
             box-sizing: border-box;
             transform: translateZ(0); /* force GPU layer to prevent offset */
+            margin: 0;
+            padding: 0;
         }
         .nav-btn { flex:1; min-width:0; padding:0; height:var(--nav-h); line-height:var(--nav-h); color:#888; text-align:center; font-weight:900; font-size:10px; text-transform:uppercase; border:none; background:0 0; cursor:pointer; transition:all 0.2s; pointer-events:auto; z-index:100; position:relative; }
         .nav-btn.active { color:#fff; border-bottom:4px solid var(--gs); background:#111; }
@@ -563,10 +566,14 @@
         body[data-theme="dark"] #reportsOutput { color:#f2f2f7; }
 
         /* ── Dark mode: Clients list — data-theme="dark" only ── */
-        body[data-theme="dark"] #clientsList > div[style*="background:#fff"] { background:#2c2c2e !important; border-color:#48484a !important; }
-        body[data-theme="dark"] #clientsList div[style*="color:#333"] { color:#f2f2f7 !important; }
+        body[data-theme="dark"] #clientsList > div { background:#2c2c2e !important; border-color:#48484a !important; }
+        body[data-theme="dark"] #clientsList div[style*="color:var(--text"] { color:#f2f2f7 !important; }
+        body[data-theme="dark"] #clientsList { --text:#f2f2f7; --bg:#2c2c2e; }
         /* Wrapper container background fix */
         body[data-theme="dark"] #admin-tab-clients-content div[style*="background:#fff"] { background:#2c2c2e !important; border-color:#48484a !important; }
+        /* Global notifications dark mode */
+        body[data-theme="dark"] { --notif-text: #f2f2f7; }
+        @media (prefers-color-scheme: dark) { body:not([data-theme="light"]) { --notif-text: #f2f2f7; } }
 
         /* History job cards - white bg inline styled divs */
         @media (prefers-color-scheme: dark) { body:not([data-theme="light"]) #history-list > div { background:#2c2c2e !important; border-color:#48484a !important; color:#f2f2f7 !important; } }
@@ -1553,7 +1560,8 @@ const firebaseConfig = {
             </div>
 
             <label>Description of Part</label>
-            <input type="text" id="desc" placeholder="e.g. Pantry Door Left" style="text-transform: uppercase;">
+            <input type="text" id="desc" placeholder="e.g. Pantry Door Left" style="text-transform: uppercase;" list="descSuggestions" autocomplete="off">
+            <datalist id="descSuggestions"></datalist>
 
             <div class="fm-row">
                 <div id="fm-flat" class="fm-opt active" ontouchstart="event.preventDefault();setFM('Flat')" onclick="setFM('Flat')">FLAT</div>
@@ -1891,7 +1899,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.9.14</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.9.15</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -2673,7 +2681,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.9.14</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.9.15</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);startTour();" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -7634,7 +7642,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.9.14'; // ← bump this on every release
+        const CURRENT_VERSION = 'v1.9.15'; // ← bump this on every release
         const CURRENT_DATE = '2026-03-09';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -7707,6 +7715,34 @@ const firebaseConfig = {
         });
     }
 
+    function buildDescSuggestions() {
+        const dl = document.getElementById('descSuggestions');
+        if (!dl) return;
+        const seen = new Set();
+        // Always include common part descriptions
+        const defaults = ['Door','Drawer','Panel','End Panel','Top','Bottom','Shelf','Back Panel',
+            'Fridge Panel','Island Panel','Kick Panel','Wardrobe Door','Laundry Door',
+            'Pantry Door Left','Pantry Door Right','Double Drawer','Single Drawer',
+            'Overhead Door','Base Door'];
+        defaults.forEach(d => seen.add(d.toUpperCase()));
+        // Pull unique descriptions from job history
+        try {
+            const history = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+            history.forEach(job => {
+                (job.items || []).forEach(item => {
+                    if (item.desc && item.desc.trim()) seen.add(item.desc.trim().toUpperCase());
+                });
+            });
+        } catch(e) {}
+        dl.innerHTML = '';
+        Array.from(seen).sort().forEach(val => {
+            const opt = document.createElement('option');
+            opt.value = val;
+            dl.appendChild(opt);
+        });
+    }
+    window.buildDescSuggestions = buildDescSuggestions;
+
     function refreshLists() {
         console.log(`🔄 REFRESHING LISTS (refreshLists called)`);
         console.log(`  Current profiles array:`, profiles);
@@ -7751,6 +7787,7 @@ const firebaseConfig = {
         }
         
         renderDB();
+        buildDescSuggestions();
         console.log(`  ✓ renderDB() called`);
     }
 
@@ -8920,7 +8957,7 @@ const firebaseConfig = {
             justify-content: space-between;
             align-items: flex-start;
             font-size: 13px;
-            color: #222;
+            color: var(--notif-text, #222);
             font-weight: 900;
             white-space: pre-line;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
@@ -16472,9 +16509,9 @@ if ('serviceWorker' in navigator && _swAllowed) {
             allClients.forEach(client => {
                 const clientId = client.id || '';
                 console.log('Rendering client:', client.name, 'ID:', clientId);
-                html += `<div data-client-name="${client.name}" data-client-id="${clientId}" style="display:flex; justify-content:space-between; align-items:center; padding:12px 15px; background:#fff; border-bottom:1px solid #f0f0f0; flex-shrink:0;">
+                html += `<div data-client-name="${client.name}" data-client-id="${clientId}" style="display:flex; justify-content:space-between; align-items:center; padding:12px 15px; background:var(--bg,#fff); border-bottom:1px solid #f0f0f0; flex-shrink:0;">
                     <div style="flex:1;">
-                        <div style="font-weight:900; font-size:13px; color:#333;">${client.name}</div>
+                        <div style="font-weight:900; font-size:13px; color:var(--text,#333);">${client.name}</div>
                     </div>
                     <div style="display:flex; gap:8px;">
                         <button class="editClientBtn" style="background:#2196f3; color:#fff; border:none; padding:8px 14px; border-radius:4px; font-weight:900; font-size:11px; cursor:pointer;">✏️ EDIT</button>
