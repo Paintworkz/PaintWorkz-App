@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.9.36 | Updated: 2026-03-09                       ║
+║  Version: v1.9.37 | Updated: 2026-03-09                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.9.36';
+    const CURRENT_VERSION = 'v1.9.37';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1672,6 +1672,12 @@ const firebaseConfig = {
                 <h3 style="margin:0; font-size:13px; font-weight:900;" id="formulaTitle">Paint Formula</h3>
                 <button onclick="closePaintFormulaModal()" style="background:none; border:none; font-size:20px; cursor:pointer; padding:0; width:24px; height:24px; line-height:1;">×</button>
             </div>
+
+            <!-- Multi-match picker — shown when >1 formula matches the colour name -->
+            <div id="formulaPickerSection" style="display:none; margin-bottom:12px; padding:10px; background:#fff8e1; border:2px solid #d4af37; border-radius:8px;">
+                <div style="font-size:10px; font-weight:900; color:#856404; margin-bottom:8px; letter-spacing:0.5px;">MULTIPLE FORMULAS FOUND — SELECT ONE:</div>
+                <div id="formulaPickerList" style="display:flex; flex-direction:column; gap:6px;"></div>
+            </div>
             
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;">
                 <div>
@@ -1943,7 +1949,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.9.36</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.9.37</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -2717,7 +2723,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.9.36</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.9.37</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);startTour();" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -4565,10 +4571,57 @@ const firebaseConfig = {
             notify('No matching formulas found');
             return;
         }
-        
-        // Show modal with first matching formula
-        selectedFormula = formulas[0];
+
+        if (formulas.length === 1) {
+            // Single match — go straight to formula view
+            selectedFormula = formulas[0];
+            displayPaintFormulaModal();
+            return;
+        }
+
+        // Multiple matches — show picker first
+        selectedFormula = formulas[0]; // default selection
         displayPaintFormulaModal();
+
+        // Build picker cards
+        var pickerSection = document.getElementById('formulaPickerSection');
+        var pickerList = document.getElementById('formulaPickerList');
+        if (!pickerSection || !pickerList) return;
+
+        pickerList.innerHTML = '';
+        formulas.forEach(function(f, idx) {
+            var finishLabel = (f.finishes && f.finishes.length) ? f.finishes.join(' / ') : (f.finish || '');
+            var productLabel = f.product || f.baseType || '';
+            var codeLabel = f.code || f.evicCode || '';
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.style.cssText = 'width:100%; border:2px solid ' + (idx===0 ? '#d4af37' : '#ddd') + '; border-radius:6px; padding:8px 10px; background:' + (idx===0 ? '#fffbea' : '#fff') + '; cursor:pointer; text-align:left; font-size:11px;';
+            btn.innerHTML =
+                '<div style="font-weight:900; color:#333; margin-bottom:2px;">' + (f.color || '') + (codeLabel ? ' — ' + codeLabel : '') + '</div>' +
+                '<div style="display:flex; gap:8px; flex-wrap:wrap;">' +
+                (finishLabel ? '<span style="background:#2196f3; color:#fff; border-radius:3px; padding:1px 6px; font-size:9px; font-weight:900;">' + finishLabel + '</span>' : '') +
+                (productLabel ? '<span style="background:#f0f0f0; color:#555; border-radius:3px; padding:1px 6px; font-size:9px;">' + productLabel + '</span>' : '') +
+                '</div>';
+            btn.onclick = function() {
+                selectedFormula = f;
+                // Highlight selected
+                pickerList.querySelectorAll('button').forEach(function(b){ b.style.borderColor='#ddd'; b.style.background='#fff'; });
+                btn.style.borderColor = '#d4af37';
+                btn.style.background = '#fffbea';
+                // Update formula display
+                document.getElementById('formulaColor').textContent = f.color || '-';
+                document.getElementById('formulaCode').textContent = f.code || f.evicCode || '-';
+                document.getElementById('formulaTitle').textContent = 'Paint Formula — ' + (f.color || '') + (finishLabel ? ' (' + finishLabel + ')' : '');
+                updateFormulaScaling();
+            };
+            pickerList.appendChild(btn);
+        });
+
+        // Set title to show first match detail
+        var first = formulas[0];
+        var firstFinish = (first.finishes && first.finishes.length) ? first.finishes.join(' / ') : (first.finish || '');
+        document.getElementById('formulaTitle').textContent = 'Paint Formula — ' + (first.color || '') + (firstFinish ? ' (' + firstFinish + ')' : '');
+        pickerSection.style.display = 'block';
     }
 
     function displayPaintFormulaModal() {
@@ -4579,9 +4632,15 @@ const firebaseConfig = {
             console.error('Paint formula modal element not found!');
             return;
         }
-        
+
+        // Hide picker (single-match path - picker shows separately if needed)
+        var pickerSection = document.getElementById('formulaPickerSection');
+        if (pickerSection) pickerSection.style.display = 'none';
+
         document.getElementById('formulaColor').textContent = selectedFormula.color;
-        document.getElementById('formulaCode').textContent = selectedFormula.code;
+        document.getElementById('formulaCode').textContent = selectedFormula.code || selectedFormula.evicCode || '-';
+        var finishLabel = (selectedFormula.finishes && selectedFormula.finishes.length) ? selectedFormula.finishes.join(' / ') : (selectedFormula.finish || '');
+        document.getElementById('formulaTitle').textContent = 'Paint Formula' + (finishLabel ? ' (' + finishLabel + ')' : '');
         
         document.getElementById('mixLitres').value = '1';
         updateFormulaScaling();
@@ -4661,6 +4720,8 @@ const firebaseConfig = {
 
     function closePaintFormulaModal() {
         document.getElementById('paintFormulaModal').style.display = 'none';
+        var pickerSection = document.getElementById('formulaPickerSection');
+        if (pickerSection) pickerSection.style.display = 'none';
         selectedFormula = null;
     }
 
@@ -7720,7 +7781,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.9.36'; // ← bump this on every release
+        const CURRENT_VERSION = 'v1.9.37'; // ← bump this on every release
         const CURRENT_DATE = '2026-03-09';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
