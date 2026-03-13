@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.9.31 | Updated: 2026-03-09                       ║
+║  Version: v1.9.32 | Updated: 2026-03-09                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.9.31';
+    const CURRENT_VERSION = 'v1.9.32';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -953,6 +953,12 @@ window.addEventListener('unhandledrejection', function(e) {
                 </div>
             </div>
             
+            <!-- Charges History (inside modal) -->
+            <div id="modalChargesHistory" style="display:none; margin-top:8px; padding:8px 10px; background:#1e1600; border:1px solid #d4af37; border-radius:6px; flex-shrink:0;">
+                <div style="font-size:9px; color:#d4af37; font-weight:900; margin-bottom:5px; letter-spacing:0.5px;">PREVIOUS CHARGES ON THIS JOB</div>
+                <div id="modalChargesHistoryRows" style="font-size:10px; color:#f5d87a; line-height:1.6;"></div>
+            </div>
+
             <!-- Buttons -->
             <div style="display:flex; gap:6px; flex-shrink:0;">
                 <button onclick="closeChargesModal()" style="flex:1; border:none; background:#e0e0e0; color:#333; padding:6px; border-radius:4px; font-weight:bold; cursor:pointer; font-size:9px;">CANCEL</button>
@@ -1935,7 +1941,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.9.31</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.9.32</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -2717,7 +2723,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.9.31</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.9.32</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);startTour();" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -7710,7 +7716,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.9.31'; // ← bump this on every release
+        const CURRENT_VERSION = 'v1.9.32'; // ← bump this on every release
         const CURRENT_DATE = '2026-03-09';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -16315,6 +16321,92 @@ if ('serviceWorker' in navigator && _swAllowed) {
             window.colourSurcharges[colour] = []; // Store as array for multiple surcharges
         });
         
+        // Pre-fill from last saved charges for this job
+        var jobNum = document.getElementById('jN') ? document.getElementById('jN').value : '';
+        var jobHistory = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+        var jIdx = (currentEditingJobIndex !== null && currentEditingJobIndex >= 0)
+            ? currentEditingJobIndex
+            : jobHistory.findIndex(function(j){ return String(j.jobNum) === String(jobNum); });
+        var lastC = null;
+        if (jIdx >= 0 && jobHistory[jIdx]) lastC = jobHistory[jIdx].lastCharges || null;
+        if (!lastC && window._lastChargesSnapshot) lastC = window._lastChargesSnapshot;
+
+        if (lastC) {
+            // Pre-fill delivery
+            if (lastC.deliveryCharge > 0) {
+                var delSel = document.getElementById('deliveryRegionSelect');
+                if (delSel) {
+                    // Find matching option by value
+                    for (var oi = 0; oi < delSel.options.length; oi++) {
+                        if (parseFloat(delSel.options[oi].value) === lastC.deliveryCharge) {
+                            delSel.selectedIndex = oi; break;
+                        }
+                    }
+                }
+            }
+            // Pre-fill freight
+            if (lastC.courierCost > 0) {
+                var freightEl = document.getElementById('freightChargeInput');
+                if (freightEl) freightEl.value = lastC.courierCost;
+            }
+            // Pre-fill other charge rows
+            if (lastC.otherRows && lastC.otherRows.length > 0) {
+                var ocRows2 = document.getElementById('otherChargesRows');
+                if (ocRows2) {
+                    ocRows2.innerHTML = '';
+                    lastC.otherRows.forEach(function(r) {
+                        var row = document.createElement('div');
+                        row.className = 'other-charge-row';
+                        row.style.cssText = 'display:flex; gap:6px; margin-bottom:4px;';
+                        row.innerHTML = '<input type="text" class="otherChargeDesc" value="' + (r.desc||'') + '" placeholder="e.g. Rush job" style="flex:2; padding:7px 8px; border:1px solid #ddd; border-radius:6px; font-size:11px; box-sizing:border-box;">' +
+                            '<input type="number" inputmode="decimal" class="otherChargeAmount" value="' + (r.amount||0) + '" min="0" step="5" style="flex:1; padding:7px 6px; border:1px solid #ddd; border-radius:6px; font-size:13px; font-weight:700; box-sizing:border-box;">' +
+                            '<button type="button" onclick="removeOtherChargeRow(this)" style="border:none; background:#ff3b30; color:#fff; border-radius:4px; padding:0 8px; font-size:12px; cursor:pointer; flex-shrink:0;">X</button>';
+                        ocRows2.appendChild(row);
+                    });
+                }
+            } else if (lastC.otherChargeAmount > 0) {
+                var ocRows3 = document.getElementById('otherChargesRows');
+                if (ocRows3) {
+                    var inp = ocRows3.querySelector('.otherChargeAmount');
+                    if (inp) inp.value = lastC.otherChargeAmount;
+                    var desc = ocRows3.querySelector('.otherChargeDesc');
+                    if (desc) desc.value = lastC.otherChargeDesc || '';
+                }
+            }
+            // Re-tick colour surcharges
+            if (lastC.colourSurcharges) {
+                document.querySelectorAll('.surcharge-check').forEach(function(cb) {
+                    var colour = cb.getAttribute('data-colour');
+                    var type = cb.getAttribute('data-type');
+                    if (lastC.colourSurcharges[colour]) {
+                        var matched = lastC.colourSurcharges[colour].some(function(s){ return s.type === type; });
+                        if (matched) cb.checked = true;
+                    }
+                });
+            }
+        }
+
+        // Show history panel inside modal
+        var modalHistPanel = document.getElementById('modalChargesHistory');
+        var modalHistRows = document.getElementById('modalChargesHistoryRows');
+        if (modalHistPanel && modalHistRows && jIdx >= 0 && jobHistory[jIdx] && jobHistory[jIdx].chargesHistory && jobHistory[jIdx].chargesHistory.length > 0) {
+            var chHist = jobHistory[jIdx].chargesHistory.slice().sort(function(a,b){ return (b.appliedAt||'')>(a.appliedAt||'') ? 1 : -1; });
+            var hHtml = '';
+            chHist.forEach(function(c) {
+                var total = c.totalWithCharges ? '$' + c.totalWithCharges.toFixed(2) : '?';
+                var date = c.appliedAt ? new Date(c.appliedAt).toLocaleDateString('en-AU') : '';
+                var label = (c.formType||'DOC').toUpperCase();
+                hHtml += '<div style="display:flex; justify-content:space-between; padding:2px 0;">' +
+                    '<span><span style="background:#d4af37; color:#000; font-size:8px; font-weight:900; padding:1px 5px; border-radius:2px; margin-right:4px;">' + label + '</span>' +
+                    (date ? '<span style="color:#888;">' + date + '</span>' : '') + '</span>' +
+                    '<span style="color:#d4af37; font-weight:900;">' + total + '</span></div>';
+            });
+            modalHistRows.innerHTML = hHtml;
+            modalHistPanel.style.display = 'block';
+        } else if (modalHistPanel) {
+            modalHistPanel.style.display = 'none';
+        }
+
         // Initialize summary on modal open
         setTimeout(() => updateChargesSummary(), 100);
     }
@@ -16662,13 +16754,21 @@ if ('serviceWorker' in navigator && _swAllowed) {
             ? currentEditingJobIndex
             : history.findIndex(function(j){ return String(j.jobNum) === String(jobNum); });
         if (targetIdx >= 0) {
-            delete history[targetIdx].lastCharges;
-            delete history[targetIdx].chargesHistory;
+            history[targetIdx].lastCharges = null;
+            history[targetIdx].chargesHistory = [];
+            // Save to ALL storage layers so Firestore sync can't bring it back
             safeStorage.setJSON('jobHistory', history);
             try { if (window.pwDB) window.pwDB.saveJob(history[targetIdx]); } catch(e) {}
+            // Push cleared record to Firestore immediately
+            if (window.currentUser && window.firebaseDb) {
+                try {
+                    var jobRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'jobHistory');
+                    window.setDoc(jobRef, { jobs: history }, { merge: false }).catch(function(){});
+                } catch(e) {}
+            }
         }
         window._lastChargesSnapshot = null;
-        if (window.appliedCharges) window.appliedCharges.lastSnapshot = null;
+        if (window.appliedCharges) { window.appliedCharges.lastSnapshot = null; }
         renderChargesHistoryPanel();
         notify('Charges cleared');
     }
