@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.9.25 | Updated: 2026-03-09                       ║
+║  Version: v1.9.26 | Updated: 2026-03-09                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.9.25';
+    const CURRENT_VERSION = 'v1.9.26';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1923,7 +1923,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.9.25</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.9.26</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -2705,7 +2705,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.9.25</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.9.26</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);startTour();" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -6137,6 +6137,9 @@ const firebaseConfig = {
             const existingJob = history[currentEditingJobIndex];
             jobData.id = existingJob?.id || `job_${jobData.jobNum}_${Date.now()}`;
             if (confirm(`Overwrite existing job #${jobData.jobNum}?`)) {
+                // Preserve charges history from existing record
+                if (existingJob.lastCharges) jobData.lastCharges = existingJob.lastCharges;
+                if (existingJob.chargesHistory) jobData.chargesHistory = existingJob.chargesHistory;
                 history[currentEditingJobIndex] = jobData;
                 currentEditingJobIndex = null; // Reset for next job
                 notify('✓ Job Updated'); flashSaved('Job Updated');
@@ -6152,6 +6155,8 @@ const firebaseConfig = {
                 // Job with same number, date, and client already exists - preserve its stable ID
                 jobData.id = history[existingIdx]?.id || `job_${jobData.jobNum}_${Date.now()}`;
                 if (confirm(`Job #${jobData.jobNum} already exists. Replace it?`)) {
+                    if (history[existingIdx].lastCharges) jobData.lastCharges = history[existingIdx].lastCharges;
+                    if (history[existingIdx].chargesHistory) jobData.chargesHistory = history[existingIdx].chargesHistory;
                     history[existingIdx] = jobData;
                     notify('✓ Job Updated (duplicate prevented)'); flashSaved('Job Updated');
                     addAdminAlert('JOB_UPDATED', `✏️ JOB UPDATED #${jobData.jobNum} • ${jobData.client}`, {jobNum: jobData.jobNum, client: jobData.client, totalParts: jobData.totalParts});
@@ -6161,6 +6166,11 @@ const firebaseConfig = {
             } else {
                 // New unique job — assign stable UUID for consistent Firebase doc key
                 jobData.id = `job_${jobData.jobNum}_${Date.now()}`;
+                // Carry any charges that were applied during this session
+                if (window.appliedCharges && window.appliedCharges.lastSnapshot) {
+                    jobData.lastCharges = window.appliedCharges.lastSnapshot;
+                    jobData.chargesHistory = [window.appliedCharges.lastSnapshot];
+                }
                 history.unshift(jobData);
                 notify('✓ Job Saved'); flashSaved('Job Saved');
                 addAdminAlert('JOB_SAVED', `✅ NEW JOB SAVED #${jobData.jobNum} • ${jobData.client}`, {jobNum: jobData.jobNum, client: jobData.client, totalParts: jobData.totalParts});
@@ -6513,32 +6523,7 @@ const firebaseConfig = {
             tab('measure');
             render();
             // Show charges banner if this job had additional charges applied
-            if (job.lastCharges) {
-                const c = job.lastCharges;
-                const lines = [];
-                if (c.totalColourSurcharge > 0) lines.push(`Colour surcharge $${c.totalColourSurcharge.toFixed(2)}`);
-                if (c.deliveryCharge > 0) lines.push(`Delivery ${c.deliveryRegionLabel} $${c.deliveryCharge.toFixed(2)}`);
-                if (c.courierCost > 0) lines.push(`Freight $${c.courierCost.toFixed(2)}`);
-                if (c.otherRows && c.otherRows.length > 0) c.otherRows.forEach(r => { if(r.amount>0) lines.push(`${r.desc} $${r.amount.toFixed(2)}`); });
-                else if (c.otherChargeAmount > 0) lines.push(`Other $${c.otherChargeAmount.toFixed(2)}`);
-                const applied = new Date(c.appliedAt).toLocaleDateString('en-AU');
-                const msg = `⚠️ Additional charges were applied on ${applied} (${c.formType}):
-${lines.join(' · ')}
-Total incl. GST: $${c.totalWithCharges?.toFixed(2) || '?'}`;
-                // Show as persistent banner above the part list
-                let banner = document.getElementById('chargesRecallBanner');
-                if (!banner) {
-                    banner = document.createElement('div');
-                    banner.id = 'chargesRecallBanner';
-                    const listEl = document.getElementById('list');
-                    if (listEl) listEl.parentNode.insertBefore(banner, listEl);
-                }
-                banner.style.cssText = 'background:#2d2200; border:2px solid #d4af37; border-radius:8px; padding:10px 14px; margin:8px 0; font-size:11px; color:#f5d87a; font-weight:700; white-space:pre-line; line-height:1.5;';
-                banner.textContent = msg;
-            } else {
-                const banner = document.getElementById('chargesRecallBanner');
-                if (banner) banner.remove();
-            }
+            showChargesRecallBanner(job.lastCharges);
         }, 300);
         notify('✓ Job Loaded - View Only (changes can be saved)');
     }
@@ -7696,7 +7681,7 @@ Total incl. GST: $${c.totalWithCharges?.toFixed(2) || '?'}`;
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.9.25'; // ← bump this on every release
+        const CURRENT_VERSION = 'v1.9.26'; // ← bump this on every release
         const CURRENT_DATE = '2026-03-09';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -16184,7 +16169,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
     
     // ==================== CHARGES MODAL SYSTEM ====================
     let pendingFormType = null;
-    let appliedCharges = { 
+    var appliedCharges = { 
         colourMultiplier: 0, 
         colourMultiplierLabel: 'NONE', 
         deliveryCharge: 0, 
@@ -16194,6 +16179,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
         otherChargeAmount: 0,
         gstRate: 0.10
     };
+    window.appliedCharges = appliedCharges;
 
     // Tour mode: generate supply docket (no charges popup, no prices visible)
     function genTourEstimate() {
@@ -16451,7 +16437,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
 
             // ── PERSIST charges to job record ────────────────────────────────
             try {
-                const total = parseFloat(document.getElementById('summaryTotalCharge')?.textContent) || 0;
+                const total = parseFloat(document.getElementById('summaryTotalCharge') ? document.getElementById('summaryTotalCharge').textContent : '0') || 0;
                 const chargesSnapshot = {
                     appliedAt: new Date().toISOString(),
                     formType: formType,
@@ -16465,20 +16451,36 @@ if ('serviceWorker' in navigator && _swAllowed) {
                     otherChargeAmount: currentCharges.otherChargeAmount || 0,
                     gstRate: currentCharges.gstRate || 0.10,
                 };
+                // Store on the in-memory appliedCharges so it survives to recall banner
+                appliedCharges.lastSnapshot = chargesSnapshot;
+                // Save to localStorage history — match by index first, fall back to job number
                 const history = JSON.parse(localStorage.getItem('jobHistory') || '[]');
-                if (currentEditingJobIndex >= 0 && currentEditingJobIndex < history.length) {
-                    if (!history[currentEditingJobIndex].chargesHistory) history[currentEditingJobIndex].chargesHistory = [];
-                    history[currentEditingJobIndex].chargesHistory.push(chargesSnapshot);
-                    history[currentEditingJobIndex].lastCharges = chargesSnapshot;
+                const currentJobNum = document.getElementById('jN') ? document.getElementById('jN').value : '';
+                let targetIdx = -1;
+                if (currentEditingJobIndex !== null && currentEditingJobIndex >= 0 && currentEditingJobIndex < history.length) {
+                    targetIdx = currentEditingJobIndex;
+                } else if (currentJobNum) {
+                    // Not a recalled job yet — find by job number
+                    targetIdx = history.findIndex(function(j) { return j.jobNum === currentJobNum; });
+                }
+                if (targetIdx >= 0) {
+                    if (!history[targetIdx].chargesHistory) history[targetIdx].chargesHistory = [];
+                    history[targetIdx].chargesHistory.push(chargesSnapshot);
+                    history[targetIdx].lastCharges = chargesSnapshot;
                     localStorage.setItem('jobHistory', JSON.stringify(history));
-                    // Sync to Firestore if available
+                    // Also update IndexedDB
+                    try { if (window.pwDB) window.pwDB.saveJob(history[targetIdx]); } catch(e) {}
+                    // Sync to Firestore
                     if (window.currentUser && window.firebaseDb) {
                         try {
                             const jobRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'jobHistory');
-                            window.setDoc(jobRef, { jobs: history }, { merge: false }).catch(()=>{});
+                            window.setDoc(jobRef, { jobs: history }, { merge: false }).catch(function(){});
                         } catch(e) {}
                     }
-                    console.log('✓ Charges saved to job record');
+                    console.log('Charges saved to job record, idx=' + targetIdx);
+                } else {
+                    // No saved job yet — store on appliedCharges only, will save when job is saved
+                    console.log('No saved job record found — charges stored in memory only');
                 }
             } catch(saveErr) { console.warn('Could not save charges to job:', saveErr); }
 
@@ -16544,6 +16546,38 @@ if ('serviceWorker' in navigator && _swAllowed) {
         }
     }
     window.removeOtherChargeRow = removeOtherChargeRow;
+
+    function showChargesRecallBanner(lastCharges) {
+        var existing = document.getElementById('chargesRecallBanner');
+        if (!lastCharges) {
+            if (existing) existing.remove();
+            return;
+        }
+        var c = lastCharges;
+        var parts = [];
+        if (c.totalColourSurcharge > 0) parts.push('Colour surcharge $' + c.totalColourSurcharge.toFixed(2));
+        if (c.deliveryCharge > 0) parts.push('Delivery ' + (c.deliveryRegionLabel || '') + ' $' + c.deliveryCharge.toFixed(2));
+        if (c.courierCost > 0) parts.push('Freight $' + c.courierCost.toFixed(2));
+        if (c.otherRows && c.otherRows.length > 0) {
+            c.otherRows.forEach(function(r) { if (r.amount > 0) parts.push(r.desc + ' $' + r.amount.toFixed(2)); });
+        } else if (c.otherChargeAmount > 0) {
+            parts.push('Other $' + c.otherChargeAmount.toFixed(2));
+        }
+        var applied = c.appliedAt ? new Date(c.appliedAt).toLocaleDateString('en-AU') : '';
+        var total = c.totalWithCharges ? '$' + c.totalWithCharges.toFixed(2) : '?';
+        var banner = existing || document.createElement('div');
+        banner.id = 'chargesRecallBanner';
+        banner.style.cssText = 'background:#2d2200; border:2px solid #d4af37; border-radius:8px; padding:10px 14px; margin:8px 4px; font-size:11px; color:#f5d87a; font-weight:700; line-height:1.6;';
+        banner.innerHTML =
+            '<div style="font-size:10px; color:#aaa; margin-bottom:3px;">ADDITIONAL CHARGES APPLIED ' + (applied ? 'ON ' + applied.toUpperCase() : '') + (c.formType ? ' • ' + c.formType.toUpperCase() : '') + '</div>' +
+            '<div style="color:#f5d87a;">' + (parts.length ? parts.join(' &nbsp;·&nbsp; ') : 'Charges applied') + '</div>' +
+            '<div style="color:#d4af37; font-size:13px; margin-top:4px;">Total incl. GST: ' + total + '</div>';
+        if (!existing) {
+            var listEl = document.getElementById('list');
+            if (listEl) listEl.parentNode.insertBefore(banner, listEl);
+        }
+    }
+    window.showChargesRecallBanner = showChargesRecallBanner;
 
     function updateFreeBannerPosition() {
         var banner = document.getElementById('freePlanBanner');
