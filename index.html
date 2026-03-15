@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.9.62 | Updated: 2026-03-09                       ║
+║  Version: v1.9.63 | Updated: 2026-03-09                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.9.62';
+    const CURRENT_VERSION = 'v1.9.63';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1563,7 +1563,7 @@ const firebaseConfig = {
 
         <div id="loginError" style="color:red; font-weight:900; margin-top:15px; text-align:center; display:none;"></div>
     </div>
-    <div style="text-align:center; margin-top:12px; font-size:10px; color:rgba(0,0,0,0.35); font-weight:700;">v1.9.62</div>
+    <div style="text-align:center; margin-top:12px; font-size:10px; color:rgba(0,0,0,0.35); font-weight:700;">v1.9.63</div>
 </div>
 
 
@@ -2081,7 +2081,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.9.62</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.9.63</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -2855,7 +2855,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.9.62</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.9.63</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);startTour();" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -3653,7 +3653,7 @@ const firebaseConfig = {
     console.log('');
     //                    VERSION: v1.7.24-FINAL | 2026-02-27 | Colin Bedford                   
     //                    ADMIN TABS FIXED | COVER SHEET FIXED | DELETE CONFIRMATION ADDED                   
-    console.log('%c PaintWorkz Pro v1.9.62 ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('%c PaintWorkz Pro v1.9.63 ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     // Changelog logs removed for production performance
     // ====================================
     
@@ -7947,7 +7947,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.9.62'; //     bump this on every release
+        const CURRENT_VERSION = 'v1.9.63'; //     bump this on every release
         const CURRENT_DATE = '2026-03-09';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -19793,46 +19793,22 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                 jobs.push(jobData);
             });
 
-            // Merge: preserve local jobs not yet confirmed in cloud + completed status
-            const localJobs = JSON.parse(localStorage.getItem('jobHistory') || '[]');
-            const repushQueue = [];
-
-            // Preserve local-only jobs (saved but not yet in cloud)
-            localJobs.forEach(localJob => {
-                const inCloud = jobs.some(j =>
-                    (j.id && j.id === localJob.id) ||
-                    (j.jobNum === localJob.jobNum && j.dateReceived === localJob.dateReceived && j.client === localJob.client)
-                );
-                if (!inCloud) {
-                    jobs.push(localJob);
-                    repushQueue.push(localJob);
-                    console.log('     Preserved local-only job on load:', localJob.jobNum, localJob.client);
-                }
-            });
-
-            jobs.forEach(cloudJob => {
-                const localMatch = localJobs.find(j =>
-                    (j.id && j.id === cloudJob.id) ||
-                    (j.jobNum === cloudJob.jobNum && j.dateReceived === cloudJob.dateReceived && j.client === cloudJob.client)
-                );
-                if (localMatch && localMatch.completed && !cloudJob.completed) {
-                    cloudJob.completed = true;
-                    cloudJob.completedDate = localMatch.completedDate || cloudJob.completedDate;
-                    cloudJob.dateCompleted = localMatch.dateCompleted || cloudJob.dateCompleted;
-                    repushQueue.push(cloudJob);
-                    console.log('     Preserved local completion for job', cloudJob.jobNum, '    queued re-push');
-                }
-            });
-
-            // Flag that this user has real Firestore data - prevents demo re-seeding
-            const _realCloudJobs = jobs.filter(j => !j.id || !j.id.startsWith('demo-'));
+            // Safety filter: only load jobs that belong to THIS user
+            const currentUid = window.currentUser.uid;
+            const safeJobs = jobs.filter(function(j) { return !j.userId || j.userId === currentUid; });
+            if (safeJobs.length < jobs.length) {
+                console.warn('Filtered out ' + (jobs.length - safeJobs.length) + ' jobs from other users');
+            }
+            // Flag real data exists - prevents demo re-seeding
+            const _realCloudJobs = safeJobs.filter(function(j) { return !j.id || !j.id.startsWith('demo-'); });
             if (_realCloudJobs.length > 0) window._userHasRealData = true;
+            const repushQueue = [];
             
             window._syncingFromCloud = true;
-            safeStorage.setJSON('jobHistory', jobs);
+            safeStorage.setJSON('jobHistory', safeJobs);
             window._syncingFromCloud = false;
-            fullHistory = jobs;
-            history = jobs.filter(j => !j.completed);
+            fullHistory = safeJobs;
+            history = safeJobs.filter(j => !j.completed);
             try { if (typeof renderHistory === 'function') renderHistory(); } catch(e) {}
 
             // Re-push any jobs that were completed locally but not in Firestore
@@ -20075,28 +20051,16 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                         });
                         if (jobs.length === 0) return; // Don't wipe local with empty cloud
 
-                        // Merge: cloud is source of truth BUT preserve local-only jobs
-                        // not yet confirmed in cloud (race condition window after save)
+                        // Safety filter: only accept jobs for THIS user
+                        const snapUid = window.currentUser ? window.currentUser.uid : null;
+                        if (snapUid) {
+                            const before = jobs.length;
+                            jobs = jobs.filter(function(j) { return !j.userId || j.userId === snapUid; });
+                            if (jobs.length < before) console.warn('onSnapshot: filtered out ' + (before - jobs.length) + ' foreign jobs');
+                        }
+
+                        // Preserve completed/phases status if local is ahead of cloud
                         const local = JSON.parse(localStorage.getItem('jobHistory') || '[]');
-                        const cloudIds = new Set(jobs.map(j => j.id || j.jobNum));
-
-                        // 1. Keep any local jobs not yet in cloud (just saved, not confirmed yet)
-                        // Only preserve if job was saved within the last 30 seconds
-                        const thirtySecsAgo = Date.now() - 30000;
-                        local.forEach(localJob => {
-                            const localId = localJob.id || localJob.jobNum;
-                            const inCloud = jobs.some(j =>
-                                (j.id && j.id === localJob.id) ||
-                                (j.jobNum === localJob.jobNum && j.dateReceived === localJob.dateReceived && j.client === localJob.client)
-                            );
-                            if (!inCloud) {
-                                // Not in cloud yet - preserve it
-                                jobs.push(localJob);
-                                console.log('     Preserved local-only job not yet in cloud:', localJob.jobNum, localJob.client);
-                            }
-                        });
-
-                        // 2. Preserve completed/phases status if local is ahead of cloud
                         jobs.forEach(cloudJob => {
                             const localMatch = local.find(j =>
                                 (j.id && j.id === cloudJob.id) ||
