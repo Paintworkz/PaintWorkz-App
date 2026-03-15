@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.9.58 | Updated: 2026-03-09                       ║
+║  Version: v1.9.59 | Updated: 2026-03-09                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.9.58';
+    const CURRENT_VERSION = 'v1.9.59';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -40,7 +40,7 @@
             'apiKeys', 'doorProfiles', 'masterMatrix', 'companySettings', 'paintFormulas',
             'pwStockLevels', 'pwStockSettings', 'adminSettings', 'defaultSettings',
             'additionalCharges', 'defaultTimeline', 'paintBrands', 'appColors',
-            'pw_tour_done_']; // preserve tour-done flag per uid
+            'pw_tour_done_', 'pw_tooltips']; // preserve tour-done and tooltip preference
         for (let i = localStorage.length - 1; i >= 0; i--) {
             const key = localStorage.key(i);
             if (key && !keysToKeep.some(k => key.startsWith(k))) {
@@ -1554,7 +1554,7 @@ const firebaseConfig = {
 
         <div id="loginError" style="color:red; font-weight:900; margin-top:15px; text-align:center; display:none;"></div>
     </div>
-    <div style="text-align:center; margin-top:12px; font-size:10px; color:rgba(0,0,0,0.35); font-weight:700;">v1.9.58</div>
+    <div style="text-align:center; margin-top:12px; font-size:10px; color:rgba(0,0,0,0.35); font-weight:700;">v1.9.59</div>
 </div>
 
 
@@ -1709,8 +1709,14 @@ const firebaseConfig = {
             </div>
 
             <label>Description of Part <span class="pw-help">?<span class="pw-help-tip">A short label for this part — e.g. DOOR, PANEL, DRAWER. Appears on your estimate and shop label to identify each line item.</span></span></label>
-            <input type="text" id="desc" placeholder="e.g. Pantry Door Left" style="text-transform: uppercase;" list="descSuggestions" autocomplete="off">
-            <datalist id="descSuggestions"></datalist>
+            <div style="position:relative;">
+                <input type="text" id="desc" placeholder="e.g. DOOR, PANEL, DRAWER..." style="text-transform:uppercase; width:100%; box-sizing:border-box;" autocomplete="off"
+                    oninput="filterDescDropdown(this.value)"
+                    onfocus="openDescDropdown()"
+                    onblur="setTimeout(closeDescDropdown,200)"
+                    onkeydown="descKeyNav(event)">
+                <div id="descDropdown" style="display:none; position:absolute; top:100%; left:0; right:0; background:#fff; border:2px solid #d4af37; border-radius:0 0 8px 8px; max-height:180px; overflow-y:auto; z-index:9999; box-shadow:0 4px 12px rgba(0,0,0,0.15);"></div>
+            </div>
 
             <div class="fm-row">
                 <div id="fm-flat" class="fm-opt active" ontouchstart="event.preventDefault();setFM('Flat')" onclick="setFM('Flat')">FLAT</div>
@@ -2066,7 +2072,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.9.58</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.9.59</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -2840,7 +2846,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.9.58</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.9.59</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);startTour();" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -3638,7 +3644,7 @@ const firebaseConfig = {
     console.log('');
     //                    VERSION: v1.7.24-FINAL | 2026-02-27 | Colin Bedford                   
     //                    ADMIN TABS FIXED | COVER SHEET FIXED | DELETE CONFIRMATION ADDED                   
-    console.log('%c PaintWorkz Pro v1.9.58 ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('%c PaintWorkz Pro v1.9.59 ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     // Changelog logs removed for production performance
     // ====================================
     
@@ -6053,6 +6059,7 @@ const firebaseConfig = {
             
             // Initialize tooltip system
             if (typeof initTooltips === 'function') initTooltips();
+            buildDescSuggestions(); // refresh desc dropdown cache
             // Apply App Store build class to hide pricing elements
             if (window.isAppStoreBuild) document.body.classList.add('app-store-build');
             // Tour autoplay handled after Firebase auth resolves (see onAuthStateChanged)
@@ -6898,9 +6905,24 @@ const firebaseConfig = {
             return;
         }
         
-        // Sync to Firebase     reset rate limiter so completion always pushes immediately
-        if (window.syncJobsToFirebase) {
-            try { lastSyncTime = 0; lastSyncedData = ''; window.syncJobsToFirebase(); } catch(e) { console.error('Firebase sync error:', e); }
+        // Push completion DIRECTLY to Firestore - don't wait for debounced sync
+        if (window.currentUser && window.firebaseDb && window.doc && window.setDoc) {
+            try {
+                const jobId = job.id || job.jobNum;
+                const jobDocRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'jobs', jobId);
+                window.setDoc(jobDocRef, {
+                    ...job,
+                    id: jobId,
+                    completed: true,
+                    completedDate: job.completedDate,
+                    dateCompleted: job.dateCompleted,
+                    lastModified: new Date().toISOString()
+                }, { merge: false }).then(function() {
+                    console.log('Job completion pushed directly to Firestore:', jobId);
+                    // Now also run full sync to catch any other changes
+                    try { lastSyncTime = 0; lastSyncedData = ''; if (window.syncJobsToFirebase) window.syncJobsToFirebase(); } catch(e) {}
+                }).catch(function(e) { console.error('Direct completion sync error:', e); });
+            } catch(e) { console.error('Firebase completion error:', e); }
         }
         
         // Generate batch PDFs
@@ -7905,7 +7927,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.9.58'; //     bump this on every release
+        const CURRENT_VERSION = 'v1.9.59'; //     bump this on every release
         const CURRENT_DATE = '2026-03-09';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -7978,32 +8000,128 @@ const firebaseConfig = {
         });
     }
 
-    function buildDescSuggestions() {
-        const dl = document.getElementById('descSuggestions');
-        if (!dl) return;
-        const seen = new Set();
-        // Always include common part descriptions
-        const defaults = ['Door','Drawer','Panel','End Panel','Top','Bottom','Shelf','Back Panel',
-            'Fridge Panel','Island Panel','Kick Panel','Wardrobe Door','Laundry Door',
-            'Pantry Door Left','Pantry Door Right','Double Drawer','Single Drawer',
-            'Overhead Door','Base Door'];
-        defaults.forEach(d => seen.add(d.toUpperCase()));
-        // Pull unique descriptions from job history
+    // ── Description dropdown system ───────────────────────────────────────────
+    var _descSuggestions = [];
+    var _descDropdownIdx = -1;
+
+    function getDescSuggestions() {
+        const defaults = ['BACK PANEL','BASE DOOR','BOTTOM','BULKHEAD','DOUBLE DRAWER',
+            'DOOR','DRAWER','END PANEL','FRIDGE PANEL','ISLAND PANEL','KICK PANEL',
+            'LAUNDRY DOOR','OVERHEAD DOOR','PANEL','PANTRY DOOR LEFT','PANTRY DOOR RIGHT',
+            'SHELF','SINGLE DRAWER','SPLASHBACK','TOP','WARDROBE DOOR'];
+        const seen = new Set(defaults);
+        // Recent entries first (from localStorage memory)
         try {
-            const history = JSON.parse(localStorage.getItem('jobHistory') || '[]');
-            history.forEach(job => {
-                (job.items || []).forEach(item => {
+            const recent = JSON.parse(localStorage.getItem('pw_desc_recent') || '[]');
+            recent.forEach(function(d) { if (d) seen.add(d.toUpperCase()); });
+        } catch(e) {}
+        // Pull from job history
+        try {
+            const hist = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+            hist.forEach(function(job) {
+                (job.items || []).forEach(function(item) {
                     if (item.desc && item.desc.trim()) seen.add(item.desc.trim().toUpperCase());
                 });
             });
         } catch(e) {}
-        dl.innerHTML = '';
-        Array.from(seen).sort().forEach(val => {
-            const opt = document.createElement('option');
-            opt.value = val;
-            dl.appendChild(opt);
+        // Also pull from current job
+        items.forEach(function(it) { if (it.desc) seen.add(it.desc.toUpperCase()); });
+        return Array.from(seen).sort();
+    }
+
+    function saveDescRecent(val) {
+        if (!val || !val.trim()) return;
+        try {
+            var recent = JSON.parse(localStorage.getItem('pw_desc_recent') || '[]');
+            recent = [val.toUpperCase()].concat(recent.filter(function(d) { return d !== val.toUpperCase(); })).slice(0, 30);
+            localStorage.setItem('pw_desc_recent', JSON.stringify(recent));
+        } catch(e) {}
+    }
+
+    function openDescDropdown() {
+        _descSuggestions = getDescSuggestions();
+        _descDropdownIdx = -1;
+        var val = (document.getElementById('desc').value || '').toUpperCase();
+        renderDescDropdown(val);
+    }
+
+    function closeDescDropdown() {
+        var dd = document.getElementById('descDropdown');
+        if (dd) dd.style.display = 'none';
+        _descDropdownIdx = -1;
+    }
+
+    function filterDescDropdown(val) {
+        _descSuggestions = getDescSuggestions();
+        _descDropdownIdx = -1;
+        renderDescDropdown((val || '').toUpperCase());
+    }
+
+    function renderDescDropdown(filter) {
+        var dd = document.getElementById('descDropdown');
+        if (!dd) return;
+        var matches = filter
+            ? _descSuggestions.filter(function(s) { return s.includes(filter); })
+            : _descSuggestions;
+        if (matches.length === 0) { dd.style.display = 'none'; return; }
+        dd.innerHTML = '';
+        matches.slice(0, 20).forEach(function(s, i) {
+            var item = document.createElement('div');
+            item.textContent = s;
+            item.dataset.idx = i;
+            item.style.cssText = 'padding:8px 12px; font-size:12px; font-weight:700; cursor:pointer; border-bottom:1px solid #f0f0f0; text-transform:uppercase;';
+            item.onmousedown = function() { selectDesc(s); };
+            item.onmouseover = function() {
+                _descDropdownIdx = i;
+                highlightDescItem(i);
+            };
+            dd.appendChild(item);
+        });
+        dd.style.display = 'block';
+    }
+
+    function highlightDescItem(idx) {
+        var dd = document.getElementById('descDropdown');
+        if (!dd) return;
+        Array.from(dd.children).forEach(function(el, i) {
+            el.style.background = i === idx ? '#2c3e50' : '';
+            el.style.color = i === idx ? '#d4af37' : '';
         });
     }
+
+    function selectDesc(val) {
+        var inp = document.getElementById('desc');
+        if (inp) inp.value = val;
+        saveDescRecent(val);
+        closeDescDropdown();
+    }
+
+    function descKeyNav(e) {
+        var dd = document.getElementById('descDropdown');
+        if (!dd || dd.style.display === 'none') return;
+        var items = Array.from(dd.children);
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            _descDropdownIdx = Math.min(_descDropdownIdx + 1, items.length - 1);
+            highlightDescItem(_descDropdownIdx);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            _descDropdownIdx = Math.max(_descDropdownIdx - 1, 0);
+            highlightDescItem(_descDropdownIdx);
+        } else if (e.key === 'Enter' && _descDropdownIdx >= 0) {
+            e.preventDefault();
+            if (items[_descDropdownIdx]) selectDesc(items[_descDropdownIdx].textContent);
+        } else if (e.key === 'Escape') {
+            closeDescDropdown();
+        }
+    }
+    window.openDescDropdown = openDescDropdown;
+    window.closeDescDropdown = closeDescDropdown;
+    window.filterDescDropdown = filterDescDropdown;
+    window.descKeyNav = descKeyNav;
+    window.selectDesc = selectDesc;
+
+    function buildDescSuggestions() { /* legacy - no-op, using new dropdown system */ }
     window.buildDescSuggestions = buildDescSuggestions;
 
     function refreshLists() {
@@ -8576,7 +8694,9 @@ const firebaseConfig = {
                 type: pType,
                 thk: document.getElementById('thk').value
             });
+            saveDescRecent(desc);
             notify("Part Added");
+            if (desc) saveDescSuggestion(desc.toUpperCase());
         }
         console.log('After addPart - Total items: ' + items.length);
         render();
@@ -8819,7 +8939,7 @@ const firebaseConfig = {
                     <div class="pl-mode" style="color:${mC}; border-color:${mC}; background:${mC}15">${it.mode}</div>
                     <div style="font-size:11px; font-weight:900;">${rowSqm.toFixed(3)}</div>
                 </div>
-                <button class="edit-btn" onclick="editItem(${originalIndex})" style="background:#2196f3; color:#fff; border:none; padding:8px 10px; border-radius:4px 0 0 4px; font-weight:900; cursor:pointer; font-size:12px;">   </button><button class="del-btn" onclick="deleteItem(${originalIndex})">  </button>
+                <button class="edit-btn" onclick="editItem(${originalIndex})" style="background:#2196f3; color:#fff; border:none; padding:8px 10px; border-radius:4px 0 0 4px; font-weight:900; cursor:pointer; font-size:12px;">Edit</button><button class="del-btn" onclick="deleteItem(${originalIndex})">X</button>
             </div>`;
         });
         
@@ -9238,7 +9358,7 @@ const firebaseConfig = {
         messageSpan.innerText = message;
         
         const dismissBtn = document.createElement('button');
-        dismissBtn.innerText = '   ';
+        dismissBtn.innerText = 'X';
         dismissBtn.style.cssText = `
             background: ${borderColor};
             color: #fff;
@@ -9311,7 +9431,7 @@ const firebaseConfig = {
         msgDiv.style.flex = '1';
         msgDiv.innerHTML = `<span class="siren-icon"></span> PAINT STOCK ALERT\n${lines}`;
         const btn = document.createElement('button');
-        btn.innerText = '   ';
+        btn.innerText = 'X';
         btn.style.cssText = 'background:rgba(255,255,255,0.3); color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; font-weight:900; margin-left:8px; font-size:12px;';
         btn.onclick = () => { notifDiv.remove(); if (notifList.children.length === 0) banner.style.display = 'none'; };
         notifDiv.appendChild(msgDiv);
@@ -17749,8 +17869,8 @@ if ('serviceWorker' in navigator && _swAllowed) {
                                 <div style="font-size:9px; color:#999;">(${code})</div>
                             </div>
                             <div style="display:flex; gap:4px;">
-                                <button onclick="editDoorTier('${tierName}', ${code}, '${profileName}')" style="background:#2196f3; color:#fff; border:none; padding:4px 6px; border-radius:3px; font-weight:900; font-size:9px; cursor:pointer;" title="Change tier">    </button>
-                                <button onclick="deleteDoorFromMatrix('${tierName}', ${code}, '${profileName}')" style="background:#ff3b30; color:#fff; border:none; padding:4px 6px; border-radius:3px; font-weight:900; font-size:9px; cursor:pointer;" title="Delete door">   </button>
+                                <button onclick="editDoorTier('${tierName}', ${code}, '${profileName}')" style="background:#2196f3; color:#fff; border:none; padding:4px 6px; border-radius:3px; font-weight:900; font-size:9px; cursor:pointer;" title="Change tier">T</button>
+                                <button onclick="deleteDoorFromMatrix('${tierName}', ${code}, '${profileName}')" style="background:#ff3b30; color:#fff; border:none; padding:4px 6px; border-radius:3px; font-weight:900; font-size:9px; cursor:pointer;" title="Delete door">X</button>
                             </div>
                         </div>
                     </td>
@@ -19908,17 +20028,34 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                         });
                         if (jobs.length === 0) return; // Don't wipe local with empty cloud
 
-                        // Always accept cloud data as the source of truth.
-                        // The sigKey detects meaningful changes (completed, phases) to decide
-                        // whether to re-render the UI (avoid thrashing on minor field diffs).
-                        const sigKey = j => `${j.id||j.jobNum}|${j.completed}|${JSON.stringify(j.phases||{})}`;
+                        // Merge: preserve local completed/phases status if cloud is behind
+                        // This prevents the real-time listener overwriting a just-completed job
                         const local = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+                        jobs.forEach(cloudJob => {
+                            const localMatch = local.find(j =>
+                                (j.id && j.id === cloudJob.id) ||
+                                (j.jobNum === cloudJob.jobNum && j.dateReceived === cloudJob.dateReceived && j.client === cloudJob.client)
+                            );
+                            if (localMatch && localMatch.completed && !cloudJob.completed) {
+                                cloudJob.completed = true;
+                                cloudJob.completedDate = localMatch.completedDate || cloudJob.completedDate;
+                                cloudJob.dateCompleted = localMatch.dateCompleted || cloudJob.dateCompleted;
+                            }
+                            // Also preserve local phase updates not yet in cloud
+                            if (localMatch && localMatch.phases && cloudJob.phases) {
+                                Object.keys(localMatch.phases).forEach(k => {
+                                    if (localMatch.phases[k] && !cloudJob.phases[k]) {
+                                        cloudJob.phases[k] = localMatch.phases[k];
+                                    }
+                                });
+                            }
+                        });
+
+                        const sigKey = j => `${j.id||j.jobNum}|${j.completed}|${JSON.stringify(j.phases||{})}`;
                         const cloudSig = jobs.map(sigKey).sort().join(';;');
                         const localSig = local.map(sigKey).sort().join(';;');
                         const hasChanges = cloudSig !== localSig || jobs.length !== local.length;
 
-                        // Always write cloud data to localStorage (keeps lastModified etc in sync)
-                        // Suppress the setItem override during this write to avoid re-upload loop
                         window._syncingFromCloud = true;
                         safeStorage.setJSON('jobHistory', jobs);
                         window._syncingFromCloud = false;
@@ -20216,8 +20353,12 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
 
 <script>
 //           Tooltip System                                                                                                                                                                      
+function getTooltipKey() {
+    var uid = window.currentUser ? window.currentUser.uid : null;
+    return uid ? 'pw_tooltips_' + uid : 'pw_tooltips';
+}
 function setTooltipsEnabled(on) {
-    localStorage.setItem('pw_tooltips', on ? '1' : '0');
+    localStorage.setItem(getTooltipKey(), on ? '1' : '0');
     document.body.classList.toggle('tooltips-on', !!on);
     document.documentElement.classList.toggle('tooltips-on', !!on);
     const cb = document.getElementById('tooltipToggle');
@@ -20225,7 +20366,10 @@ function setTooltipsEnabled(on) {
 }
 function initTooltips() {
     // Default ON for new users (key not set yet). Once they toggle it off, '0' is stored.
-    var stored = localStorage.getItem('pw_tooltips');
+    var key = getTooltipKey();
+    var stored = localStorage.getItem(key);
+    // Fallback: check old non-user key
+    if (stored === null) stored = localStorage.getItem('pw_tooltips');
     var on = stored === null ? true : stored === '1';
     document.body.classList.toggle('tooltips-on', on);
     document.documentElement.classList.toggle('tooltips-on', on);
