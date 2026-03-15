@@ -3944,6 +3944,49 @@ const firebaseConfig = {
 
     // ==================== END FIREBASE SETUP ====================
     let items = [], mode = 'SS', pType = 'Panel', fmState = 'Flat', currentPanelFilter = 'all', currentColorFilter = '';
+
+    let ctsThicknesses = [16, 18, 21, 25]; // default thickness columns (mm)
+    let ctsEdgeTypes   = [                  // edge types with price per lineal metre
+        { name: 'Square',   lm: 0  },
+        { name: 'Aris',     lm: 5  },
+        { name: '2mm Round',lm: 8  },
+        { name: '3mm Round',lm: 12 }
+    ];
+    let ctsMatrix = {};  // { "Tier 1": { 1: ["Settler", 100, 125, 150, 175], ... } }
+    let ctsJobEdgeType = ''; // selected edge type name for current job
+
+    // Load from localStorage
+    try {
+        const storedCts = JSON.parse(localStorage.getItem('ctsMatrix'));
+        if (storedCts && Object.keys(storedCts).length > 0) ctsMatrix = storedCts;
+        const storedCtsThk = JSON.parse(localStorage.getItem('ctsThicknesses'));
+        if (storedCtsThk && storedCtsThk.length > 0) ctsThicknesses = storedCtsThk;
+        const storedCtsEdge = JSON.parse(localStorage.getItem('ctsEdgeTypes'));
+        if (storedCtsEdge && storedCtsEdge.length > 0) ctsEdgeTypes = storedCtsEdge;
+    } catch(e) {}
+
+    function saveCtsData() {
+        localStorage.setItem('ctsMatrix', JSON.stringify(ctsMatrix));
+        localStorage.setItem('ctsThicknesses', JSON.stringify(ctsThicknesses));
+        localStorage.setItem('ctsEdgeTypes', JSON.stringify(ctsEdgeTypes));
+        syncCtsToFirestore();
+    }
+
+    function syncCtsToFirestore() {
+        try {
+            if (window.currentUser && window.firebaseDb && window.setDoc && window.doc) {
+                const ref = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'ctsData');
+                window.setDoc(ref, {
+                    matrix: ctsMatrix,
+                    thicknesses: ctsThicknesses,
+                    edgeTypes: ctsEdgeTypes,
+                    updated: new Date().toISOString()
+                }).catch(e => console.warn('CTS Firestore save failed:', e));
+            }
+        } catch(e) {}
+    }
+    window.saveCtsData = saveCtsData;
+
     
     // RESTORED MASTER LISTS
     let clients = []; // legacy array     clients now come from clientDatabase (Firebase) only
@@ -16373,47 +16416,6 @@ if ('serviceWorker' in navigator && _swAllowed) {
     //        Cut To Size Matrix                                                                                                                                                                
     // Row structure: [name, price_t0, price_t1, price_t2, ...] matching ctsThicknesses
     // Stored separately from paint matrix     no data bleed
-    let ctsThicknesses = [16, 18, 21, 25]; // default thickness columns (mm)
-    let ctsEdgeTypes   = [                  // edge types with price per lineal metre
-        { name: 'Square',   lm: 0  },
-        { name: 'Aris',     lm: 5  },
-        { name: '2mm Round',lm: 8  },
-        { name: '3mm Round',lm: 12 }
-    ];
-    let ctsMatrix = {};  // { "Tier 1": { 1: ["Settler", 100, 125, 150, 175], ... } }
-    let ctsJobEdgeType = ''; // selected edge type name for current job
-
-    // Load from localStorage
-    try {
-        const storedCts = JSON.parse(localStorage.getItem('ctsMatrix'));
-        if (storedCts && Object.keys(storedCts).length > 0) ctsMatrix = storedCts;
-        const storedCtsThk = JSON.parse(localStorage.getItem('ctsThicknesses'));
-        if (storedCtsThk && storedCtsThk.length > 0) ctsThicknesses = storedCtsThk;
-        const storedCtsEdge = JSON.parse(localStorage.getItem('ctsEdgeTypes'));
-        if (storedCtsEdge && storedCtsEdge.length > 0) ctsEdgeTypes = storedCtsEdge;
-    } catch(e) {}
-
-    function saveCtsData() {
-        localStorage.setItem('ctsMatrix', JSON.stringify(ctsMatrix));
-        localStorage.setItem('ctsThicknesses', JSON.stringify(ctsThicknesses));
-        localStorage.setItem('ctsEdgeTypes', JSON.stringify(ctsEdgeTypes));
-        syncCtsToFirestore();
-    }
-
-    function syncCtsToFirestore() {
-        try {
-            if (window.currentUser && window.firebaseDb && window.setDoc && window.doc) {
-                const ref = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'ctsData');
-                window.setDoc(ref, {
-                    matrix: ctsMatrix,
-                    thicknesses: ctsThicknesses,
-                    edgeTypes: ctsEdgeTypes,
-                    updated: new Date().toISOString()
-                }).catch(e => console.warn('CTS Firestore save failed:', e));
-            }
-        } catch(e) {}
-    }
-    window.saveCtsData = saveCtsData;
     
     // MIGRATION: add Clear price (index 5) to any saved entries that pre-date this column
     (() => {
