@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.9.58-dev';
+    const CURRENT_VERSION = 'v1.9.58-dev-s1';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1554,7 +1554,7 @@ const firebaseConfig = {
 
         <div id="loginError" style="color:red; font-weight:900; margin-top:15px; text-align:center; display:none;"></div>
     </div>
-    <div style="text-align:center; margin-top:12px; font-size:10px; color:rgba(0,0,0,0.35); font-weight:700;">v1.9.58-dev</div>
+    <div style="text-align:center; margin-top:12px; font-size:10px; color:rgba(0,0,0,0.35); font-weight:700;">v1.9.58-dev-s1</div>
 </div>
 
 
@@ -3886,6 +3886,42 @@ const firebaseConfig = {
 
     // ==================== END FIREBASE SETUP ====================
     let items = [], mode = 'SS', pType = 'Panel', fmState = 'Flat', currentPanelFilter = 'all', currentColorFilter = '';
+
+    // ── Cut To Size (CTS) data ────────────────────────────────────────────────
+    let ctsThicknesses = [16, 18, 21, 25];
+    let ctsEdgeTypes   = [
+        { name: 'Square',    lm: 0  },
+        { name: 'Aris',      lm: 5  },
+        { name: '2mm Round', lm: 8  },
+        { name: '3mm Round', lm: 12 }
+    ];
+    let ctsMatrix      = {};
+    let ctsJobEdgeType = '';
+
+    try {
+        const s1 = JSON.parse(localStorage.getItem('ctsMatrix'));
+        if (s1 && Object.keys(s1).length > 0) ctsMatrix = s1;
+        const s2 = JSON.parse(localStorage.getItem('ctsThicknesses'));
+        if (s2 && s2.length > 0) ctsThicknesses = s2;
+        const s3 = JSON.parse(localStorage.getItem('ctsEdgeTypes'));
+        if (s3 && s3.length > 0) ctsEdgeTypes = s3;
+    } catch(e) {}
+
+    function saveCtsData() {
+        localStorage.setItem('ctsMatrix', JSON.stringify(ctsMatrix));
+        localStorage.setItem('ctsThicknesses', JSON.stringify(ctsThicknesses));
+        localStorage.setItem('ctsEdgeTypes', JSON.stringify(ctsEdgeTypes));
+        try {
+            if (window.currentUser && window.firebaseDb && window.setDoc && window.doc) {
+                const ref = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'ctsData');
+                window.setDoc(ref, {
+                    matrix: ctsMatrix, thicknesses: ctsThicknesses,
+                    edgeTypes: ctsEdgeTypes, updated: new Date().toISOString()
+                }).catch(function(e) {});
+            }
+        } catch(e) {}
+    }
+    window.saveCtsData = saveCtsData;
     
     // RESTORED MASTER LISTS
     let clients = []; // legacy array     clients now come from clientDatabase (Firebase) only
