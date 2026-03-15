@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.9.58-dev-s1';
+    const CURRENT_VERSION = 'v1.9.58-dev-s2';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1554,7 +1554,7 @@ const firebaseConfig = {
 
         <div id="loginError" style="color:red; font-weight:900; margin-top:15px; text-align:center; display:none;"></div>
     </div>
-    <div style="text-align:center; margin-top:12px; font-size:10px; color:rgba(0,0,0,0.35); font-weight:700;">v1.9.58-dev-s1</div>
+    <div style="text-align:center; margin-top:12px; font-size:10px; color:rgba(0,0,0,0.35); font-weight:700;">v1.9.58-dev-s2</div>
 </div>
 
 
@@ -8104,6 +8104,85 @@ const firebaseConfig = {
         const modal = document.getElementById('quickPDFModal');
         if (modal) modal.remove();
     }
+
+
+    // ── CTS Pricing functions ─────────────────────────────────────────────────
+    function getCtsPriceForPart(item) {
+        if (!item.cts) return null;
+        const thk = parseInt(item.thk) || 18;
+        const sqm = parseFloat(item.sqm) || 0;
+        const prof = item.prof || '';
+        let pricePerSqm = 0;
+        let bestThkIndex = 0;
+        const thkIndex = ctsThicknesses.indexOf(thk);
+        if (thkIndex >= 0) {
+            bestThkIndex = thkIndex;
+        } else {
+            let closest = Infinity;
+            ctsThicknesses.forEach(function(t, i) {
+                if (Math.abs(t - thk) < closest) { closest = Math.abs(t - thk); bestThkIndex = i; }
+            });
+        }
+        Object.values(ctsMatrix).forEach(function(tier) {
+            Object.values(tier).forEach(function(row) {
+                if (row[0] === prof) pricePerSqm = row[bestThkIndex + 1] || 0;
+            });
+        });
+        const sqmCost = sqm * item.qty * pricePerSqm;
+        let edgeCost = 0;
+        if (ctsJobEdgeType) {
+            const edgeType = ctsEdgeTypes.find(function(e) { return e.name === ctsJobEdgeType; });
+            if (edgeType && edgeType.lm > 0) {
+                const h = parseFloat(item.h) / 1000;
+                const w = parseFloat(item.w) / 1000;
+                edgeCost = 2 * (h + w) * item.qty * edgeType.lm;
+            }
+        }
+        return { sqmCost: sqmCost, edgeCost: edgeCost, total: sqmCost + edgeCost, pricePerSqm: pricePerSqm };
+    }
+    window.getCtsPriceForPart = getCtsPriceForPart;
+
+    function getCtsJobTotal(jobItems) {
+        let sqmTotal = 0, edgeTotal = 0;
+        (jobItems || items).forEach(function(item) {
+            if (!item.cts) return;
+            const p = getCtsPriceForPart(item);
+            if (p) { sqmTotal += p.sqmCost; edgeTotal += p.edgeCost; }
+        });
+        return { sqmTotal: sqmTotal, edgeTotal: edgeTotal, total: sqmTotal + edgeTotal };
+    }
+    window.getCtsJobTotal = getCtsJobTotal;
+
+    function toggleCtsLabel() {
+        const cb = document.getElementById('ctsPart');
+        const lbl = document.getElementById('ctsCheckLabel');
+        if (lbl) lbl.style.borderColor = cb && cb.checked ? '#d4af37' : '#ddd';
+    }
+    window.toggleCtsLabel = toggleCtsLabel;
+
+    function updateCtsEdgePanel() {
+        const panel = document.getElementById('ctsEdgePanel');
+        const sel   = document.getElementById('ctsEdgeSelect');
+        if (!panel || !sel) return;
+        const hasCts = items.some(function(it) { return it.cts; });
+        panel.style.display = hasCts ? 'block' : 'none';
+        if (hasCts) {
+            let opts = '<option value="">No edge routing</option>';
+            ctsEdgeTypes.forEach(function(e) {
+                const selected = ctsJobEdgeType === e.name ? 'selected' : '';
+                opts += '<option value="' + e.name + '" ' + selected + '>' + e.name + ' - $' + e.lm + '/lm</option>';
+            });
+            sel.innerHTML = opts;
+        }
+    }
+    window.updateCtsEdgePanel = updateCtsEdgePanel;
+
+    function setCtsJobEdge(val) {
+        ctsJobEdgeType = val;
+        saveData();
+    }
+    window.setCtsJobEdge = setCtsJobEdge;
+    // ── END CTS Pricing functions ─────────────────────────────────────────────
 
     function tab(t) {
         document.querySelectorAll('.view-section, .nav-btn').forEach(x => x.classList.remove('active'));
