@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.9.60 | Updated: 2026-03-09                       ║
+║  Version: v1.9.62 | Updated: 2026-03-09                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.9.60';
+    const CURRENT_VERSION = 'v1.9.62';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1132,23 +1132,26 @@ const firebaseConfig = {
                     return;
                 }
 
-                // ── Session isolation: clear user-scoped data on every login ──────
+                // ── Session isolation: nuclear wipe on every login ────────────────
+                // Wipe ALL localStorage except app-global preferences
+                // Firestore will repopulate all user data immediately after
                 const lastUid = localStorage.getItem('pw_last_uid');
-                const userScopedKeys = [
-                    'clientDatabase','jobHistory','paintFormulas','masterMatrix',
-                    'doorProfiles','companySettings','companyLogo','headerLogoBase64',
-                    'headerLogo','adminAlerts','appColors','paintBrands',
-                    'additionalCharges','defaultTimeline','adminSettings',
-                    'pw_onboarded','currentJob'
+                const keepKeys = [
+                    'pw_tooltips', 'pw_tooltips_' + user.uid,
+                    'paintworkz_version', 'pw_tour_done_' + user.uid,
+                    'app_theme', 'app_locale'
                 ];
-                // Always clear on login - if another user's tab writes these back,
-                // Firestore will overwrite with the correct user's data
-                userScopedKeys.forEach(k => localStorage.removeItem(k));
-                // Also clear any stale data from other UIDs
-                if (lastUid && lastUid !== user.uid) {
-                    userScopedKeys.forEach(k => localStorage.removeItem(`${lastUid}_${k}`));
-                    console.log('🔄 User changed — cleared stale data for old UID:', lastUid);
+                // Full wipe - remove everything except global prefs
+                const allKeys = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    allKeys.push(localStorage.key(i));
                 }
+                allKeys.forEach(k => {
+                    if (k && !keepKeys.some(keep => k === keep || k.startsWith('pw_tooltips_') || k.startsWith('pw_tour_done_'))) {
+                        localStorage.removeItem(k);
+                    }
+                });
+                console.log('Session isolation: localStorage wiped for user', user.uid, '(was:', lastUid || 'none', ')');
                 // Reset in-memory variables immediately
                 try { if (typeof paintDatabase !== 'undefined') paintDatabase = []; } catch(e) {}
                 try { if (typeof profiles !== 'undefined') profiles = []; } catch(e) {}
@@ -1158,6 +1161,12 @@ const firebaseConfig = {
                 // Clear logo memory so previous user's logos don't bleed into PDFs
                 window.currentCompanyLogo = null;
                 window.currentHeaderLogo = null;
+                window._userHasRealData = false;
+                window._lastChargesSnapshot = null;
+                window.currentLoadedJob = null;
+                window.appliedCharges = {};
+                window.colourSurcharges = {};
+                try { if (typeof fullHistory !== 'undefined') fullHistory = []; } catch(e) {}
                 localStorage.setItem('pw_last_uid', user.uid);
                 // ── End session isolation ──────────────────────────────────────────
 
@@ -1554,7 +1563,7 @@ const firebaseConfig = {
 
         <div id="loginError" style="color:red; font-weight:900; margin-top:15px; text-align:center; display:none;"></div>
     </div>
-    <div style="text-align:center; margin-top:12px; font-size:10px; color:rgba(0,0,0,0.35); font-weight:700;">v1.9.60</div>
+    <div style="text-align:center; margin-top:12px; font-size:10px; color:rgba(0,0,0,0.35); font-weight:700;">v1.9.62</div>
 </div>
 
 
@@ -2072,7 +2081,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.9.60</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.9.62</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -2846,7 +2855,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.9.60</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.9.62</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);startTour();" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -3644,7 +3653,7 @@ const firebaseConfig = {
     console.log('');
     //                    VERSION: v1.7.24-FINAL | 2026-02-27 | Colin Bedford                   
     //                    ADMIN TABS FIXED | COVER SHEET FIXED | DELETE CONFIRMATION ADDED                   
-    console.log('%c PaintWorkz Pro v1.9.60 ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('%c PaintWorkz Pro v1.9.62 ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     // Changelog logs removed for production performance
     // ====================================
     
@@ -3694,21 +3703,25 @@ const firebaseConfig = {
             window.realtimeSyncUnsubscribe = null;
         }
         window.realtimeSyncActive = false;
-        // Clear all user-scoped data from localStorage immediately
-        const userScopedKeys = [
-            'clientDatabase','jobHistory','paintFormulas','masterMatrix',
-            'doorProfiles','companySettings','companyLogo','headerLogoBase64',
-            'headerLogo','adminAlerts','appColors','paintBrands',
-            'additionalCharges','defaultTimeline','adminSettings',
-            'pw_onboarded','currentJob','pw_last_uid'
-        ];
-        userScopedKeys.forEach(k => localStorage.removeItem(k));
+        // Nuclear wipe on logout - preserve only app-global prefs
+        const uid = window.currentUser ? window.currentUser.uid : null;
+        const keepOnLogout = ['paintworkz_version'];
+        if (uid) { keepOnLogout.push('pw_tooltips_' + uid); keepOnLogout.push('pw_tour_done_' + uid); }
+        const logoutKeys = [];
+        for (let i = 0; i < localStorage.length; i++) logoutKeys.push(localStorage.key(i));
+        logoutKeys.forEach(k => {
+            if (k && !keepOnLogout.some(keep => k === keep)) localStorage.removeItem(k);
+        });
         // Reset in-memory variables
         try { if (typeof history !== 'undefined') history = []; } catch(e) {}
         try { if (typeof fullHistory !== 'undefined') fullHistory = []; } catch(e) {}
         try { if (typeof items !== 'undefined') items = []; } catch(e) {}
         try { if (typeof paintDatabase !== 'undefined') paintDatabase = []; } catch(e) {}
         try { if (typeof profiles !== 'undefined') profiles = []; } catch(e) {}
+        window._userHasRealData = false;
+        window._lastChargesSnapshot = null;
+        window.currentLoadedJob = null;
+        window.appliedCharges = {};
         window.signOut().then(() => {});
     }
 
@@ -5790,11 +5803,15 @@ const firebaseConfig = {
     // Does NOT run for the owner account.
     function seedDemoDataForNewUser() {
         if (!window.currentUser) return;
-        if (window.currentUser.email === OWNER_EMAIL) return; // Owner manages their own data
-        // Skip seeding if user already has real jobs (e.g. restored from backup)
+        if (window.currentUser.email === OWNER_EMAIL) return;
+        // Never seed if flag set (user has real Firestore data)
+        if (window._userHasRealData) return;
+        // Skip if already seeded this session
+        if (sessionStorage.getItem('pw_demo_seeded_' + window.currentUser.uid)) return;
+        // Skip seeding if user already has real jobs
         const preCheckJobs = JSON.parse(localStorage.getItem('jobHistory') || '[]');
         const realJobs = preCheckJobs.filter(function(j) { return !j.id || !j.id.startsWith('demo-'); });
-        if (realJobs.length > 0) return; // Has real data - don't seed demo content
+        if (realJobs.length > 0) { window._userHasRealData = true; return; }
 
         // --- Demo Clients ---
         const existingClients = getClientDatabase();
@@ -5809,6 +5826,8 @@ const firebaseConfig = {
             try { if (typeof populateClientDropdown === 'function') populateClientDropdown(); } catch(e) {}
             try { if (typeof renderClientsList === 'function') renderClientsList(); } catch(e) {}
             console.log('     Demo clients seeded for new user');
+            // Mark seeded so we don't repeat this login session
+            try { sessionStorage.setItem('pw_demo_seeded_' + window.currentUser.uid, '1'); } catch(e) {}
         }
 
         // --- Demo Paint Formula ---
@@ -7928,7 +7947,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.9.60'; //     bump this on every release
+        const CURRENT_VERSION = 'v1.9.62'; //     bump this on every release
         const CURRENT_DATE = '2026-03-09';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -16647,7 +16666,14 @@ if ('serviceWorker' in navigator && _swAllowed) {
             : jobHistory.findIndex(function(j){ return String(j.jobNum) === String(jobNum); });
         var lastC = null;
         if (jIdx >= 0 && jobHistory[jIdx]) lastC = jobHistory[jIdx].lastCharges || null;
-        if (!lastC && window._lastChargesSnapshot) lastC = window._lastChargesSnapshot;
+        // Only use in-memory snapshot if it belongs to THIS job (prevents bleed from previous job)
+        if (!lastC && window._lastChargesSnapshot) {
+            var snapJobNum = window._lastChargesSnapshot._jobNum || null;
+            var curJobNum = document.getElementById('jN') ? document.getElementById('jN').value : '';
+            if (snapJobNum && curJobNum && String(snapJobNum) === String(curJobNum)) {
+                lastC = window._lastChargesSnapshot;
+            }
+        }
 
         if (lastC) {
             // Pre-fill delivery
@@ -16894,6 +16920,8 @@ if ('serviceWorker' in navigator && _swAllowed) {
                     gstRate: currentCharges.gstRate || 0.10
                 };
                 // Always park for saveJob to pick up later (new jobs not yet in history)
+                var _curJN = document.getElementById('jN') ? document.getElementById('jN').value : '';
+                chargesSnapshot._jobNum = _curJN;
                 appliedCharges.lastSnapshot = chargesSnapshot;
                 window._lastChargesSnapshot = chargesSnapshot;
 
@@ -19796,6 +19824,10 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                 }
             });
 
+            // Flag that this user has real Firestore data - prevents demo re-seeding
+            const _realCloudJobs = jobs.filter(j => !j.id || !j.id.startsWith('demo-'));
+            if (_realCloudJobs.length > 0) window._userHasRealData = true;
+            
             window._syncingFromCloud = true;
             safeStorage.setJSON('jobHistory', jobs);
             window._syncingFromCloud = false;
