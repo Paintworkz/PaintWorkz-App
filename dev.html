@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.9.58-dev-s6';
+    const CURRENT_VERSION = 'v1.9.58-dev-s7';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1557,7 +1557,7 @@ const firebaseConfig = {
 
         <div id="loginError" style="color:red; font-weight:900; margin-top:15px; text-align:center; display:none;"></div>
     </div>
-    <div id="loginVersionText" style="text-align:center; margin-top:12px; font-size:10px; color:rgba(128,128,128,0.8); font-weight:700;">v1.9.58-dev-s6</div>
+    <div id="loginVersionText" style="text-align:center; margin-top:12px; font-size:10px; color:rgba(128,128,128,0.8); font-weight:700;">v1.9.58-dev-s7</div>
 </div>
 
 
@@ -6415,6 +6415,9 @@ const firebaseConfig = {
         // Clear parked charges     don't bleed into next job
         window._lastChargesSnapshot = null;
         if (window.appliedCharges) window.appliedCharges.lastSnapshot = null;
+        // Clear photos after save
+        jobPhotos = [];
+        try{if(typeof renderPhotoGallery==='function')renderPhotoGallery();}catch(e){}
         
         // Send appropriate notification based on what happened
         if (currentEditingJobIndex !== null) {
@@ -8638,11 +8641,15 @@ const firebaseConfig = {
         
         let html = `<div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(80px,1fr)); gap:10px; margin-bottom:10px;">`;
         
-        jobPhotos.forEach((photo, idx) => {
+        var _lp=[...jobPhotos.filter(function(p){return !!p.linkedPart;}),...jobPhotos.filter(function(p){return !p.linkedPart;})];
+        var _lastSec="";
+        _lp.forEach((photo, idx) => {
+            var _sec=photo.linkedPart?photo.linkedPart:"General";
+            if(_sec!==_lastSec){html+='<div style="font-size:9px;font-weight:900;color:#888;margin:4px 0 2px;">'+_sec+'</div>';_lastSec=_sec;}
             html += `
                 <div style="position:relative; cursor:pointer; border-radius:6px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,0.1); height:80px;">
                     <img src="${photo.data}" style="width:100%; height:100%; object-fit:cover;" onclick="viewPhoto(${photo.id})">
-                    <div style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; font-size:8px; padding:2px 4px; border-radius:3px;">${jobPhotos.length}</div>
+                    <div style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; font-size:8px; padding:2px 4px; border-radius:3px;">${_lp.length}</div>
                     <button onclick="deletePhoto(${photo.id})" style="position:absolute; bottom:2px; right:2px; background:#ff3b30; border:none; color:#fff; padding:2px 4px; border-radius:3px; font-size:9px; cursor:pointer;">X</button>
                 </div>
             `;
@@ -8970,7 +8977,12 @@ const firebaseConfig = {
             }
             
             const ctsBadge = it.cts ? '<span style="background:#2c3e50; color:#d4af37; font-size:9px; font-weight:900; padding:2px 6px; border-radius:3px; margin-left:4px;">CTS</span>' : '';
-            l.innerHTML += `<div class="part-label" style="border-left:5px solid ${clr}">
+            l.innerHTML += `<div class="part-label" style="border-left:5px solid ${clr}; position:relative;">
+                ${(function(){
+                    var _pc=0;
+                    if(typeof jobPhotos!=="undefined") _pc=jobPhotos.filter(function(p){return p.linkedPart&&p.linkedPart===it.desc.toUpperCase();}).length;
+                    return _pc>0 ? '<div title="'+_pc+' photo(s)" style="position:absolute;top:3px;right:38px;background:#ff9500;color:#fff;font-size:9px;font-weight:900;padding:2px 5px;border-radius:3px;z-index:3;">'+_pc+' 📷</div>' : "";
+                })()}
                 <div class="qty-controls">
                     <button class="qty-btn" style="border-radius:4px 4px 0 0;" onclick="changeQty(${originalIndex}, 1)">+</button>
                     <div class="pl-qty" style="margin:0; border-radius:0;">${it.qty}</div>
