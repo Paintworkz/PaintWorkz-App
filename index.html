@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.9.79 | Updated: 2026-03-09                       ║
+║  Version: v1.9.80 | Updated: 2026-03-09                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.9.79';
+    const CURRENT_VERSION = 'v1.9.80';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1303,7 +1303,8 @@ const firebaseConfig = {
     // Only add tooltips-on if explicitly set to '1' OR never set before (null = new user default ON)
     // Once set to '0' by user, respect that across sessions
         var _anyOff=_allKeys.some(function(k){return k.startsWith('pw_tooltips_')&&localStorage.getItem(k)==='0';});
-    if(!_anyOff&&(_tooltipStored===null||_tooltipStored==='1')) document.documentElement.classList.add('tooltips-on');
+    var _globalOff=localStorage.getItem('pw_tooltips')==='0';
+    if(!_anyOff&&!_globalOff&&(_tooltipStored===null||_tooltipStored==='1')) document.documentElement.classList.add('tooltips-on');
 })();
 
 // Remove stray text nodes from loginScreen (injected by old scripts or browser quirks)
@@ -1593,7 +1594,7 @@ const firebaseConfig = {
 
         <div id="loginError" style="color:red; font-weight:900; margin-top:15px; text-align:center; display:none;"></div>
     </div>
-    <div id="loginVersionText" style="text-align:center; margin-top:12px; font-size:10px; color:rgba(128,128,128,0.8); font-weight:700;">v1.9.79</div>
+    <div id="loginVersionText" style="text-align:center; margin-top:12px; font-size:10px; color:rgba(128,128,128,0.8); font-weight:700;">v1.9.80</div>
 </div>
 
 
@@ -2105,7 +2106,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.9.79</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.9.80</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -2879,7 +2880,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.9.79</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.9.80</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);startTour();" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -3677,7 +3678,7 @@ const firebaseConfig = {
     console.log('');
     //                    VERSION: v1.7.24-FINAL | 2026-02-27 | Colin Bedford                   
     //                    ADMIN TABS FIXED | COVER SHEET FIXED | DELETE CONFIRMATION ADDED                   
-    console.log('%c PaintWorkz Pro v1.9.79 ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('%c PaintWorkz Pro v1.9.80 ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     // Changelog logs removed for production performance
     // ====================================
     
@@ -7999,7 +8000,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.9.79'; //     bump this on every release
+        const CURRENT_VERSION = 'v1.9.80'; //     bump this on every release
         const CURRENT_DATE = '2026-03-09';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -8612,7 +8613,14 @@ const firebaseConfig = {
         const reader = new FileReader();
         reader.onload = (event) => {
             const timestamp = new Date().toLocaleString('en-AU');
-            jobPhotos.push({ id: Date.now(), data: event.target.result, timestamp, linkedPart: window._snapForPart||null });window._snapForPart=null;
+            var _newPhoto={id:Date.now(),data:event.target.result,timestamp:timestamp,linkedPart:window._snapForPart||null};
+            window._snapForPart=null;
+            jobPhotos.push(_newPhoto);
+            // Immediately persist to localStorage - iOS Safari can clear memory on background
+            try{
+                var _jn=document.getElementById('jN')?document.getElementById('jN').value:'';
+                if(_jn) localStorage.setItem('jobPhotos_'+_jn, JSON.stringify(jobPhotos));
+            }catch(e){}
             renderPhotoGallery();
             notify(`Photo saved: ${timestamp}`);
         };
@@ -8664,7 +8672,7 @@ const firebaseConfig = {
         canvas.getContext('2d').drawImage(video, 0, 0);
         const imgData = canvas.toDataURL('image/jpeg', 0.9);
         const timestamp = new Date().toLocaleString('en-AU');
-        jobPhotos.push({ id: Date.now(), data: imgData, timestamp, linkedPart: window._snapForPart||null });window._snapForPart=null;
+        var _np2={id:Date.now(),data:imgData,timestamp:timestamp,linkedPart:window._snapForPart||null};window._snapForPart=null;jobPhotos.push(_np2);try{var _jn2=document.getElementById("jN")?document.getElementById("jN").value:"";if(_jn2)localStorage.setItem("jobPhotos_"+_jn2,JSON.stringify(jobPhotos));}catch(e){}
         renderPhotoGallery();
         notify(`Photo captured: ${timestamp}`);
         snapWebcamClose();
@@ -13779,7 +13787,7 @@ const firebaseConfig = {
         const clrRate    = parseFloat(CR.clear)      || 5;
 
         //        Aggregate stats                                                                                                                                                       
-        let totalSqm = 0, totalParts = 0;
+        let totalSqm = 0, totalParts = 0, totalValue = 0;
         const colourCount = {}, profileCount = {}, clientCount = {}, monthlyData = {}, finishCount = {};
         const baseCodeLitres = {};
         let clearPaintLitres = 0;
@@ -13793,6 +13801,26 @@ const firebaseConfig = {
             const _ucDone  = !!(job.phases && job.phases.undercoat);  // undercoat already applied
             const _tcDone  = !!(job.phases && job.phases.topcoat);    // topcoat already applied
             totalParts += parts;
+            // Estimate job value from items
+            var _jv=0;
+            (job.items||[]).forEach(function(it){
+                var _sqm=parseFloat(it.sqm)||0, _qty=parseInt(it.qty)||1;
+                var _ppsm=125; // default
+                if(it.prof&&masterMatrix){
+                    Object.values(masterMatrix).forEach(function(tier){
+                        Object.keys(tier).forEach(function(code){
+                            if(tier[code][0]===it.prof||code===it.prof){
+                                var _fin=(it.finish||'satin').toLowerCase();
+                                var _pi=_fin==='matt'?1:_fin==='semi-gloss'||_fin==='semi gloss'?3:_fin==='gloss'?4:_fin==='clear'?5:2;
+                                if(tier[code][_pi]>0) _ppsm=tier[code][_pi];
+                            }
+                        });
+                    });
+                }
+                _jv += _sqm * _qty * _ppsm;
+            });
+            job._estValue=_jv;
+            totalValue += _jv;
 
             const d = parseReportDate(job.dateReceived) || new Date(job.timestamp || 0);
             const mo = d.toLocaleDateString('en-AU', { month: 'short', year: 'numeric' });
@@ -14147,6 +14175,7 @@ const firebaseConfig = {
                     <th style="padding:7px 8px; text-align:left;">Colour</th>
                     <th style="padding:7px 8px; text-align:left;">Finish</th>
                     <th style="padding:7px 8px; text-align:right;">Parts</th>
+                    <th style="padding:7px 8px; text-align:right;">Est. Value</th>
                     <th style="padding:7px 8px; text-align:right;">SQM</th>
                     <th style="padding:7px 8px; text-align:left;">Date</th>
                 </tr></thead>
@@ -14158,6 +14187,7 @@ const firebaseConfig = {
                     <td style="padding:6px 8px; color:#000;">${j.color||'   '}</td>
                     <td style="padding:6px 8px; color:#000;">${j.finish||'   '}</td>
                     <td style="padding:6px 8px; text-align:right; color:#000;">${j.totalParts||0}</td>
+                    <td style="padding:6px 8px; text-align:right; font-weight:900; color:#2196f3;">${(j._estValue||0).toFixed(0)}</td>
                     <td style="padding:6px 8px; text-align:right; font-weight:900; color:#000;">${parseFloat(j.totalSqm||0).toFixed(2)}</td>
                     <td style="padding:6px 8px; color:#000;">${j.dateReceived||'   '}</td>
                 </tr>`).join('')}
@@ -14165,6 +14195,7 @@ const firebaseConfig = {
                 <tfoot><tr style="background:#e3f2fd; font-weight:900; color:#000;">
                     <td colspan="5" style="padding:7px 8px; color:#000;">TOTALS</td>
                     <td style="padding:7px 8px; text-align:right; color:#000;">${totalParts}</td>
+                    <td style="padding:7px 8px; text-align:right; font-weight:900; color:#2196f3;">${totalValue.toFixed(0)}</td>
                     <td style="padding:7px 8px; text-align:right; color:#000;">${totalSqm.toFixed(2)}</td>
                     <td></td>
                 </tr></tfoot>
@@ -20499,17 +20530,19 @@ function getTooltipKey() {
 }
 function setTooltipsEnabled(on) {
     localStorage.setItem(getTooltipKey(), on ? '1' : '0');
+    // Also save to global key so boot script sees it before auth resolves
+    localStorage.setItem('pw_tooltips', on ? '1' : '0');
     document.body.classList.toggle('tooltips-on', !!on);
     document.documentElement.classList.toggle('tooltips-on', !!on);
     const cb = document.getElementById('tooltipToggle');
     if (cb) cb.checked = !!on;
 }
 function initTooltips() {
-    // Default ON for new users (key not set yet). Once they toggle it off, '0' is stored.
     var key = getTooltipKey();
     var stored = localStorage.getItem(key);
-    // Fallback: check old non-user key
+    // Fallback: check global key
     if (stored === null) stored = localStorage.getItem('pw_tooltips');
+    // Default ON only if NO key has ever been set (genuinely new user)
     var on = stored === null ? true : stored === '1';
     document.body.classList.toggle('tooltips-on', on);
     document.documentElement.classList.toggle('tooltips-on', on);
