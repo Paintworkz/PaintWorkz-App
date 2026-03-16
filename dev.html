@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.9.57 | Updated: 2026-03-09                       ║
+║  Version: v1.9.64 | Updated: 2026-03-09                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.9.58-dev-s3';
+    const CURRENT_VERSION = 'v1.9.64';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -40,7 +40,7 @@
             'apiKeys', 'doorProfiles', 'masterMatrix', 'companySettings', 'paintFormulas',
             'pwStockLevels', 'pwStockSettings', 'adminSettings', 'defaultSettings',
             'additionalCharges', 'defaultTimeline', 'paintBrands', 'appColors',
-            'pw_tour_done_']; // preserve tour-done flag per uid
+            'pw_tour_done_', 'pw_tooltips']; // preserve tour-done and tooltip preference
         for (let i = localStorage.length - 1; i >= 0; i--) {
             const key = localStorage.key(i);
             if (key && !keysToKeep.some(k => key.startsWith(k))) {
@@ -1049,17 +1049,17 @@ window.addEventListener('unhandledrejection', function(e) {
         import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, reauthenticateWithCredential, EmailAuthProvider, sendPasswordResetEmail, confirmPasswordReset, verifyPasswordResetCode } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js";
         import { getFirestore, collection, doc, setDoc, addDoc, getDoc, onSnapshot, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
         
-        //                                                                                                                                                                                                    
+        // ─────────────────────────────────────────────────────────────────
 // FIREBASE API KEY SECURITY
-// Firebase client keys are designed to be public     they do NOT grant
+// Firebase client keys are designed to be public — they do NOT grant
 // admin access. Security is enforced by:
 //   1. Firebase Security Rules (Firestore/Storage)
 //   2. Domain restrictions set in Google Cloud Console:
-//      console.cloud.google.com     APIs     Credentials     restrict key
+//      console.cloud.google.com → APIs → Credentials → restrict key
 //      to: paintworkz.github.io and localhost
 //   3. Firebase App Check (attestation layer, initialized below)
-// DO NOT add admin SDK keys here     those must stay server-side only.
-//                                                                                                                                                                                                    
+// DO NOT add admin SDK keys here — those must stay server-side only.
+// ─────────────────────────────────────────────────────────────────
 const firebaseConfig = {
             apiKey: "AIzaSyCddhnoWoJczM2yXemz2evZc-W2x7OnP00",
             authDomain: "paintworkz-42bc0.firebaseapp.com",
@@ -1080,9 +1080,9 @@ const firebaseConfig = {
                 const { setPersistence, browserSessionPersistence } = await import('https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js');
                 await setPersistence(auth, browserSessionPersistence);
             } catch(pe) {}
-            console.log('    Firebase initialized successfully');
+            console.log('✓ Firebase initialized successfully');
         } catch(fbError) {
-            console.log('       Firebase note (non-critical):', fbError.message);
+            console.log('ℹ️ Firebase note (non-critical):', fbError.message);
             // Firebase will still work with explicit config - this error is from hosting environment check
         }
         
@@ -1132,23 +1132,26 @@ const firebaseConfig = {
                     return;
                 }
 
-                //        Session isolation: clear user-scoped data on every login                   
+                // ── Session isolation: nuclear wipe on every login ────────────────
+                // Wipe ALL localStorage except app-global preferences
+                // Firestore will repopulate all user data immediately after
                 const lastUid = localStorage.getItem('pw_last_uid');
-                const userScopedKeys = [
-                    'clientDatabase','jobHistory','paintFormulas','masterMatrix',
-                    'doorProfiles','companySettings','companyLogo','headerLogoBase64',
-                    'headerLogo','adminAlerts','appColors','paintBrands',
-                    'additionalCharges','defaultTimeline','adminSettings',
-                    'pw_onboarded','currentJob'
+                const keepKeys = [
+                    'pw_tooltips', 'pw_tooltips_' + user.uid,
+                    'paintworkz_version', 'pw_tour_done_' + user.uid,
+                    'app_theme', 'app_locale'
                 ];
-                // Always clear on login - if another user's tab writes these back,
-                // Firestore will overwrite with the correct user's data
-                userScopedKeys.forEach(k => localStorage.removeItem(k));
-                // Also clear any stale data from other UIDs
-                if (lastUid && lastUid !== user.uid) {
-                    userScopedKeys.forEach(k => localStorage.removeItem(`${lastUid}_${k}`));
-                    console.log('     User changed     cleared stale data for old UID:', lastUid);
+                // Full wipe - remove everything except global prefs
+                const allKeys = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    allKeys.push(localStorage.key(i));
                 }
+                allKeys.forEach(k => {
+                    if (k && !keepKeys.some(keep => k === keep || k.startsWith('pw_tooltips_') || k.startsWith('pw_tour_done_'))) {
+                        localStorage.removeItem(k);
+                    }
+                });
+                console.log('Session isolation: localStorage wiped for user', user.uid, '(was:', lastUid || 'none', ')');
                 // Reset in-memory variables immediately
                 try { if (typeof paintDatabase !== 'undefined') paintDatabase = []; } catch(e) {}
                 try { if (typeof profiles !== 'undefined') profiles = []; } catch(e) {}
@@ -1158,8 +1161,14 @@ const firebaseConfig = {
                 // Clear logo memory so previous user's logos don't bleed into PDFs
                 window.currentCompanyLogo = null;
                 window.currentHeaderLogo = null;
+                window._userHasRealData = false;
+                window._lastChargesSnapshot = null;
+                window.currentLoadedJob = null;
+                window.appliedCharges = {};
+                window.colourSurcharges = {};
+                try { if (typeof fullHistory !== 'undefined') fullHistory = []; } catch(e) {}
                 localStorage.setItem('pw_last_uid', user.uid);
-                //        End session isolation                                                                                                                               
+                // ── End session isolation ──────────────────────────────────────────
 
                 // Apply pro locks now that we know who the user is
                 setTimeout(() => {
@@ -1209,7 +1218,7 @@ const firebaseConfig = {
                         } else if (attempts > 0) {
                             setTimeout(() => tryLoad(attempts - 1), 400);
                         } else {
-                            console.warn('       loadAllDataFromFirebase never became available');
+                            console.warn('⚠️ loadAllDataFromFirebase never became available');
                         }
                     };
                     setTimeout(() => tryLoad(10), 500); // retry up to 10x every 400ms
@@ -1223,7 +1232,7 @@ const firebaseConfig = {
                         }
                     }, 1500);
                 }
-                // Tour autoplay     fires after data has loaded (3s gives Firebase time to sync demo jobs)
+                // Tour autoplay — fires after data has loaded (3s gives Firebase time to sync demo jobs)
                 setTimeout(() => {
                     if (typeof maybeStartTour === 'function') maybeStartTour();
                 }, 3000);
@@ -1263,8 +1272,18 @@ const firebaseConfig = {
 <script>
 // Apply tooltip state immediately on load (before auth/initApp) so ? badges show on first render
 (function(){
-    var stored = localStorage.getItem('pw_tooltips');
-    if (stored === null || stored === '1') document.documentElement.classList.add('tooltips-on');
+    // Check uid-based key first, fall back to global key
+    var _tooltipStored = null;
+    try {
+        var _allKeys = Object.keys(localStorage);
+        // Find any pw_tooltips_<uid> key
+        var _uidKey = _allKeys.find(function(k){ return k.startsWith('pw_tooltips_'); });
+        if (_uidKey) _tooltipStored = localStorage.getItem(_uidKey);
+        if (_tooltipStored === null) _tooltipStored = localStorage.getItem('pw_tooltips');
+    } catch(e) {}
+    // Only add tooltips-on if explicitly set to '1' OR never set before (null = new user default ON)
+    // Once set to '0' by user, respect that across sessions
+    if (_tooltipStored === null || _tooltipStored === '1') document.documentElement.classList.add('tooltips-on');
 })();
 
 // Remove stray text nodes from loginScreen (injected by old scripts or browser quirks)
@@ -1554,7 +1573,7 @@ const firebaseConfig = {
 
         <div id="loginError" style="color:red; font-weight:900; margin-top:15px; text-align:center; display:none;"></div>
     </div>
-    <div style="text-align:center; margin-top:12px; font-size:10px; color:rgba(0,0,0,0.35); font-weight:700;">v1.9.58-dev-s3</div>
+    <div style="text-align:center; margin-top:12px; font-size:10px; color:rgba(0,0,0,0.35); font-weight:700;">v1.9.64</div>
 </div>
 
 
@@ -1709,14 +1728,14 @@ const firebaseConfig = {
             </div>
 
             <label>Description of Part <span class="pw-help">?<span class="pw-help-tip">A short label for this part — e.g. DOOR, PANEL, DRAWER. Appears on your estimate and shop label to identify each line item.</span></span></label>
-            <div style="display:flex; align-items:center; gap:8px;">
-                <input type="text" id="desc" placeholder="e.g. DOOR, PANEL..." style="text-transform:uppercase; flex:1;" list="descSuggestions" autocomplete="off">
-                <label id="ctsCheckLabel" style="display:flex; align-items:center; gap:5px; font-size:10px; font-weight:900; color:#2c3e50; white-space:nowrap; cursor:pointer; background:#f0f0f0; padding:7px 9px; border-radius:6px; border:2px solid #ddd; user-select:none;" title="Cut To Size - charge board supply price">
-                    <input type="checkbox" id="ctsPart" onchange="toggleCtsLabel()" style="width:14px; height:14px; cursor:pointer; accent-color:#2c3e50;">
-                    CTS
-                </label>
+            <div style="position:relative;">
+                <input type="text" id="desc" placeholder="e.g. DOOR, PANEL, DRAWER..." style="text-transform:uppercase; width:100%; box-sizing:border-box;" autocomplete="off"
+                    oninput="filterDescDropdown(this.value)"
+                    onfocus="openDescDropdown()"
+                    onblur="setTimeout(closeDescDropdown,50)"
+                    onkeydown="descKeyNav(event)">
+                <div id="descDropdown" style="display:none; position:absolute; top:100%; left:0; right:0; background:#fff; border:2px solid #d4af37; border-radius:0 0 8px 8px; max-height:180px; overflow-y:auto; z-index:9999; box-shadow:0 4px 12px rgba(0,0,0,0.15);"></div>
             </div>
-            <datalist id="descSuggestions"></datalist>
 
             <div class="fm-row">
                 <div id="fm-flat" class="fm-opt active" ontouchstart="event.preventDefault();setFM('Flat')" onclick="setFM('Flat')">FLAT</div>
@@ -1755,15 +1774,7 @@ const firebaseConfig = {
                 <div style="font-size: 10px; font-weight: 900; color: #aaa;">CURRENT PART SQM (m²)</div>
             </div>
 
-            <button class="add-main-btn" onclick="addPart()">ADD PART +</button>
-
-            <!-- CTS EDGE TYPE SELECTOR -->
-            <div id="ctsEdgePanel" style="display:none; margin-top:12px; background:#2c3e50; border-radius:10px; padding:12px;">
-                <div style="font-size:10px; font-weight:900; color:#d4af37; margin-bottom:6px;">CUT TO SIZE - Edge Routing</div>
-                <select id="ctsEdgeSelect" onchange="setCtsJobEdge(this.value)" style="width:100%; padding:9px; border:none; border-radius:6px; font-size:12px; font-weight:700; background:#fff; color:#2c3e50;">
-                    <option value="">No edge routing</option>
-                </select>
-            </div>
+            <button class="add-main-btn" onmousedown="closeDescDropdown()" onclick="addPart()">ADD PART +</button>
             
             <!-- JOB PHOTOS GALLERY -->
             <div id="jobPhotosContainer" style="margin-top:20px; padding:15px; background:#f5f5f5; border-radius:8px; border:1px solid #e0e0e0;">
@@ -1783,7 +1794,6 @@ const firebaseConfig = {
             <button class="filter-btn" onclick="filterPanels('ss')" data-bg="#e0f2f1" data-color="#00695c" style="padding:6px 14px; border:none; background:#e0f2f1; color:#00695c; border-radius:20px; cursor:pointer; font-weight:900; box-shadow:0 1px 3px rgba(0,0,0,0.08); transition:all 0.2s;">S/S</button>
             <button class="filter-btn" onclick="filterPanels('ds')" data-bg="#ede7f6" data-color="#4527a0" style="padding:6px 14px; border:none; background:#ede7f6; color:#4527a0; border-radius:20px; cursor:pointer; font-weight:900; box-shadow:0 1px 3px rgba(0,0,0,0.08); transition:all 0.2s;">D/S</button>
             <button class="filter-btn" onclick="filterPanels('se')" style="padding:6px 12px; border:1px solid #ddd; background:#fff; border-radius:4px; cursor:pointer; font-weight:900;">S/E</button>
-            <button class="filter-btn" onclick="filterPanels('cts')" style="padding:6px 14px; border:none; background:#f0f0f0; color:#2c3e50; border-radius:20px; cursor:pointer; font-weight:900; font-size:10px;">CTS</button>
             
             <!-- Paint Colour Filter -->
             <div style="display:flex; gap:8px; align-items:center; margin-top:12px;">
@@ -2081,7 +2091,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.9.57</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.9.64</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -2855,7 +2865,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.9.57</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.9.64</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);startTour();" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -2977,36 +2987,13 @@ const firebaseConfig = {
                         💳 Upgrade to Pro
                     </button>
                 </div>
-                <h4 style="margin-top:0; margin-bottom:10px; font-weight:900;">Price Matrix <span class="pw-help">?<span class="pw-help-tip">Switch between Paint and Cut To Size matrices using the toggle.</span></span></h4>
-
-                <!-- Matrix Toggle -->
-                <div style="display:flex; background:#f0f0f0; border-radius:10px; padding:3px; margin-bottom:12px; gap:3px;">
-                    <button id="matrixTogglePaint" onclick="switchMatrixView('paint')" style="flex:1; border:none; background:#d4af37; color:#000; padding:9px; border-radius:8px; font-weight:900; font-size:12px; cursor:pointer;">Paint Matrix</button>
-                    <button id="matrixToggleCts" onclick="switchMatrixView('cts')" style="flex:1; border:none; background:transparent; color:#999; padding:9px; border-radius:8px; font-weight:900; font-size:12px; cursor:pointer;">Cut To Size</button>
+                <h4 style="margin-top:0; margin-bottom:8px; font-weight:900;">Price Matrix <span class="pw-help">?<span class="pw-help-tip">Your pricing grid. Each row is a door/panel profile (e.g. Plain, Shaker). Each column is a paint finish. Enter the price per m² you charge for that combination. Leave blank to exclude from quoting.</span></span></h4>
+                <div style="display:flex; gap:6px; margin-bottom:8px;">
+                    <button onclick="syncAllFromFirebase()" style="flex:1; background:#2196f3; color:#fff; border:none; padding:7px 0; border-radius:6px; font-size:10px; font-weight:900; cursor:pointer;">☁️ Sync from Cloud</button>
+                    <button onclick="forcePushPricingToCloud()" style="flex:1; background:#34c759; color:#fff; border:none; padding:7px 0; border-radius:6px; font-size:10px; font-weight:900; cursor:pointer;">⬆️ Push to Cloud</button>
                 </div>
-
-                <!-- Paint controls -->
-                <div id="matrixControlsPaint">
-                    <div style="display:flex; gap:6px; margin-bottom:8px;">
-                        <button onclick="syncAllFromFirebase()" style="flex:1; background:#2196f3; color:#fff; border:none; padding:9px 0; border-radius:6px; font-size:10px; font-weight:900; cursor:pointer;">Sync from Cloud</button>
-                        <button onclick="forcePushPricingToCloud()" style="flex:1; background:#34c759; color:#fff; border:none; padding:9px 0; border-radius:6px; font-size:10px; font-weight:900; cursor:pointer;">Push to Cloud</button>
-                    </div>
-                    <button onclick="genPriceListPDF()" style="width:100%; background:#d4af37; color:#000; border:none; padding:9px 0; border-radius:6px; font-size:11px; font-weight:900; cursor:pointer; margin-bottom:12px; letter-spacing:0.3px;">Print Paint Price List PDF</button>
-                </div>
-
-                <!-- CTS controls -->
-                <div id="matrixControlsCts" style="display:none;">
-                    <div style="display:flex; gap:6px; margin-bottom:8px;">
-                        <button onclick="saveCtsData()" style="flex:1; background:#34c759; color:#fff; border:none; padding:9px 0; border-radius:6px; font-size:10px; font-weight:900; cursor:pointer;">Push to Cloud</button>
-                    </div>
-                    <button onclick="genCtsPriceListPDF()" style="width:100%; background:#2c3e50; color:#d4af37; border:none; padding:9px 0; border-radius:6px; font-size:11px; font-weight:900; cursor:pointer; margin-bottom:12px; letter-spacing:0.3px;">Print CTS Price List PDF</button>
-                </div>
-
-                <!-- Paint Matrix container -->
+                <button onclick="genPriceListPDF()" style="width:100%; background:#d4af37; color:#000; border:none; padding:9px 0; border-radius:6px; font-size:11px; font-weight:900; cursor:pointer; margin-bottom:14px; letter-spacing:0.3px;">🖨️ Print Price List PDF</button>
                 <div id="admin-pricing-matrix"></div>
-
-                <!-- CTS Matrix container -->
-                <div id="admin-cts-matrix" style="display:none;"></div>
             </div>
 
             <!-- Reports Tab -->
@@ -3676,7 +3663,7 @@ const firebaseConfig = {
     console.log('');
     //                    VERSION: v1.7.24-FINAL | 2026-02-27 | Colin Bedford                   
     //                    ADMIN TABS FIXED | COVER SHEET FIXED | DELETE CONFIRMATION ADDED                   
-    console.log('%c PaintWorkz Pro v1.9.57 ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('%c PaintWorkz Pro v1.9.64 ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     // Changelog logs removed for production performance
     // ====================================
     
@@ -3726,21 +3713,25 @@ const firebaseConfig = {
             window.realtimeSyncUnsubscribe = null;
         }
         window.realtimeSyncActive = false;
-        // Clear all user-scoped data from localStorage immediately
-        const userScopedKeys = [
-            'clientDatabase','jobHistory','paintFormulas','masterMatrix',
-            'doorProfiles','companySettings','companyLogo','headerLogoBase64',
-            'headerLogo','adminAlerts','appColors','paintBrands',
-            'additionalCharges','defaultTimeline','adminSettings',
-            'pw_onboarded','currentJob','pw_last_uid'
-        ];
-        userScopedKeys.forEach(k => localStorage.removeItem(k));
+        // Nuclear wipe on logout - preserve only app-global prefs
+        const uid = window.currentUser ? window.currentUser.uid : null;
+        const keepOnLogout = ['paintworkz_version'];
+        if (uid) { keepOnLogout.push('pw_tooltips_' + uid); keepOnLogout.push('pw_tour_done_' + uid); }
+        const logoutKeys = [];
+        for (let i = 0; i < localStorage.length; i++) logoutKeys.push(localStorage.key(i));
+        logoutKeys.forEach(k => {
+            if (k && !keepOnLogout.some(keep => k === keep)) localStorage.removeItem(k);
+        });
         // Reset in-memory variables
         try { if (typeof history !== 'undefined') history = []; } catch(e) {}
         try { if (typeof fullHistory !== 'undefined') fullHistory = []; } catch(e) {}
         try { if (typeof items !== 'undefined') items = []; } catch(e) {}
         try { if (typeof paintDatabase !== 'undefined') paintDatabase = []; } catch(e) {}
         try { if (typeof profiles !== 'undefined') profiles = []; } catch(e) {}
+        window._userHasRealData = false;
+        window._lastChargesSnapshot = null;
+        window.currentLoadedJob = null;
+        window.appliedCharges = {};
         window.signOut().then(() => {});
     }
 
@@ -3924,42 +3915,6 @@ const firebaseConfig = {
 
     // ==================== END FIREBASE SETUP ====================
     let items = [], mode = 'SS', pType = 'Panel', fmState = 'Flat', currentPanelFilter = 'all', currentColorFilter = '';
-
-    //        Cut To Size (CTS) data                                                                                                                                                 
-    let ctsThicknesses = [16, 18, 21, 25];
-    let ctsEdgeTypes   = [
-        { name: 'Square',    lm: 0  },
-        { name: 'Aris',      lm: 5  },
-        { name: '2mm Round', lm: 8  },
-        { name: '3mm Round', lm: 12 }
-    ];
-    let ctsMatrix      = {};
-    let ctsJobEdgeType = '';
-
-    try {
-        const s1 = JSON.parse(localStorage.getItem('ctsMatrix'));
-        if (s1 && Object.keys(s1).length > 0) ctsMatrix = s1;
-        const s2 = JSON.parse(localStorage.getItem('ctsThicknesses'));
-        if (s2 && s2.length > 0) ctsThicknesses = s2;
-        const s3 = JSON.parse(localStorage.getItem('ctsEdgeTypes'));
-        if (s3 && s3.length > 0) ctsEdgeTypes = s3;
-    } catch(e) {}
-
-    function saveCtsData() {
-        localStorage.setItem('ctsMatrix', JSON.stringify(ctsMatrix));
-        localStorage.setItem('ctsThicknesses', JSON.stringify(ctsThicknesses));
-        localStorage.setItem('ctsEdgeTypes', JSON.stringify(ctsEdgeTypes));
-        try {
-            if (window.currentUser && window.firebaseDb && window.setDoc && window.doc) {
-                const ref = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'ctsData');
-                window.setDoc(ref, {
-                    matrix: ctsMatrix, thicknesses: ctsThicknesses,
-                    edgeTypes: ctsEdgeTypes, updated: new Date().toISOString()
-                }).catch(function(e) {});
-            }
-        } catch(e) {}
-    }
-    window.saveCtsData = saveCtsData;
     
     // RESTORED MASTER LISTS
     let clients = []; // legacy array     clients now come from clientDatabase (Firebase) only
@@ -5858,7 +5813,15 @@ const firebaseConfig = {
     // Does NOT run for the owner account.
     function seedDemoDataForNewUser() {
         if (!window.currentUser) return;
-        if (window.currentUser.email === OWNER_EMAIL) return; // Owner manages their own data
+        if (window.currentUser.email === OWNER_EMAIL) return;
+        // Never seed if flag set (user has real Firestore data)
+        if (window._userHasRealData) return;
+        // Skip if already seeded this session
+        if (sessionStorage.getItem('pw_demo_seeded_' + window.currentUser.uid)) return;
+        // Skip seeding if user already has real jobs
+        const preCheckJobs = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+        const realJobs = preCheckJobs.filter(function(j) { return !j.id || !j.id.startsWith('demo-'); });
+        if (realJobs.length > 0) { window._userHasRealData = true; return; }
 
         // --- Demo Clients ---
         const existingClients = getClientDatabase();
@@ -5873,6 +5836,8 @@ const firebaseConfig = {
             try { if (typeof populateClientDropdown === 'function') populateClientDropdown(); } catch(e) {}
             try { if (typeof renderClientsList === 'function') renderClientsList(); } catch(e) {}
             console.log('     Demo clients seeded for new user');
+            // Mark seeded so we don't repeat this login session
+            try { sessionStorage.setItem('pw_demo_seeded_' + window.currentUser.uid, '1'); } catch(e) {}
         }
 
         // --- Demo Paint Formula ---
@@ -6123,6 +6088,7 @@ const firebaseConfig = {
             
             // Initialize tooltip system
             if (typeof initTooltips === 'function') initTooltips();
+            buildDescSuggestions(); // refresh desc dropdown cache
             // Apply App Store build class to hide pricing elements
             if (window.isAppStoreBuild) document.body.classList.add('app-store-build');
             // Tour autoplay handled after Firebase auth resolves (see onAuthStateChanged)
@@ -6698,6 +6664,7 @@ const firebaseConfig = {
         
         currentEditingJobIndex = index; // Track this job for overwrite
         isJobViewMode = true; // Set view mode
+        window.currentLoadedJob = job; // Store for cover sheet / PDFs
         
         items = (job.items || []).map(it => ({
             ...it,
@@ -6968,9 +6935,24 @@ const firebaseConfig = {
             return;
         }
         
-        // Sync to Firebase     reset rate limiter so completion always pushes immediately
-        if (window.syncJobsToFirebase) {
-            try { lastSyncTime = 0; lastSyncedData = ''; window.syncJobsToFirebase(); } catch(e) { console.error('Firebase sync error:', e); }
+        // Push completion DIRECTLY to Firestore - don't wait for debounced sync
+        if (window.currentUser && window.firebaseDb && window.doc && window.setDoc) {
+            try {
+                const jobId = job.id || job.jobNum;
+                const jobDocRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'jobs', jobId);
+                window.setDoc(jobDocRef, {
+                    ...job,
+                    id: jobId,
+                    completed: true,
+                    completedDate: job.completedDate,
+                    dateCompleted: job.dateCompleted,
+                    lastModified: new Date().toISOString()
+                }, { merge: false }).then(function() {
+                    console.log('Job completion pushed directly to Firestore:', jobId);
+                    // Now also run full sync to catch any other changes
+                    try { lastSyncTime = 0; lastSyncedData = ''; if (window.syncJobsToFirebase) window.syncJobsToFirebase(); } catch(e) {}
+                }).catch(function(e) { console.error('Direct completion sync error:', e); });
+            } catch(e) { console.error('Firebase completion error:', e); }
         }
         
         // Generate batch PDFs
@@ -7916,14 +7898,25 @@ const firebaseConfig = {
                                 var val = localStorage.getItem(lsKey);
                                 if (val) {
                                     var parsed = JSON.parse(val);
-                                    var ref = window.doc(window.firebaseDb, 'users', uid, 'appData', lsKey);
                                     var payload = {};
-                                    // Use correct field name per collection
-                                    if (lsKey === 'paintFormulas') payload = { formulas: parsed };
-                                    else if (lsKey === 'doorProfiles') payload = { profiles: parsed };
-                                    else if (lsKey === 'clientDatabase') payload = { clients: parsed };
-                                    else if (lsKey === 'masterMatrix') payload = { matrix: parsed };
-                                    else payload = parsed;
+                                    var ref;
+                                    // doorProfiles and masterMatrix live in 'config' not 'appData'
+                                    if (lsKey === 'doorProfiles') {
+                                        ref = window.doc(window.firebaseDb, 'users', uid, 'config', 'doorProfiles');
+                                        payload = { doorProfiles: parsed, masterMatrix: JSON.parse(localStorage.getItem('masterMatrix') || '{}') };
+                                    } else if (lsKey === 'masterMatrix') {
+                                        ref = window.doc(window.firebaseDb, 'users', uid, 'appData', 'masterMatrix');
+                                        payload = { matrix: parsed };
+                                    } else if (lsKey === 'paintFormulas') {
+                                        ref = window.doc(window.firebaseDb, 'users', uid, 'appData', lsKey);
+                                        payload = { formulas: parsed };
+                                    } else if (lsKey === 'clientDatabase') {
+                                        ref = window.doc(window.firebaseDb, 'users', uid, 'appData', lsKey);
+                                        payload = { clients: parsed };
+                                    } else {
+                                        ref = window.doc(window.firebaseDb, 'users', uid, 'appData', lsKey);
+                                        payload = parsed;
+                                    }
                                     pushes.push(window.setDoc(ref, payload, { merge: false }));
                                 }
                             } catch(e) {}
@@ -7964,7 +7957,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.9.57'; //     bump this on every release
+        const CURRENT_VERSION = 'v1.9.64'; //     bump this on every release
         const CURRENT_DATE = '2026-03-09';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -8037,32 +8030,128 @@ const firebaseConfig = {
         });
     }
 
-    function buildDescSuggestions() {
-        const dl = document.getElementById('descSuggestions');
-        if (!dl) return;
-        const seen = new Set();
-        // Always include common part descriptions
-        const defaults = ['Door','Drawer','Panel','End Panel','Top','Bottom','Shelf','Back Panel',
-            'Fridge Panel','Island Panel','Kick Panel','Wardrobe Door','Laundry Door',
-            'Pantry Door Left','Pantry Door Right','Double Drawer','Single Drawer',
-            'Overhead Door','Base Door'];
-        defaults.forEach(d => seen.add(d.toUpperCase()));
-        // Pull unique descriptions from job history
+    // ── Description dropdown system ───────────────────────────────────────────
+    var _descSuggestions = [];
+    var _descDropdownIdx = -1;
+
+    function getDescSuggestions() {
+        const defaults = ['BACK PANEL','BASE DOOR','BOTTOM','BULKHEAD','DOUBLE DRAWER',
+            'DOOR','DRAWER','END PANEL','FRIDGE PANEL','ISLAND PANEL','KICK PANEL',
+            'LAUNDRY DOOR','OVERHEAD DOOR','PANEL','PANTRY DOOR LEFT','PANTRY DOOR RIGHT',
+            'SHELF','SINGLE DRAWER','SPLASHBACK','TOP','WARDROBE DOOR'];
+        const seen = new Set(defaults);
+        // Recent entries first (from localStorage memory)
         try {
-            const history = JSON.parse(localStorage.getItem('jobHistory') || '[]');
-            history.forEach(job => {
-                (job.items || []).forEach(item => {
+            const recent = JSON.parse(localStorage.getItem('pw_desc_recent') || '[]');
+            recent.forEach(function(d) { if (d) seen.add(d.toUpperCase()); });
+        } catch(e) {}
+        // Pull from job history
+        try {
+            const hist = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+            hist.forEach(function(job) {
+                (job.items || []).forEach(function(item) {
                     if (item.desc && item.desc.trim()) seen.add(item.desc.trim().toUpperCase());
                 });
             });
         } catch(e) {}
-        dl.innerHTML = '';
-        Array.from(seen).sort().forEach(val => {
-            const opt = document.createElement('option');
-            opt.value = val;
-            dl.appendChild(opt);
+        // Also pull from current job
+        items.forEach(function(it) { if (it.desc) seen.add(it.desc.toUpperCase()); });
+        return Array.from(seen).sort();
+    }
+
+    function saveDescRecent(val) {
+        if (!val || !val.trim()) return;
+        try {
+            var recent = JSON.parse(localStorage.getItem('pw_desc_recent') || '[]');
+            recent = [val.toUpperCase()].concat(recent.filter(function(d) { return d !== val.toUpperCase(); })).slice(0, 30);
+            localStorage.setItem('pw_desc_recent', JSON.stringify(recent));
+        } catch(e) {}
+    }
+
+    function openDescDropdown() {
+        _descSuggestions = getDescSuggestions();
+        _descDropdownIdx = -1;
+        var val = (document.getElementById('desc').value || '').toUpperCase();
+        renderDescDropdown(val);
+    }
+
+    function closeDescDropdown() {
+        var dd = document.getElementById('descDropdown');
+        if (dd) dd.style.display = 'none';
+        _descDropdownIdx = -1;
+    }
+
+    function filterDescDropdown(val) {
+        _descSuggestions = getDescSuggestions();
+        _descDropdownIdx = -1;
+        renderDescDropdown((val || '').toUpperCase());
+    }
+
+    function renderDescDropdown(filter) {
+        var dd = document.getElementById('descDropdown');
+        if (!dd) return;
+        var matches = filter
+            ? _descSuggestions.filter(function(s) { return s.includes(filter); })
+            : _descSuggestions;
+        if (matches.length === 0) { dd.style.display = 'none'; return; }
+        dd.innerHTML = '';
+        matches.slice(0, 20).forEach(function(s, i) {
+            var item = document.createElement('div');
+            item.textContent = s;
+            item.dataset.idx = i;
+            item.style.cssText = 'padding:8px 12px; font-size:12px; font-weight:700; cursor:pointer; border-bottom:1px solid #f0f0f0; text-transform:uppercase;';
+            item.onmousedown = function() { selectDesc(s); };
+            item.onmouseover = function() {
+                _descDropdownIdx = i;
+                highlightDescItem(i);
+            };
+            dd.appendChild(item);
+        });
+        dd.style.display = 'block';
+    }
+
+    function highlightDescItem(idx) {
+        var dd = document.getElementById('descDropdown');
+        if (!dd) return;
+        Array.from(dd.children).forEach(function(el, i) {
+            el.style.background = i === idx ? '#2c3e50' : '';
+            el.style.color = i === idx ? '#d4af37' : '';
         });
     }
+
+    function selectDesc(val) {
+        var inp = document.getElementById('desc');
+        if (inp) inp.value = val;
+        saveDescRecent(val);
+        closeDescDropdown();
+    }
+
+    function descKeyNav(e) {
+        var dd = document.getElementById('descDropdown');
+        if (!dd || dd.style.display === 'none') return;
+        var items = Array.from(dd.children);
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            _descDropdownIdx = Math.min(_descDropdownIdx + 1, items.length - 1);
+            highlightDescItem(_descDropdownIdx);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            _descDropdownIdx = Math.max(_descDropdownIdx - 1, 0);
+            highlightDescItem(_descDropdownIdx);
+        } else if (e.key === 'Enter' && _descDropdownIdx >= 0) {
+            e.preventDefault();
+            if (items[_descDropdownIdx]) selectDesc(items[_descDropdownIdx].textContent);
+        } else if (e.key === 'Escape') {
+            closeDescDropdown();
+        }
+    }
+    window.openDescDropdown = openDescDropdown;
+    window.closeDescDropdown = closeDescDropdown;
+    window.filterDescDropdown = filterDescDropdown;
+    window.descKeyNav = descKeyNav;
+    window.selectDesc = selectDesc;
+
+    function buildDescSuggestions() { /* legacy - no-op, using new dropdown system */ }
     window.buildDescSuggestions = buildDescSuggestions;
 
     function refreshLists() {
@@ -8142,85 +8231,6 @@ const firebaseConfig = {
         const modal = document.getElementById('quickPDFModal');
         if (modal) modal.remove();
     }
-
-
-    //        CTS Pricing functions                                                                                                                                                    
-    function getCtsPriceForPart(item) {
-        if (!item.cts) return null;
-        const thk = parseInt(item.thk) || 18;
-        const sqm = parseFloat(item.sqm) || 0;
-        const prof = item.prof || '';
-        let pricePerSqm = 0;
-        let bestThkIndex = 0;
-        const thkIndex = ctsThicknesses.indexOf(thk);
-        if (thkIndex >= 0) {
-            bestThkIndex = thkIndex;
-        } else {
-            let closest = Infinity;
-            ctsThicknesses.forEach(function(t, i) {
-                if (Math.abs(t - thk) < closest) { closest = Math.abs(t - thk); bestThkIndex = i; }
-            });
-        }
-        Object.values(ctsMatrix).forEach(function(tier) {
-            Object.values(tier).forEach(function(row) {
-                if (row[0] === prof) pricePerSqm = row[bestThkIndex + 1] || 0;
-            });
-        });
-        const sqmCost = sqm * item.qty * pricePerSqm;
-        let edgeCost = 0;
-        if (ctsJobEdgeType) {
-            const edgeType = ctsEdgeTypes.find(function(e) { return e.name === ctsJobEdgeType; });
-            if (edgeType && edgeType.lm > 0) {
-                const h = parseFloat(item.h) / 1000;
-                const w = parseFloat(item.w) / 1000;
-                edgeCost = 2 * (h + w) * item.qty * edgeType.lm;
-            }
-        }
-        return { sqmCost: sqmCost, edgeCost: edgeCost, total: sqmCost + edgeCost, pricePerSqm: pricePerSqm };
-    }
-    window.getCtsPriceForPart = getCtsPriceForPart;
-
-    function getCtsJobTotal(jobItems) {
-        let sqmTotal = 0, edgeTotal = 0;
-        (jobItems || items).forEach(function(item) {
-            if (!item.cts) return;
-            const p = getCtsPriceForPart(item);
-            if (p) { sqmTotal += p.sqmCost; edgeTotal += p.edgeCost; }
-        });
-        return { sqmTotal: sqmTotal, edgeTotal: edgeTotal, total: sqmTotal + edgeTotal };
-    }
-    window.getCtsJobTotal = getCtsJobTotal;
-
-    function toggleCtsLabel() {
-        const cb = document.getElementById('ctsPart');
-        const lbl = document.getElementById('ctsCheckLabel');
-        if (lbl) lbl.style.borderColor = cb && cb.checked ? '#d4af37' : '#ddd';
-    }
-    window.toggleCtsLabel = toggleCtsLabel;
-
-    function updateCtsEdgePanel() {
-        const panel = document.getElementById('ctsEdgePanel');
-        const sel   = document.getElementById('ctsEdgeSelect');
-        if (!panel || !sel) return;
-        const hasCts = items.some(function(it) { return it.cts; });
-        panel.style.display = hasCts ? 'block' : 'none';
-        if (hasCts) {
-            let opts = '<option value="">No edge routing</option>';
-            ctsEdgeTypes.forEach(function(e) {
-                const selected = ctsJobEdgeType === e.name ? 'selected' : '';
-                opts += '<option value="' + e.name + '" ' + selected + '>' + e.name + ' - $' + e.lm + '/lm</option>';
-            });
-            sel.innerHTML = opts;
-        }
-    }
-    window.updateCtsEdgePanel = updateCtsEdgePanel;
-
-    function setCtsJobEdge(val) {
-        ctsJobEdgeType = val;
-        saveData();
-    }
-    window.setCtsJobEdge = setCtsJobEdge;
-    //        END CTS Pricing functions                                                                                                                                        
 
     function tab(t) {
         document.querySelectorAll('.view-section, .nav-btn').forEach(x => x.classList.remove('active'));
@@ -8676,7 +8686,11 @@ const firebaseConfig = {
         }
     }
 
+    let _addingPart = false;
     function addPart() {
+        if (_addingPart) return; // prevent double-fire
+        _addingPart = true;
+        setTimeout(function(){ _addingPart = false; }, 500);
         if (!canCreateJobs()) { showUpgradePrompt('solo'); return; }
         const h = document.getElementById('h').value;
         const w = document.getElementById('w').value;
@@ -8703,7 +8717,6 @@ const firebaseConfig = {
             const liveSqElement = document.getElementById('liveSq');
             const sqmValue = liveSqElement ? liveSqElement.innerText : '0.000';
             
-            const ctsChecked = document.getElementById('ctsPart') ? document.getElementById('ctsPart').checked : false;
             items.push({
                 h, w, qty: (parseInt(document.getElementById('qty').value) || 1),
                 desc: desc.toUpperCase(), prof: prof, fm: fmState,
@@ -8713,14 +8726,14 @@ const firebaseConfig = {
                 code: document.getElementById('p-code').value,
                 finish: document.getElementById('p-finish').value,
                 type: pType,
-                thk: document.getElementById('thk').value,
-                cts: ctsChecked
+                thk: document.getElementById('thk').value
             });
+            saveDescRecent(desc);
             notify("Part Added");
+            if (desc) saveDescSuggestion(desc.toUpperCase());
         }
         console.log('After addPart - Total items: ' + items.length);
         render();
-        updateCtsEdgePanel();
         saveData(); // Auto-save to LocalStorage
         
         // Reset for next entry: qty back to 1, clear other fields
@@ -8877,9 +8890,6 @@ const firebaseConfig = {
                 else if (filter === 'ss' || filter === 'ds' || filter === 'se') {
                     return it.mode === filter.toUpperCase();
                 }
-                else if (filter === 'cts') {
-                    return !!it.cts;
-                }
                 return true;
             });
         }
@@ -8891,7 +8901,6 @@ const firebaseConfig = {
         
         // Update colour dropdown with available colours from ALL items (not just filtered)
         updateColourDropdown();
-        if (typeof updateCtsEdgePanel === 'function') updateCtsEdgePanel();
         
         filteredItems.forEach((it, i) => {
             const originalIndex = items.indexOf(it);
@@ -8942,17 +8951,16 @@ const firebaseConfig = {
                 }
             }
             
-            const ctsBadge = it.cts ? '<span style="background:#2c3e50; color:#d4af37; font-size:9px; font-weight:900; padding:2px 6px; border-radius:3px; margin-left:4px;">CTS</span>' : '';
             l.innerHTML += `<div class="part-label" style="border-left:5px solid ${clr}">
                 <div class="qty-controls">
                     <button class="qty-btn" style="border-radius:4px 4px 0 0;" onclick="changeQty(${originalIndex}, 1)">+</button>
                     <div class="pl-qty" style="margin:0; border-radius:0;">${it.qty}</div>
-                    <button class="qty-btn" style="border-radius:0 0 4px 4px;" onclick="changeQty(${originalIndex}, -1)">   </button>
+                    <button class="qty-btn" style="border-radius:0 0 4px 4px;" onclick="changeQty(${originalIndex}, -1)">-</button>
                 </div>
                 <div class="pl-center">
-                    <div style="font-size:10px; font-weight:900; color:${clr}; text-transform:uppercase; line-height:1;">${it.desc} (${it.fm})${ctsBadge}</div>
-                    <div style="font-size:10px; font-weight:700; color:#666; margin-bottom:2px;">${it.brand} - ${it.color}     ${it.finish}</div>
-                    <div class="pl-dims">${it.h}    ${it.w}    ${it.thk}</div>
+                    <div style="font-size:10px; font-weight:900; color:${clr}; text-transform:uppercase; line-height:1;">${it.desc} (${it.fm})</div>
+                    <div style="font-size:10px; font-weight:700; color:#666; margin-bottom:2px;">${it.brand} - ${it.color} | ${it.finish}</div>
+                    <div class="pl-dims">${it.h} x ${it.w} x ${it.thk}</div>
                     <div class="pl-meta">
                         <span style="font-weight:700; background:${clr}; color:#fff; padding:2px 6px; border-radius:3px; font-size:9px; text-transform:uppercase;">${it.type}</span>
                         <span style="font-weight:700;">${it.prof}</span>
@@ -8965,7 +8973,7 @@ const firebaseConfig = {
                     <div class="pl-mode" style="color:${mC}; border-color:${mC}; background:${mC}15">${it.mode}</div>
                     <div style="font-size:11px; font-weight:900;">${rowSqm.toFixed(3)}</div>
                 </div>
-                <button class="edit-btn" onclick="editItem(${originalIndex})" style="background:#2196f3; color:#fff; border:none; padding:8px 10px; border-radius:4px 0 0 4px; font-weight:900; cursor:pointer; font-size:12px;">   </button><button class="del-btn" onclick="deleteItem(${originalIndex})">  </button>
+                <button class="edit-btn" onclick="editItem(${originalIndex})" style="background:#2196f3; color:#fff; border:none; padding:8px 10px; border-radius:4px 0 0 4px; font-weight:900; cursor:pointer; font-size:12px;">Edit</button><button class="del-btn" onclick="deleteItem(${originalIndex})">X</button>
             </div>`;
         });
         
@@ -9075,13 +9083,7 @@ const firebaseConfig = {
                     
                     <div style="margin-bottom:15px;">
                         <label style="display:block; font-weight:900; margin-bottom:8px; font-size:12px; color:#666;">DESCRIPTION</label>
-                        <div style="display:flex; align-items:center; gap:10px;">
-                            <input type="text" id="editDescInput" value="${item.desc}" style="flex:1; padding:10px; border:1px solid #ddd; border-radius:4px; font-size:14px; box-sizing:border-box;">
-                            <label style="display:flex; align-items:center; gap:6px; font-size:11px; font-weight:900; color:#2c3e50; white-space:nowrap; cursor:pointer; background:#f0f0f0; padding:8px 10px; border-radius:6px; border:2px solid ${item.cts ? '#d4af37' : '#ddd'}; user-select:none;">
-                                <input type="checkbox" id="editCtsInput" ${item.cts ? 'checked' : ''} onchange="this.parentElement.style.borderColor=this.checked?'#d4af37':'#ddd'" style="width:16px; height:16px; cursor:pointer; accent-color:#2c3e50;">
-                                CTS
-                            </label>
-                        </div>
+                        <input type="text" id="editDescInput" value="${item.desc}" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:4px; font-size:14px; box-sizing:border-box;">
                     </div>
                     
                     <div style="margin-bottom:15px;">
@@ -9203,7 +9205,6 @@ const firebaseConfig = {
                 return;
             }
             
-            const editCtsInput = document.getElementById('editCtsInput');
             items[index].prof = newProf;
             items[index].desc = newDesc.toUpperCase();
             items[index].thk = newThk;
@@ -9211,7 +9212,6 @@ const firebaseConfig = {
             items[index].color = newColor;
             items[index].code = newCode;
             items[index].finish = newFinish;
-            items[index].cts = editCtsInput ? editCtsInput.checked : false;
             // type, panelType, edgeConfig are updated live by their setEdit* functions
             
             render();
@@ -9392,7 +9392,7 @@ const firebaseConfig = {
         messageSpan.innerText = message;
         
         const dismissBtn = document.createElement('button');
-        dismissBtn.innerText = '   ';
+        dismissBtn.innerText = 'X';
         dismissBtn.style.cssText = `
             background: ${borderColor};
             color: #fff;
@@ -9465,7 +9465,7 @@ const firebaseConfig = {
         msgDiv.style.flex = '1';
         msgDiv.innerHTML = `<span class="siren-icon"></span> PAINT STOCK ALERT\n${lines}`;
         const btn = document.createElement('button');
-        btn.innerText = '   ';
+        btn.innerText = 'X';
         btn.style.cssText = 'background:rgba(255,255,255,0.3); color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; font-weight:900; margin-left:8px; font-size:12px;';
         btn.onclick = () => { notifDiv.remove(); if (notifList.children.length === 0) banner.style.display = 'none'; };
         notifDiv.appendChild(msgDiv);
@@ -9631,241 +9631,6 @@ const firebaseConfig = {
     }
 
     // ===== PRICE LIST PDF =====
-
-    //        CTS Matrix UI functions                                                                                                                                              
-    function switchMatrixView(view) {
-        const paintBtn = document.getElementById('matrixTogglePaint');
-        const ctsBtn   = document.getElementById('matrixToggleCts');
-        const paintDiv = document.getElementById('admin-pricing-matrix');
-        const ctsDiv   = document.getElementById('admin-cts-matrix');
-        const paintCtrl = document.getElementById('matrixControlsPaint');
-        const ctsCtrl   = document.getElementById('matrixControlsCts');
-        if (view === 'paint') {
-            if (paintBtn) { paintBtn.style.background = '#d4af37'; paintBtn.style.color = '#000'; }
-            if (ctsBtn)   { ctsBtn.style.background = 'transparent'; ctsBtn.style.color = '#999'; }
-            if (paintDiv) paintDiv.style.display = '';
-            if (ctsDiv)   ctsDiv.style.display = 'none';
-            if (paintCtrl) paintCtrl.style.display = '';
-            if (ctsCtrl)   ctsCtrl.style.display = 'none';
-        } else {
-            if (ctsBtn)   { ctsBtn.style.background = '#2c3e50'; ctsBtn.style.color = '#d4af37'; }
-            if (paintBtn) { paintBtn.style.background = 'transparent'; paintBtn.style.color = '#999'; }
-            if (paintDiv) paintDiv.style.display = 'none';
-            if (ctsDiv)   ctsDiv.style.display = '';
-            if (paintCtrl) paintCtrl.style.display = 'none';
-            if (ctsCtrl)   ctsCtrl.style.display = '';
-            renderCtsMatrix();
-        }
-    }
-    window.switchMatrixView = switchMatrixView;
-
-    function renderCtsMatrix() {
-        var target = document.getElementById('admin-cts-matrix');
-        if (!target) return;
-        var thks = ctsThicknesses;
-        var thkHeaders = thks.map(function(t, i) {
-            return '<th style="padding:8px; text-align:center; min-width:70px;">' + t + 'mm<br>' +
-                '<button onclick="removeCtsThickness(' + i + ')" style="background:#ff3b30; color:#fff; border:none; border-radius:3px; font-size:8px; padding:1px 5px; cursor:pointer; margin-top:2px;">x</button></th>';
-        }).join('');
-        var html = '<div style="overflow-x:auto;"><table style="min-width:500px; width:100%; border-collapse:collapse; font-size:10px; background:#fff;">' +
-            '<tr style="background:#2c3e50; color:#d4af37; font-weight:900;">' +
-            '<th style="padding:8px; text-align:left; min-width:160px;">Profile</th>' + thkHeaders +
-            '<th style="padding:8px; text-align:center; background:#1a252f;">' +
-            '<button onclick="addCtsThickness()" style="background:#d4af37; color:#000; border:none; border-radius:4px; font-size:9px; font-weight:900; padding:4px 8px; cursor:pointer;">+mm</button></th></tr>';
-
-        var sortedTiers = Object.keys(ctsMatrix).sort();
-        sortedTiers.forEach(function(tierName) {
-            html += '<tr style="background:#eee;"><td colspan="' + (thks.length + 2) + '" style="padding:8px; font-weight:900;">' + tierName + '</td></tr>';
-            var tier = ctsMatrix[tierName];
-            Object.keys(tier).forEach(function(code) {
-                var row = tier[code];
-                var name = row[0];
-                var priceCells = thks.map(function(t, i) {
-                    var val = row[i+1] !== undefined ? row[i+1] : 100;
-                    return '<td style="padding:6px;text-align:center;"><input type="number" inputmode="numeric" value="' + val + '" data-tier="' + tierName + '" data-code="' + code + '" data-idx="' + i + '" onchange="ctsInputChange(this)" style="width:55px;padding:4px;border:1px solid #ddd;border-radius:4px;text-align:center;"> $</td>';
-                }).join('');
-                html += '<tr><td style="padding:8px;"><div style="display:flex; justify-content:space-between; align-items:center;">' +
-                    '<span style="font-weight:900;">' + name + '</span>' +
-                    '<div style="display:flex; gap:4px;">' +
-                    '<button data-tier="' + tierName + '" data-code="' + code + '" data-name="' + name.replace(/"/g,'&quot;') + '" onclick="ctsTierBtn(this)" style="background:#2196f3; color:#fff; border:none; padding:4px 6px; border-radius:3px; font-size:9px; cursor:pointer;">T</button>' +
-                    '<button data-tier="' + tierName + '" data-code="' + code + '" data-name="' + name.replace(/"/g,'&quot;') + '" onclick="ctsDelBtn(this)" style="background:#ff3b30; color:#fff; border:none; padding:4px 6px; border-radius:3px; font-size:9px; cursor:pointer;">X</button>' +
-                    '</div></div></td>' + priceCells + '<td></td></tr>';
-            });
-        });
-
-        // Add new profile row
-        html += '<tr style="background:#f9f9f9; border-top:2px solid #2c3e50;"><td colspan="' + (thks.length + 2) + '" style="padding:10px;">' +
-            '<div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">' +
-            '<input id="ctsNewProfileName" type="text" placeholder="Profile name e.g. Settler 10" style="flex:2; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:12px; min-width:120px;">' +
-            '<input id="ctsNewProfileTier" type="text" placeholder="Tier e.g. Tier 1" style="flex:1; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:12px; min-width:80px;">' +
-            '<button onclick="addCtsProfile()" style="background:#2c3e50; color:#d4af37; border:none; padding:9px 16px; border-radius:6px; font-weight:900; font-size:12px; cursor:pointer;">Add Profile</button>' +
-            '</div></td></tr></table></div>';
-
-        // Edge Types Section
-        html += '<div style="margin-top:20px; background:#f5f5f5; border-radius:10px; padding:14px;">' +
-            '<h5 style="margin:0 0 10px; font-weight:900; font-size:12px; color:#2c3e50;">Edge Types <span style="font-size:10px; color:#999; font-weight:400;">(price per lineal metre)</span></h5>' +
-            '<table style="width:100%; border-collapse:collapse; font-size:11px;">' +
-            '<tr style="background:#2c3e50; color:#d4af37;"><th style="padding:8px; text-align:left;">Edge Type</th><th style="padding:8px; text-align:center; min-width:90px;">$/lineal m</th><th style="padding:8px; width:50px;"></th></tr>';
-        ctsEdgeTypes.forEach(function(edge, i) {
-            html += '<tr style="border-bottom:1px solid #eee; background:#fff;">' +
-                '<td style="padding:8px; font-weight:700;">' + edge.name + '</td>' +
-                '<td style="padding:6px; text-align:center;"><input type="number" value="' + edge.lm + '" onchange="updateCtsEdgePrice(' + i + ',this.value)" style="width:70px; padding:5px; border:1px solid #ddd; border-radius:4px; text-align:center;"> $</td>' +
-                '<td style="padding:6px; text-align:center;"><button onclick="deleteCtsEdgeType(' + i + ')" style="background:#ff3b30; color:#fff; border:none; padding:4px 8px; border-radius:4px; font-size:10px; cursor:pointer;">X</button></td></tr>';
-        });
-        html += '</table>' +
-            '<div style="display:flex; gap:6px; margin-top:10px; flex-wrap:wrap;">' +
-            '<input id="ctsNewEdgeName" type="text" placeholder="Edge type name e.g. 4mm Round" style="flex:2; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:12px;">' +
-            '<input id="ctsNewEdgeLm" type="number" placeholder="$/lm" style="width:80px; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:12px;">' +
-            '<button onclick="addCtsEdgeType()" style="background:#2c3e50; color:#d4af37; border:none; padding:9px 14px; border-radius:6px; font-weight:900; font-size:12px; cursor:pointer;">Add Edge</button>' +
-            '</div></div>';
-
-        target.innerHTML = html;
-    }
-    window.renderCtsMatrix = renderCtsMatrix;
-
-    //        CTS Matrix CRUD                                                                                                                                                                      
-    function addCtsProfile() {
-        var name = (document.getElementById('ctsNewProfileName').value || '').trim();
-        var tier = (document.getElementById('ctsNewProfileTier').value || '').trim() || 'Tier 1';
-        if (!name) { notify('Enter a profile name'); return; }
-        if (!ctsMatrix[tier]) ctsMatrix[tier] = {};
-        var codes = Object.keys(ctsMatrix[tier]).map(Number);
-        var newCode = codes.length ? Math.max.apply(null, codes) + 1 : 1;
-        ctsMatrix[tier][newCode] = [name].concat(ctsThicknesses.map(function() { return 100; }));
-        saveCtsData(); renderCtsMatrix(); notify('CTS profile added: ' + name);
-    }
-    window.addCtsProfile = addCtsProfile;
-    function updateCtsMatrix(tier, code, thkIndex, val) {
-        if (ctsMatrix[tier] && ctsMatrix[tier][code]) { ctsMatrix[tier][code][thkIndex+1] = parseFloat(val)||0; saveCtsData(); }
-    }
-    window.updateCtsMatrix = updateCtsMatrix;
-    function ctsInputChange(el) {
-        var tier = el.dataset.tier;
-        var code = el.dataset.code;
-        var idx  = parseInt(el.dataset.idx);
-        updateCtsMatrix(tier, code, idx, el.value);
-    }
-    window.ctsInputChange = ctsInputChange;
-    function ctsTierBtn(el) {
-        var tier = el.dataset.tier, code = el.dataset.code, name = el.dataset.name;
-        editCtsDoorTier(tier, code, name);
-    }
-    window.ctsTierBtn = ctsTierBtn;
-    function ctsDelBtn(el) {
-        var tier = el.dataset.tier, code = el.dataset.code, name = el.dataset.name;
-        deleteCtsRow(tier, code, name);
-    }
-    window.ctsDelBtn = ctsDelBtn;
-    function deleteCtsRow(tier, code, name) {
-        if (!confirm('Delete "' + name + '"?')) return;
-        delete ctsMatrix[tier][code];
-        if (Object.keys(ctsMatrix[tier]).length === 0) delete ctsMatrix[tier];
-        saveCtsData(); renderCtsMatrix(); notify(name + ' deleted');
-    }
-    window.deleteCtsRow = deleteCtsRow;
-    function editCtsDoorTier(tier, code, name) {
-        var newTier = prompt('Move "' + name + '" to tier:', tier);
-        if (!newTier || newTier === tier) return;
-        if (!ctsMatrix[newTier]) ctsMatrix[newTier] = {};
-        var codes = Object.keys(ctsMatrix[newTier]).map(Number);
-        var newCode = codes.length ? Math.max.apply(null, codes) + 1 : 1;
-        ctsMatrix[newTier][newCode] = ctsMatrix[tier][code];
-        delete ctsMatrix[tier][code];
-        if (Object.keys(ctsMatrix[tier]).length === 0) delete ctsMatrix[tier];
-        saveCtsData(); renderCtsMatrix();
-    }
-    window.editCtsDoorTier = editCtsDoorTier;
-    function addCtsThickness() {
-        var val = prompt('New thickness in mm:', '');
-        var mm = parseInt(val);
-        if (!mm || isNaN(mm)) return;
-        if (ctsThicknesses.indexOf(mm) >= 0) { notify('Already exists'); return; }
-        ctsThicknesses.push(mm); ctsThicknesses.sort(function(a,b){return a-b;});
-        Object.values(ctsMatrix).forEach(function(tier) { Object.values(tier).forEach(function(row) { row.push(100); }); });
-        saveCtsData(); renderCtsMatrix();
-    }
-    window.addCtsThickness = addCtsThickness;
-    function removeCtsThickness(index) {
-        if (ctsThicknesses.length <= 1) { notify('Must have at least one thickness'); return; }
-        if (!confirm('Remove ' + ctsThicknesses[index] + 'mm column?')) return;
-        ctsThicknesses.splice(index, 1);
-        Object.values(ctsMatrix).forEach(function(tier) { Object.values(tier).forEach(function(row) { row.splice(index+1,1); }); });
-        saveCtsData(); renderCtsMatrix();
-    }
-    window.removeCtsThickness = removeCtsThickness;
-    function addCtsEdgeType() {
-        var name = (document.getElementById('ctsNewEdgeName').value || '').trim();
-        var lm = parseFloat(document.getElementById('ctsNewEdgeLm').value) || 0;
-        if (!name) { notify('Enter edge type name'); return; }
-        ctsEdgeTypes.push({name: name, lm: lm}); saveCtsData(); renderCtsMatrix();
-    }
-    window.addCtsEdgeType = addCtsEdgeType;
-    function updateCtsEdgePrice(index, val) {
-        ctsEdgeTypes[index].lm = parseFloat(val)||0; saveCtsData();
-    }
-    window.updateCtsEdgePrice = updateCtsEdgePrice;
-    function deleteCtsEdgeType(index) {
-        if (!confirm('Delete "' + ctsEdgeTypes[index].name + '"?')) return;
-        ctsEdgeTypes.splice(index,1); saveCtsData(); renderCtsMatrix();
-    }
-    window.deleteCtsEdgeType = deleteCtsEdgeType;
-    //        END CTS Matrix UI                                                                                                                                                                
-
-
-    function genCtsPriceListPDF() {
-        try {
-            if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) { notify('PDF library not loaded'); return; }
-            if (Object.keys(ctsMatrix).length === 0) {
-                notify('No CTS profiles yet. Add in Admin > Price Matrix > Cut To Size.');
-                return;
-            }
-            var jsPDF = window.jspdf.jsPDF;
-            var doc = new jsPDF('p','mm','a4');
-            var cs = JSON.parse(localStorage.getItem('companySettings') || '{}');
-            var lm = 12, rm = 198, y = 20;
-            var logo = window.currentCompanyLogo || localStorage.getItem('companyLogo');
-            if (logo) { try { doc.addImage(logo,'PNG',145,5,50,30); } catch(e){} }
-            doc.setFillColor(44,62,80); doc.rect(lm,y-5,rm-lm,12,'F');
-            doc.setTextColor(212,175,55); doc.setFont(undefined,'bold'); doc.setFontSize(14);
-            doc.text('CUT TO SIZE PRICE LIST', lm+2, y+3);
-            doc.setTextColor(100,100,100); doc.setFont(undefined,'normal'); doc.setFontSize(8);
-            doc.text(cs.name || '', rm-2, y+3, {align:'right'});
-            doc.text(new Date().toLocaleDateString('en-AU'), rm-2, y+7, {align:'right'});
-            doc.setTextColor(0,0,0); y += 16;
-            var thkCols = ctsThicknesses;
-            var pColW = 55, thkColW = Math.min(25, (rm-lm-pColW-5)/thkCols.length);
-            doc.setFillColor(44,62,80); doc.rect(lm,y-4,rm-lm,7,'F');
-            doc.setTextColor(212,175,55); doc.setFont(undefined,'bold'); doc.setFontSize(8);
-            doc.text('Profile', lm+2, y);
-            thkCols.forEach(function(t,i){ doc.text(t+'mm', lm+pColW+i*thkColW, y, {align:'center'}); });
-            doc.setTextColor(0,0,0); y += 8;
-            Object.keys(ctsMatrix).sort().forEach(function(tn) {
-                doc.setFillColor(212,175,55); doc.rect(lm,y-3,3,6,'F'); doc.rect(rm-3,y-3,3,6,'F');
-                doc.setFont(undefined,'bold'); doc.setFontSize(9); doc.setTextColor(44,62,80);
-                doc.text(tn, lm+6, y+1); doc.setTextColor(0,0,0); y += 8;
-                Object.values(ctsMatrix[tn]).forEach(function(row) {
-                    doc.setFont(undefined,'normal'); doc.setFontSize(8);
-                    doc.text(String(row[0]), lm+2, y);
-                    thkCols.forEach(function(t,i){ doc.text('$'+(row[i+1]||0), lm+pColW+i*thkColW, y, {align:'center'}); });
-                    y += 6.2; if (y > 275) { doc.addPage(); y = 20; }
-                }); y += 3;
-            });
-            if (ctsEdgeTypes.length > 0) {
-                y += 4;
-                doc.setFillColor(44,62,80); doc.rect(lm,y-4,rm-lm,7,'F');
-                doc.setTextColor(212,175,55); doc.setFont(undefined,'bold'); doc.setFontSize(9);
-                doc.text('Edge Routing (per lineal metre)', lm+2, y);
-                doc.setTextColor(0,0,0); y += 8;
-                ctsEdgeTypes.forEach(function(edge) {
-                    doc.setFont(undefined,'normal'); doc.setFontSize(8);
-                    doc.text(edge.name, lm+2, y); doc.text('$'+edge.lm+'/lm', lm+80, y); y += 6;
-                });
-            }
-            showPDFPreview(doc.output('datauristring'), 'CTS_PriceList.pdf', 'Cut To Size Price List');
-        } catch(e) { console.error('genCtsPriceListPDF:', e); notify('PDF error: '+e.message); }
-    }
-    window.genCtsPriceListPDF = genCtsPriceListPDF;
-
     function genPriceListPDF() {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
@@ -10369,41 +10134,6 @@ const firebaseConfig = {
             }
             
             // Calculate and display GST
-
-            // -- CTS (Cut To Size) section -----------------------------------
-            var ctsItemsPDF = (typeof itemsForPDF !== 'undefined' ? itemsForPDF : items).filter(function(it){ return !!it.cts; });
-            if (ctsItemsPDF.length > 0) {
-                if (y > 250) { doc.addPage(); y = 25; }
-                y += 6;
-                doc.setFillColor(44,62,80); doc.rect(x,y-4,totalColX+15-x,7,'F');
-                doc.setTextColor(212,175,55); doc.setFont(undefined,'bold'); doc.setFontSize(9);
-                doc.text('CUT TO SIZE DOORS', x+2, y);
-                doc.setTextColor(0,0,0); y += 8;
-                var ctsProfMap = {};
-                ctsItemsPDF.forEach(function(it){ var k=it.prof||'Unknown'; if(!ctsProfMap[k]) ctsProfMap[k]=[]; ctsProfMap[k].push(it); });
-                var ctsGrandTotal = 0;
-                Object.keys(ctsProfMap).forEach(function(prof) {
-                    var pi=ctsProfMap[prof], pq=pi.reduce(function(s,it){return s+it.qty;},0), ps=pi.reduce(function(s,it){return s+parseFloat(it.sqm)*it.qty;},0), pt=0;
-                    pi.forEach(function(it){var p=getCtsPriceForPart(it);if(p)pt+=p.total;});
-                    ctsGrandTotal+=pt;
-                    doc.setFont(undefined,'bold'); doc.setFontSize(9); doc.text(prof,x,y);
-                    doc.setFont(undefined,'normal'); doc.setFontSize(8);
-                    doc.text(pq+' parts | '+ps.toFixed(3)+' m2',x+2,y+5);
-                    doc.text('$'+pt.toFixed(2),totalColX+8,y,{align:'right'});
-                    y+=12; if(y>270){doc.addPage();y=25;}
-                });
-                var ctsTot=getCtsJobTotal(ctsItemsPDF);
-                if(ctsTot.edgeTotal>0&&ctsJobEdgeType){
-                    doc.setFont(undefined,'normal'); doc.setFontSize(8);
-                    doc.text('Edge routing ('+ctsJobEdgeType+'):',x+2,y);
-                    doc.text('$'+ctsTot.edgeTotal.toFixed(2),totalColX+8,y,{align:'right'});
-                    y+=7; ctsGrandTotal=ctsTot.total;
-                }
-                doc.setFont(undefined,'bold'); doc.setFontSize(9);
-                doc.text('CTS Subtotal:',x,y); doc.text('$'+ctsGrandTotal.toFixed(2),totalColX+8,y,{align:'right'});
-                grandTotal+=ctsGrandTotal; y+=8;
-            }
-
             const gstRate = appliedCharges && appliedCharges.gstRate ? appliedCharges.gstRate : 0.10;
             const gstAmount = grandTotal * gstRate;
             
@@ -10785,41 +10515,6 @@ const firebaseConfig = {
             }
             
             // Calculate and display GST
-
-            // -- CTS (Cut To Size) section -----------------------------------
-            var ctsItemsPDF = (typeof itemsForPDF !== 'undefined' ? itemsForPDF : items).filter(function(it){ return !!it.cts; });
-            if (ctsItemsPDF.length > 0) {
-                if (y > 250) { doc.addPage(); y = 25; }
-                y += 6;
-                doc.setFillColor(44,62,80); doc.rect(x,y-4,totalColX+15-x,7,'F');
-                doc.setTextColor(212,175,55); doc.setFont(undefined,'bold'); doc.setFontSize(9);
-                doc.text('CUT TO SIZE DOORS', x+2, y);
-                doc.setTextColor(0,0,0); y += 8;
-                var ctsProfMap = {};
-                ctsItemsPDF.forEach(function(it){ var k=it.prof||'Unknown'; if(!ctsProfMap[k]) ctsProfMap[k]=[]; ctsProfMap[k].push(it); });
-                var ctsGrandTotal = 0;
-                Object.keys(ctsProfMap).forEach(function(prof) {
-                    var pi=ctsProfMap[prof], pq=pi.reduce(function(s,it){return s+it.qty;},0), ps=pi.reduce(function(s,it){return s+parseFloat(it.sqm)*it.qty;},0), pt=0;
-                    pi.forEach(function(it){var p=getCtsPriceForPart(it);if(p)pt+=p.total;});
-                    ctsGrandTotal+=pt;
-                    doc.setFont(undefined,'bold'); doc.setFontSize(9); doc.text(prof,x,y);
-                    doc.setFont(undefined,'normal'); doc.setFontSize(8);
-                    doc.text(pq+' parts | '+ps.toFixed(3)+' m2',x+2,y+5);
-                    doc.text('$'+pt.toFixed(2),totalColX+8,y,{align:'right'});
-                    y+=12; if(y>270){doc.addPage();y=25;}
-                });
-                var ctsTot=getCtsJobTotal(ctsItemsPDF);
-                if(ctsTot.edgeTotal>0&&ctsJobEdgeType){
-                    doc.setFont(undefined,'normal'); doc.setFontSize(8);
-                    doc.text('Edge routing ('+ctsJobEdgeType+'):',x+2,y);
-                    doc.text('$'+ctsTot.edgeTotal.toFixed(2),totalColX+8,y,{align:'right'});
-                    y+=7; ctsGrandTotal=ctsTot.total;
-                }
-                doc.setFont(undefined,'bold'); doc.setFontSize(9);
-                doc.text('CTS Subtotal:',x,y); doc.text('$'+ctsGrandTotal.toFixed(2),totalColX+8,y,{align:'right'});
-                grandTotal+=ctsGrandTotal; y+=8;
-            }
-
             const gstRate = appliedCharges && appliedCharges.gstRate ? appliedCharges.gstRate : 0.10;
             const gstAmount = grandTotal * gstRate;
             
@@ -11201,41 +10896,6 @@ const firebaseConfig = {
             }
             
             // Calculate and display GST
-
-            // -- CTS (Cut To Size) section -----------------------------------
-            var ctsItemsPDF = (typeof itemsForPDF !== 'undefined' ? itemsForPDF : items).filter(function(it){ return !!it.cts; });
-            if (ctsItemsPDF.length > 0) {
-                if (y > 250) { doc.addPage(); y = 25; }
-                y += 6;
-                doc.setFillColor(44,62,80); doc.rect(x,y-4,totalColX+15-x,7,'F');
-                doc.setTextColor(212,175,55); doc.setFont(undefined,'bold'); doc.setFontSize(9);
-                doc.text('CUT TO SIZE DOORS', x+2, y);
-                doc.setTextColor(0,0,0); y += 8;
-                var ctsProfMap = {};
-                ctsItemsPDF.forEach(function(it){ var k=it.prof||'Unknown'; if(!ctsProfMap[k]) ctsProfMap[k]=[]; ctsProfMap[k].push(it); });
-                var ctsGrandTotal = 0;
-                Object.keys(ctsProfMap).forEach(function(prof) {
-                    var pi=ctsProfMap[prof], pq=pi.reduce(function(s,it){return s+it.qty;},0), ps=pi.reduce(function(s,it){return s+parseFloat(it.sqm)*it.qty;},0), pt=0;
-                    pi.forEach(function(it){var p=getCtsPriceForPart(it);if(p)pt+=p.total;});
-                    ctsGrandTotal+=pt;
-                    doc.setFont(undefined,'bold'); doc.setFontSize(9); doc.text(prof,x,y);
-                    doc.setFont(undefined,'normal'); doc.setFontSize(8);
-                    doc.text(pq+' parts | '+ps.toFixed(3)+' m2',x+2,y+5);
-                    doc.text('$'+pt.toFixed(2),totalColX+8,y,{align:'right'});
-                    y+=12; if(y>270){doc.addPage();y=25;}
-                });
-                var ctsTot=getCtsJobTotal(ctsItemsPDF);
-                if(ctsTot.edgeTotal>0&&ctsJobEdgeType){
-                    doc.setFont(undefined,'normal'); doc.setFontSize(8);
-                    doc.text('Edge routing ('+ctsJobEdgeType+'):',x+2,y);
-                    doc.text('$'+ctsTot.edgeTotal.toFixed(2),totalColX+8,y,{align:'right'});
-                    y+=7; ctsGrandTotal=ctsTot.total;
-                }
-                doc.setFont(undefined,'bold'); doc.setFontSize(9);
-                doc.text('CTS Subtotal:',x,y); doc.text('$'+ctsGrandTotal.toFixed(2),totalColX+8,y,{align:'right'});
-                grandTotal+=ctsGrandTotal; y+=8;
-            }
-
             const gstRate = appliedCharges && appliedCharges.gstRate ? appliedCharges.gstRate : 0.10;
             const gstAmount = grandTotal * gstRate;
             
@@ -11589,44 +11249,6 @@ const firebaseConfig = {
         // Show preview
         const pdfDataUri = doc.output('datauristring');
         const filename = `SupplyDocket_${jobClient.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
-        
-        // -- CTS Supply Docket page -----------------------------------------
-        var ctsSupplyItems = (typeof itemsForPDF !== 'undefined' ? itemsForPDF : items).filter(function(it){ return !!it.cts; });
-        if (ctsSupplyItems.length > 0) {
-            doc.addPage(); var y2 = 20;
-            doc.setFillColor(44,62,80); doc.rect(15,y2-5,180,10,'F');
-            doc.setTextColor(212,175,55); doc.setFont(undefined,'bold'); doc.setFontSize(13);
-            doc.text('CUT TO SIZE DOORS - SUPPLY DOCKET', 15, y2+1);
-            doc.setTextColor(0,0,0); y2 += 14;
-            doc.setFontSize(9); doc.setFont(undefined,'normal');
-            doc.text('Client: '+jobClient, 15, y2); y2+=5;
-            doc.text('Job: '+jobNum+(jobName?' - '+jobName:''), 15, y2); y2+=5;
-            if (ctsJobEdgeType) { doc.text('Edge routing: '+ctsJobEdgeType, 15, y2); y2+=5; }
-            y2+=3;
-            var ctsHdrs = ['Description','H','W','Thk','Qty','Profile','SQM'];
-            var ctsCW   = [55,20,20,20,15,30,20];
-            doc.setFillColor(44,62,80); doc.rect(15,y2-4,180,7,'F');
-            doc.setTextColor(212,175,55); doc.setFont(undefined,'bold'); doc.setFontSize(8);
-            var cx2=15; ctsHdrs.forEach(function(h,i){doc.text(h,cx2,y2); cx2+=ctsCW[i];});
-            doc.setTextColor(0,0,0); doc.setFont(undefined,'normal'); y2+=7;
-            var ctsDocketSqm=0;
-            ctsSupplyItems.forEach(function(it) {
-                var rowSqm=parseFloat(it.sqm)*it.qty; ctsDocketSqm+=rowSqm;
-                cx2=15;
-                doc.text(String(it.desc||'').substring(0,22),cx2,y2); cx2+=ctsCW[0];
-                doc.text(String(it.h),cx2,y2); cx2+=ctsCW[1];
-                doc.text(String(it.w),cx2,y2); cx2+=ctsCW[2];
-                doc.text(String(it.thk||18),cx2,y2); cx2+=ctsCW[3];
-                doc.text(String(it.qty),cx2,y2); cx2+=ctsCW[4];
-                doc.text(String(it.prof||'').substring(0,14),cx2,y2); cx2+=ctsCW[5];
-                doc.text(rowSqm.toFixed(3),cx2,y2);
-                y2+=6; if(y2>275){doc.addPage();y2=20;}
-            });
-            y2+=4; doc.setFont(undefined,'bold'); doc.setFontSize(9);
-            doc.text('Total CTS SQM: '+ctsDocketSqm.toFixed(3)+' m2', 15, y2); y2+=6;
-            doc.text('Total CTS Parts: '+ctsSupplyItems.reduce(function(s,it){return s+it.qty;},0), 15, y2);
-        }
-
         showPDFPreview(pdfDataUri, filename, '     Supply Docket Preview');
         notify("    Supply Docket Ready - Review & Download");
     }
@@ -12398,8 +12020,9 @@ const firebaseConfig = {
             console.log(` Looking for job: #${jobNum} | Client: ${jobClient} | Date: ${dateReceived}`);
             console.log(` Total jobs in history: ${jobHistory.length}`);
             
-            // Try exact match first, then fallback to jobNum only
-            let currentJob = jobHistory.find(j => j.jobNum === jobNum && j.client === jobClient && j.dateReceived === dateReceived);
+            // Use in-memory loaded job first (avoids date format mismatch)
+            let currentJob = (window.currentLoadedJob && window.currentLoadedJob.jobNum === jobNum) ? window.currentLoadedJob : null;
+            if (!currentJob) currentJob = jobHistory.find(j => j.jobNum === jobNum && j.client === jobClient && j.dateReceived === dateReceived);
             if (!currentJob) currentJob = jobHistory.find(j => j.jobNum === jobNum && j.client === jobClient);
             if (!currentJob) currentJob = jobHistory.find(j => j.jobNum === jobNum);
             
@@ -17057,7 +16680,14 @@ if ('serviceWorker' in navigator && _swAllowed) {
             : jobHistory.findIndex(function(j){ return String(j.jobNum) === String(jobNum); });
         var lastC = null;
         if (jIdx >= 0 && jobHistory[jIdx]) lastC = jobHistory[jIdx].lastCharges || null;
-        if (!lastC && window._lastChargesSnapshot) lastC = window._lastChargesSnapshot;
+        // Only use in-memory snapshot if it belongs to THIS job (prevents bleed from previous job)
+        if (!lastC && window._lastChargesSnapshot) {
+            var snapJobNum = window._lastChargesSnapshot._jobNum || null;
+            var curJobNum = document.getElementById('jN') ? document.getElementById('jN').value : '';
+            if (snapJobNum && curJobNum && String(snapJobNum) === String(curJobNum)) {
+                lastC = window._lastChargesSnapshot;
+            }
+        }
 
         if (lastC) {
             // Pre-fill delivery
@@ -17304,6 +16934,8 @@ if ('serviceWorker' in navigator && _swAllowed) {
                     gstRate: currentCharges.gstRate || 0.10
                 };
                 // Always park for saveJob to pick up later (new jobs not yet in history)
+                var _curJN = document.getElementById('jN') ? document.getElementById('jN').value : '';
+                chargesSnapshot._jobNum = _curJN;
                 appliedCharges.lastSnapshot = chargesSnapshot;
                 window._lastChargesSnapshot = chargesSnapshot;
 
@@ -18281,8 +17913,8 @@ if ('serviceWorker' in navigator && _swAllowed) {
                                 <div style="font-size:9px; color:#999;">(${code})</div>
                             </div>
                             <div style="display:flex; gap:4px;">
-                                <button onclick="editDoorTier('${tierName}', ${code}, '${profileName}')" style="background:#2196f3; color:#fff; border:none; padding:4px 6px; border-radius:3px; font-weight:900; font-size:9px; cursor:pointer;" title="Change tier">    </button>
-                                <button onclick="deleteDoorFromMatrix('${tierName}', ${code}, '${profileName}')" style="background:#ff3b30; color:#fff; border:none; padding:4px 6px; border-radius:3px; font-weight:900; font-size:9px; cursor:pointer;" title="Delete door">   </button>
+                                <button onclick="editDoorTier('${tierName}', ${code}, '${profileName}')" style="background:#2196f3; color:#fff; border:none; padding:4px 6px; border-radius:3px; font-weight:900; font-size:9px; cursor:pointer;" title="Change tier">T</button>
+                                <button onclick="deleteDoorFromMatrix('${tierName}', ${code}, '${profileName}')" style="background:#ff3b30; color:#fff; border:none; padding:4px 6px; border-radius:3px; font-weight:900; font-size:9px; cursor:pointer;" title="Delete door">X</button>
                             </div>
                         </div>
                     </td>
@@ -20164,20 +19796,6 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                 }
             } catch(planErr) { console.warn('Plan load error:', planErr.message); }
 
-            // -- 0b. CTS data ----------------------------------------------------
-            try {
-                var ctsRef2 = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'ctsData');
-                var ctsSnap2 = await window.getDoc(ctsRef2);
-                if (ctsSnap2.exists()) {
-                    var cd = ctsSnap2.data();
-                    if (cd.matrix && Object.keys(cd.matrix).length > 0) ctsMatrix = cd.matrix;
-                    if (cd.thicknesses && cd.thicknesses.length > 0) ctsThicknesses = cd.thicknesses;
-                    if (cd.edgeTypes && cd.edgeTypes.length > 0) ctsEdgeTypes = cd.edgeTypes;
-                    saveCtsData();
-                    console.log('CTS data loaded from Firestore');
-                }
-            } catch(ctsErr2) { console.warn('CTS load error:', ctsErr2.message); }
-
             //        1. Jobs                                                                                                                                     
             const userDocRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid);
             const jobsCollectionRef = window.collection(userDocRef, 'jobs');
@@ -20189,29 +19807,22 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                 jobs.push(jobData);
             });
 
-            // Merge: if local has completed:true but cloud doesn't, preserve local.
-            // This repairs the McLean scenario where the completion write failed.
-            const localJobs = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+            // Safety filter: only load jobs that belong to THIS user
+            const currentUid = window.currentUser.uid;
+            const safeJobs = jobs.filter(function(j) { return !j.userId || j.userId === currentUid; });
+            if (safeJobs.length < jobs.length) {
+                console.warn('Filtered out ' + (jobs.length - safeJobs.length) + ' jobs from other users');
+            }
+            // Flag real data exists - prevents demo re-seeding
+            const _realCloudJobs = safeJobs.filter(function(j) { return !j.id || !j.id.startsWith('demo-'); });
+            if (_realCloudJobs.length > 0) window._userHasRealData = true;
             const repushQueue = [];
-            jobs.forEach(cloudJob => {
-                const localMatch = localJobs.find(j =>
-                    (j.id && j.id === cloudJob.id) ||
-                    (j.jobNum === cloudJob.jobNum && j.dateReceived === cloudJob.dateReceived && j.client === cloudJob.client)
-                );
-                if (localMatch && localMatch.completed && !cloudJob.completed) {
-                    cloudJob.completed = true;
-                    cloudJob.completedDate = localMatch.completedDate || cloudJob.completedDate;
-                    cloudJob.dateCompleted = localMatch.dateCompleted || cloudJob.dateCompleted;
-                    repushQueue.push(cloudJob);
-                    console.log('     Preserved local completion for job', cloudJob.jobNum, '    queued re-push');
-                }
-            });
-
+            
             window._syncingFromCloud = true;
-            safeStorage.setJSON('jobHistory', jobs);
+            safeStorage.setJSON('jobHistory', safeJobs);
             window._syncingFromCloud = false;
-            fullHistory = jobs;
-            history = jobs.filter(j => !j.completed);
+            fullHistory = safeJobs;
+            history = safeJobs.filter(j => !j.completed);
             try { if (typeof renderHistory === 'function') renderHistory(); } catch(e) {}
 
             // Re-push any jobs that were completed locally but not in Firestore
@@ -20454,17 +20065,40 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                         });
                         if (jobs.length === 0) return; // Don't wipe local with empty cloud
 
-                        // Always accept cloud data as the source of truth.
-                        // The sigKey detects meaningful changes (completed, phases) to decide
-                        // whether to re-render the UI (avoid thrashing on minor field diffs).
-                        const sigKey = j => `${j.id||j.jobNum}|${j.completed}|${JSON.stringify(j.phases||{})}`;
+                        // Safety filter: only accept jobs for THIS user
+                        const snapUid = window.currentUser ? window.currentUser.uid : null;
+                        if (snapUid) {
+                            const before = jobs.length;
+                            jobs = jobs.filter(function(j) { return !j.userId || j.userId === snapUid; });
+                            if (jobs.length < before) console.warn('onSnapshot: filtered out ' + (before - jobs.length) + ' foreign jobs');
+                        }
+
+                        // Preserve completed/phases status if local is ahead of cloud
                         const local = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+                        jobs.forEach(cloudJob => {
+                            const localMatch = local.find(j =>
+                                (j.id && j.id === cloudJob.id) ||
+                                (j.jobNum === cloudJob.jobNum && j.dateReceived === cloudJob.dateReceived && j.client === cloudJob.client)
+                            );
+                            if (localMatch && localMatch.completed && !cloudJob.completed) {
+                                cloudJob.completed = true;
+                                cloudJob.completedDate = localMatch.completedDate || cloudJob.completedDate;
+                                cloudJob.dateCompleted = localMatch.dateCompleted || cloudJob.dateCompleted;
+                            }
+                            if (localMatch && localMatch.phases && cloudJob.phases) {
+                                Object.keys(localMatch.phases).forEach(k => {
+                                    if (localMatch.phases[k] && !cloudJob.phases[k]) {
+                                        cloudJob.phases[k] = localMatch.phases[k];
+                                    }
+                                });
+                            }
+                        });
+
+                        const sigKey = j => `${j.id||j.jobNum}|${j.completed}|${JSON.stringify(j.phases||{})}`;
                         const cloudSig = jobs.map(sigKey).sort().join(';;');
                         const localSig = local.map(sigKey).sort().join(';;');
                         const hasChanges = cloudSig !== localSig || jobs.length !== local.length;
 
-                        // Always write cloud data to localStorage (keeps lastModified etc in sync)
-                        // Suppress the setItem override during this write to avoid re-upload loop
                         window._syncingFromCloud = true;
                         safeStorage.setJSON('jobHistory', jobs);
                         window._syncingFromCloud = false;
@@ -20762,8 +20396,12 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
 
 <script>
 //           Tooltip System                                                                                                                                                                      
+function getTooltipKey() {
+    var uid = window.currentUser ? window.currentUser.uid : null;
+    return uid ? 'pw_tooltips_' + uid : 'pw_tooltips';
+}
 function setTooltipsEnabled(on) {
-    localStorage.setItem('pw_tooltips', on ? '1' : '0');
+    localStorage.setItem(getTooltipKey(), on ? '1' : '0');
     document.body.classList.toggle('tooltips-on', !!on);
     document.documentElement.classList.toggle('tooltips-on', !!on);
     const cb = document.getElementById('tooltipToggle');
@@ -20771,7 +20409,10 @@ function setTooltipsEnabled(on) {
 }
 function initTooltips() {
     // Default ON for new users (key not set yet). Once they toggle it off, '0' is stored.
-    var stored = localStorage.getItem('pw_tooltips');
+    var key = getTooltipKey();
+    var stored = localStorage.getItem(key);
+    // Fallback: check old non-user key
+    if (stored === null) stored = localStorage.getItem('pw_tooltips');
     var on = stored === null ? true : stored === '1';
     document.body.classList.toggle('tooltips-on', on);
     document.documentElement.classList.toggle('tooltips-on', on);
