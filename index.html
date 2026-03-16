@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.9.71 | Updated: 2026-03-09                       ║
+║  Version: v1.9.72 | Updated: 2026-03-09                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.9.71';
+    const CURRENT_VERSION = 'v1.9.72';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1592,7 +1592,7 @@ const firebaseConfig = {
 
         <div id="loginError" style="color:red; font-weight:900; margin-top:15px; text-align:center; display:none;"></div>
     </div>
-    <div style="text-align:center; margin-top:12px; font-size:10px; color:rgba(0,0,0,0.35); font-weight:700;">v1.9.71</div>
+    <div style="text-align:center; margin-top:12px; font-size:10px; color:rgba(0,0,0,0.35); font-weight:700;">v1.9.72</div>
 </div>
 
 
@@ -2104,7 +2104,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.9.71</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.9.72</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -2878,7 +2878,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.9.71</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.9.72</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-09</span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);startTour();" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -3676,7 +3676,7 @@ const firebaseConfig = {
     console.log('');
     //                    VERSION: v1.7.24-FINAL | 2026-02-27 | Colin Bedford                   
     //                    ADMIN TABS FIXED | COVER SHEET FIXED | DELETE CONFIRMATION ADDED                   
-    console.log('%c PaintWorkz Pro v1.9.71 ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('%c PaintWorkz Pro v1.9.72 ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     // Changelog logs removed for production performance
     // ====================================
     
@@ -6552,7 +6552,8 @@ const firebaseConfig = {
                     const jobId = job.id || job.jobNum || `job_${Date.now()}_${pushed}`;
                     if (!job.id) job.id = jobId;
                     const jobDoc = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'jobs', jobId);
-                    await window.setDoc(jobDoc, { ...job, id: jobId, lastModified: new Date().toISOString(), userId: window.currentUser.uid }, { merge: false });
+                    var _pfc={...job}; delete _pfc.photos;
+                    await window.setDoc(jobDoc, { ..._pfc, id: jobId, lastModified: new Date().toISOString(), userId: window.currentUser.uid }, { merge: false });
                     pushed++;
                 } catch(e) { console.error('Push error for job', job.jobNum, e); }
             }
@@ -6944,6 +6945,7 @@ const firebaseConfig = {
         job.dateCompleted = chosenDateDisplay;
         history[jobIdx] = job;
         safeStorage.setJSON('jobHistory', history);
+        try{if(Array.isArray(window.fullHistory)){var _fi=window.fullHistory.findIndex(function(j){return j.jobNum===job.jobNum&&j.client===job.client;});if(_fi>=0)window.fullHistory[_fi]=job;}}catch(e){}
         
         // Verify save
         const verify = JSON.parse(localStorage.getItem('jobHistory')) || [];
@@ -6958,14 +6960,9 @@ const firebaseConfig = {
             try {
                 const jobId = job.id || job.jobNum;
                 const jobDocRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'jobs', jobId);
-                window.setDoc(jobDocRef, {
-                    ...job,
-                    id: jobId,
-                    completed: true,
-                    completedDate: job.completedDate,
-                    dateCompleted: job.dateCompleted,
-                    lastModified: new Date().toISOString()
-                }, { merge: false }).then(function() {
+                var complJob={...job,id:jobId,completed:true,completedDate:job.completedDate,dateCompleted:job.dateCompleted,lastModified:new Date().toISOString(),userId:window.currentUser.uid};
+                delete complJob.photos;
+                window.setDoc(jobDocRef, complJob, { merge: false }).then(function() {
                     console.log('Job completion pushed directly to Firestore:', jobId);
                     // Now also run full sync to catch any other changes
                     try { lastSyncTime = 0; lastSyncedData = ''; if (window.syncJobsToFirebase) window.syncJobsToFirebase(); } catch(e) {}
@@ -7975,7 +7972,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.9.71'; //     bump this on every release
+        const CURRENT_VERSION = 'v1.9.72'; //     bump this on every release
         const CURRENT_DATE = '2026-03-09';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -9057,6 +9054,8 @@ const firebaseConfig = {
             
             // Get paint brands for dropdown
             const brands = getPaintBrands();
+            // Also add brands from paint formulas
+            try{(window.paintDatabase||[]).forEach(function(f){if(f.brand&&brands.indexOf(f.brand)<0)brands.push(f.brand);});}catch(e){}
             let brandOptions = brands.map(b => `<option value="${b}" ${b === item.brand ? 'selected' : ''}>${b}</option>`).join('');
             
             // Add current brand if it's not in the list
@@ -9067,13 +9066,14 @@ const firebaseConfig = {
             // Add a blank option and Custom at the top
             brandOptions = `<option value="">-- Select Brand --</option>${brandOptions}<option value="Custom">Custom</option>`;
             
-            // Get all unique colors from items for dropdown
+            // Get all unique colors from all sources including in-memory
             const uniqueColors = new Set();
-            items.forEach(it => {
-                if (it.color && it.color.trim()) {
-                    uniqueColors.add(it.color.trim());
-                }
-            });
+            try{(window.paintDatabase||[]).forEach(function(f){if(f.color&&f.color.trim())uniqueColors.add(f.color.trim());});}catch(e){}
+            try{(window.fullHistory||[]).forEach(function(j){(j.items||[]).forEach(function(it){if(it.color&&it.color.trim())uniqueColors.add(it.color.trim());});});}catch(e){}
+            if(item.color&&item.color.trim()) uniqueColors.add(item.color.trim());
+            items.forEach(function(it){if(it.color&&it.color.trim())uniqueColors.add(it.color.trim());});
+            try{JSON.parse(localStorage.getItem('jobHistory')||'[]').forEach(function(j){(j.items||[]).forEach(function(it){if(it.color&&it.color.trim())uniqueColors.add(it.color.trim());});});}catch(e){}
+            try{JSON.parse(localStorage.getItem('paintFormulas')||'[]').forEach(function(f){if(f.color&&f.color.trim())uniqueColors.add(f.color.trim());});}catch(e){}
             const sortedColors = Array.from(uniqueColors).sort();
             let colorOptions = sortedColors.map(c => `<option value="${c}" ${c === item.color ? 'selected' : ''}>${c}</option>`).join('');
             
@@ -9157,8 +9157,9 @@ const firebaseConfig = {
                         
                         <div style="margin-bottom:10px;">
                             <label style="display:block; font-weight:900; margin-bottom:4px; font-size:11px; color:#666;">Colour</label>
-                            <select id="editColorInput" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
+                            <select id="editColorInput" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;" onchange="if(this.value==='__nc__'){var nc=prompt('Type colour name:');if(nc&&nc.trim()){var opt=document.createElement('option');opt.value=nc.trim().toUpperCase();opt.text=nc.trim().toUpperCase();opt.selected=true;this.add(opt);this.value=nc.trim().toUpperCase();}else this.value=''}">
                                 ${colorOptions}
+                                <option value="__nc__">+ Enter new colour...</option>
                             </select>
                         </div>
                         
@@ -20237,12 +20238,9 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                 try {
                     const jobId = job.id || job.jobNum || Date.now().toString();
                     const jobDoc = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'jobs', jobId);
-                    window.setDoc(jobDoc, {
-                        ...job,
-                        id: jobId,
-                        lastModified: new Date().toISOString(),
-                        userId: window.currentUser.uid
-                    }, { merge: true }).catch(err => console.error('Firestore sync error for job', jobId, ':', err));
+                    var jobForCloud={...job,id:jobId,lastModified:new Date().toISOString(),userId:window.currentUser.uid};
+                    delete jobForCloud.photos; // strip base64 photos - too large for Firestore 1MB limit
+                    window.setDoc(jobDoc, jobForCloud, { merge: true }).catch(err => console.error('Firestore sync error for job', jobId, ':', err));
                 } catch(e) {
                     console.error('Error syncing individual job:', e);
                 }
