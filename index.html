@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.9.90 | Updated: 2026-03-17                       ║
+║  Version: v1.9.91 | Updated: 2026-03-17                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.9.90';
+    const CURRENT_VERSION = 'v1.9.91';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1596,7 +1596,7 @@ const firebaseConfig = {
 
         <div id="loginError" style="color:red; font-weight:900; margin-top:15px; text-align:center; display:none;"></div>
     </div>
-    <div id="loginVersionText" style="text-align:center; margin-top:12px; font-size:10px; color:rgba(128,128,128,0.8); font-weight:700;">v1.9.90</div>
+    <div id="loginVersionText" style="text-align:center; margin-top:12px; font-size:10px; color:rgba(128,128,128,0.8); font-weight:700;">v1.9.91</div>
 </div>
 
 
@@ -2111,7 +2111,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.9.90</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.9.91</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -2885,7 +2885,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.9.90</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-17</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.9.91</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-17</span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);startTour();" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -3683,7 +3683,7 @@ const firebaseConfig = {
     console.log('');
     //                    VERSION: v1.7.24-FINAL | 2026-02-27 | Colin Bedford                   
     //                    ADMIN TABS FIXED | COVER SHEET FIXED | DELETE CONFIRMATION ADDED                   
-    console.log('%c PaintWorkz Pro v1.9.90 ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('%c PaintWorkz Pro v1.9.91 ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     // Changelog logs removed for production performance
     // ====================================
     
@@ -5723,6 +5723,17 @@ const firebaseConfig = {
             timestamp: new Date().toISOString()
         };
         localStorage.setItem('currentJob', JSON.stringify(jobData));
+        
+        // CRITICAL: Save photos with current job data
+        try {
+            const jobNum = document.getElementById('jN')?.value;
+            if (jobNum && typeof jobPhotos !== 'undefined') {
+                localStorage.setItem(`jobPhotos_${jobNum}`, JSON.stringify(jobPhotos));
+                console.log(`Photos auto-saved: ${jobPhotos.length} photos for job ${jobNum}`);
+            }
+        } catch(e) {
+            console.error('Photo auto-save error:', e);
+        }
     }
 
     //        Client Database helpers     defined early so initializeApp can use them       
@@ -6396,8 +6407,14 @@ const firebaseConfig = {
             jobPhotos=_merged;
             localStorage.removeItem('jobPhotos__pending');
         }}catch(_pe2){}
-        if(_jobNum4Photos&&typeof jobPhotos!=='undefined'&&jobPhotos.length>0){
-            try{localStorage.setItem('jobPhotos_'+_jobNum4Photos,JSON.stringify(jobPhotos));}catch(e){}
+        // CRITICAL: Always save photos for this job - even if empty array
+        if(_jobNum4Photos&&typeof jobPhotos!=='undefined'){
+            try{
+                localStorage.setItem('jobPhotos_'+_jobNum4Photos,JSON.stringify(jobPhotos));
+                console.log(`Photos saved with job: ${jobPhotos.length} photos for job ${_jobNum4Photos}`);
+            }catch(e){
+                console.error('Photo save error:',e);
+            }
         }
         // Strip photos from history before localStorage save
         var _hs=history.map(function(j){if(!j.photos||!j.photos.length)return j;var jc=Object.assign({},j);jc.photos=[];jc._hasPhotos=true;return jc;});
@@ -7480,6 +7497,19 @@ const firebaseConfig = {
         if (!/^\d+$/.test(pin)) { notify('&#x274C; PIN must be numbers only'); return; }
         if (pin !== conf) { notify('&#x274C; PINs do not match'); return; }
         localStorage.setItem('floorPIN', pin);
+        
+        // Sync to Firestore for cross-device support
+        if (window.currentUser && window.firebaseDb && window.setDoc && window.doc) {
+            try {
+                const ref = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'settings');
+                window.setDoc(ref, { floorPIN: pin, updated: new Date().toISOString() }, { merge: true })
+                    .then(() => console.log('Staff PIN synced to Firestore'))
+                    .catch(e => console.warn('Firestore PIN sync failed:', e));
+            } catch(e) {
+                console.warn('Firestore PIN sync error:', e);
+            }
+        }
+        
         updateStaffPinDisplay();
         document.getElementById('staffPinSetInput').value = '';
         document.getElementById('staffPinConfirmInput').value = '';
@@ -8017,7 +8047,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.9.90'; //     bump this on every release
+        const CURRENT_VERSION = 'v1.9.91'; //     bump this on every release
         const CURRENT_DATE = '2026-03-17';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -8327,17 +8357,28 @@ const firebaseConfig = {
         // Populate paint brands dropdown when Measure tab is opened
         if (t === 'measure') {
             setTimeout(() => populatePaintBrandsDropdown(), 100);
-            // Reload photos for current job
+            // CRITICAL: Reload photos for current job - don't trust in-memory array
             try {
                 const jobNum = document.getElementById('jN')?.value;
                 if (jobNum) {
                     const saved = localStorage.getItem(`jobPhotos_${jobNum}`);
                     if (saved) {
                         jobPhotos = JSON.parse(saved);
+                        console.log(`Photos reloaded on tab switch: ${jobPhotos.length} photos for job ${jobNum}`);
+                    } else {
+                        jobPhotos = [];
+                        console.log(`No photos found for job ${jobNum}`);
                     }
+                } else {
+                    jobPhotos = [];
                 }
                 renderPhotoGallery();
-            } catch(e) {}
+                updatePhotoTargetIndicator();
+            } catch(e) {
+                console.error('Photo reload error:', e);
+                jobPhotos = [];
+                renderPhotoGallery();
+            }
         }
 
         // Render charges history panel when forms tab opens
@@ -8681,12 +8722,23 @@ const firebaseConfig = {
             var _sp=(window._preSnapPart||window._snapForPart||null); if(_sp) _sp=_sp.trim().toUpperCase();
             var _newPhoto={id:Date.now(),data:event.target.result,timestamp:timestamp,linkedPart:_sp};
             jobPhotos.push(_newPhoto);
-            // Immediately persist to localStorage - iOS Safari can clear memory on background
+            
+            // CRITICAL: Immediately persist to localStorage - iOS Safari can clear memory on background
             try{
                 var _jn=(window._preSnapJobNum)||(document.getElementById('jN')?document.getElementById('jN').value:'');
-                if(_jn) localStorage.setItem('jobPhotos_'+_jn, JSON.stringify(jobPhotos));
+                if(!_jn || _jn === '_pending') {
+                    // No job number yet - save to pending
+                    localStorage.setItem('jobPhotos__pending', JSON.stringify(jobPhotos));
+                    console.log('Photo saved to PENDING (no job number yet)');
+                } else {
+                    // Have job number - save to that job's photos
+                    localStorage.setItem('jobPhotos_'+_jn, JSON.stringify(jobPhotos));
+                    console.log('Photo saved to job '+_jn+': '+jobPhotos.length+' total photos');
+                }
                 window._preSnapJobNum=null; window._preSnapPart=null;
-            }catch(e){}
+            }catch(e){
+                console.error('Photo save error:', e);
+            }
             renderPhotoGallery();
             // Show clear feedback about what was saved
             if (_sp) {
@@ -8747,10 +8799,23 @@ const firebaseConfig = {
         var _np2={id:Date.now(),data:imgData,timestamp:timestamp,linkedPart:_linkedPart};
         window._snapForPart=null;
         jobPhotos.push(_np2);
+        
+        // CRITICAL: Immediately persist to localStorage
         try{
             var _jn2=document.getElementById("jN")?document.getElementById("jN").value:"";
-            if(_jn2)localStorage.setItem("jobPhotos_"+_jn2,JSON.stringify(jobPhotos));
-        }catch(e){}
+            if(!_jn2 || _jn2 === '_pending') {
+                // No job number yet - save to pending
+                localStorage.setItem('jobPhotos__pending', JSON.stringify(jobPhotos));
+                console.log('Photo saved to PENDING (no job number yet)');
+            } else {
+                // Have job number - save to that job's photos
+                localStorage.setItem("jobPhotos_"+_jn2,JSON.stringify(jobPhotos));
+                console.log('Photo saved to job '+_jn2+': '+jobPhotos.length+' total photos');
+            }
+        }catch(e){
+            console.error('Photo save error:', e);
+        }
+        
         renderPhotoGallery();
         // Show clear feedback about what was saved
         if (_linkedPart) {
@@ -20152,6 +20217,20 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                 try { if (typeof renderClientsList === 'function') renderClientsList(); } catch(e) {}
                 try { if (typeof populateClientDropdown === 'function') populateClientDropdown(); } catch(e) {}
             } catch(e) { console.warn('Client database load error:', e.message); }
+
+            //        3b. Staff PIN Settings                                                                                                    
+            try {
+                const settingsRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'settings');
+                const settingsSnap = await window.getDoc(settingsRef);
+                if (settingsSnap.exists()) {
+                    const settingsData = settingsSnap.data();
+                    if (settingsData.floorPIN) {
+                        localStorage.setItem('floorPIN', settingsData.floorPIN);
+                        console.log('       Staff PIN loaded from Firestore');
+                        try { if (typeof updateStaffPinDisplay === 'function') updateStaffPinDisplay(); } catch(e) {}
+                    }
+                }
+            } catch(e) { console.warn('Staff PIN load error:', e.message); }
 
             //        4. Pricing Matrix + Door Profiles                                                    
             try {
