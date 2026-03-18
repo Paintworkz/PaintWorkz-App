@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.9.99 | Updated: 2026-03-17                       ║
+║  Version: v1.10.00 | Updated: 2026-03-17                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.9.99';
+    const CURRENT_VERSION = 'v1.10.00';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1220,33 +1220,42 @@ const firebaseConfig = {
                     return;
                 }
 
-                // ── Session isolation: nuclear wipe on every login ────────────────
-                // Wipe ALL localStorage except app-global preferences
-                // Firestore will repopulate all user data immediately after
-                const lastUid = localStorage.getItem('pw_last_uid');
-                const keepKeys = [
-                    'pw_tooltips', 'pw_tooltips_' + user.uid,
-                    'paintworkz_version', 'pw_tour_done_' + user.uid,
-                    'app_theme', 'app_locale',
-                    'doorProfiles', 'masterMatrix', 'paintBrands', 'floorPIN'
-                ];
-                // Full wipe - remove everything except global prefs
-                const allKeys = [];
-                for (let i = 0; i < localStorage.length; i++) {
-                    allKeys.push(localStorage.key(i));
-                }
-                allKeys.forEach(k => {
-                    if (k && !keepKeys.some(keep => k === keep || k.startsWith('pw_tooltips_') || k.startsWith('pw_tour_done_'))) {
-                        if (k.startsWith('jobPhotos_')) return;
-                        localStorage.removeItem(k);
+                // Check if this is a staff account before doing session isolation
+                checkIfStaffAccountAndActivate(user).then(isStaff => {
+                    if (isStaff) {
+                        // Staff account detected - skip session isolation, go straight to staff mode
+                        console.log('Staff account detected:', user.email);
+                        return;
                     }
-                });
-                console.log('Session isolation: localStorage wiped for user', user.uid, '(was:', lastUid || 'none', ')');
-                // Immediately restore profiles so measure tab isn't blank while Firestore loads
-                try {
-                    const _kp = JSON.parse(localStorage.getItem('doorProfiles') || '[]');
-                    if (_kp.length > 0) { profiles = _kp; }
-                    else if (typeof DEFAULT_PROFILES !== 'undefined') { profiles = [...DEFAULT_PROFILES]; }
+
+                    // Regular owner account - proceed with normal login
+                    // ── Session isolation: nuclear wipe on every login ────────────────
+                    // Wipe ALL localStorage except app-global preferences
+                    // Firestore will repopulate all user data immediately after
+                    const lastUid = localStorage.getItem('pw_last_uid');
+                    const keepKeys = [
+                        'pw_tooltips', 'pw_tooltips_' + user.uid,
+                        'paintworkz_version', 'pw_tour_done_' + user.uid,
+                        'app_theme', 'app_locale',
+                        'doorProfiles', 'masterMatrix', 'paintBrands', 'floorPIN'
+                    ];
+                    // Full wipe - remove everything except global prefs
+                    const allKeys = [];
+                    for (let i = 0; i < localStorage.length; i++) {
+                        allKeys.push(localStorage.key(i));
+                    }
+                    allKeys.forEach(k => {
+                        if (k && !keepKeys.some(keep => k === keep || k.startsWith('pw_tooltips_') || k.startsWith('pw_tour_done_'))) {
+                            if (k.startsWith('jobPhotos_')) return;
+                            localStorage.removeItem(k);
+                        }
+                    });
+                    console.log('Session isolation: localStorage wiped for user', user.uid, '(was:', lastUid || 'none', ')');
+                    // Immediately restore profiles so measure tab isn't blank while Firestore loads
+                    try {
+                        const _kp = JSON.parse(localStorage.getItem('doorProfiles') || '[]');
+                        if (_kp.length > 0) { profiles = _kp; }
+                        else if (typeof DEFAULT_PROFILES !== 'undefined') { profiles = [...DEFAULT_PROFILES]; }
                     setTimeout(function(){ try { if(typeof refreshLists==='function') refreshLists(); } catch(e){} }, 200);
                 } catch(_pe) {}
                 // Reset in-memory variables immediately
@@ -1646,44 +1655,22 @@ const firebaseConfig = {
             <p style="color:#666; margin:10px 0 0; font-size:14px;">Live Sync &#x2022; All Devices</p>
         </div>
 
-        <!-- MODE TOGGLE -->
-        <div style="display:flex; background:#f0f0f0; border-radius:10px; padding:4px; margin-bottom:20px; gap:4px;">
-            <button id="loginModeAdmin" onclick="setLoginMode('admin')"
-                style="flex:1; border:none; background:#d4af37; color:#000; padding:10px; border-radius:7px; font-weight:900; font-size:13px; cursor:pointer; transition:all 0.2s;">
-                &#x1F512; ADMIN
-            </button>
-            <button id="loginModeStaff" onclick="setLoginMode('staff')"
-                style="flex:1; border:none; background:transparent; color:#999; padding:10px; border-radius:7px; font-weight:900; font-size:13px; cursor:pointer; transition:all 0.2s;">
-                &#x1F477; STAFF
-            </button>
-        </div>
-
-        <!-- ADMIN PANEL -->
+        <!-- LOGIN PANEL -->
         <div id="loginPanelAdmin">
             <input type="email" id="loginEmail" placeholder="Email" style="margin-bottom:12px; padding:15px;">
-            <input type="password" id="loginPassword" placeholder="Password" style="margin-bottom:20px; padding:15px;">
+            <input type="password" id="loginPassword" placeholder="Password or PIN" style="margin-bottom:20px; padding:15px;">
             <button onclick="handleLogin()" style="width:100%; background:#d4af37; border:none; padding:15px; border-radius:10px; font-weight:900; font-size:16px; cursor:pointer; margin-bottom:10px;">SIGN IN</button>
             <button onclick="trySignup()" style="width:100%; background:#333; color:#d4af37; border:2px solid #d4af37; padding:15px; border-radius:10px; font-weight:900; font-size:16px; cursor:pointer; margin-bottom:10px;">CREATE ACCOUNT</button>
             <button onclick="showForgotPassword()" style="width:100%; background:transparent; border:none; color:#999; font-size:12px; font-weight:700; cursor:pointer; padding:6px;">Forgot password?</button>
-        </div>
-
-        <!-- FLOOR PANEL -->
-        <div id="loginPanelStaff" style="display:none;">
-            <div style="text-align:center; margin-bottom:16px; font-size:13px; color:#666; font-weight:700;">Enter shop staff PIN to continue</div>
-            <div style="display:flex; justify-content:center; gap:10px; margin-bottom:16px;">
-                <input type="password" id="staffPinInput" placeholder="&#x2022;&#x2022;&#x2022;&#x2022;" maxlength="8" inputmode="numeric"
-                    style="text-align:center; letter-spacing:8px; font-size:24px; font-weight:900; padding:15px; width:160px; border:2px solid #ddd; border-radius:10px;"
-                    onkeydown="if(event.key==='Enter') enterStaffMode()">
+            <div style="margin-top:16px; padding:12px; background:#f0f9ff; border-radius:8px; border-left:3px solid #2196f3;">
+                <div style="font-size:11px; font-weight:900; color:#1976d2; margin-bottom:4px;">&#x1F477; STAFF LOGIN</div>
+                <div style="font-size:10px; color:#666; line-height:1.4;">Staff: Use your email + 4-digit PIN as password. Ask admin to create your account in Admin → Settings → Staff Accounts.</div>
             </div>
-            <button onclick="enterStaffMode()" style="width:100%; background:#2196f3; color:#fff; border:none; padding:15px; border-radius:10px; font-weight:900; font-size:16px; cursor:pointer;">
-                ENTER STAFF MODE
-            </button>
-            <div id="staffPinError" style="color:#ff3b30; font-weight:900; margin-top:12px; text-align:center; display:none;">Incorrect PIN. Try again.</div>
         </div>
 
         <div id="loginError" style="color:red; font-weight:900; margin-top:15px; text-align:center; display:none;"></div>
     </div>
-    <div id="loginVersionText" style="text-align:center; margin-top:12px; font-size:10px; color:rgba(128,128,128,0.8); font-weight:700;">v1.9.99</div>
+    <div id="loginVersionText" style="text-align:center; margin-top:12px; font-size:10px; color:rgba(128,128,128,0.8); font-weight:700;">v1.10.00</div>
 </div>
 
 
@@ -2195,7 +2182,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.9.99</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.10.00</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -2727,31 +2714,43 @@ const firebaseConfig = {
                 <!-- ===== FLOOR PIN SETUP ===== -->
                 <hr style="margin:20px 0; border:none; border-top:1px solid #ddd;">
                 <div style="background:linear-gradient(135deg,#e0f2f1,#e0f2f1cc); border:2px solid #00695c; border-radius:12px; padding:12px 15px; margin-bottom:12px;">
-                    <div style="display:flex; align-items:center; gap:8px; cursor:pointer;" onclick="toggleSection('staff-pin-container', this.querySelector('button'))">
+                    <div style="display:flex; align-items:center; gap:8px; cursor:pointer;" onclick="toggleSection('staff-accounts-container', this.querySelector('button'))">
                         <span style="font-size:20px;">👷</span>
-                        <div style="margin:0; font-weight:900; font-size:13px; color:#004d40; letter-spacing:0.5px; flex:1;">STAFF PIN LOGIN</div>
+                        <div style="margin:0; font-weight:900; font-size:13px; color:#004d40; letter-spacing:0.5px; flex:1;">STAFF ACCOUNTS</div>
                         <button style="background:rgba(0,77,64,0.1); border:1px solid #004d40; cursor:pointer; font-weight:900; font-size:18px; color:#004d40; padding:4px 12px; border-radius:6px; min-width:32px;">+</button>
                     </div>
                 </div>
-                <div id="staff-pin-container" style="display:none;">
+                <div id="staff-accounts-container" style="display:none;">
                     <p style="font-size:11px; color:#666; margin:0 0 12px 0; line-height:1.5;">
-                        Set the PIN shop staff use to log in. They will see jobs, history, database, supply docket, mixing card, labels and A3 schedule &mdash; but <strong>not</strong> admin, pricing, estimates, quotes or invoices.
+                        Create accounts for shop staff. They can log in with email + 4-digit PIN to view jobs, history, database, supply docket, mixing cards, and labels — but <strong>not</strong> admin, pricing, estimates, quotes or invoices.
                     </p>
-                    <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
-                        <div style="flex:1; min-width:120px;">
-                            <label style="font-size:11px; font-weight:900; color:#333; display:block; margin-bottom:4px;">Staff PIN (4&ndash;8 digits) <span class="pw-help">?<span class="pw-help-tip">A 4–8 digit PIN your floor staff use to access the app in Staff Mode. Staff Mode hides pricing, admin and financial data — staff can only view and measure jobs.</span></span></label>
-                            <input type="password" id="staffPinSetInput" placeholder="e.g. 1234" maxlength="8" inputmode="numeric"
-                                style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:16px; text-align:center; letter-spacing:6px; box-sizing:border-box;">
+                    
+                    <!-- Create New Staff Account -->
+                    <div style="background:#f9fbe7; border:1px solid #c0ca33; border-radius:8px; padding:12px; margin-bottom:12px;">
+                        <div style="font-size:12px; font-weight:900; color:#333; margin-bottom:8px;">CREATE NEW STAFF ACCOUNT</div>
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
+                            <div>
+                                <label style="font-size:10px; font-weight:900; color:#333; display:block; margin-bottom:4px;">Staff Name</label>
+                                <input type="text" id="newStaffName" placeholder="John Smith" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:6px; font-size:13px; box-sizing:border-box;">
+                            </div>
+                            <div>
+                                <label style="font-size:10px; font-weight:900; color:#333; display:block; margin-bottom:4px;">Email</label>
+                                <input type="email" id="newStaffEmail" placeholder="john@example.com" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:6px; font-size:13px; box-sizing:border-box;">
+                            </div>
                         </div>
-                        <div style="flex:1; min-width:120px;">
-                            <label style="font-size:11px; font-weight:900; color:#333; display:block; margin-bottom:4px;">Confirm PIN</label>
-                            <input type="password" id="staffPinConfirmInput" placeholder="Repeat PIN" maxlength="8" inputmode="numeric"
-                                style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:16px; text-align:center; letter-spacing:6px; box-sizing:border-box;">
+                        <div style="margin-bottom:8px;">
+                            <label style="font-size:10px; font-weight:900; color:#333; display:block; margin-bottom:4px;">4-Digit PIN (their password)</label>
+                            <input type="password" id="newStaffPin" placeholder="1234" maxlength="4" inputmode="numeric" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:6px; font-size:13px; text-align:center; letter-spacing:6px; box-sizing:border-box;">
                         </div>
-                        <button onclick="saveStaffPIN()" style="border:none; background:#2196f3; color:#fff; padding:10px 18px; border-radius:6px; font-weight:900; font-size:12px; cursor:pointer; white-space:nowrap;">&#x1F4BE; SAVE PIN</button>
+                        <button onclick="createStaffAccount()" style="width:100%; background:#2196f3; color:#fff; border:none; padding:10px; border-radius:6px; font-weight:900; font-size:12px; cursor:pointer;">
+                            ➕ CREATE STAFF ACCOUNT
+                        </button>
                     </div>
-                    <div id="staffPinStatus" style="margin-top:8px; font-size:11px; color:#666;">
-                        Current PIN: <strong id="staffPinMask">Not set</strong>
+                    
+                    <!-- Existing Staff Accounts List -->
+                    <div style="font-size:11px; font-weight:900; color:#333; margin-bottom:6px;">EXISTING STAFF ACCOUNTS</div>
+                    <div id="staffAccountsList" style="background:#fff; border:1px solid #ddd; border-radius:6px; padding:8px; min-height:60px;">
+                        <div style="text-align:center; color:#999; font-size:11px; padding:20px;">No staff accounts created yet</div>
                     </div>
                 </div>
                 <!-- ===== BACKUP & RESTORE SECTION ===== -->
@@ -2969,7 +2968,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.9.99</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-17</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.10.00</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-17</span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);startTour();" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -3767,7 +3766,7 @@ const firebaseConfig = {
     console.log('');
     //                    VERSION: v1.7.24-FINAL | 2026-02-27 | Colin Bedford                   
     //                    ADMIN TABS FIXED | COVER SHEET FIXED | DELETE CONFIRMATION ADDED                   
-    console.log('%c PaintWorkz Pro v1.9.99 ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('%c PaintWorkz Pro v1.10.00 ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     // Changelog logs removed for production performance
     // ====================================
     
@@ -5636,7 +5635,7 @@ const firebaseConfig = {
             console.log('        Clearing stale Firebase data...');
             
             // 1. Delete the old Firebase documents to remove stale data
-            const configDoc = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'config', 'doorProfiles');
+            const configDoc = window.doc(window.firebaseDb, 'users', dataUid, 'config', 'doorProfiles');
             window.deleteDoc(configDoc).then(() => {
                 console.log('    Deleted old Firebase doorProfiles document');
             }).catch(err => {
@@ -7510,44 +7509,224 @@ const firebaseConfig = {
 
     function enterStaffMode() {
         const enteredPin = (document.getElementById('staffPinInput')?.value || '').trim();
-        const storedPin = localStorage.getItem('floorPIN');
         const errDiv = document.getElementById('staffPinError');
 
         console.log('%c🔐 STAFF LOGIN ATTEMPT', 'background:#2196f3;color:#fff;font-weight:900;padding:4px;', {
-            enteredPin: enteredPin ? enteredPin.length + ' digits' : 'EMPTY',
-            storedPin: storedPin ? storedPin.length + ' digits (' + storedPin + ')' : 'NULL',
-            currentUser: window.currentUser ? window.currentUser.email : 'NOT LOGGED IN'
+            enteredPin: enteredPin ? enteredPin.length + ' digits' : 'EMPTY'
         });
 
-        if (!storedPin) {
-            if (errDiv) { errDiv.textContent = 'No staff PIN set. Ask admin to set one.'; errDiv.style.display = 'block'; }
-            return;
-        }
         if (!enteredPin) {
             if (errDiv) { errDiv.textContent = 'Please enter PIN'; errDiv.style.display = 'block'; }
             return;
         }
-        if (enteredPin !== storedPin) {
-            if (errDiv) { errDiv.textContent = 'Incorrect PIN. Try again.'; errDiv.style.display = 'block'; }
-            document.getElementById('staffPinInput').value = '';
-            return;
-        }
 
-        // PIN correct - check if admin is logged in
-        if (!window.currentUser) {
+        // Load PIN from sessionStorage (persists across logouts)
+        const storedPin = sessionStorage.getItem('floorPIN_persistent') || localStorage.getItem('floorPIN');
+        
+        console.log('%c🔍 PIN CHECK', 'background:#ff9500;color:#fff;font-weight:900;padding:4px;', {
+            entered: enteredPin,
+            stored: storedPin ? storedPin.length + ' digits (' + storedPin + ')' : 'NULL',
+            source: sessionStorage.getItem('floorPIN_persistent') ? 'sessionStorage' : 'localStorage'
+        });
+
+        if (!storedPin) {
             if (errDiv) { 
-                errDiv.textContent = 'Admin must be logged in first. Ask admin to sign in.';
+                errDiv.textContent = 'No staff PIN set. Ask admin to set one in Admin → Settings.';
                 errDiv.style.display = 'block';
-                errDiv.style.color = '#ff9500';
+                errDiv.style.color = '#ff3b30';
             }
             return;
         }
 
-        // All good - activate staff mode
+        if (enteredPin !== storedPin) {
+            if (errDiv) { 
+                errDiv.textContent = 'Incorrect PIN. Try again.';
+                errDiv.style.display = 'block';
+                errDiv.style.color = '#ff3b30';
+            }
+            document.getElementById('staffPinInput').value = '';
+            return;
+        }
+
+        // PIN is correct - now we need to sign in as owner
+        // For now, show message that admin must complete setup
         document.getElementById('staffPinInput').value = '';
-        if (errDiv) errDiv.style.display = 'none';
-        activateStaffMode();
+        if (errDiv) { 
+            errDiv.textContent = 'PIN verified! Staff mode requires owner account login. Please contact Colin to complete staff account setup.';
+            errDiv.style.display = 'block';
+            errDiv.style.color = '#ff9500';
+        }
     }
+
+    async function checkIfStaffAccountAndActivate(user) {
+        if (!user) return false;
+
+        try {
+            // Check if user document has isStaffAccount flag
+            const userDocRef = window.doc(window.firebaseDb, 'users', user.uid);
+            const userDocSnap = await window.getDoc(userDocRef);
+
+            if (!userDocSnap.exists()) {
+                // New user, not a staff account
+                return false;
+            }
+
+            const userData = userDocSnap.data();
+            if (userData.isStaffAccount === true && userData.parentUid) {
+                // This IS a staff account
+                console.log('%c👷 STAFF ACCOUNT LOGIN', 'background:#00695c;color:#fff;font-weight:900;padding:4px;', {
+                    staff: user.email,
+                    owner: userData.parentUid
+                });
+
+                // Store the owner UID so we load data from owner's Firestore path
+                window.staffModeOwnerUid = userData.parentUid;
+                window.isStaffAccount = true;
+
+                // Activate staff mode immediately
+                activateStaffMode();
+                
+                // Load owner's data from Firestore
+                setTimeout(() => {
+                    loadAllDataFromFirebase(userData.parentUid);
+                }, 500);
+
+                return true;
+            }
+
+            return false;
+
+        } catch (error) {
+            console.error('Error checking staff account status:', error);
+            return false;
+        }
+    }
+
+    async function createStaffAccount() {
+        const name = (document.getElementById('newStaffName')?.value || '').trim();
+        const email = (document.getElementById('newStaffEmail')?.value || '').trim();
+        const pin = (document.getElementById('newStaffPin')?.value || '').trim();
+
+        if (!name) { notify('❌ Enter staff name'); return; }
+        if (!email) { notify('❌ Enter staff email'); return; }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { notify('❌ Invalid email format'); return; }
+        if (!pin || pin.length !== 4) { notify('❌ PIN must be exactly 4 digits'); return; }
+        if (!/^\d{4}$/.test(pin)) { notify('❌ PIN must be numbers only'); return; }
+
+        if (!window.currentUser) { notify('❌ You must be logged in'); return; }
+
+        console.log('Creating staff account:', { name, email, pin: '****' });
+
+        try {
+            // Create Firebase Auth account with email + PIN as password
+            const auth = window.auth;
+            const secondaryApp = window.initializeApp(window.firebaseConfig, 'secondary-' + Date.now());
+            const secondaryAuth = window.getAuth(secondaryApp);
+
+            const userCredential = await window.createUserWithEmailAndPassword(secondaryAuth, email, pin);
+            const staffUid = userCredential.user.uid;
+
+            // Store staff account relationship in Firestore under owner's UID
+            const staffAccountRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'staffAccounts', staffUid);
+            await window.setDoc(staffAccountRef, {
+                name: name,
+                email: email,
+                staffUid: staffUid,
+                ownerUid: window.currentUser.uid,
+                createdAt: new Date().toISOString(),
+                isStaffAccount: true
+            });
+
+            // Also store reverse lookup in staff's own user document
+            const staffUserRef = window.doc(window.firebaseDb, 'users', staffUid);
+            await window.setDoc(staffUserRef, {
+                name: name,
+                email: email,
+                parentUid: window.currentUser.uid,
+                isStaffAccount: true,
+                createdAt: new Date().toISOString()
+            });
+
+            // Clean up secondary app
+            await secondaryApp.delete();
+
+            // Clear form
+            document.getElementById('newStaffName').value = '';
+            document.getElementById('newStaffEmail').value = '';
+            document.getElementById('newStaffPin').value = '';
+
+            notify('✅ Staff account created! ' + name + ' can now log in with email + PIN');
+            renderStaffAccountsList();
+
+        } catch (error) {
+            console.error('Staff account creation error:', error);
+            if (error.code === 'auth/email-already-in-use') {
+                notify('❌ This email is already registered');
+            } else if (error.code === 'auth/weak-password') {
+                notify('❌ PIN must be 4 digits');
+            } else {
+                notify('❌ Error: ' + error.message);
+            }
+        }
+    }
+
+    async function renderStaffAccountsList() {
+        if (!window.currentUser) return;
+
+        const container = document.getElementById('staffAccountsList');
+        if (!container) return;
+
+        try {
+            const staffCollectionRef = window.collection(window.firebaseDb, 'users', window.currentUser.uid, 'staffAccounts');
+            const snapshot = await window.getDocs(staffCollectionRef);
+
+            if (snapshot.empty) {
+                container.innerHTML = '<div style="text-align:center; color:#999; font-size:11px; padding:20px;">No staff accounts created yet</div>';
+                return;
+            }
+
+            let html = '';
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                html += `
+                    <div style="display:flex; align-items:center; justify-content:space-between; padding:8px; border-bottom:1px solid #eee;">
+                        <div>
+                            <div style="font-weight:900; font-size:12px; color:#333;">${data.name}</div>
+                            <div style="font-size:10px; color:#666;">${data.email}</div>
+                        </div>
+                        <button onclick="deleteStaffAccount('${doc.id}')" style="background:#ff3b30; color:#fff; border:none; padding:6px 12px; border-radius:4px; font-size:10px; font-weight:900; cursor:pointer;">DELETE</button>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+
+        } catch (error) {
+            console.error('Error loading staff accounts:', error);
+            container.innerHTML = '<div style="text-align:center; color:#ff3b30; font-size:11px; padding:20px;">Error loading staff accounts</div>';
+        }
+    }
+
+    async function deleteStaffAccount(staffUid) {
+        if (!confirm('Delete this staff account? They will no longer be able to log in.')) return;
+
+        try {
+            // Delete from owner's staffAccounts collection
+            const staffAccountRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'staffAccounts', staffUid);
+            await window.deleteDoc(staffAccountRef);
+
+            // Note: Cannot delete Firebase Auth users from client-side
+            // Need Cloud Functions or manual deletion from Firebase Console
+
+            notify('✅ Staff account removed');
+            renderStaffAccountsList();
+
+        } catch (error) {
+            console.error('Error deleting staff account:', error);
+            notify('❌ Error deleting account');
+        }
+    }
+
 
     function activateStaffMode() {
         window.staffMode = true;
@@ -7603,7 +7782,7 @@ const firebaseConfig = {
         // Sync to Firestore for cross-device support
         if (window.currentUser && window.firebaseDb && window.setDoc && window.doc) {
             try {
-                const ref = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'settings');
+                const ref = window.doc(window.firebaseDb, 'users', dataUid, 'appData', 'settings');
                 window.setDoc(ref, { floorPIN: pin, updated: new Date().toISOString() }, { merge: true })
                     .then(() => console.log('%c✅ SAVED TO Firestore', 'background:#34c759;color:#fff;font-weight:900;padding:4px;', 'PIN synced'))
                     .catch(e => console.warn('%c❌ Firestore sync FAILED', 'background:#ff3b30;color:#fff;font-weight:900;padding:4px;', e.message));
@@ -8151,7 +8330,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.9.99'; //     bump this on every release
+        const CURRENT_VERSION = 'v1.10.00'; //     bump this on every release
         const CURRENT_DATE = '2026-03-17';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -16442,7 +16621,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
         // Sync to Firestore so colours persist across devices
         if (window.currentUser && window.firebaseDb) {
             try {
-                const ref = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'appColors');
+                const ref = window.doc(window.firebaseDb, 'users', dataUid, 'appData', 'appColors');
                 window.setDoc(ref, { colors: window.appColors, lastUpdated: new Date().toISOString() }, { merge: false });
             } catch(e) { console.warn('appColors sync error:', e); }
         }
@@ -18514,7 +18693,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
     function syncMasterMatrixToFirestore() {
         try {
             if (window.currentUser && window.firebaseDb && window.setDoc && window.doc) {
-                const ref = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'masterMatrix');
+                const ref = window.doc(window.firebaseDb, 'users', dataUid, 'appData', 'masterMatrix');
                 window.setDoc(ref, { matrix: masterMatrix, updated: new Date().toISOString() })
                     .then(() => console.log('       Pricing matrix synced to Firestore'))
                     .catch(e => console.warn('       Firestore pricing save failed:', e));
@@ -19087,7 +19266,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         // Sync to Firestore so settings load on all devices after login
         if (window.currentUser && window.firebaseDb) {
             try {
-                const ref = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'companySettings');
+                const ref = window.doc(window.firebaseDb, 'users', dataUid, 'appData', 'companySettings');
                 window.setDoc(ref, { ...settings, lastUpdated: new Date().toISOString() }, { merge: false })
                     .then(() => { console.log('       Company settings synced to Firestore'); })
                     .catch(e => { console.error('    Company settings Firestore FAILED:', e); notify('       Cloud save failed     details saved locally only'); });
@@ -20211,14 +20390,24 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
     }
 
     // Load all jobs from Firebase
-    async function loadAllDataFromFirebase() {
+    async function loadAllDataFromFirebase(ownerUid = null) {
         if (!window.currentUser) return;
         window.loadAllDataFromFirebase = loadAllDataFromFirebase; // keep self-reference fresh
+        
+        // If ownerUid is provided (staff account), load from owner's path
+        // Otherwise use current user's uid (normal account)
+        const dataUid = ownerUid || window.currentUser.uid;
+        
+        console.log('%c📥 LOADING DATA FROM FIRESTORE', 'background:#2196f3;color:#fff;font-weight:900;padding:4px;', {
+            currentUser: window.currentUser.email,
+            dataUid: dataUid,
+            isStaffMode: ownerUid ? 'YES (loading owner data)' : 'NO'
+        });
         
         try {
             //        0. Plan     load from user root document                                        
             try {
-                const userDocRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid);
+                const userDocRef = window.doc(window.firebaseDb, 'users', dataUid);
                 const userSnap = await window.getDoc(userDocRef);
                 if (userSnap.exists()) {
                     const userData = userSnap.data();
@@ -20232,7 +20421,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             } catch(planErr) { console.warn('Plan load error:', planErr.message); }
 
             //        1. Jobs                                                                                                                                     
-            const userDocRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid);
+            const userDocRef = window.doc(window.firebaseDb, 'users', dataUid);
             const jobsCollectionRef = window.collection(userDocRef, 'jobs');
             const snapshot = await window.getDocs(jobsCollectionRef);
             const jobs = [];
@@ -20242,9 +20431,8 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                 jobs.push(jobData);
             });
 
-            // Safety filter: only load jobs that belong to THIS user
-            const currentUid = window.currentUser.uid;
-            const safeJobs = jobs.filter(function(j) { return !j.userId || j.userId === currentUid; });
+            // Safety filter: only load jobs that belong to THIS user (dataUid)
+            const safeJobs = jobs.filter(function(j) { return !j.userId || j.userId === dataUid; });
             if (safeJobs.length < jobs.length) {
                 console.warn('Filtered out ' + (jobs.length - safeJobs.length) + ' jobs from other users');
             }
@@ -20265,7 +20453,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             repushQueue.forEach(job => {
                 try {
                     const jobId = job.id || job.jobNum;
-                    const jobDoc = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'jobs', jobId);
+                    const jobDoc = window.doc(window.firebaseDb, 'users', dataUid, 'jobs', jobId);
                     window.setDoc(jobDoc, { ...job, lastModified: new Date().toISOString() }, { merge: false })
                         .then(() => console.log('    Re-pushed completed job', job.jobNum))
                         .catch(e => console.warn('Re-push failed for', job.jobNum, e));
@@ -20274,7 +20462,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
 
             //        2. Paint Formulas                                                                                                       
             try {
-                const pfRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'paintFormulas');
+                const pfRef = window.doc(window.firebaseDb, 'users', dataUid, 'appData', 'paintFormulas');
                 const pfSnap = await window.getDoc(pfRef);
                 if (pfSnap.exists()) {
                     const pfData = pfSnap.data();
@@ -20299,7 +20487,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
 
             //        3. Client Database                                                                                                    
             try {
-                const cdRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'clientDatabase');
+                const cdRef = window.doc(window.firebaseDb, 'users', dataUid, 'appData', 'clientDatabase');
                 const cdSnap = await window.getDoc(cdRef);
                 if (cdSnap.exists()) {
                     const cdData = cdSnap.data();
@@ -20325,7 +20513,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
 
             //        3b. Staff PIN Settings                                                                                                    
             try {
-                const settingsRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'settings');
+                const settingsRef = window.doc(window.firebaseDb, 'users', dataUid, 'appData', 'settings');
                 const settingsSnap = await window.getDoc(settingsRef);
                 if (settingsSnap.exists()) {
                     const settingsData = settingsSnap.data();
@@ -20339,7 +20527,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
 
             //        4. Pricing Matrix + Door Profiles                                                    
             try {
-                const mmRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'masterMatrix');
+                const mmRef = window.doc(window.firebaseDb, 'users', dataUid, 'appData', 'masterMatrix');
                 const mmSnap = await window.getDoc(mmRef);
                 if (mmSnap.exists()) {
                     const mmData = mmSnap.data();
@@ -20354,7 +20542,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
 
             //        5. Door Profiles                                                                                                          
             try {
-                const dpRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'config', 'doorProfiles');
+                const dpRef = window.doc(window.firebaseDb, 'users', dataUid, 'config', 'doorProfiles');
                 const dpSnap = await window.getDoc(dpRef);
                 if (dpSnap.exists()) {
                     const dpData = dpSnap.data();
@@ -20386,7 +20574,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             //        5c. Company Settings + Logos + App Colors                               
             // Load appColors
             try {
-                const acRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'appColors');
+                const acRef = window.doc(window.firebaseDb, 'users', dataUid, 'appData', 'appColors');
                 const acSnap = await window.getDoc(acRef);
                 if (acSnap.exists() && acSnap.data().colors) {
                     window.appColors = acSnap.data().colors;
@@ -20396,7 +20584,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                 }
             } catch(e) { console.warn('appColors load error:', e.message); }
             try {
-                const csRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'companySettings');
+                const csRef = window.doc(window.firebaseDb, 'users', dataUid, 'appData', 'companySettings');
                 const csSnap = await window.getDoc(csRef);
                 if (csSnap.exists()) {
                     const cs = csSnap.data();
@@ -20450,7 +20638,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         //        7. Stock Settings (paint base costs)                                              
         try { if (typeof loadStockSettings === 'function') loadStockSettings(); } catch(e) {}
         
-        //        UI Refresh     repaint everything after all data is loaded       
+        //        UI Refresh — repaint everything after all data is loaded       
         try {
             setTimeout(() => {
                 if (typeof renderPaintFormulaList === 'function') renderPaintFormulaList();
@@ -20461,6 +20649,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                 if (typeof renderAdminGanttChart === 'function') renderAdminGanttChart();
                 if (typeof renderGlobalNotifications === 'function') renderGlobalNotifications();
                 if (typeof updateNotificationBadge === 'function') updateNotificationBadge();
+                if (typeof renderStaffAccountsList === 'function') renderStaffAccountsList(); // Load staff accounts in admin
                 console.log('    UI refreshed after Firebase data load');
             }, 200);
         } catch(e) {}
@@ -20676,7 +20865,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         }
 
         try {
-            const configDoc = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'config', 'doorProfiles');
+            const configDoc = window.doc(window.firebaseDb, 'users', dataUid, 'config', 'doorProfiles');
             window.setDoc(configDoc, {
                 doorProfiles: profiles,
                 masterMatrix: masterMatrix,
@@ -20821,7 +21010,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
     function forcePushPricingToCloud() {
         if (!window.currentUser) { notify('    Not logged in'); return; }
         if (!window.firebaseDb || !window.doc || !window.setDoc) { notify('    Firebase not ready'); return; }
-        const configDoc = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'config', 'doorProfiles');
+        const configDoc = window.doc(window.firebaseDb, 'users', dataUid, 'config', 'doorProfiles');
         window.setDoc(configDoc, {
             doorProfiles: profiles,
             masterMatrix: masterMatrix,
