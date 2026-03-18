@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.10.00 | Updated: 2026-03-17                       ║
+║  Version: v1.10.01 | Updated: 2026-03-17                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.10.00';
+    const CURRENT_VERSION = 'v1.10.01';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1661,7 +1661,7 @@ const firebaseConfig = {
 
         <div id="loginError" style="color:red; font-weight:900; margin-top:15px; text-align:center; display:none;"></div>
     </div>
-    <div id="loginVersionText" style="text-align:center; margin-top:12px; font-size:10px; color:rgba(128,128,128,0.8); font-weight:700;">v1.10.00</div>
+    <div id="loginVersionText" style="text-align:center; margin-top:12px; font-size:10px; color:rgba(128,128,128,0.8); font-weight:700;">v1.10.01</div>
 </div>
 
 
@@ -2173,7 +2173,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.10.00</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.10.01</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -2959,7 +2959,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.10.00</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-17</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.10.01</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-17</span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);startTour();" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -3757,7 +3757,7 @@ const firebaseConfig = {
     console.log('');
     //                    VERSION: v1.7.24-FINAL | 2026-02-27 | Colin Bedford                   
     //                    ADMIN TABS FIXED | COVER SHEET FIXED | DELETE CONFIRMATION ADDED                   
-    console.log('%c PaintWorkz Pro v1.10.00 ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('%c PaintWorkz Pro v1.10.01 ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     // Changelog logs removed for production performance
     // ====================================
     
@@ -7565,38 +7565,45 @@ const firebaseConfig = {
 
         console.log('Creating staff account:', { name, email, pin: '****' });
 
-        try {
-            // Create Firebase Auth account with email + PIN as password
-            const auth = window.auth;
-            const secondaryApp = window.initializeApp(window.firebaseConfig, 'secondary-' + Date.now());
-            const secondaryAuth = window.getAuth(secondaryApp);
+        // CRITICAL: Save admin credentials BEFORE creating staff account
+        const adminEmail = window.currentUser.email;
+        const adminUid = window.currentUser.uid;
+        const adminPassword = prompt('Enter YOUR password to confirm staff account creation:');
+        if (!adminPassword) { notify('❌ Password required'); return; }
 
-            const userCredential = await window.createUserWithEmailAndPassword(secondaryAuth, email, pin);
+        try {
+            // Create the staff account (this will sign us in as the new user)
+            const userCredential = await window.createUserWithEmailAndPassword(email, pin);
             const staffUid = userCredential.user.uid;
 
-            // Store staff account relationship in Firestore under owner's UID
-            const staffAccountRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'staffAccounts', staffUid);
-            await window.setDoc(staffAccountRef, {
-                name: name,
-                email: email,
-                staffUid: staffUid,
-                ownerUid: window.currentUser.uid,
-                createdAt: new Date().toISOString(),
-                isStaffAccount: true
-            });
+            console.log('Staff Firebase account created:', staffUid);
 
-            // Also store reverse lookup in staff's own user document
+            // Store staff account metadata in STAFF's user document (use saved adminUid)
             const staffUserRef = window.doc(window.firebaseDb, 'users', staffUid);
             await window.setDoc(staffUserRef, {
                 name: name,
                 email: email,
-                parentUid: window.currentUser.uid,
+                parentUid: adminUid, // Use saved admin UID
                 isStaffAccount: true,
                 createdAt: new Date().toISOString()
             });
 
-            // Clean up secondary app
-            await secondaryApp.delete();
+            // Sign back in as admin
+            await window.signInWithEmailAndPassword(adminEmail, adminPassword);
+            
+            // Explicitly mark that we're logging in (for session guard)
+            sessionStorage.setItem('pw_explicit_login', '1');
+
+            // Now currentUser is admin again - store staff relationship in admin's document
+            const staffAccountRef = window.doc(window.firebaseDb, 'users', adminUid, 'staffAccounts', staffUid);
+            await window.setDoc(staffAccountRef, {
+                name: name,
+                email: email,
+                staffUid: staffUid,
+                ownerUid: adminUid,
+                createdAt: new Date().toISOString(),
+                isStaffAccount: true
+            });
 
             // Clear form
             document.getElementById('newStaffName').value = '';
@@ -7612,6 +7619,8 @@ const firebaseConfig = {
                 notify('❌ This email is already registered');
             } else if (error.code === 'auth/weak-password') {
                 notify('❌ PIN must be 4 digits');
+            } else if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+                notify('❌ Incorrect admin password - staff account created but you need to log back in');
             } else {
                 notify('❌ Error: ' + error.message);
             }
@@ -8278,7 +8287,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.10.00'; //     bump this on every release
+        const CURRENT_VERSION = 'v1.10.01'; //     bump this on every release
         const CURRENT_DATE = '2026-03-17';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
