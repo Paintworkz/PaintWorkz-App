@@ -1220,42 +1220,33 @@ const firebaseConfig = {
                     return;
                 }
 
-                // Check if this is a staff account before doing session isolation
-                checkIfStaffAccountAndActivate(user).then(isStaff => {
-                    if (isStaff) {
-                        // Staff account detected - skip session isolation, go straight to staff mode
-                        console.log('Staff account detected:', user.email);
-                        return;
+                // ── Session isolation: nuclear wipe on every login ────────────────
+                // Wipe ALL localStorage except app-global preferences
+                // Firestore will repopulate all user data immediately after
+                const lastUid = localStorage.getItem('pw_last_uid');
+                const keepKeys = [
+                    'pw_tooltips', 'pw_tooltips_' + user.uid,
+                    'paintworkz_version', 'pw_tour_done_' + user.uid,
+                    'app_theme', 'app_locale',
+                    'doorProfiles', 'masterMatrix', 'paintBrands', 'floorPIN'
+                ];
+                // Full wipe - remove everything except global prefs
+                const allKeys = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    allKeys.push(localStorage.key(i));
+                }
+                allKeys.forEach(k => {
+                    if (k && !keepKeys.some(keep => k === keep || k.startsWith('pw_tooltips_') || k.startsWith('pw_tour_done_'))) {
+                        if (k.startsWith('jobPhotos_')) return;
+                        localStorage.removeItem(k);
                     }
-
-                    // Regular owner account - proceed with normal login
-                    // ── Session isolation: nuclear wipe on every login ────────────────
-                    // Wipe ALL localStorage except app-global preferences
-                    // Firestore will repopulate all user data immediately after
-                    const lastUid = localStorage.getItem('pw_last_uid');
-                    const keepKeys = [
-                        'pw_tooltips', 'pw_tooltips_' + user.uid,
-                        'paintworkz_version', 'pw_tour_done_' + user.uid,
-                        'app_theme', 'app_locale',
-                        'doorProfiles', 'masterMatrix', 'paintBrands', 'floorPIN'
-                    ];
-                    // Full wipe - remove everything except global prefs
-                    const allKeys = [];
-                    for (let i = 0; i < localStorage.length; i++) {
-                        allKeys.push(localStorage.key(i));
-                    }
-                    allKeys.forEach(k => {
-                        if (k && !keepKeys.some(keep => k === keep || k.startsWith('pw_tooltips_') || k.startsWith('pw_tour_done_'))) {
-                            if (k.startsWith('jobPhotos_')) return;
-                            localStorage.removeItem(k);
-                        }
-                    });
-                    console.log('Session isolation: localStorage wiped for user', user.uid, '(was:', lastUid || 'none', ')');
-                    // Immediately restore profiles so measure tab isn't blank while Firestore loads
-                    try {
-                        const _kp = JSON.parse(localStorage.getItem('doorProfiles') || '[]');
-                        if (_kp.length > 0) { profiles = _kp; }
-                        else if (typeof DEFAULT_PROFILES !== 'undefined') { profiles = [...DEFAULT_PROFILES]; }
+                });
+                console.log('Session isolation: localStorage wiped for user', user.uid, '(was:', lastUid || 'none', ')');
+                // Immediately restore profiles so measure tab isn't blank while Firestore loads
+                try {
+                    const _kp = JSON.parse(localStorage.getItem('doorProfiles') || '[]');
+                    if (_kp.length > 0) { profiles = _kp; }
+                    else if (typeof DEFAULT_PROFILES !== 'undefined') { profiles = [...DEFAULT_PROFILES]; }
                     setTimeout(function(){ try { if(typeof refreshLists==='function') refreshLists(); } catch(e){} }, 200);
                 } catch(_pe) {}
                 // Reset in-memory variables immediately
@@ -7558,49 +7549,6 @@ const firebaseConfig = {
         }
     }
 
-    async function checkIfStaffAccountAndActivate(user) {
-        if (!user) return false;
-
-        try {
-            // Check if user document has isStaffAccount flag
-            const userDocRef = window.doc(window.firebaseDb, 'users', user.uid);
-            const userDocSnap = await window.getDoc(userDocRef);
-
-            if (!userDocSnap.exists()) {
-                // New user, not a staff account
-                return false;
-            }
-
-            const userData = userDocSnap.data();
-            if (userData.isStaffAccount === true && userData.parentUid) {
-                // This IS a staff account
-                console.log('%c👷 STAFF ACCOUNT LOGIN', 'background:#00695c;color:#fff;font-weight:900;padding:4px;', {
-                    staff: user.email,
-                    owner: userData.parentUid
-                });
-
-                // Store the owner UID so we load data from owner's Firestore path
-                window.staffModeOwnerUid = userData.parentUid;
-                window.isStaffAccount = true;
-
-                // Activate staff mode immediately
-                activateStaffMode();
-                
-                // Load owner's data from Firestore
-                setTimeout(() => {
-                    loadAllDataFromFirebase(userData.parentUid);
-                }, 500);
-
-                return true;
-            }
-
-            return false;
-
-        } catch (error) {
-            console.error('Error checking staff account status:', error);
-            return false;
-        }
-    }
 
     async function createStaffAccount() {
         const name = (document.getElementById('newStaffName')?.value || '').trim();
@@ -20393,6 +20341,31 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
     async function loadAllDataFromFirebase(ownerUid = null) {
         if (!window.currentUser) return;
         window.loadAllDataFromFirebase = loadAllDataFromFirebase; // keep self-reference fresh
+        
+        // Check if current user is a staff account (first time only)
+        if (!ownerUid && !window._staffCheckDone) {
+            window._staffCheckDone = true;
+            try {
+                const userDocRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid);
+                const userDocSnap = await window.getDoc(userDocRef);
+                if (userDocSnap.exists()) {
+                    const userData = userDocSnap.data();
+                    if (userData.isStaffAccount === true && userData.parentUid) {
+                        console.log('%c👷 STAFF ACCOUNT DETECTED', 'background:#00695c;color:#fff;font-weight:900;padding:4px;', {
+                            staff: window.currentUser.email,
+                            owner: userData.parentUid
+                        });
+                        window.staffModeOwnerUid = userData.parentUid;
+                        window.isStaffAccount = true;
+                        activateStaffMode();
+                        // Reload data from owner's UID
+                        return loadAllDataFromFirebase(userData.parentUid);
+                    }
+                }
+            } catch (error) {
+                console.warn('Staff account check error:', error);
+            }
+        }
         
         // If ownerUid is provided (staff account), load from owner's path
         // Otherwise use current user's uid (normal account)
