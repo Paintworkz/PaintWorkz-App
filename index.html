@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.10.02 | Updated: 2026-03-17                       ║
+║  Version: v1.10.03 | Updated: 2026-03-17                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.10.02';
+    const CURRENT_VERSION = 'v1.10.03';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1661,7 +1661,7 @@ const firebaseConfig = {
 
         <div id="loginError" style="color:red; font-weight:900; margin-top:15px; text-align:center; display:none;"></div>
     </div>
-    <div id="loginVersionText" style="text-align:center; margin-top:12px; font-size:10px; color:rgba(128,128,128,0.8); font-weight:700;">v1.10.02</div>
+    <div id="loginVersionText" style="text-align:center; margin-top:12px; font-size:10px; color:rgba(128,128,128,0.8); font-weight:700;">v1.10.03</div>
 </div>
 
 
@@ -2173,7 +2173,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.10.02</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.10.03</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-02-27</div>
                         </div>
                     </div>
@@ -2959,7 +2959,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.10.02</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-17</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.10.03</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-17</span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);startTour();" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -3305,6 +3305,11 @@ const firebaseConfig = {
     window.OWNER_EMAIL = OWNER_EMAIL; // inspectable in console
     function isOwner() {
         return window.currentUser && window.currentUser.email === OWNER_EMAIL;
+    }
+
+    // Get target UID for Firestore operations (owner UID if staff mode, current user otherwise)
+    function getTargetUid() {
+        return window.staffModeOwnerUid || (window.currentUser ? window.currentUser.uid : null);
     }
 
     //        PLAN SYSTEM                                                                                                                                                                               
@@ -3757,7 +3762,7 @@ const firebaseConfig = {
     console.log('');
     //                    VERSION: v1.7.24-FINAL | 2026-02-27 | Colin Bedford                   
     //                    ADMIN TABS FIXED | COVER SHEET FIXED | DELETE CONFIRMATION ADDED                   
-    console.log('%c PaintWorkz Pro v1.10.02 ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('%c PaintWorkz Pro v1.10.03 ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     // Changelog logs removed for production performance
     // ====================================
     
@@ -6685,7 +6690,8 @@ const firebaseConfig = {
                 try {
                     const jobId = job.id || job.jobNum || `job_${Date.now()}_${pushed}`;
                     if (!job.id) job.id = jobId;
-                    const jobDoc = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'jobs', jobId);
+                    const targetUid = getTargetUid();
+                    const jobDoc = window.doc(window.firebaseDb, 'users', targetUid, 'jobs', jobId);
                     var _pfc={...job}; delete _pfc.photos;
                     await window.setDoc(jobDoc, { ..._pfc, id: jobId, lastModified: new Date().toISOString(), userId: window.currentUser.uid }, { merge: false });
                     pushed++;
@@ -8293,7 +8299,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.10.02'; //     bump this on every release
+        const CURRENT_VERSION = 'v1.10.03'; //     bump this on every release
         const CURRENT_DATE = '2026-03-17';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -20860,7 +20866,10 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         }
 
         try {
-            const configDoc = window.doc(window.firebaseDb, 'users', dataUid, 'config', 'doorProfiles');
+            // Use owner UID if in staff mode, otherwise current user's UID
+            const targetUid = window.staffModeOwnerUid || window.currentUser.uid;
+            
+            const configDoc = window.doc(window.firebaseDb, 'users', targetUid, 'config', 'doorProfiles');
             window.setDoc(configDoc, {
                 doorProfiles: profiles,
                 masterMatrix: masterMatrix,
