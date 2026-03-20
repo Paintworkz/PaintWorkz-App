@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.10.20 | Updated: 2026-03-17                       ║
+║  Version: v1.10.21 | Updated: 2026-03-17                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.10.20';
+    const CURRENT_VERSION = 'v1.10.21';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1735,7 +1735,7 @@ const firebaseConfig = {
 
         <div id="loginError" style="color:red; font-weight:900; margin-top:15px; text-align:center; display:none;"></div>
     </div>
-    <div id="loginVersionText" style="text-align:center; margin-top:12px; font-size:10px; color:rgba(128,128,128,0.8); font-weight:700;">v1.10.20</div>
+    <div id="loginVersionText" style="text-align:center; margin-top:12px; font-size:10px; color:rgba(128,128,128,0.8); font-weight:700;">v1.10.21</div>
 </div>
 
 
@@ -2250,7 +2250,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.10.20</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.10.21</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-03-17</div>
                         </div>
                     </div>
@@ -3037,7 +3037,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.10.20</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-17</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.10.21</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-17</span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);startTour();" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -3838,9 +3838,9 @@ const firebaseConfig = {
     console.log('%cUnauthorized copying, modification, or claiming ownership is prohibited.', 'color:#ff0000;font-weight:bold;');
     console.log('%cAll rights reserved    2026 Colin Bedford', 'color:#ff0000;font-weight:bold;');
     console.log('');
-    //                    VERSION: v1.10.20 | 2026-03-17 | Colin Bedford                   
+    //                    VERSION: v1.10.21 | 2026-03-17 | Colin Bedford                   
     //                    ADMIN TABS FIXED | COVER SHEET FIXED | DELETE CONFIRMATION ADDED                   
-    console.log('%c PaintWorkz Pro v1.10.20 ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('%c PaintWorkz Pro v1.10.21 ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     // Changelog logs removed for production performance
     // ====================================
     
@@ -8730,7 +8730,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.10.20'; //     bump this on every release
+        const CURRENT_VERSION = 'v1.10.21'; //     bump this on every release
         const CURRENT_DATE = '2026-03-17';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -20728,7 +20728,34 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         sessionStorage.setItem('pw_explicit_login', '1');
 
         window.createUserWithEmailAndPassword(email, password)
-            .then(() => {
+            .then(async (userCredential) => {
+                // CRITICAL: Create Firestore user document immediately!
+                const user = userCredential.user;
+                console.log('✅ Firebase Auth account created:', user.uid);
+                
+                try {
+                    // Create initial user document in Firestore
+                    const userDocRef = window.doc(window.firebaseDb, 'users', user.uid);
+                    const initialData = {
+                        email: user.email,
+                        createdAt: Date.now(),
+                        plan: 'free',
+                        trialEndsAt: Date.now() + (7 * 24 * 60 * 60 * 1000), // 7 days from now
+                        setupComplete: false
+                    };
+                    
+                    await window.setDoc(userDocRef, initialData);
+                    console.log('✅ Firestore user document created');
+                    
+                    // Initialize with demo data
+                    await initializeDemoData(user.uid);
+                    console.log('✅ Demo data initialized');
+                    
+                } catch (firestoreError) {
+                    console.error('❌ Error creating user document:', firestoreError);
+                    // Don't block login if Firestore fails - they can try again
+                }
+                
                 errorDiv.style.display = 'none';
                 document.getElementById('loginEmail').value = '';
                 document.getElementById('loginPassword').value = '';
@@ -20751,6 +20778,37 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                 errorDiv.textContent = error.message;
                 errorDiv.style.display = 'block';
             });
+    }
+    
+    // Initialize demo data for new accounts
+    async function initializeDemoData(userId) {
+        try {
+            // Demo jobs
+            const demoJobs = [
+                {
+                    jobNumber: '001',
+                    clientName: 'Demo Kitchen',
+                    items: [],
+                    totalSqm: 0,
+                    savedAt: Date.now(),
+                    isDemo: true
+                }
+            ];
+            
+            // Demo clients
+            const demoClients = ['Demo Client 1', 'Sample Kitchen', 'Example Project'];
+            
+            // Save demo data to user's Firestore
+            const userRef = window.doc(window.firebaseDb, 'users', userId);
+            await window.setDoc(userRef, {
+                jobHistory: demoJobs,
+                clientDatabase: demoClients,
+                setupComplete: true
+            }, { merge: true });
+            
+        } catch (e) {
+            console.error('Error initializing demo data:', e);
+        }
     }
 
     // Logout function
@@ -20857,10 +20915,38 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                         return loadAllDataFromFirebase(userData.parentUid);
                     }
                 } else {
-                    // User doc doesn't exist - this is a deleted staff account or orphaned auth user
-                    // Only allow if this is the owner account (check function exists and returns true)
+                    // User doc doesn't exist - could be:
+                    // 1. Brand new account (document being created)
+                    // 2. Deleted staff account
+                    // 3. Owner account (doesn't require user doc)
+                    
                     const isOwnerAccount = (typeof isOwner === 'function' && isOwner());
-                    if (!isOwnerAccount) {
+                    const accountAge = window.currentUser.metadata.creationTime ? 
+                        Date.now() - new Date(window.currentUser.metadata.creationTime).getTime() : 999999;
+                    const isNewAccount = accountAge < 60000; // Less than 1 minute old
+                    
+                    if (isOwnerAccount) {
+                        console.log('✅ Owner account - no user document required');
+                        // Owner account doesn't need Firestore document, continue normally
+                    } else if (isNewAccount) {
+                        console.log('✅ New account detected - allowing initialization time');
+                        // New account, give it time to initialize
+                        // Create user document now if it doesn't exist
+                        try {
+                            const newUserDoc = window.doc(window.firebaseDb, 'users', window.currentUser.uid);
+                            await window.setDoc(newUserDoc, {
+                                email: window.currentUser.email,
+                                createdAt: Date.now(),
+                                plan: 'free',
+                                trialEndsAt: Date.now() + (7 * 24 * 60 * 60 * 1000),
+                                setupComplete: false
+                            }, { merge: true });
+                            console.log('✅ User document created for new account');
+                        } catch (createError) {
+                            console.error('Failed to create user document:', createError);
+                        }
+                    } else {
+                        // Account is old and has no document - deleted staff account
                         console.error('❌ User document not found - this account has been deleted');
                         alert('❌ This account has been deleted by the administrator.\n\nPlease contact your admin for access.');
                         // Force sign out
