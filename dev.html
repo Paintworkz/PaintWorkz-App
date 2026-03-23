@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.10.70-dev';
+    const CURRENT_VERSION = 'v1.10.71-dev';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1724,7 +1724,7 @@ const firebaseConfig = {
 
         <div id="loginError" style="color:red; font-weight:900; margin-top:15px; text-align:center; display:none;"></div>
     </div>
-    <div id="loginVersionText" style="text-align:center; margin-top:12px; font-size:10px; color:rgba(128,128,128,0.8); font-weight:700;">v1.10.70-dev</div>
+    <div id="loginVersionText" style="text-align:center; margin-top:12px; font-size:10px; color:rgba(128,128,128,0.8); font-weight:700;">v1.10.71-dev</div>
 </div>
 
 <div id="resetPasswordScreen" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:linear-gradient(135deg, #d4af37, #f9f1b0); z-index:10001; flex-direction:column; align-items:center; justify-content:center; padding:20px;">
@@ -1773,7 +1773,7 @@ const firebaseConfig = {
     </div>
 </div>
 <!-- HEADER + NAV always outside appContainer so banner/tabs are always rendered -->
-<div id="devBuildBanner">⚠ DEV BUILD — v1.10.70-dev ⚠</div>
+<div id="devBuildBanner">⚠ DEV BUILD — v1.10.71-dev ⚠</div>
 
 <div id="staffModeBanner">
     <span>&#x1F477; STAFF MODE</span>
@@ -2248,7 +2248,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.10.70-dev</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.10.71-dev</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-03-17</div>
                         </div>
                     </div>
@@ -8930,7 +8930,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.10.70-dev'; //     bump this on every release
+        const CURRENT_VERSION = 'v1.10.71-dev'; //     bump this on every release
         const CURRENT_DATE = '2026-03-17';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -11419,37 +11419,65 @@ const firebaseConfig = {
             
             // Add all other charges with better spacing
             const totalColX = x + (8+16+16+14+14+15+10+15+26+12+12);
-            // -- CTS (Cut To Size) section --
+            // -- CTS (Cut To Size) section — full itemised table --
             var ctsItemsPDF = (typeof itemsForPDF !== 'undefined' ? itemsForPDF : items).filter(function(it){ return !!it.cts; });
             if (ctsItemsPDF.length > 0) {
-                doc.setFont(undefined, 'bold');
-                doc.setFontSize(9);
-                doc.setTextColor(44, 62, 80);
-                doc.text('CUT TO SIZE', x, y);
-                doc.setTextColor(0, 0, 0);
-                y += 6;
-                var ctsProfMap = {};
-                ctsItemsPDF.forEach(function(it){ var k=it.prof||'Unknown'; if(!ctsProfMap[k]) ctsProfMap[k]=[]; ctsProfMap[k].push(it); });
+                if (y > 230) { doc.addPage(); y = 20; }
+                doc.setFontSize(11); doc.setFont(undefined,'bold');
+                doc.setFillColor(44,62,80); doc.setDrawColor(44,62,80);
+                doc.rect(x, y, 180-2*x, 8, 'FD');
+                doc.setTextColor(212,175,55);
+                doc.text('CUT TO SIZE', x+2, y+5);
+                y += 10;
+                var ctsHeaders = ['Qty','H','W','Thick','Profile','SQ/MTR','$/sq/m','Total'];
+                var ctsCW = [8,15,15,13,52,12,12,18];
+                var ctsCH = 6;
+                var _drawCtsHeaders = function() {
+                    var sx = x;
+                    doc.setFontSize(9); doc.setFont(undefined,'bold');
+                    ctsHeaders.forEach(function(h,i){
+                        doc.setFillColor(0,0,0); doc.setDrawColor(0,0,0); doc.setTextColor(255,255,255);
+                        doc.rect(sx, y, ctsCW[i], ctsCH, 'FD');
+                        doc.text(h, sx+ctsCW[i]/2, y+ctsCH/2+1.2, {align:'center'});
+                        sx+=ctsCW[i];
+                    });
+                    y += ctsCH;
+                    doc.setFont(undefined,'normal'); doc.setFontSize(8); doc.setTextColor(0,0,0);
+                };
+                _drawCtsHeaders();
                 var ctsGrandTotal = 0;
-                Object.keys(ctsProfMap).forEach(function(prof) {
-                    var pi=ctsProfMap[prof], pq=pi.reduce(function(s,it){return s+it.qty;},0), ps=pi.reduce(function(s,it){return s+(parseFloat(it.sqm)||0)*it.qty;},0), pt=0;
-                    pi.forEach(function(it){var p=getCtsPriceForPart(it);if(p)pt+=p.total;});
-                    ctsGrandTotal+=pt;
-                    doc.setFont(undefined, 'normal'); doc.setFontSize(8);
-                    doc.text(prof+' x'+pq+' ('+ps.toFixed(3)+'m\u00B2)',x+2,y);
-                    doc.text('$'+pt.toFixed(2),totalColX+8,y,{align:'right'});
-                    y+=6;
+                ctsItemsPDF.forEach(function(it){
+                    if (y > 270) { doc.addPage(); y = 20; _drawCtsHeaders(); }
+                    var p = getCtsPriceForPart(it);
+                    var sqm = (parseFloat(it.sqm)||0);
+                    var ppsm = p ? p.pricePerSqm : 0;
+                    var rowTotal = p ? p.sqmCost : 0;
+                    ctsGrandTotal += rowTotal;
+                    var profDisplay = (it.prof||'').replace(/\s*\(\d+\)\s*$/,'').trim() || 'Unknown';
+                    var rowData = [String(it.qty||1),String(it.h||''),String(it.w||''),String(it.thk||18),profDisplay.substring(0,20),sqm.toFixed(3),ppsm.toFixed(0),rowTotal.toFixed(2)];
+                    var sx = x;
+                    rowData.forEach(function(v,i){
+                        doc.setDrawColor(150,150,150); doc.setTextColor(0,0,0);
+                        doc.rect(sx, y, ctsCW[i], ctsCH);
+                        doc.text(v, sx+ctsCW[i]/2, y+ctsCH/2+0.8, {align:'center', maxWidth:ctsCW[i]-0.5});
+                        sx+=ctsCW[i];
+                    });
+                    y += ctsCH;
                 });
-                var ctsTot=getCtsJobTotal(ctsItemsPDF);
-                if(ctsTot.edgeTotal>0&&ctsJobEdgeType){
-                    doc.setFont(undefined,'normal'); doc.setFontSize(8);
-                    doc.text('Edge routing ('+ctsJobEdgeType+'):',x+2,y);
-                    doc.text('$'+ctsTot.edgeTotal.toFixed(2),totalColX+8,y,{align:'right'});
-                    y+=7; ctsGrandTotal=ctsTot.total;
+                var ctsTot = getCtsJobTotal(ctsItemsPDF);
+                if (ctsTot.edgeTotal > 0 && ctsJobEdgeType) {
+                    doc.setFont(undefined,'normal'); doc.setFontSize(8); doc.setTextColor(0,0,0);
+                    doc.text('Edge routing ('+ctsJobEdgeType+'):', x+2, y+4);
+                    doc.text('$'+ctsTot.edgeTotal.toFixed(2), totalColX+8, y+4, {align:'right'});
+                    ctsGrandTotal = ctsTot.total;
+                    y += 7;
                 }
-                doc.setFont(undefined,'bold'); doc.setFontSize(9);
-                doc.text('CTS Subtotal:',x,y); doc.text('$'+ctsGrandTotal.toFixed(2),totalColX+8,y,{align:'right'});
-                grandTotal+=ctsGrandTotal; y+=8;
+                doc.setFillColor(44,62,80); doc.rect(x, y, 180-2*x, 7, 'F');
+                doc.setFont(undefined,'bold'); doc.setFontSize(9); doc.setTextColor(212,175,55);
+                doc.text('CTS Subtotal:', x+2, y+5);
+                doc.text('$'+ctsGrandTotal.toFixed(2), totalColX+8, y+5, {align:'right'});
+                doc.setTextColor(0,0,0);
+                grandTotal += ctsGrandTotal; y += 10;
             }
 
             doc.setFont(undefined, 'normal');
@@ -11833,37 +11861,65 @@ const firebaseConfig = {
             
             // Add all other charges with better spacing
             const totalColX = x + (8+16+16+14+14+15+10+15+26+12+12);
-            // -- CTS (Cut To Size) section --
+            // -- CTS (Cut To Size) section — full itemised table --
             var ctsItemsPDF = (typeof itemsForPDF !== 'undefined' ? itemsForPDF : items).filter(function(it){ return !!it.cts; });
             if (ctsItemsPDF.length > 0) {
-                doc.setFont(undefined, 'bold');
-                doc.setFontSize(9);
-                doc.setTextColor(44, 62, 80);
-                doc.text('CUT TO SIZE', x, y);
-                doc.setTextColor(0, 0, 0);
-                y += 6;
-                var ctsProfMap = {};
-                ctsItemsPDF.forEach(function(it){ var k=it.prof||'Unknown'; if(!ctsProfMap[k]) ctsProfMap[k]=[]; ctsProfMap[k].push(it); });
+                if (y > 230) { doc.addPage(); y = 20; }
+                doc.setFontSize(11); doc.setFont(undefined,'bold');
+                doc.setFillColor(44,62,80); doc.setDrawColor(44,62,80);
+                doc.rect(x, y, 180-2*x, 8, 'FD');
+                doc.setTextColor(212,175,55);
+                doc.text('CUT TO SIZE', x+2, y+5);
+                y += 10;
+                var ctsHeaders = ['Qty','H','W','Thick','Profile','SQ/MTR','$/sq/m','Total'];
+                var ctsCW = [8,15,15,13,52,12,12,18];
+                var ctsCH = 6;
+                var _drawCtsHeaders = function() {
+                    var sx = x;
+                    doc.setFontSize(9); doc.setFont(undefined,'bold');
+                    ctsHeaders.forEach(function(h,i){
+                        doc.setFillColor(0,0,0); doc.setDrawColor(0,0,0); doc.setTextColor(255,255,255);
+                        doc.rect(sx, y, ctsCW[i], ctsCH, 'FD');
+                        doc.text(h, sx+ctsCW[i]/2, y+ctsCH/2+1.2, {align:'center'});
+                        sx+=ctsCW[i];
+                    });
+                    y += ctsCH;
+                    doc.setFont(undefined,'normal'); doc.setFontSize(8); doc.setTextColor(0,0,0);
+                };
+                _drawCtsHeaders();
                 var ctsGrandTotal = 0;
-                Object.keys(ctsProfMap).forEach(function(prof) {
-                    var pi=ctsProfMap[prof], pq=pi.reduce(function(s,it){return s+it.qty;},0), ps=pi.reduce(function(s,it){return s+(parseFloat(it.sqm)||0)*it.qty;},0), pt=0;
-                    pi.forEach(function(it){var p=getCtsPriceForPart(it);if(p)pt+=p.total;});
-                    ctsGrandTotal+=pt;
-                    doc.setFont(undefined, 'normal'); doc.setFontSize(8);
-                    doc.text(prof+' x'+pq+' ('+ps.toFixed(3)+'m\u00B2)',x+2,y);
-                    doc.text('$'+pt.toFixed(2),totalColX+8,y,{align:'right'});
-                    y+=6;
+                ctsItemsPDF.forEach(function(it){
+                    if (y > 270) { doc.addPage(); y = 20; _drawCtsHeaders(); }
+                    var p = getCtsPriceForPart(it);
+                    var sqm = (parseFloat(it.sqm)||0);
+                    var ppsm = p ? p.pricePerSqm : 0;
+                    var rowTotal = p ? p.sqmCost : 0;
+                    ctsGrandTotal += rowTotal;
+                    var profDisplay = (it.prof||'').replace(/\s*\(\d+\)\s*$/,'').trim() || 'Unknown';
+                    var rowData = [String(it.qty||1),String(it.h||''),String(it.w||''),String(it.thk||18),profDisplay.substring(0,20),sqm.toFixed(3),ppsm.toFixed(0),rowTotal.toFixed(2)];
+                    var sx = x;
+                    rowData.forEach(function(v,i){
+                        doc.setDrawColor(150,150,150); doc.setTextColor(0,0,0);
+                        doc.rect(sx, y, ctsCW[i], ctsCH);
+                        doc.text(v, sx+ctsCW[i]/2, y+ctsCH/2+0.8, {align:'center', maxWidth:ctsCW[i]-0.5});
+                        sx+=ctsCW[i];
+                    });
+                    y += ctsCH;
                 });
-                var ctsTot=getCtsJobTotal(ctsItemsPDF);
-                if(ctsTot.edgeTotal>0&&ctsJobEdgeType){
-                    doc.setFont(undefined,'normal'); doc.setFontSize(8);
-                    doc.text('Edge routing ('+ctsJobEdgeType+'):',x+2,y);
-                    doc.text('$'+ctsTot.edgeTotal.toFixed(2),totalColX+8,y,{align:'right'});
-                    y+=7; ctsGrandTotal=ctsTot.total;
+                var ctsTot = getCtsJobTotal(ctsItemsPDF);
+                if (ctsTot.edgeTotal > 0 && ctsJobEdgeType) {
+                    doc.setFont(undefined,'normal'); doc.setFontSize(8); doc.setTextColor(0,0,0);
+                    doc.text('Edge routing ('+ctsJobEdgeType+'):', x+2, y+4);
+                    doc.text('$'+ctsTot.edgeTotal.toFixed(2), totalColX+8, y+4, {align:'right'});
+                    ctsGrandTotal = ctsTot.total;
+                    y += 7;
                 }
-                doc.setFont(undefined,'bold'); doc.setFontSize(9);
-                doc.text('CTS Subtotal:',x,y); doc.text('$'+ctsGrandTotal.toFixed(2),totalColX+8,y,{align:'right'});
-                grandTotal+=ctsGrandTotal; y+=8;
+                doc.setFillColor(44,62,80); doc.rect(x, y, 180-2*x, 7, 'F');
+                doc.setFont(undefined,'bold'); doc.setFontSize(9); doc.setTextColor(212,175,55);
+                doc.text('CTS Subtotal:', x+2, y+5);
+                doc.text('$'+ctsGrandTotal.toFixed(2), totalColX+8, y+5, {align:'right'});
+                doc.setTextColor(0,0,0);
+                grandTotal += ctsGrandTotal; y += 10;
             }
 
             doc.setFont(undefined, 'normal');
@@ -12247,37 +12303,65 @@ const firebaseConfig = {
             
             // Add all other charges with better spacing
             const totalColX = x + (8+16+16+14+14+15+10+15+26+12+12);
-            // -- CTS (Cut To Size) section --
+            // -- CTS (Cut To Size) section — full itemised table --
             var ctsItemsPDF = (typeof itemsForPDF !== 'undefined' ? itemsForPDF : items).filter(function(it){ return !!it.cts; });
             if (ctsItemsPDF.length > 0) {
-                doc.setFont(undefined, 'bold');
-                doc.setFontSize(9);
-                doc.setTextColor(44, 62, 80);
-                doc.text('CUT TO SIZE', x, y);
-                doc.setTextColor(0, 0, 0);
-                y += 6;
-                var ctsProfMap = {};
-                ctsItemsPDF.forEach(function(it){ var k=it.prof||'Unknown'; if(!ctsProfMap[k]) ctsProfMap[k]=[]; ctsProfMap[k].push(it); });
+                if (y > 230) { doc.addPage(); y = 20; }
+                doc.setFontSize(11); doc.setFont(undefined,'bold');
+                doc.setFillColor(44,62,80); doc.setDrawColor(44,62,80);
+                doc.rect(x, y, 180-2*x, 8, 'FD');
+                doc.setTextColor(212,175,55);
+                doc.text('CUT TO SIZE', x+2, y+5);
+                y += 10;
+                var ctsHeaders = ['Qty','H','W','Thick','Profile','SQ/MTR','$/sq/m','Total'];
+                var ctsCW = [8,15,15,13,52,12,12,18];
+                var ctsCH = 6;
+                var _drawCtsHeaders = function() {
+                    var sx = x;
+                    doc.setFontSize(9); doc.setFont(undefined,'bold');
+                    ctsHeaders.forEach(function(h,i){
+                        doc.setFillColor(0,0,0); doc.setDrawColor(0,0,0); doc.setTextColor(255,255,255);
+                        doc.rect(sx, y, ctsCW[i], ctsCH, 'FD');
+                        doc.text(h, sx+ctsCW[i]/2, y+ctsCH/2+1.2, {align:'center'});
+                        sx+=ctsCW[i];
+                    });
+                    y += ctsCH;
+                    doc.setFont(undefined,'normal'); doc.setFontSize(8); doc.setTextColor(0,0,0);
+                };
+                _drawCtsHeaders();
                 var ctsGrandTotal = 0;
-                Object.keys(ctsProfMap).forEach(function(prof) {
-                    var pi=ctsProfMap[prof], pq=pi.reduce(function(s,it){return s+it.qty;},0), ps=pi.reduce(function(s,it){return s+(parseFloat(it.sqm)||0)*it.qty;},0), pt=0;
-                    pi.forEach(function(it){var p=getCtsPriceForPart(it);if(p)pt+=p.total;});
-                    ctsGrandTotal+=pt;
-                    doc.setFont(undefined, 'normal'); doc.setFontSize(8);
-                    doc.text(prof+' x'+pq+' ('+ps.toFixed(3)+'m\u00B2)',x+2,y);
-                    doc.text('$'+pt.toFixed(2),totalColX+8,y,{align:'right'});
-                    y+=6;
+                ctsItemsPDF.forEach(function(it){
+                    if (y > 270) { doc.addPage(); y = 20; _drawCtsHeaders(); }
+                    var p = getCtsPriceForPart(it);
+                    var sqm = (parseFloat(it.sqm)||0);
+                    var ppsm = p ? p.pricePerSqm : 0;
+                    var rowTotal = p ? p.sqmCost : 0;
+                    ctsGrandTotal += rowTotal;
+                    var profDisplay = (it.prof||'').replace(/\s*\(\d+\)\s*$/,'').trim() || 'Unknown';
+                    var rowData = [String(it.qty||1),String(it.h||''),String(it.w||''),String(it.thk||18),profDisplay.substring(0,20),sqm.toFixed(3),ppsm.toFixed(0),rowTotal.toFixed(2)];
+                    var sx = x;
+                    rowData.forEach(function(v,i){
+                        doc.setDrawColor(150,150,150); doc.setTextColor(0,0,0);
+                        doc.rect(sx, y, ctsCW[i], ctsCH);
+                        doc.text(v, sx+ctsCW[i]/2, y+ctsCH/2+0.8, {align:'center', maxWidth:ctsCW[i]-0.5});
+                        sx+=ctsCW[i];
+                    });
+                    y += ctsCH;
                 });
-                var ctsTot=getCtsJobTotal(ctsItemsPDF);
-                if(ctsTot.edgeTotal>0&&ctsJobEdgeType){
-                    doc.setFont(undefined,'normal'); doc.setFontSize(8);
-                    doc.text('Edge routing ('+ctsJobEdgeType+'):',x+2,y);
-                    doc.text('$'+ctsTot.edgeTotal.toFixed(2),totalColX+8,y,{align:'right'});
-                    y+=7; ctsGrandTotal=ctsTot.total;
+                var ctsTot = getCtsJobTotal(ctsItemsPDF);
+                if (ctsTot.edgeTotal > 0 && ctsJobEdgeType) {
+                    doc.setFont(undefined,'normal'); doc.setFontSize(8); doc.setTextColor(0,0,0);
+                    doc.text('Edge routing ('+ctsJobEdgeType+'):', x+2, y+4);
+                    doc.text('$'+ctsTot.edgeTotal.toFixed(2), totalColX+8, y+4, {align:'right'});
+                    ctsGrandTotal = ctsTot.total;
+                    y += 7;
                 }
-                doc.setFont(undefined,'bold'); doc.setFontSize(9);
-                doc.text('CTS Subtotal:',x,y); doc.text('$'+ctsGrandTotal.toFixed(2),totalColX+8,y,{align:'right'});
-                grandTotal+=ctsGrandTotal; y+=8;
+                doc.setFillColor(44,62,80); doc.rect(x, y, 180-2*x, 7, 'F');
+                doc.setFont(undefined,'bold'); doc.setFontSize(9); doc.setTextColor(212,175,55);
+                doc.text('CTS Subtotal:', x+2, y+5);
+                doc.text('$'+ctsGrandTotal.toFixed(2), totalColX+8, y+5, {align:'right'});
+                doc.setTextColor(0,0,0);
+                grandTotal += ctsGrandTotal; y += 10;
             }
 
             doc.setFont(undefined, 'normal');
