@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.10.66-dev';
+    const CURRENT_VERSION = 'v1.10.67-dev';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1724,7 +1724,7 @@ const firebaseConfig = {
 
         <div id="loginError" style="color:red; font-weight:900; margin-top:15px; text-align:center; display:none;"></div>
     </div>
-    <div id="loginVersionText" style="text-align:center; margin-top:12px; font-size:10px; color:rgba(128,128,128,0.8); font-weight:700;">v1.10.66-dev</div>
+    <div id="loginVersionText" style="text-align:center; margin-top:12px; font-size:10px; color:rgba(128,128,128,0.8); font-weight:700;">v1.10.67-dev</div>
 </div>
 
 <div id="resetPasswordScreen" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:linear-gradient(135deg, #d4af37, #f9f1b0); z-index:10001; flex-direction:column; align-items:center; justify-content:center; padding:20px;">
@@ -1773,7 +1773,7 @@ const firebaseConfig = {
     </div>
 </div>
 <!-- HEADER + NAV always outside appContainer so banner/tabs are always rendered -->
-<div id="devBuildBanner">⚠ DEV BUILD — v1.10.66-dev ⚠</div>
+<div id="devBuildBanner">⚠ DEV BUILD — v1.10.67-dev ⚠</div>
 
 <div id="staffModeBanner">
     <span>&#x1F477; STAFF MODE</span>
@@ -2248,7 +2248,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.10.66-dev</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.10.67-dev</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-03-17</div>
                         </div>
                     </div>
@@ -8927,7 +8927,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.10.66-dev'; //     bump this on every release
+        const CURRENT_VERSION = 'v1.10.67-dev'; //     bump this on every release
         const CURRENT_DATE = '2026-03-17';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -19540,7 +19540,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
             '<div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">' +
             '<select id="ctsNewProfileName" style="flex:2; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:12px; min-width:120px;">' +
             '<option value="">-- Select door profile --</option>' +
-            (profiles||[]).map(function(p){ return '<option value="' + (p.name||p) + '">' + (p.name||p) + '</option>'; }).join('') +
+            (function() { var opts=[]; var to2=(typeof getSortedTierNames==='function')?getSortedTierNames():Object.keys(masterMatrix).sort(); to2.forEach(function(tn){ if(!masterMatrix[tn]) return; Object.keys(masterMatrix[tn]).forEach(function(code){ var row=masterMatrix[tn][code]; if(!Array.isArray(row)||!row[0]) return; opts.push('<option value="'+row[0].replace(/"/g,'&quot;')+'">'+row[0]+' ('+code+')</option>'); }); }); return opts.join(''); })() +
             '</select>' +
             '<input id="ctsNewProfileTier" type="text" placeholder="Tier e.g. Tier 1" style="flex:1; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:12px; min-width:80px;">' +
             '<button onclick="addCtsProfile()" style="background:#2c3e50; color:#d4af37; border:none; padding:9px 16px; border-radius:6px; font-weight:900; font-size:12px; cursor:pointer;">Add Profile</button>' +
@@ -19891,77 +19891,84 @@ if ('serviceWorker' in navigator && _swAllowed) {
             }
 
             // ── ORDER TABLE ──
-            // Columns: # | Part Type | H | W | Thk | Paint Mode | Edges to Paint | Comments
-            const cols = [
-                { label:'#',             w:7,  hint:''                },
-                { label:'Part Type',     w:32, hint:'e.g. DOOR, PANEL'},
-                { label:'H (mm)',        w:18, hint:'Length'          },
-                { label:'W (mm)',        w:18, hint:'Width'           },
-                { label:'Thk',          w:13, hint:'e.g. 18mm'       },
-                { label:'Mode',          w:16, hint:'SS / DS / SE'    },
-                { label:'Edges',         w:28, hint:'L L S S / ALL'   },
-                { label:'Comments',      w:54, hint:''                }
+            // Two-header table: fixed cols | SS/DS/SE tick | L1/L2/S1/S2/ALL tick | Comments
+            const fixedCols = [
+                { label:'#',         w:7  },
+                { label:'Part Type', w:30 },
+                { label:'H (mm)',    w:17 },
+                { label:'W (mm)',    w:17 },
+                { label:'Thk',       w:12 },
             ];
-            const totalColW = cols.reduce((s,c)=>s+c.w,0);
-            const scale = (rm-lm)/totalColW;
-            cols.forEach(c=>c.w=c.w*scale);
+            const modeCols = ['SS','DS','SE'];
+            const edgeCols = ['L1','L2','S1','S2','ALL'];
+            const modeW = 9, edgeW = 9;
+            const commentW = 40;
+            const fixedTotal = fixedCols.reduce((s,c)=>s+c.w,0);
+            const tickTotal  = modeCols.length*modeW + edgeCols.length*edgeW;
+            const pageW = rm - lm;
+            const scaleF = (pageW - tickTotal) / (fixedTotal + commentW);
+            fixedCols.forEach(c => c.w = c.w * scaleF);
+            const scaledCommentW = commentW * scaleF;
+            const rH=9, hH=6, hH2=5, cbS=3.2;
 
-            const rH = 8;
-
-            // Header row 1 - dark background
-            doc.setFillColor(26,26,26); doc.rect(lm,y,rm-lm,7,'F');
+            // Header row 1
+            doc.setFillColor(26,26,26); doc.rect(lm,y,pageW,hH,'F');
+            doc.setFont('helvetica','bold'); doc.setFontSize(6.5); doc.setTextColor(212,175,55);
             let cx = lm;
-            cols.forEach(function(col) {
-                doc.setFont('helvetica','bold'); doc.setFontSize(6.8); doc.setTextColor(212,175,55);
-                doc.text(col.label, cx+col.w/2, y+4.8, {align:'center'});
-                cx += col.w;
-            });
-            y += 7;
+            fixedCols.forEach(function(col){ doc.text(col.label, cx+col.w/2, y+4, {align:'center'}); cx+=col.w; });
+            const modeGroupW = modeCols.length*modeW;
+            doc.text('PAINT MODE', cx+modeGroupW/2, y+4, {align:'center'}); cx+=modeGroupW;
+            const edgeGroupW = edgeCols.length*edgeW;
+            doc.text('EDGES TO PAINT', cx+edgeGroupW/2, y+4, {align:'center'}); cx+=edgeGroupW;
+            doc.text('Comments', cx+scaledCommentW/2, y+4, {align:'center'});
+            y += hH;
 
-            // Sub-header hint row
-            doc.setFillColor(40,40,40); doc.rect(lm,y,rm-lm,5,'F');
-            cx = lm;
-            cols.forEach(function(col) {
-                doc.setFont('helvetica','normal'); doc.setFontSize(5); doc.setTextColor(140,140,140);
-                if (col.hint) doc.text(col.hint, cx+col.w/2, y+3.5, {align:'center'});
-                cx += col.w;
-            });
-            y += 5;
+            // Header row 2: tick labels
+            doc.setFillColor(40,40,40); doc.rect(lm,y,pageW,hH2,'F');
+            doc.setFont('helvetica','normal'); doc.setFontSize(5.5); doc.setTextColor(180,180,180);
+            cx = lm; fixedCols.forEach(function(col){ cx+=col.w; });
+            modeCols.forEach(function(m){ doc.text(m, cx+modeW/2, y+3.6, {align:'center'}); cx+=modeW; });
+            edgeCols.forEach(function(e){ doc.text(e, cx+edgeW/2, y+3.6, {align:'center'}); cx+=edgeW; });
+            y += hH2;
 
-            // Paint Mode helper box — small legend above table
-            // (shown inline in the hint, no extra space needed)
-
-            // Data rows — 20 blank rows
-            for (let r = 0; r < 20; r++) {
+            // Data rows
+            for (let r = 0; r < 22; r++) {
                 const bg = r%2===0 ? [255,255,255] : [248,248,252];
-                doc.setFillColor(...bg); doc.rect(lm,y,rm-lm,rH,'F');
-                doc.setDrawColor(215,215,215); doc.setLineWidth(0.18); doc.rect(lm,y,rm-lm,rH);
-                // Row number
-                doc.setFont('helvetica','normal'); doc.setFontSize(6); doc.setTextColor(180,180,180);
-                doc.text(String(r+1), lm+cols[0].w/2, y+5.2, {align:'center'});
-                // Column dividers
+                doc.setFillColor(...bg); doc.rect(lm,y,pageW,rH,'F');
+                doc.setDrawColor(215,215,215); doc.setLineWidth(0.18); doc.rect(lm,y,pageW,rH);
                 cx = lm;
-                cols.forEach(function(col) {
-                    doc.setDrawColor(215,215,215); doc.setLineWidth(0.18);
-                    doc.line(cx+col.w, y, cx+col.w, y+rH);
-                    cx += col.w;
+                doc.setFont('helvetica','normal'); doc.setFontSize(6); doc.setTextColor(180,180,180);
+                doc.text(String(r+1), cx+fixedCols[0].w/2, y+5.5, {align:'center'});
+                cx += fixedCols[0].w;
+                for (let i=1;i<fixedCols.length;i++){ doc.setDrawColor(215,215,215); doc.line(cx,y,cx,y+rH); cx+=fixedCols[i].w; }
+                doc.setDrawColor(140,140,140); doc.setLineWidth(0.4); doc.line(cx,y,cx,y+rH);
+                modeCols.forEach(function(){
+                    doc.setFillColor(255,255,255); doc.setDrawColor(140,140,140); doc.setLineWidth(0.5);
+                    doc.rect(cx+(modeW-cbS)/2, y+(rH-cbS)/2, cbS, cbS, 'FD');
+                    doc.setDrawColor(215,215,215); doc.setLineWidth(0.18); cx+=modeW; doc.line(cx,y,cx,y+rH);
                 });
-                y += rH;
-                if (y > 265) { doc.addPage(); y = 12; }
+                doc.setDrawColor(140,140,140); doc.setLineWidth(0.4); doc.line(cx,y,cx,y+rH);
+                edgeCols.forEach(function(e){
+                    if(e==='ALL') doc.setFillColor(255,252,220); else doc.setFillColor(255,255,255);
+                    doc.setDrawColor(140,140,140); doc.setLineWidth(0.5);
+                    doc.rect(cx+(edgeW-cbS)/2, y+(rH-cbS)/2, cbS, cbS, 'FD');
+                    doc.setDrawColor(215,215,215); doc.setLineWidth(0.18); cx+=edgeW; doc.line(cx,y,cx,y+rH);
+                });
+                y+=rH; if(y>265){ doc.addPage(); y=12; }
             }
 
             y += 3;
 
-            // ── LEGEND BOX ──
-            if (y > 240) { doc.addPage(); y = 12; }
+            // Legend
+            if(y>245){ doc.addPage(); y=12; }
             doc.setFillColor(237,245,255); doc.setDrawColor(33,150,243); doc.setLineWidth(0.22);
-            doc.roundedRect(lm, y, rm-lm, 14, 1.5, 1.5, 'FD');
+            doc.roundedRect(lm,y,pageW,12,1.5,1.5,'FD');
             doc.setFont('helvetica','bold'); doc.setFontSize(6.5); doc.setTextColor(13,71,161);
-            doc.text('LEGEND:', lm+3, y+5);
-            doc.setFont('helvetica','normal'); doc.setFontSize(6.5); doc.setTextColor(30,30,30);
-            doc.text('MODE: SS = Single Side  |  DS = Double Side  |  SE = Single Side + Edge Return', lm+22, y+5);
-            doc.text('EDGES: L = Long edge (height)  |  S = Short edge (width)  |  e.g. "L L" = both long edges  |  "ALL" = all 4 edges  |  "1L 1S" = one long + one short', lm+3, y+10.5);
-            y += 18;
+            doc.text('LEGEND:',lm+3,y+4.5);
+            doc.setFont('helvetica','normal'); doc.setTextColor(30,30,30);
+            doc.text('MODE: SS = Single Side  |  DS = Double Side  |  SE = Single Side + Edge Return',lm+22,y+4.5);
+            doc.text('EDGES: L1/L2 = Long edges (height)  |  S1/S2 = Short edges (width)  |  ALL = all 4 edges  — Tick the edges you want painted',lm+3,y+9.5);
+            y += 16;
 
             // ── NOTES BOX ──
             if (y > 230) { doc.addPage(); y = 12; }
