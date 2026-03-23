@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.10.62-dev';
+    const CURRENT_VERSION = 'v1.10.63-dev';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1724,7 +1724,7 @@ const firebaseConfig = {
 
         <div id="loginError" style="color:red; font-weight:900; margin-top:15px; text-align:center; display:none;"></div>
     </div>
-    <div id="loginVersionText" style="text-align:center; margin-top:12px; font-size:10px; color:rgba(128,128,128,0.8); font-weight:700;">v1.10.62-dev</div>
+    <div id="loginVersionText" style="text-align:center; margin-top:12px; font-size:10px; color:rgba(128,128,128,0.8); font-weight:700;">v1.10.63-dev</div>
 </div>
 
 <div id="resetPasswordScreen" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:linear-gradient(135deg, #d4af37, #f9f1b0); z-index:10001; flex-direction:column; align-items:center; justify-content:center; padding:20px;">
@@ -1773,7 +1773,7 @@ const firebaseConfig = {
     </div>
 </div>
 <!-- HEADER + NAV always outside appContainer so banner/tabs are always rendered -->
-<div id="devBuildBanner">⚠ DEV BUILD — v1.10.62-dev ⚠</div>
+<div id="devBuildBanner">⚠ DEV BUILD — v1.10.63-dev ⚠</div>
 
 <div id="staffModeBanner">
     <span>&#x1F477; STAFF MODE</span>
@@ -2248,7 +2248,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.10.62-dev</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.10.63-dev</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-03-17</div>
                         </div>
                     </div>
@@ -5932,7 +5932,8 @@ const firebaseConfig = {
             console.log('        Clearing stale Firebase data...');
             
             // 1. Delete the old Firebase documents to remove stale data
-            const configDoc = window.doc(window.firebaseDb, 'users', dataUid, 'config', 'doorProfiles');
+            const _uid = window.staffModeOwnerUid || window.currentUser.uid;
+            const configDoc = window.doc(window.firebaseDb, 'users', _uid, 'config', 'doorProfiles');
             window.deleteDoc(configDoc).then(() => {
                 console.log('    Deleted old Firebase doorProfiles document');
             }).catch(err => {
@@ -5951,8 +5952,42 @@ const firebaseConfig = {
             alert('Error clearing Firebase. Check console.');
         }
     }
-    
-    // EXTREME: Clear ALL browser localStorage and reload
+
+    function dedupMatrixProfiles() {
+        if (!confirm('🧹 Remove Duplicate Profiles\n\nThis will scan your Price Matrix and remove any duplicate door names, keeping the first occurrence of each.\n\nYour prices for the original entries will be kept.\n\nProceed?')) return;
+        let removed = 0;
+        const seenNames = new Set();
+        Object.keys(masterMatrix).forEach(tierName => {
+            const tier = masterMatrix[tierName];
+            Object.keys(tier).forEach(code => {
+                const row = tier[code];
+                if (!Array.isArray(row) || !row[0]) return;
+                const name = row[0].trim();
+                if (seenNames.has(name)) {
+                    delete tier[code];
+                    removed++;
+                } else {
+                    seenNames.add(name);
+                }
+            });
+            // Clean up empty tiers
+            if (Object.keys(masterMatrix[tierName]).length === 0) delete masterMatrix[tierName];
+        });
+        // Also dedup profiles[] array
+        const seen2 = new Set();
+        profiles = profiles.filter(p => {
+            if (!p || seen2.has(p)) return false;
+            seen2.add(p); return true;
+        });
+        localStorage.setItem('masterMatrix', JSON.stringify(masterMatrix));
+        localStorage.setItem('doorProfiles', JSON.stringify(profiles));
+        try { syncMasterMatrixToFirestore(); } catch(e) {}
+        try { syncProfilesToFirebase(); } catch(e) {}
+        renderPricingMatrix();
+        if (typeof refreshLists === 'function') refreshLists();
+        notify(`🧹 Done — removed ${removed} duplicate${removed!==1?'s':''}. Synced to cloud.`);
+    }
+    window.dedupMatrixProfiles = dedupMatrixProfiles;
     function clearAllLocalStorage() {
         if (!confirm('       EXTREME ACTION:\n\nThis will DELETE ALL browser storage:\n- All jobs\n- All profiles\n- All settings\n- Everything\n\nYou will need to hard refresh after.\n\nAre you 100% sure?')) {
             return;
@@ -8844,7 +8879,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.10.62-dev'; //     bump this on every release
+        const CURRENT_VERSION = 'v1.10.63-dev'; //     bump this on every release
         const CURRENT_DATE = '2026-03-17';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -20005,6 +20040,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
             <button onclick='clearFirebaseProfilesData()' style='background:#2196f3;color:#fff;border:none;padding:8px 12px;border-radius:6px;font-weight:900;font-size:11px;cursor:pointer;'>☁️ SYNC TO FIREBASE</button>
             <button onclick='forcePushJobsToCloud()' style='background:#34c759;color:#fff;border:none;padding:8px 12px;border-radius:6px;font-weight:900;font-size:11px;cursor:pointer;'>⬆️ PUSH TO CLOUD</button>
             <button onclick='forceCloudSync()' style='background:#ff9500;color:#fff;border:none;padding:8px 12px;border-radius:6px;font-weight:900;font-size:11px;cursor:pointer;'>🔄 SYNC FROM CLOUD</button>
+            <button onclick='dedupMatrixProfiles()' style='background:#ff3b30;color:#fff;border:none;padding:8px 12px;border-radius:6px;font-weight:900;font-size:11px;cursor:pointer;'>🧹 Remove Duplicates</button>
             <button onclick='diagnoseStorage()' style='background:#9c27b0;color:#fff;border:none;padding:8px 12px;border-radius:6px;font-weight:900;font-size:11px;cursor:pointer;'>🔍 DIAGNOSE</button>
         </div>`;
         target.innerHTML = '<div style="overflow:auto;max-height:75vh;padding-bottom:40px;-webkit-overflow-scrolling:touch;">'+html+'</div>';
@@ -20130,34 +20166,11 @@ if ('serviceWorker' in navigator && _swAllowed) {
     }
     window.normaliseMasterMatrix = normaliseMasterMatrix;
 
-    // Repair: add any profiles[] entries that are missing from masterMatrix
-    function repairMissingProfilesInMatrix() {
-        const matrixNames = new Set();
-        Object.values(masterMatrix).forEach(tier => {
-            Object.values(tier).forEach(row => { if (row[0]) matrixNames.add(row[0]); });
-        });
-        const missing = profiles.filter(p => p && !matrixNames.has(p));
-        if (missing.length === 0) return;
-        console.log(`🔧 repairMissingProfilesInMatrix: adding ${missing.length} missing profiles to matrix:`, missing);
-        const tierNames = getSortedTierNames ? getSortedTierNames() : Object.keys(masterMatrix);
-        const targetTier = tierNames.length > 0 ? tierNames[tierNames.length-1] : 'Tier 1';
-        if (!masterMatrix[targetTier]) masterMatrix[targetTier] = {};
-        missing.forEach(function(name) {
-            const existingCodes = Object.keys(masterMatrix[targetTier]).map(Number);
-            const newCode = existingCodes.length ? Math.max(...existingCodes) + 1 : 1;
-            masterMatrix[targetTier][newCode] = [name, 0, 0, 0, 0, 0];
-        });
-        localStorage.setItem('masterMatrix', JSON.stringify(masterMatrix));
-        try { syncMasterMatrixToFirestore(); } catch(e) {}
-        try { syncProfilesToFirebase(); } catch(e) {}
-        notify(`✓ Synced ${missing.length} missing profile${missing.length>1?'s':''} into Price Matrix`);
-    }
-    window.repairMissingProfilesInMatrix = repairMissingProfilesInMatrix;
-
     function syncMasterMatrixToFirestore() {
         try {
             if (window.currentUser && window.firebaseDb && window.setDoc && window.doc) {
-                const ref = window.doc(window.firebaseDb, 'users', dataUid, 'appData', 'masterMatrix');
+                const _uid = window.staffModeOwnerUid || window.currentUser.uid;
+                const ref = window.doc(window.firebaseDb, 'users', _uid, 'appData', 'masterMatrix');
                 window.setDoc(ref, { matrix: masterMatrix, updated: new Date().toISOString() })
                     .then(() => console.log('       Pricing matrix synced to Firestore'))
                     .catch(e => console.warn('       Firestore pricing save failed:', e));
@@ -22215,7 +22228,6 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                         }
                         console.log('       Door profiles loaded from Firestore:', profiles.length, 'profiles from UID:', dataUid);
                         console.log('       First profile:', profiles[0]);
-                        try { if (typeof repairMissingProfilesInMatrix === 'function') repairMissingProfilesInMatrix(); } catch(e) {}
                         try { if (typeof refreshLists === 'function') refreshLists(); } catch(e) {}
                         try { if (typeof renderPricingMatrix === 'function') renderPricingMatrix(); } catch(e) {}
                     } else {
