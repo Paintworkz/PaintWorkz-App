@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.10.61-dev';
+    const CURRENT_VERSION = 'v1.10.62-dev';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1724,7 +1724,7 @@ const firebaseConfig = {
 
         <div id="loginError" style="color:red; font-weight:900; margin-top:15px; text-align:center; display:none;"></div>
     </div>
-    <div id="loginVersionText" style="text-align:center; margin-top:12px; font-size:10px; color:rgba(128,128,128,0.8); font-weight:700;">v1.10.61-dev</div>
+    <div id="loginVersionText" style="text-align:center; margin-top:12px; font-size:10px; color:rgba(128,128,128,0.8); font-weight:700;">v1.10.62-dev</div>
 </div>
 
 <div id="resetPasswordScreen" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:linear-gradient(135deg, #d4af37, #f9f1b0); z-index:10001; flex-direction:column; align-items:center; justify-content:center; padding:20px;">
@@ -1773,7 +1773,7 @@ const firebaseConfig = {
     </div>
 </div>
 <!-- HEADER + NAV always outside appContainer so banner/tabs are always rendered -->
-<div id="devBuildBanner">⚠ DEV BUILD — v1.10.61-dev ⚠</div>
+<div id="devBuildBanner">⚠ DEV BUILD — v1.10.62-dev ⚠</div>
 
 <div id="staffModeBanner">
     <span>&#x1F477; STAFF MODE</span>
@@ -2248,7 +2248,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.10.61-dev</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.10.62-dev</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-03-17</div>
                         </div>
                     </div>
@@ -8844,7 +8844,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.10.61-dev'; //     bump this on every release
+        const CURRENT_VERSION = 'v1.10.62-dev'; //     bump this on every release
         const CURRENT_DATE = '2026-03-17';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -9450,26 +9450,25 @@ const firebaseConfig = {
         let v = document.getElementById('new-profile').value.trim(); 
         if(v && !profiles.includes(v)){ 
             profiles.push(v); 
-            console.log(`  Current profiles:`, profiles);
+            saveProfilesToStorage();
             
-            saveProfilesToStorage(); // SAVE TO LOCALSTORAGE
-            console.log(`   Saved to localStorage`);
+            // Also add to masterMatrix so it appears in price matrix and syncs to Firestore
+            const tierNames = getSortedTierNames ? getSortedTierNames() : Object.keys(masterMatrix);
+            const targetTier = tierNames.length > 0 ? tierNames[tierNames.length-1] : 'Tier 1';
+            if (!masterMatrix[targetTier]) masterMatrix[targetTier] = {};
+            const existingCodes = Object.keys(masterMatrix[targetTier]).map(Number);
+            const newCode = existingCodes.length ? Math.max(...existingCodes) + 1 : 1;
+            masterMatrix[targetTier][newCode] = [v, 0, 0, 0, 0, 0];
+            localStorage.setItem('masterMatrix', JSON.stringify(masterMatrix));
+            try { if (typeof syncProfilesToFirebase === 'function') syncProfilesToFirebase(); } catch(e) {}
             
             document.getElementById('new-profile').value=''; 
             refreshLists();
-            console.log(`   Refreshed lists (dropdown should update)`);
-            
-            // Show global notification in red
             addAdminAlert('PROFILE_ADDED', `NEW DOOR PROFILE ADDED: "${v}"`, {profileName: v});
-            
-            // Update unallocated doors in price matrix if visible
             renderPricingMatrix();
-            console.log(`   Rendered price matrix`);
+            notify(`✓ Profile "${v}" added — set prices in Admin → Price Matrix`);
         } else if (profiles.includes(v)) {
-            console.log(`   Door already exists in profiles`);
             notify('Profile Already Exists');
-        } else {
-            console.log(`   Empty input`);
         }
     }
     
@@ -20131,6 +20130,30 @@ if ('serviceWorker' in navigator && _swAllowed) {
     }
     window.normaliseMasterMatrix = normaliseMasterMatrix;
 
+    // Repair: add any profiles[] entries that are missing from masterMatrix
+    function repairMissingProfilesInMatrix() {
+        const matrixNames = new Set();
+        Object.values(masterMatrix).forEach(tier => {
+            Object.values(tier).forEach(row => { if (row[0]) matrixNames.add(row[0]); });
+        });
+        const missing = profiles.filter(p => p && !matrixNames.has(p));
+        if (missing.length === 0) return;
+        console.log(`🔧 repairMissingProfilesInMatrix: adding ${missing.length} missing profiles to matrix:`, missing);
+        const tierNames = getSortedTierNames ? getSortedTierNames() : Object.keys(masterMatrix);
+        const targetTier = tierNames.length > 0 ? tierNames[tierNames.length-1] : 'Tier 1';
+        if (!masterMatrix[targetTier]) masterMatrix[targetTier] = {};
+        missing.forEach(function(name) {
+            const existingCodes = Object.keys(masterMatrix[targetTier]).map(Number);
+            const newCode = existingCodes.length ? Math.max(...existingCodes) + 1 : 1;
+            masterMatrix[targetTier][newCode] = [name, 0, 0, 0, 0, 0];
+        });
+        localStorage.setItem('masterMatrix', JSON.stringify(masterMatrix));
+        try { syncMasterMatrixToFirestore(); } catch(e) {}
+        try { syncProfilesToFirebase(); } catch(e) {}
+        notify(`✓ Synced ${missing.length} missing profile${missing.length>1?'s':''} into Price Matrix`);
+    }
+    window.repairMissingProfilesInMatrix = repairMissingProfilesInMatrix;
+
     function syncMasterMatrixToFirestore() {
         try {
             if (window.currentUser && window.firebaseDb && window.setDoc && window.doc) {
@@ -22192,6 +22215,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                         }
                         console.log('       Door profiles loaded from Firestore:', profiles.length, 'profiles from UID:', dataUid);
                         console.log('       First profile:', profiles[0]);
+                        try { if (typeof repairMissingProfilesInMatrix === 'function') repairMissingProfilesInMatrix(); } catch(e) {}
                         try { if (typeof refreshLists === 'function') refreshLists(); } catch(e) {}
                         try { if (typeof renderPricingMatrix === 'function') renderPricingMatrix(); } catch(e) {}
                     } else {
