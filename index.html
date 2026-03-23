@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.10.72';
+    const CURRENT_VERSION = 'v1.10.73';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -2180,6 +2180,7 @@ const firebaseConfig = {
             <div style="display:flex; gap:8px; margin-bottom:15px;">
                 <button onclick="forceCloudSync()" id="historyCloudSyncBtn" style="flex:1; background:#2196f3; color:#fff; border:none; padding:8px 0; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">☁️ Sync from Cloud</button>
                 <button onclick="forcePushJobsToCloud()" id="historyPushBtn" style="flex:1; background:#34c759; color:#fff; border:none; padding:8px 0; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">⬆️ Push to Cloud</button>
+                <button onclick="mergeDuplicateJobs()" style="flex:1; background:#ff3b30; color:#fff; border:none; padding:8px 0; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">🧹 Merge Dupes</button>
             </div>
         </div>
         <div id="history-list"></div>
@@ -6851,7 +6852,12 @@ const firebaseConfig = {
             }
         } else {
             // Add new job to history - CHECK FOR DUPLICATES FIRST
-            const existingIdx = history.findIndex(j => j.jobNum === jobData.jobNum && j.dateReceived === jobData.dateReceived && j.client === jobData.client);
+            // Match on jobNum + client only (dateReceived can be blank or differ between saves)
+            const existingIdx = history.findIndex(j => 
+                String(j.jobNum).trim() === String(jobData.jobNum).trim() && 
+                (j.client || '').trim().toLowerCase() === (jobData.client || '').trim().toLowerCase() &&
+                !j.completed
+            );
             
             if (existingIdx !== -1) {
                 // Job with same number, date, and client already exists - preserve its stable ID
@@ -6907,6 +6913,7 @@ const firebaseConfig = {
                 }];
                 
                 history.unshift(jobData);
+                currentEditingJobIndex = 0; // Point to the just-saved job so re-saves update it
                 notify('    Job Saved'); flashSaved('Job Saved');
                 addAdminAlert('JOB_SAVED', ` NEW JOB SAVED #${jobData.jobNum} - ${jobData.client}`, {jobNum: jobData.jobNum, client: jobData.client, totalParts: jobData.totalParts, createdBy: currentUserName});
             }
@@ -7132,6 +7139,60 @@ const firebaseConfig = {
             if (btn) { btn.textContent = origText; btn.disabled = false; }
         }
     }
+
+    function mergeDuplicateJobs() {
+        let history = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+        const before = history.length;
+
+        // Group by jobNum + client (case-insensitive)
+        const groups = {};
+        history.forEach(function(j) {
+            const key = String(j.jobNum).trim() + '|' + (j.client || '').trim().toLowerCase();
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(j);
+        });
+
+        const merged = [];
+        let mergedCount = 0;
+        Object.values(groups).forEach(function(group) {
+            if (group.length === 1) { merged.push(group[0]); return; }
+            // Keep the one with the most parts/sqm (most complete), preserve its ID
+            group.sort(function(a, b) {
+                const aParts = (a.items || []).length;
+                const bParts = (b.items || []).length;
+                return bParts - aParts;
+            });
+            const winner = group[0];
+            // If any version is completed, mark winner completed
+            if (group.some(function(j) { return j.completed; })) {
+                winner.completed = true;
+                winner.completedDate = group.find(function(j) { return j.completedDate; })?.completedDate || winner.completedDate;
+            }
+            merged.push(winner);
+            mergedCount += group.length - 1;
+
+            // Delete the loser Firestore docs
+            group.slice(1).forEach(function(loser) {
+                if (loser.id && window.firebaseDb && window.deleteDoc && window.doc && window.currentUser) {
+                    const ref = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'jobs', loser.id);
+                    window.deleteDoc(ref).catch(function(e) { console.warn('Delete dupe Firestore doc failed:', e); });
+                }
+            });
+        });
+
+        if (mergedCount === 0) { alert('No duplicate jobs found.'); return; }
+
+        // Sort by timestamp descending
+        merged.sort(function(a, b) { return new Date(b.timestamp || 0) - new Date(a.timestamp || 0); });
+        localStorage.setItem('jobHistory', JSON.stringify(merged));
+
+        // Push clean list to Firestore
+        try { if (typeof forcePushJobsToCloud === 'function') forcePushJobsToCloud(); } catch(e) {}
+
+        renderHistory();
+        alert('✅ Merged ' + mergedCount + ' duplicate job' + (mergedCount !== 1 ? 's' : '') + '.\n\nHistory now has ' + merged.length + ' jobs (was ' + before + ').\n\nCloud updated.');
+    }
+    window.mergeDuplicateJobs = mergeDuplicateJobs;
 
     async function forcePushJobsToCloud() {
         const btn = document.getElementById('historyPushBtn');
@@ -7563,7 +7624,10 @@ const firebaseConfig = {
     function completeJobById(jobNum, dateReceived, client) {
         const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
         
-        const jobIdx = history.findIndex(j => j.jobNum === jobNum && j.dateReceived === dateReceived && j.client === client);
+        // Find by jobNum + client (dateReceived may differ between saves)
+        let jobIdx = history.findIndex(j => j.jobNum === jobNum && j.dateReceived === dateReceived && j.client === client);
+        // Fallback: match on jobNum + client only if strict match fails
+        if (jobIdx < 0) jobIdx = history.findIndex(j => String(j.jobNum).trim() === String(jobNum).trim() && (j.client||'').trim().toLowerCase() === (client||'').trim().toLowerCase() && !j.completed);
         
         if (jobIdx < 0) {
             console.error('    Job not found:', jobNum, dateReceived, client);
@@ -8930,7 +8994,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.10.72'; //     bump this on every release
+        const CURRENT_VERSION = 'v1.10.73'; //     bump this on every release
         const CURRENT_DATE = '2026-03-17';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
