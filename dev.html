@@ -20,9 +20,9 @@
 -->
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
-║  🔧 DEVELOPMENT VERSION - DO NOT USE IN PRODUCTION            ║
-║  Version: v1.10.54-dev | Updated: 2026-03-23                  ║
-║  Based on master v1.10.53                                     ║
+║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
+║  Version: v1.10.53 | Updated: 2026-03-17                       ║
+║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
@@ -215,9 +215,37 @@
             --safe-top: env(safe-area-inset-top, 0px);
             --header-h: 64px;
             --nav-h: 48px;
+            --dev-banner-h: 24px;
             /* header is fixed (not sticky) — only nav needs clearing */
             --top-total: calc(var(--nav-h) + 8px);
         }
+        /* DEV BUILD BANNER */
+        #devBuildBanner {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            height: var(--dev-banner-h);
+            background: repeating-linear-gradient(90deg, #ff3b30 0px, #ff3b30 12px, #ff6b35 12px, #ff6b35 24px);
+            color: #fff;
+            font-size: 10px;
+            font-weight: 900;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 99999;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            pointer-events: none;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+        }
+        /* Push everything down by banner height */
+        header { top: calc(var(--dev-banner-h) + var(--safe-top)) !important; }
+        .nav-tabs { top: calc(var(--dev-banner-h) + var(--header-h) + var(--safe-top)) !important; }
+        .sub-nav { top: calc(var(--dev-banner-h) + var(--header-h) + var(--safe-top) + var(--nav-h)) !important; }
+        body { padding-top: calc(var(--dev-banner-h) + var(--header-h) + var(--safe-top)) !important; }
+        #staffModeBanner { top: calc(var(--dev-banner-h) + var(--header-h) + var(--safe-top)) !important; }
+        body.staff-mode .nav-tabs { top: calc(var(--dev-banner-h) + var(--header-h) + var(--safe-top) + 28px) !important; }
+        body.staff-mode { padding-top: calc(var(--dev-banner-h) + var(--header-h) + var(--safe-top) + 28px) !important; }
+        body.staff-mode .sub-nav { top: calc(var(--dev-banner-h) + var(--header-h) + var(--safe-top) + var(--nav-h) + 28px) !important; }
         header {
             background: var(--rainbow);
             padding: env(safe-area-inset-top, 0px) 15px 0 15px;
@@ -1702,7 +1730,7 @@ const firebaseConfig = {
 
         <div id="loginError" style="color:red; font-weight:900; margin-top:15px; text-align:center; display:none;"></div>
     </div>
-    <div id="loginVersionText" style="text-align:center; margin-top:12px; font-size:10px; color:#ff6b6b; font-weight:900;">🔧 DEVELOPMENT v1.10.54-dev</div>
+    <div id="loginVersionText" style="text-align:center; margin-top:12px; font-size:10px; color:rgba(128,128,128,0.8); font-weight:700;">v1.10.54-dev</div>
 </div>
 
 <div id="resetPasswordScreen" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:linear-gradient(135deg, #d4af37, #f9f1b0); z-index:10001; flex-direction:column; align-items:center; justify-content:center; padding:20px;">
@@ -1751,6 +1779,8 @@ const firebaseConfig = {
     </div>
 </div>
 <!-- HEADER + NAV always outside appContainer so banner/tabs are always rendered -->
+<div id="devBuildBanner">⚠ DEV BUILD — v1.10.54-dev ⚠</div>
+
 <div id="staffModeBanner">
     <span>&#x1F477; STAFF MODE</span>
     <button onclick="exitStaffMode()" style="border:none; background:rgba(255,255,255,0.2); color:#fff; padding:4px 12px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">&#x1F512; Admin Login</button>
@@ -1776,11 +1806,6 @@ const firebaseConfig = {
     <div class="nav-btn" id="btn-schedule" data-tab="schedule" onclick="tab('schedule')">Schedule</div>
     <div class="nav-btn" id="btn-admin" data-tab="admin" onclick="tab('admin')">Admin</div>
     <div id="saveIndicator" style="position:absolute; right:8px; top:50%; transform:translateY(-50%); padding:0 10px; display:flex; align-items:center; font-size:10px; font-weight:900; color:#4caf50; opacity:0; transition:opacity 0.4s; pointer-events:none; white-space:nowrap; z-index:10;">✓ Saved</div>
-</div>
-
-<!-- DEV VERSION BANNER -->
-<div id="devBanner" style="display:none; background:linear-gradient(135deg, #ff6b6b, #ee5a6f); color:#fff; text-align:center; padding:6px; font-size:11px; font-weight:900; border-bottom:2px solid #d63031; position:sticky; top:0; z-index:9999;">
-    🔧 DEVELOPMENT VERSION - v1.10.54-dev - DO NOT USE IN PRODUCTION
 </div>
 
 <!-- APP CONTAINER -->
@@ -1859,7 +1884,13 @@ const firebaseConfig = {
             </div>
 
             <label>Description of Part <span class="pw-help">?<span class="pw-help-tip">A short label for this part — e.g. DOOR, PANEL, DRAWER. Appears on your estimate and shop label to identify each line item.</span></span></label>
-            <input type="text" id="desc" placeholder="e.g. DOOR, PANEL, DRAWER..." style="text-transform:uppercase;" autocomplete="off" list="descSuggestions" oninput="updatePhotoTargetIndicator()">
+            <div style="display:flex; align-items:center; gap:8px;">
+                <input type="text" id="desc" placeholder="e.g. DOOR, PANEL..." style="text-transform:uppercase; flex:1;" list="descSuggestions" autocomplete="off" oninput="updatePhotoTargetIndicator()">
+                <label id="ctsCheckLabel" style="display:flex; align-items:center; gap:5px; font-size:10px; font-weight:900; color:#2c3e50; white-space:nowrap; cursor:pointer; background:#f0f0f0; padding:7px 9px; border-radius:6px; border:2px solid #ddd; user-select:none;" title="Cut To Size - charge board supply price">
+                    <input type="checkbox" id="ctsPart" onchange="toggleCtsLabel()" style="width:14px; height:14px; cursor:pointer; accent-color:#2c3e50;">
+                    CTS
+                </label>
+            </div>
             <datalist id="descSuggestions"></datalist>
 
             <div class="fm-row">
@@ -1901,7 +1932,13 @@ const firebaseConfig = {
 
             <button class="add-main-btn" onclick="addPart()">ADD PART +</button>
             
-            <!-- JOB PHOTOS GALLERY -->
+            <!-- CTS EDGE TYPE SELECTOR -->
+            <div id="ctsEdgePanel" style="display:none; margin-top:12px; background:#2c3e50; border-radius:10px; padding:12px;">
+                <div style="font-size:10px; font-weight:900; color:#d4af37; margin-bottom:6px;">CUT TO SIZE - Edge Routing</div>
+                <select id="ctsEdgeSelect" onchange="setCtsJobEdge(this.value)" style="width:100%; padding:9px; border:none; border-radius:6px; font-size:12px; font-weight:700; background:#fff; color:#2c3e50;">
+                    <option value="">No edge routing</option>
+                </select>
+            </div>
             <div id="jobPhotosContainer" style="margin-top:20px; padding:15px; background:#f5f5f5; border-radius:8px; border:1px solid #e0e0e0;"><div style="font-weight:900; font-size:11px; color:#666; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">&#128247; Job Reference Photos <span style="font-weight:400; color:#999;">(packaging, damage, delivery)</span></div>
                 <p style="text-align:center; color:#999; font-size:11px; padding:10px;">No photos yet</p>
             </div>
@@ -1919,6 +1956,7 @@ const firebaseConfig = {
             <button class="filter-btn" onclick="filterPanels('ss')" data-bg="#e0f2f1" data-color="#00695c" style="padding:6px 14px; border:none; background:#e0f2f1; color:#00695c; border-radius:20px; cursor:pointer; font-weight:900; box-shadow:0 1px 3px rgba(0,0,0,0.08); transition:all 0.2s;">S/S</button>
             <button class="filter-btn" onclick="filterPanels('ds')" data-bg="#ede7f6" data-color="#4527a0" style="padding:6px 14px; border:none; background:#ede7f6; color:#4527a0; border-radius:20px; cursor:pointer; font-weight:900; box-shadow:0 1px 3px rgba(0,0,0,0.08); transition:all 0.2s;">D/S</button>
             <button class="filter-btn" onclick="filterPanels('se')" style="padding:6px 12px; border:1px solid #ddd; background:#fff; border-radius:4px; cursor:pointer; font-weight:900;">S/E</button>
+            <button class="filter-btn" onclick="filterPanels('cts')" style="padding:6px 14px; border:none; background:#f0f0f0; color:#2c3e50; border-radius:20px; cursor:pointer; font-weight:900; font-size:10px;">CTS</button>
             
             <!-- Paint Colour Filter -->
             <div style="display:flex; gap:8px; align-items:center; margin-top:12px;">
@@ -2216,8 +2254,8 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#ff6b6b; margin-bottom:3px;">🔧 DEV v1.10.54-dev</div>
-                            <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-03-23</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.10.54-dev</div>
+                            <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-03-17</div>
                         </div>
                     </div>
                     <div style="margin-top:10px; padding-top:10px; border-top:1px solid #ddd; font-size:9px; color:#999;">
@@ -2895,7 +2933,7 @@ const firebaseConfig = {
                     </div>
                     <div style="display:flex; gap:8px; flex-wrap:wrap;">
                         <a href="https://paintworkzpro.com/pricing.html" target="_blank" style="display:inline-flex; align-items:center; gap:5px; background:#3a3a3c; color:#fff; padding:8px 12px; border-radius:6px; font-weight:900; font-size:10px; text-decoration:none;">🌐 Full Pricing Details</a>
-                        <a href="mailto:support@paintworkzpro.com.au" style="display:inline-flex; align-items:center; gap:5px; background:#3a3a3c; color:#fff; padding:8px 12px; border-radius:6px; font-weight:900; font-size:10px; text-decoration:none;">📧 Billing Support</a>
+                        <a href="/cdn-cgi/l/email-protection#4d3e383d3d223f390d3d2c2423393a223f26373d3f22632e2220632c38" style="display:inline-flex; align-items:center; gap:5px; background:#3a3a3c; color:#fff; padding:8px 12px; border-radius:6px; font-weight:900; font-size:10px; text-decoration:none;">📧 Billing Support</a>
                     </div>
                     <p style="font-size:9px; color:#666; margin:10px 0 0 0;">Prices in AUD inc. GST. Payments processed securely by Paddle. Cancel anytime.</p>
                     </div><!-- end subscriptionBody -->
@@ -2948,7 +2986,7 @@ const firebaseConfig = {
                         <strong>7. Subscription &amp; Payment</strong><br>Where a subscription applies, access is contingent on current payment. Pricing may be modified with 30 days notice.<br><br>
                         <strong>8. Termination</strong><br>The Owner may suspend or terminate access at any time for breach of these Terms.<br><br>
                         <strong>9. Governing Law</strong><br>These Terms are governed by the laws of Victoria, Australia.<br><br>
-                        <strong>10. Contact</strong><br><a href="mailto:support@paintworkzpro.com.au" style="color:#2196f3;">support@paintworkzpro.com.au</a><br><br>
+                        <strong>10. Contact</strong><br><a href="/cdn-cgi/l/email-protection#9deee8ededf2efe9ddedfcf4f3e9eaf2eff6e7edeff2b3fef2f0b3fce8" style="color:#2196f3;"><span class="__cf_email__" data-cfemail="186b6d6868776a6c58687971766c6f776a7362686a77367b777536796d">[email&#160;protected]</span></a><br><br>
                         <hr style="border:none; border-top:1px solid #ddd; margin:8px 0;">
                         <strong>Privacy Policy (Summary)</strong><br>We collect your email address for login and business data you enter (stored in Firebase under your account). We do not sell your data. Firebase (Google) is used for auth and storage. You may request deletion of your account at any time by contacting us.
                     </div>
@@ -2967,8 +3005,8 @@ const firebaseConfig = {
                     <div style="background:#f0f4ff; border:1px solid #c5cae9; border-radius:8px; padding:14px; font-size:11px; color:#333; line-height:1.7;">
                         <p style="margin:0 0 10px 0; color:#555;">Found a bug or have a feature request? Send us a message and we'll get onto it.</p>
                         <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
-                            <a href="mailto:support@paintworkzpro.com.au?subject=Bug%20Report" style="display:inline-flex;align-items:center;gap:6px;background:#ff3b30;color:#fff;border:none;padding:10px 16px;border-radius:6px;font-weight:900;font-size:11px;cursor:pointer;text-decoration:none;">🐛 Bug Report</a>
-                            <a href="mailto:support@paintworkzpro.com.au?subject=Feature%20Request" style="display:inline-flex;align-items:center;gap:6px;background:#007aff;color:#fff;border:none;padding:10px 16px;border-radius:6px;font-weight:900;font-size:11px;cursor:pointer;text-decoration:none;">💡 Feature Request</a>
+                            <a href="/cdn-cgi/l/email-protection#71020401011e0305310110181f05061e031a0b01031e5f121e1c5f10044e0204131b1412054c3304165443412314011e0305" style="display:inline-flex;align-items:center;gap:6px;background:#ff3b30;color:#fff;border:none;padding:10px 16px;border-radius:6px;font-weight:900;font-size:11px;cursor:pointer;text-decoration:none;">🐛 Bug Report</a>
+                            <a href="/cdn-cgi/l/email-protection#deadabaeaeb1acaa9eaebfb7b0aaa9b1acb5a4aeacb1f0bdb1b3f0bfabe1adabbcb4bbbdaae398bbbfaaabacbbfbecee8cbbafabbbadaa" style="display:inline-flex;align-items:center;gap:6px;background:#007aff;color:#fff;border:none;padding:10px 16px;border-radius:6px;font-weight:900;font-size:11px;cursor:pointer;text-decoration:none;">💡 Feature Request</a>
                         </div>
                         <p style="margin:0; font-size:10px; color:#888;">Include your device type and what you were doing when the issue occurred. Screenshots welcome.</p>
                     </div>
@@ -2980,7 +3018,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.10.54-dev</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-23</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.10.53</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-17</span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);startTour();" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -3102,13 +3140,31 @@ const firebaseConfig = {
                         💳 Upgrade to Pro
                     </button>
                 </div>
-                <h4 style="margin-top:0; margin-bottom:8px; font-weight:900;">Price Matrix <span class="pw-help">?<span class="pw-help-tip">Your pricing grid. Each row is a door/panel profile (e.g. Plain, Shaker). Each column is a paint finish. Enter the price per m² you charge for that combination. Leave blank to exclude from quoting.</span></span></h4>
-                <div style="display:flex; gap:6px; margin-bottom:8px;">
-                    <button onclick="syncAllFromFirebase()" style="flex:1; background:#2196f3; color:#fff; border:none; padding:7px 0; border-radius:6px; font-size:10px; font-weight:900; cursor:pointer;">☁️ Sync from Cloud</button>
-                    <button onclick="forcePushPricingToCloud()" style="flex:1; background:#34c759; color:#fff; border:none; padding:7px 0; border-radius:6px; font-size:10px; font-weight:900; cursor:pointer;">⬆️ Push to Cloud</button>
+                <h4 style="margin-top:0; margin-bottom:10px; font-weight:900;">Price Matrix <span class="pw-help">?<span class="pw-help-tip">Switch between Paint and Cut To Size matrices using the toggle.</span></span></h4>
+                <!-- Matrix toggle -->
+                <div style="display:flex; gap:4px; background:#f0f0f0; border-radius:10px; padding:4px; margin-bottom:10px;">
+                    <button id="matrixTogglePaint" onclick="switchMatrixView('paint')" style="flex:1; border:none; background:#d4af37; color:#000; padding:9px; border-radius:8px; font-weight:900; font-size:12px; cursor:pointer;">Paint Matrix</button>
+                    <button id="matrixToggleCts" onclick="switchMatrixView('cts')" style="flex:1; border:none; background:transparent; color:#999; padding:9px; border-radius:8px; font-weight:900; font-size:12px; cursor:pointer;">Cut To Size</button>
                 </div>
-                <button onclick="genPriceListPDF()" style="width:100%; background:#d4af37; color:#000; border:none; padding:9px 0; border-radius:6px; font-size:11px; font-weight:900; cursor:pointer; margin-bottom:14px; letter-spacing:0.3px;">🖨️ Print Price List PDF</button>
+                <!-- Paint controls -->
+                <div id="matrixControlsPaint">
+                    <div style="display:flex; gap:6px; margin-bottom:8px;">
+                        <button onclick="syncAllFromFirebase()" style="flex:1; background:#2196f3; color:#fff; border:none; padding:7px 0; border-radius:6px; font-size:10px; font-weight:900; cursor:pointer;">☁️ Sync from Cloud</button>
+                        <button onclick="forcePushPricingToCloud()" style="flex:1; background:#34c759; color:#fff; border:none; padding:7px 0; border-radius:6px; font-size:10px; font-weight:900; cursor:pointer;">⬆️ Push to Cloud</button>
+                    </div>
+                    <button onclick="genPriceListPDF()" style="width:100%; background:#d4af37; color:#000; border:none; padding:9px 0; border-radius:6px; font-size:11px; font-weight:900; cursor:pointer; margin-bottom:14px; letter-spacing:0.3px;">🖨️ Print Price List PDF</button>
+                </div>
+                <!-- CTS controls -->
+                <div id="matrixControlsCts" style="display:none;">
+                    <div style="display:flex; gap:6px; margin-bottom:8px;">
+                        <button onclick="saveCtsData()" style="flex:1; background:#34c759; color:#fff; border:none; padding:9px 0; border-radius:6px; font-size:10px; font-weight:900; cursor:pointer;">Push to Cloud</button>
+                    </div>
+                    <button onclick="genCtsPriceListPDF()" style="width:100%; background:#2c3e50; color:#d4af37; border:none; padding:9px 0; border-radius:6px; font-size:11px; font-weight:900; cursor:pointer; margin-bottom:12px; letter-spacing:0.3px;">Print CTS Price List PDF</button>
+                </div>
+                <!-- Paint Matrix container -->
                 <div id="admin-pricing-matrix"></div>
+                <!-- CTS Matrix container -->
+                <div id="admin-cts-matrix" style="display:none;"></div>
             </div>
 
             <!-- Reports Tab -->
@@ -3246,7 +3302,7 @@ const firebaseConfig = {
     <div class="icon-btn" onclick="logout()" title="Logout" style="color:#ff3b30; font-size:24px; cursor:pointer; margin-right:15px;">🚪</div>
 </div>
 
-<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
     //        PADDLE INIT                                                                                                                                                                               
     //        App Store detection                                                                                                                                                       
     // Hide Paddle checkout on iOS App Store build (no IAP allowed)
@@ -3878,9 +3934,9 @@ const firebaseConfig = {
     console.log('%cUnauthorized copying, modification, or claiming ownership is prohibited.', 'color:#ff0000;font-weight:bold;');
     console.log('%cAll rights reserved    2026 Colin Bedford', 'color:#ff0000;font-weight:bold;');
     console.log('');
-    //                    VERSION: v1.10.54-dev | 2026-03-23 | Colin Bedford                   
+    //                    VERSION: v1.10.53 | 2026-03-17 | Colin Bedford                   
     //                    ADMIN TABS FIXED | COVER SHEET FIXED | DELETE CONFIRMATION ADDED                   
-    console.log('%c 🔧 PaintWorkz Pro v1.10.54-dev [DEVELOPMENT] ', 'background:#ff6b6b;color:#fff;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('%c PaintWorkz Pro v1.10.53 ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     // Changelog logs removed for production performance
     // ====================================
     
@@ -4134,6 +4190,24 @@ const firebaseConfig = {
 
     // ==================== END FIREBASE SETUP ====================
     let items = [], mode = 'SS', pType = 'Panel', fmState = 'Flat', currentPanelFilter = 'all', currentColorFilter = '';
+
+    //        Cut To Size (CTS) data
+    let ctsThicknesses = [16, 18, 21, 25];
+    let ctsEdgeTypes   = [
+        { name: 'ABS 0.5mm', lm: 0 },
+        { name: 'ABS 1mm',   lm: 0 },
+        { name: 'ABS 2mm',   lm: 0 }
+    ];
+    let ctsMatrix      = {};
+    let ctsJobEdgeType = '';
+    (function loadCtsData() {
+        const s1 = JSON.parse(localStorage.getItem('ctsMatrix'));
+        if (s1 && Object.keys(s1).length > 0) ctsMatrix = s1;
+        const s2 = JSON.parse(localStorage.getItem('ctsThicknesses'));
+        if (s2 && s2.length > 0) ctsThicknesses = s2;
+        const s3 = JSON.parse(localStorage.getItem('ctsEdgeTypes'));
+        if (s3 && s3.length > 0) ctsEdgeTypes = s3;
+    })();
     
     // RESTORED MASTER LISTS
     let clients = []; // legacy array     clients now come from clientDatabase (Firebase) only
@@ -8774,7 +8848,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         const CURRENT_VERSION = 'v1.10.54-dev'; //     bump this on every release
-        const CURRENT_DATE = '2026-03-23';
+        const CURRENT_DATE = '2026-03-17';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
         const versionDate = document.getElementById('adminVersionDate');
@@ -9073,6 +9147,100 @@ const firebaseConfig = {
         const modal = document.getElementById('quickPDFModal');
         if (modal) modal.remove();
     }
+
+    //        CTS Pricing functions
+    function saveCtsData() {
+        localStorage.setItem('ctsMatrix', JSON.stringify(ctsMatrix));
+        localStorage.setItem('ctsThicknesses', JSON.stringify(ctsThicknesses));
+        localStorage.setItem('ctsEdgeTypes', JSON.stringify(ctsEdgeTypes));
+        try {
+            if (window.currentUser && window.firebaseDb && window.setDoc && window.doc) {
+                const ref = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'ctsData');
+                window.setDoc(ref, {
+                    matrix: ctsMatrix, thicknesses: ctsThicknesses,
+                    edgeTypes: ctsEdgeTypes, updated: new Date().toISOString()
+                }).catch(function(e) {});
+            }
+        } catch(e) {}
+    }
+    window.saveCtsData = saveCtsData;
+
+    function getCtsPriceForPart(item) {
+        if (!item.cts) return null;
+        const thk = parseInt(item.thk) || 18;
+        const sqm = parseFloat(item.sqm) || 0;
+        const prof = item.prof || '';
+        let pricePerSqm = 0;
+        let bestThkIndex = 0;
+        const thkIndex = ctsThicknesses.indexOf(thk);
+        if (thkIndex >= 0) {
+            bestThkIndex = thkIndex;
+        } else {
+            let closest = Infinity;
+            ctsThicknesses.forEach(function(t, i) {
+                if (Math.abs(t - thk) < closest) { closest = Math.abs(t - thk); bestThkIndex = i; }
+            });
+        }
+        Object.values(ctsMatrix).forEach(function(tier) {
+            Object.values(tier).forEach(function(row) {
+                if (row[0] === prof) pricePerSqm = row[bestThkIndex + 1] || 0;
+            });
+        });
+        const sqmCost = sqm * item.qty * pricePerSqm;
+        let edgeCost = 0;
+        if (ctsJobEdgeType) {
+            const edgeType = ctsEdgeTypes.find(function(e) { return e.name === ctsJobEdgeType; });
+            if (edgeType && edgeType.lm > 0) {
+                const h = parseFloat(item.h) / 1000;
+                const w = parseFloat(item.w) / 1000;
+                edgeCost = 2 * (h + w) * item.qty * edgeType.lm;
+            }
+        }
+        return { sqmCost: sqmCost, edgeCost: edgeCost, total: sqmCost + edgeCost, pricePerSqm: pricePerSqm };
+    }
+    window.getCtsPriceForPart = getCtsPriceForPart;
+
+    function getCtsJobTotal(jobItems) {
+        let sqmTotal = 0, edgeTotal = 0;
+        (jobItems || items).forEach(function(item) {
+            if (!item.cts) return;
+            const p = getCtsPriceForPart(item);
+            if (p) { sqmTotal += p.sqmCost; edgeTotal += p.edgeCost; }
+        });
+        return { sqmTotal: sqmTotal, edgeTotal: edgeTotal, total: sqmTotal + edgeTotal };
+    }
+    window.getCtsJobTotal = getCtsJobTotal;
+
+    function toggleCtsLabel() {
+        const cb = document.getElementById('ctsPart');
+        const lbl = document.getElementById('ctsCheckLabel');
+        if (lbl) lbl.style.borderColor = cb && cb.checked ? '#d4af37' : '#ddd';
+    }
+    window.toggleCtsLabel = toggleCtsLabel;
+
+    function updateCtsEdgePanel() {
+        const panel = document.getElementById('ctsEdgePanel');
+        const sel   = document.getElementById('ctsEdgeSelect');
+        if (!panel || !sel) return;
+        const hasCts = items.some(function(it) { return it.cts; });
+        panel.style.display = hasCts ? 'block' : 'none';
+        if (hasCts) {
+            let opts = '<option value="">No edge routing</option>';
+            ctsEdgeTypes.forEach(function(e) {
+                const selected = ctsJobEdgeType === e.name ? 'selected' : '';
+                opts += '<option value="' + e.name + '" ' + selected + '>' + e.name + ' - $' + e.lm + '/lm</option>';
+            });
+            sel.innerHTML = opts;
+        }
+    }
+    window.updateCtsEdgePanel = updateCtsEdgePanel;
+
+    function setCtsJobEdge(val) {
+        ctsJobEdgeType = val;
+        saveData();
+    }
+    window.setCtsJobEdge = setCtsJobEdge;
+    //        END CTS Pricing functions
 
     function tab(t) {
         document.querySelectorAll('.view-section, .nav-btn').forEach(x => x.classList.remove('active'));
@@ -9714,7 +9882,8 @@ const firebaseConfig = {
                 code: (document.getElementById('p-code').value || '').toUpperCase(),
                 finish: document.getElementById('p-finish').value,
                 type: pType,
-                thk: document.getElementById('thk').value
+                thk: document.getElementById('thk').value,
+                cts: document.getElementById('ctsPart') ? document.getElementById('ctsPart').checked : false
             });
             saveDescRecent(desc);
             buildDescSuggestions();
@@ -9744,6 +9913,10 @@ const firebaseConfig = {
             const hInput = document.getElementById('h');
             if (hInput) hInput.focus();
         }, 50);
+        // Reset CTS checkbox
+        const ctsCb = document.getElementById('ctsPart');
+        if (ctsCb) { ctsCb.checked = false; toggleCtsLabel(); }
+        updateCtsEdgePanel();
     }
 
     function filterPanels(filterType) {
@@ -9880,6 +10053,9 @@ const firebaseConfig = {
                 else if (filter === 'ss' || filter === 'ds' || filter === 'se') {
                     return it.mode === filter.toUpperCase();
                 }
+                else if (filter === 'cts') {
+                    return !!it.cts;
+                }
                 return true;
             });
         }
@@ -9961,7 +10137,7 @@ const firebaseConfig = {
                     <button class="qty-btn" style="border-radius:0 0 4px 4px;" onclick="changeQty(${originalIndex}, -1)">-</button>
                 </div>
                 <div class="pl-center">
-                    <div style="font-size:10px; font-weight:900; color:${clr}; text-transform:uppercase; line-height:1;">${it.desc} (${it.fm})</div>
+                    <div style="font-size:10px; font-weight:900; color:${clr}; text-transform:uppercase; line-height:1;">${it.desc} (${it.fm})${it.cts ? '<span style="background:#2c3e50; color:#d4af37; font-size:9px; font-weight:900; padding:2px 6px; border-radius:3px; margin-left:4px;">CTS</span>' : ''}</div>
                     <div style="font-size:10px; font-weight:700; color:#666; margin-bottom:2px;">${it.brand} - ${it.color} | ${it.finish}</div>
                     <div class="pl-dims">${it.h} x ${it.w} x ${it.thk}</div>
                     <div class="pl-meta">
@@ -10154,6 +10330,13 @@ const firebaseConfig = {
                         </div>
                     </div>
                     
+                    <div style="margin-bottom:15px;">
+                        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:900; font-size:12px; color:#2c3e50; background:#f0f0f0; padding:10px; border-radius:6px; border:2px solid ${item.cts ? '#d4af37' : '#ddd'}; user-select:none;" id="editCtsLabel">
+                            <input type="checkbox" id="editCtsInput" ${item.cts ? 'checked' : ''} onchange="document.getElementById('editCtsLabel').style.borderColor=this.checked?'#d4af37':'#ddd'" style="width:16px; height:16px; cursor:pointer; accent-color:#2c3e50;">
+                            CTS — Cut To Size (charge board supply price)
+                        </label>
+                    </div>
+                    
                     <div style="display:flex; gap:10px; margin-top:25px;">
                         <button onclick="confirmEditItem(${index})" style="flex:1; padding:12px; background:#34c759; color:#fff; border:none; border-radius:4px; font-weight:900; font-size:13px; cursor:pointer;">    SAVE CHANGES</button>
                         <button onclick="closeEditModal()" style="flex:1; padding:12px; background:#ddd; color:#000; border:none; border-radius:4px; font-weight:900; font-size:13px; cursor:pointer;">    CANCEL</button>
@@ -10237,6 +10420,8 @@ const firebaseConfig = {
             items[index].color = newColor;
             items[index].code = newCode;
             items[index].finish = newFinish;
+            const editCtsInput = document.getElementById('editCtsInput');
+            items[index].cts = editCtsInput ? editCtsInput.checked : false;
             // type, panelType, edgeConfig are updated live by their setEdit* functions
             
             render();
@@ -10535,6 +10720,8 @@ const firebaseConfig = {
                     return it.fm.toLowerCase() === filter;
                 } else if (filter === 'ss' || filter === 'ds' || filter === 'se') {
                     return it.mode === filter.toUpperCase();
+                } else if (filter === 'cts') {
+                    return !!it.cts;
                 }
                 return true;
             });
@@ -11131,6 +11318,39 @@ const firebaseConfig = {
             
             // Add all other charges with better spacing
             const totalColX = x + (8+16+16+14+14+15+10+15+26+12+12);
+            // -- CTS (Cut To Size) section --
+            var ctsItemsPDF = (typeof itemsForPDF !== 'undefined' ? itemsForPDF : items).filter(function(it){ return !!it.cts; });
+            if (ctsItemsPDF.length > 0) {
+                doc.setFont(undefined, 'bold');
+                doc.setFontSize(9);
+                doc.setTextColor(44, 62, 80);
+                doc.text('CUT TO SIZE', x, y);
+                doc.setTextColor(0, 0, 0);
+                y += 6;
+                var ctsProfMap = {};
+                ctsItemsPDF.forEach(function(it){ var k=it.prof||'Unknown'; if(!ctsProfMap[k]) ctsProfMap[k]=[]; ctsProfMap[k].push(it); });
+                var ctsGrandTotal = 0;
+                Object.keys(ctsProfMap).forEach(function(prof) {
+                    var pi=ctsProfMap[prof], pq=pi.reduce(function(s,it){return s+it.qty;},0), ps=pi.reduce(function(s,it){return s+(parseFloat(it.sqm)||0)*it.qty;},0), pt=0;
+                    pi.forEach(function(it){var p=getCtsPriceForPart(it);if(p)pt+=p.total;});
+                    ctsGrandTotal+=pt;
+                    doc.setFont(undefined, 'normal'); doc.setFontSize(8);
+                    doc.text(prof+' x'+pq+' ('+ps.toFixed(3)+'m\u00B2)',x+2,y);
+                    doc.text('$'+pt.toFixed(2),totalColX+8,y,{align:'right'});
+                    y+=6;
+                });
+                var ctsTot=getCtsJobTotal(ctsItemsPDF);
+                if(ctsTot.edgeTotal>0&&ctsJobEdgeType){
+                    doc.setFont(undefined,'normal'); doc.setFontSize(8);
+                    doc.text('Edge routing ('+ctsJobEdgeType+'):',x+2,y);
+                    doc.text('$'+ctsTot.edgeTotal.toFixed(2),totalColX+8,y,{align:'right'});
+                    y+=7; ctsGrandTotal=ctsTot.total;
+                }
+                doc.setFont(undefined,'bold'); doc.setFontSize(9);
+                doc.text('CTS Subtotal:',x,y); doc.text('$'+ctsGrandTotal.toFixed(2),totalColX+8,y,{align:'right'});
+                grandTotal+=ctsGrandTotal; y+=8;
+            }
+
             doc.setFont(undefined, 'normal');
             doc.setFontSize(8);
             
@@ -11512,6 +11732,39 @@ const firebaseConfig = {
             
             // Add all other charges with better spacing
             const totalColX = x + (8+16+16+14+14+15+10+15+26+12+12);
+            // -- CTS (Cut To Size) section --
+            var ctsItemsPDF = (typeof itemsForPDF !== 'undefined' ? itemsForPDF : items).filter(function(it){ return !!it.cts; });
+            if (ctsItemsPDF.length > 0) {
+                doc.setFont(undefined, 'bold');
+                doc.setFontSize(9);
+                doc.setTextColor(44, 62, 80);
+                doc.text('CUT TO SIZE', x, y);
+                doc.setTextColor(0, 0, 0);
+                y += 6;
+                var ctsProfMap = {};
+                ctsItemsPDF.forEach(function(it){ var k=it.prof||'Unknown'; if(!ctsProfMap[k]) ctsProfMap[k]=[]; ctsProfMap[k].push(it); });
+                var ctsGrandTotal = 0;
+                Object.keys(ctsProfMap).forEach(function(prof) {
+                    var pi=ctsProfMap[prof], pq=pi.reduce(function(s,it){return s+it.qty;},0), ps=pi.reduce(function(s,it){return s+(parseFloat(it.sqm)||0)*it.qty;},0), pt=0;
+                    pi.forEach(function(it){var p=getCtsPriceForPart(it);if(p)pt+=p.total;});
+                    ctsGrandTotal+=pt;
+                    doc.setFont(undefined, 'normal'); doc.setFontSize(8);
+                    doc.text(prof+' x'+pq+' ('+ps.toFixed(3)+'m\u00B2)',x+2,y);
+                    doc.text('$'+pt.toFixed(2),totalColX+8,y,{align:'right'});
+                    y+=6;
+                });
+                var ctsTot=getCtsJobTotal(ctsItemsPDF);
+                if(ctsTot.edgeTotal>0&&ctsJobEdgeType){
+                    doc.setFont(undefined,'normal'); doc.setFontSize(8);
+                    doc.text('Edge routing ('+ctsJobEdgeType+'):',x+2,y);
+                    doc.text('$'+ctsTot.edgeTotal.toFixed(2),totalColX+8,y,{align:'right'});
+                    y+=7; ctsGrandTotal=ctsTot.total;
+                }
+                doc.setFont(undefined,'bold'); doc.setFontSize(9);
+                doc.text('CTS Subtotal:',x,y); doc.text('$'+ctsGrandTotal.toFixed(2),totalColX+8,y,{align:'right'});
+                grandTotal+=ctsGrandTotal; y+=8;
+            }
+
             doc.setFont(undefined, 'normal');
             doc.setFontSize(8);
             
@@ -11893,6 +12146,39 @@ const firebaseConfig = {
             
             // Add all other charges with better spacing
             const totalColX = x + (8+16+16+14+14+15+10+15+26+12+12);
+            // -- CTS (Cut To Size) section --
+            var ctsItemsPDF = (typeof itemsForPDF !== 'undefined' ? itemsForPDF : items).filter(function(it){ return !!it.cts; });
+            if (ctsItemsPDF.length > 0) {
+                doc.setFont(undefined, 'bold');
+                doc.setFontSize(9);
+                doc.setTextColor(44, 62, 80);
+                doc.text('CUT TO SIZE', x, y);
+                doc.setTextColor(0, 0, 0);
+                y += 6;
+                var ctsProfMap = {};
+                ctsItemsPDF.forEach(function(it){ var k=it.prof||'Unknown'; if(!ctsProfMap[k]) ctsProfMap[k]=[]; ctsProfMap[k].push(it); });
+                var ctsGrandTotal = 0;
+                Object.keys(ctsProfMap).forEach(function(prof) {
+                    var pi=ctsProfMap[prof], pq=pi.reduce(function(s,it){return s+it.qty;},0), ps=pi.reduce(function(s,it){return s+(parseFloat(it.sqm)||0)*it.qty;},0), pt=0;
+                    pi.forEach(function(it){var p=getCtsPriceForPart(it);if(p)pt+=p.total;});
+                    ctsGrandTotal+=pt;
+                    doc.setFont(undefined, 'normal'); doc.setFontSize(8);
+                    doc.text(prof+' x'+pq+' ('+ps.toFixed(3)+'m\u00B2)',x+2,y);
+                    doc.text('$'+pt.toFixed(2),totalColX+8,y,{align:'right'});
+                    y+=6;
+                });
+                var ctsTot=getCtsJobTotal(ctsItemsPDF);
+                if(ctsTot.edgeTotal>0&&ctsJobEdgeType){
+                    doc.setFont(undefined,'normal'); doc.setFontSize(8);
+                    doc.text('Edge routing ('+ctsJobEdgeType+'):',x+2,y);
+                    doc.text('$'+ctsTot.edgeTotal.toFixed(2),totalColX+8,y,{align:'right'});
+                    y+=7; ctsGrandTotal=ctsTot.total;
+                }
+                doc.setFont(undefined,'bold'); doc.setFontSize(9);
+                doc.text('CTS Subtotal:',x,y); doc.text('$'+ctsGrandTotal.toFixed(2),totalColX+8,y,{align:'right'});
+                grandTotal+=ctsGrandTotal; y+=8;
+            }
+
             doc.setFont(undefined, 'normal');
             doc.setFontSize(8);
             
@@ -12275,6 +12561,40 @@ const firebaseConfig = {
         doc.setFontSize(6.5); doc.setFont('helvetica','normal'); doc.setTextColor(170,170,170);
         doc.text('Created by paintworkzpro.com.au', doc.internal.pageSize.getWidth()-10, doc.internal.pageSize.getHeight()-4, {align:'right'});
         doc.setTextColor(0,0,0); doc.setFont('helvetica','normal'); doc.setFontSize(9);
+        // -- CTS Supply Docket page --
+        var ctsSupplyItems = (typeof itemsForPDF !== 'undefined' ? itemsForPDF : items).filter(function(it){ return !!it.cts; });
+        if (ctsSupplyItems.length > 0) {
+            doc.addPage();
+            var y2 = 15;
+            doc.setFont(undefined,'bold'); doc.setFontSize(14); doc.setTextColor(44,62,80);
+            doc.text('CUT TO SIZE - Supply List', 15, y2); y2 += 8;
+            doc.setFont(undefined,'normal'); doc.setFontSize(9); doc.setTextColor(80,80,80);
+            doc.text('Job: ' + (jobName||'') + '   Client: ' + (jobClient||''), 15, y2); y2 += 5;
+            if (ctsJobEdgeType) { doc.text('Edge routing: '+ctsJobEdgeType, 15, y2); y2+=5; }
+            y2 += 3;
+            var ctsHdrs = ['Description','H','W','Thk','Qty','Profile','SQM'];
+            var ctsCW   = [55,20,20,20,15,35,20];
+            doc.setFont(undefined,'bold'); doc.setFontSize(8); doc.setTextColor(255,255,255);
+            var cx2=15;
+            ctsHdrs.forEach(function(h,i){
+                doc.setFillColor(44,62,80); doc.rect(cx2,y2-4,ctsCW[i],7,'F');
+                doc.text(h,cx2+ctsCW[i]/2,y2,{align:'center'}); cx2+=ctsCW[i];
+            });
+            y2 += 5;
+            doc.setFont(undefined,'normal'); doc.setFontSize(8); doc.setTextColor(0,0,0);
+            var ctsDocketSqm=0;
+            ctsSupplyItems.forEach(function(it) {
+                var rowSqm=parseFloat(it.sqm)*it.qty; ctsDocketSqm+=rowSqm;
+                cx2=15;
+                var vals=[String(it.desc||'').substring(0,22),String(it.h),String(it.w),String(it.thk||18),String(it.qty),String(it.prof||'').substring(0,18),rowSqm.toFixed(3)];
+                vals.forEach(function(v,i){ doc.text(v,cx2+2,y2); cx2+=ctsCW[i]; });
+                y2+=6; if(y2>270){doc.addPage();y2=20;}
+            });
+            y2+=4;
+            doc.setFont(undefined,'bold');
+            doc.text('Total CTS SQM: '+ctsDocketSqm.toFixed(3)+' m²', 15, y2); y2+=6;
+            doc.text('Total CTS Parts: '+ctsSupplyItems.reduce(function(s,it){return s+it.qty;},0), 15, y2);
+        }
         // Show preview
         const pdfDataUri = doc.output('datauristring');
         const filename = `SupplyDocket_${jobClient.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
@@ -18924,6 +19244,225 @@ if ('serviceWorker' in navigator && _swAllowed) {
         console.log(` Client lists refreshed`);
     }
     
+
+    //        CTS Matrix UI functions
+    function switchMatrixView(view) {
+        const paintBtn = document.getElementById('matrixTogglePaint');
+        const ctsBtn   = document.getElementById('matrixToggleCts');
+        const paintDiv = document.getElementById('admin-pricing-matrix');
+        const ctsDiv   = document.getElementById('admin-cts-matrix');
+        const paintCtrl = document.getElementById('matrixControlsPaint');
+        const ctsCtrl   = document.getElementById('matrixControlsCts');
+        if (view === 'paint') {
+            if (paintBtn) { paintBtn.style.background = '#d4af37'; paintBtn.style.color = '#000'; }
+            if (ctsBtn)   { ctsBtn.style.background = 'transparent'; ctsBtn.style.color = '#999'; }
+            if (paintDiv) paintDiv.style.display = '';
+            if (ctsDiv)   ctsDiv.style.display = 'none';
+            if (paintCtrl) paintCtrl.style.display = '';
+            if (ctsCtrl)   ctsCtrl.style.display = 'none';
+        } else {
+            if (ctsBtn)   { ctsBtn.style.background = '#2c3e50'; ctsBtn.style.color = '#d4af37'; }
+            if (paintBtn) { paintBtn.style.background = 'transparent'; paintBtn.style.color = '#999'; }
+            if (paintDiv) paintDiv.style.display = 'none';
+            if (ctsDiv)   ctsDiv.style.display = '';
+            if (paintCtrl) paintCtrl.style.display = 'none';
+            if (ctsCtrl)   ctsCtrl.style.display = '';
+            renderCtsMatrix();
+        }
+    }
+    window.switchMatrixView = switchMatrixView;
+
+    function renderCtsMatrix() {
+        var target = document.getElementById('admin-cts-matrix');
+        if (!target) return;
+        var thks = ctsThicknesses;
+        var thkHeaders = thks.map(function(t, i) {
+            return '<th style="padding:8px; text-align:center; min-width:70px;">' + t + 'mm<br>' +
+                '<button onclick="removeCtsThickness(' + i + ')" style="background:#ff3b30; color:#fff; border:none; border-radius:3px; font-size:8px; padding:1px 5px; cursor:pointer; margin-top:2px;">x</button></th>';
+        }).join('');
+        var html = '<div style="overflow-x:auto;"><table style="min-width:500px; width:100%; border-collapse:collapse; font-size:10px; background:#fff;">' +
+            '<tr style="background:#2c3e50; color:#d4af37; font-weight:900;">' +
+            '<th style="padding:8px; text-align:left; min-width:160px;">Profile</th>' + thkHeaders +
+            '<th style="padding:8px; text-align:center; background:#1a252f;">' +
+            '<button onclick="addCtsThickness()" style="background:#d4af37; color:#000; border:none; border-radius:4px; font-size:9px; font-weight:900; padding:4px 8px; cursor:pointer;">+mm</button></th></tr>';
+
+        var sortedTiers = Object.keys(ctsMatrix).sort();
+        sortedTiers.forEach(function(tierName) {
+            html += '<tr style="background:#eee;"><td colspan="' + (thks.length + 2) + '" style="padding:8px; font-weight:900;">' + tierName + '</td></tr>';
+            var tier = ctsMatrix[tierName];
+            Object.keys(tier).forEach(function(code) {
+                var row = tier[code];
+                var name = row[0];
+                var priceCells = thks.map(function(t, i) {
+                    var val = row[i+1] !== undefined ? row[i+1] : 100;
+                    return '<td style="padding:6px;text-align:center;"><input type="number" inputmode="numeric" value="' + val + '" data-tier="' + tierName + '" data-code="' + code + '" data-idx="' + i + '" onchange="ctsInputChange(this)" style="width:55px;padding:4px;border:1px solid #ddd;border-radius:4px;text-align:center;"> $</td>';
+                }).join('');
+                html += '<tr><td style="padding:8px;"><div style="display:flex; justify-content:space-between; align-items:center;">' +
+                    '<span style="font-weight:900;">' + name + '</span>' +
+                    '<div style="display:flex; gap:4px;">' +
+                    '<button data-tier="' + tierName + '" data-code="' + code + '" data-name="' + name.replace(/"/g,'&quot;') + '" onclick="ctsTierBtn(this)" style="background:#2196f3; color:#fff; border:none; padding:4px 6px; border-radius:3px; font-size:9px; cursor:pointer;">T</button>' +
+                    '<button data-tier="' + tierName + '" data-code="' + code + '" data-name="' + name.replace(/"/g,'&quot;') + '" onclick="ctsDelBtn(this)" style="background:#ff3b30; color:#fff; border:none; padding:4px 6px; border-radius:3px; font-size:9px; cursor:pointer;">X</button>' +
+                    '</div></div></td>' + priceCells + '<td></td></tr>';
+            });
+        });
+
+        html += '<tr style="background:#f9f9f9; border-top:2px solid #2c3e50;"><td colspan="' + (thks.length + 2) + '" style="padding:10px;">' +
+            '<div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">' +
+            '<input id="ctsNewProfileName" type="text" placeholder="Profile name e.g. Settler 10" style="flex:2; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:12px; min-width:120px;">' +
+            '<input id="ctsNewProfileTier" type="text" placeholder="Tier e.g. Tier 1" style="flex:1; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:12px; min-width:80px;">' +
+            '<button onclick="addCtsProfile()" style="background:#2c3e50; color:#d4af37; border:none; padding:9px 16px; border-radius:6px; font-weight:900; font-size:12px; cursor:pointer;">Add Profile</button>' +
+            '</div></td></tr></table></div>';
+
+        html += '<div style="margin-top:20px; background:#f5f5f5; border-radius:10px; padding:14px;">' +
+            '<h5 style="margin:0 0 10px; font-weight:900; font-size:12px; color:#2c3e50;">Edge Types <span style="font-size:10px; color:#999; font-weight:400;">(price per lineal metre)</span></h5>' +
+            '<table style="width:100%; border-collapse:collapse; font-size:11px;">' +
+            '<tr style="background:#2c3e50; color:#d4af37;"><th style="padding:8px; text-align:left;">Edge Type</th><th style="padding:8px; text-align:center; min-width:90px;">$/lineal m</th><th style="padding:8px; width:50px;"></th></tr>';
+        ctsEdgeTypes.forEach(function(edge, i) {
+            html += '<tr style="border-bottom:1px solid #eee; background:#fff;">' +
+                '<td style="padding:8px; font-weight:700;">' + edge.name + '</td>' +
+                '<td style="padding:6px; text-align:center;"><input type="number" value="' + edge.lm + '" onchange="updateCtsEdgePrice(' + i + ',this.value)" style="width:70px; padding:5px; border:1px solid #ddd; border-radius:4px; text-align:center;"> $</td>' +
+                '<td style="padding:6px; text-align:center;"><button onclick="deleteCtsEdgeType(' + i + ')" style="background:#ff3b30; color:#fff; border:none; padding:4px 8px; border-radius:4px; font-size:10px; cursor:pointer;">X</button></td></tr>';
+        });
+        html += '</table>' +
+            '<div style="display:flex; gap:6px; margin-top:10px; flex-wrap:wrap;">' +
+            '<input id="ctsNewEdgeName" type="text" placeholder="Edge type name e.g. 4mm Round" style="flex:2; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:12px;">' +
+            '<input id="ctsNewEdgeLm" type="number" placeholder="$/lm" style="width:80px; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:12px;">' +
+            '<button onclick="addCtsEdgeType()" style="background:#2c3e50; color:#d4af37; border:none; padding:9px 14px; border-radius:6px; font-weight:900; font-size:12px; cursor:pointer;">Add Edge</button>' +
+            '</div></div>';
+
+        target.innerHTML = html;
+    }
+    window.renderCtsMatrix = renderCtsMatrix;
+
+    function addCtsProfile() {
+        var name = (document.getElementById('ctsNewProfileName').value || '').trim();
+        var tier = (document.getElementById('ctsNewProfileTier').value || '').trim() || 'Tier 1';
+        if (!name) { notify('Enter a profile name'); return; }
+        if (!ctsMatrix[tier]) ctsMatrix[tier] = {};
+        var codes = Object.keys(ctsMatrix[tier]).map(Number);
+        var newCode = codes.length ? Math.max.apply(null, codes) + 1 : 1;
+        ctsMatrix[tier][newCode] = [name].concat(ctsThicknesses.map(function() { return 100; }));
+        saveCtsData(); renderCtsMatrix(); notify('CTS profile added: ' + name);
+    }
+    window.addCtsProfile = addCtsProfile;
+    function updateCtsMatrix(tier, code, thkIndex, val) {
+        if (ctsMatrix[tier] && ctsMatrix[tier][code]) { ctsMatrix[tier][code][thkIndex+1] = parseFloat(val)||0; saveCtsData(); }
+    }
+    window.updateCtsMatrix = updateCtsMatrix;
+    function ctsInputChange(el) {
+        updateCtsMatrix(el.dataset.tier, el.dataset.code, parseInt(el.dataset.idx), el.value);
+    }
+    window.ctsInputChange = ctsInputChange;
+    function ctsTierBtn(el) { editCtsDoorTier(el.dataset.tier, el.dataset.code, el.dataset.name); }
+    window.ctsTierBtn = ctsTierBtn;
+    function ctsDelBtn(el) { deleteCtsRow(el.dataset.tier, el.dataset.code, el.dataset.name); }
+    window.ctsDelBtn = ctsDelBtn;
+    function deleteCtsRow(tier, code, name) {
+        if (!confirm('Delete "' + name + '"?')) return;
+        delete ctsMatrix[tier][code];
+        if (Object.keys(ctsMatrix[tier]).length === 0) delete ctsMatrix[tier];
+        saveCtsData(); renderCtsMatrix(); notify(name + ' deleted');
+    }
+    window.deleteCtsRow = deleteCtsRow;
+    function editCtsDoorTier(tier, code, name) {
+        var newTier = prompt('Move "' + name + '" to tier:', tier);
+        if (!newTier || newTier === tier) return;
+        if (!ctsMatrix[newTier]) ctsMatrix[newTier] = {};
+        var codes = Object.keys(ctsMatrix[newTier]).map(Number);
+        var newCode = codes.length ? Math.max.apply(null, codes) + 1 : 1;
+        ctsMatrix[newTier][newCode] = ctsMatrix[tier][code];
+        delete ctsMatrix[tier][code];
+        if (Object.keys(ctsMatrix[tier]).length === 0) delete ctsMatrix[tier];
+        saveCtsData(); renderCtsMatrix();
+    }
+    window.editCtsDoorTier = editCtsDoorTier;
+    function addCtsThickness() {
+        var val = prompt('New thickness in mm:', '');
+        var mm = parseInt(val);
+        if (!mm || isNaN(mm)) return;
+        if (ctsThicknesses.indexOf(mm) >= 0) { notify('Already exists'); return; }
+        ctsThicknesses.push(mm); ctsThicknesses.sort(function(a,b){return a-b;});
+        Object.values(ctsMatrix).forEach(function(tier) { Object.values(tier).forEach(function(row) { row.push(100); }); });
+        saveCtsData(); renderCtsMatrix();
+    }
+    window.addCtsThickness = addCtsThickness;
+    function removeCtsThickness(index) {
+        if (ctsThicknesses.length <= 1) { notify('Must have at least one thickness'); return; }
+        if (!confirm('Remove ' + ctsThicknesses[index] + 'mm column?')) return;
+        ctsThicknesses.splice(index, 1);
+        Object.values(ctsMatrix).forEach(function(tier) { Object.values(tier).forEach(function(row) { row.splice(index+1,1); }); });
+        saveCtsData(); renderCtsMatrix();
+    }
+    window.removeCtsThickness = removeCtsThickness;
+    function addCtsEdgeType() {
+        var name = (document.getElementById('ctsNewEdgeName').value || '').trim();
+        var lm = parseFloat(document.getElementById('ctsNewEdgeLm').value) || 0;
+        if (!name) { notify('Enter edge type name'); return; }
+        ctsEdgeTypes.push({name: name, lm: lm}); saveCtsData(); renderCtsMatrix();
+    }
+    window.addCtsEdgeType = addCtsEdgeType;
+    function updateCtsEdgePrice(index, val) {
+        ctsEdgeTypes[index].lm = parseFloat(val)||0; saveCtsData();
+    }
+    window.updateCtsEdgePrice = updateCtsEdgePrice;
+    function deleteCtsEdgeType(index) {
+        if (!confirm('Delete "' + ctsEdgeTypes[index].name + '"?')) return;
+        ctsEdgeTypes.splice(index,1); saveCtsData(); renderCtsMatrix();
+    }
+    window.deleteCtsEdgeType = deleteCtsEdgeType;
+    //        END CTS Matrix UI
+
+    function genCtsPriceListPDF() {
+        try {
+            if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) { notify('PDF library not loaded'); return; }
+            if (Object.keys(ctsMatrix).length === 0) { notify('No CTS profiles yet. Add in Admin > Price Matrix > Cut To Size.'); return; }
+            var jsPDF = window.jspdf.jsPDF;
+            var doc = new jsPDF('p','mm','a4');
+            var cs = JSON.parse(localStorage.getItem('companySettings') || '{}');
+            var lm = 12, rm = 198, y = 20;
+            var logo = window.currentCompanyLogo || localStorage.getItem('companyLogo');
+            if (logo) { try { doc.addImage(logo,'PNG',145,5,50,30); } catch(e){} }
+            doc.setFillColor(44,62,80); doc.rect(lm,y-5,rm-lm,12,'F');
+            doc.setTextColor(212,175,55); doc.setFont(undefined,'bold'); doc.setFontSize(14);
+            doc.text('CUT TO SIZE PRICE LIST', lm+2, y+3);
+            doc.setTextColor(100,100,100); doc.setFont(undefined,'normal'); doc.setFontSize(8);
+            doc.text(cs.name || '', rm-2, y+3, {align:'right'});
+            doc.text(new Date().toLocaleDateString('en-AU'), rm-2, y+7, {align:'right'});
+            doc.setTextColor(0,0,0); y += 16;
+            var thkCols = ctsThicknesses;
+            var pColW = 55, thkColW = Math.min(25, (rm-lm-pColW-5)/thkCols.length);
+            doc.setFillColor(44,62,80); doc.rect(lm,y-4,rm-lm,7,'F');
+            doc.setTextColor(212,175,55); doc.setFont(undefined,'bold'); doc.setFontSize(8);
+            doc.text('Profile', lm+2, y);
+            thkCols.forEach(function(t,i){ doc.text(t+'mm', lm+pColW+i*thkColW, y, {align:'center'}); });
+            doc.setTextColor(0,0,0); y += 8;
+            Object.keys(ctsMatrix).sort().forEach(function(tn) {
+                doc.setFillColor(212,175,55); doc.rect(lm,y-3,3,6,'F'); doc.rect(rm-3,y-3,3,6,'F');
+                doc.setFont(undefined,'bold'); doc.setFontSize(9); doc.setTextColor(44,62,80);
+                doc.text(tn, lm+6, y+1); doc.setTextColor(0,0,0); y += 8;
+                Object.values(ctsMatrix[tn]).forEach(function(row) {
+                    doc.setFont(undefined,'normal'); doc.setFontSize(8);
+                    doc.text(String(row[0]), lm+2, y);
+                    thkCols.forEach(function(t,i){ doc.text('$'+(row[i+1]||0), lm+pColW+i*thkColW, y, {align:'center'}); });
+                    y += 6.2; if (y > 275) { doc.addPage(); y = 20; }
+                }); y += 3;
+            });
+            if (ctsEdgeTypes.length > 0) {
+                y += 4;
+                doc.setFillColor(44,62,80); doc.rect(lm,y-4,rm-lm,7,'F');
+                doc.setTextColor(212,175,55); doc.setFont(undefined,'bold'); doc.setFontSize(9);
+                doc.text('Edge Routing (per lineal metre)', lm+2, y);
+                doc.setTextColor(0,0,0); y += 8;
+                ctsEdgeTypes.forEach(function(edge) {
+                    doc.setFont(undefined,'normal'); doc.setFontSize(8);
+                    doc.text(edge.name, lm+2, y); doc.text('$'+edge.lm+'/lm', lm+80, y); y += 6;
+                });
+            }
+            showPDFPreview(doc.output('datauristring'), 'CTS_PriceList.pdf', 'Cut To Size Price List');
+        } catch(e) { console.error('genCtsPriceListPDF:', e); notify('PDF error: '+e.message); }
+    }
+    window.genCtsPriceListPDF = genCtsPriceListPDF;
+
     function renderPricingMatrix() {
         console.log('renderPricingMatrix called');
         const target = document.getElementById('admin-pricing-matrix');
@@ -20712,12 +21251,10 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             const app = document.getElementById('appContainer');
             const mh  = document.getElementById('mainHeader');
             const mn  = document.getElementById('mainNavTabs');
-            const db  = document.getElementById('devBanner');
             if (ls)  ls.style.display  = 'none';
             if (app) app.style.display = 'block';
             if (mh)  mh.style.display  = 'flex';
             if (mn)  mn.style.display  = 'flex';
-            if (db)  db.style.display  = 'block';  // Show DEV banner
             var sf = document.getElementById('stickyFooter');
             if (sf) sf.style.display = 'flex';
             if (typeof initializeApp === 'function') {
@@ -21215,6 +21752,22 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                     }
                 }
             } catch(e) { console.warn('Pricing matrix load error:', e.message); }
+
+            // CTS data
+            try {
+                const ctsRef = window.doc(window.firebaseDb, 'users', dataUid, 'appData', 'ctsData');
+                const ctsSnap = await window.getDoc(ctsRef);
+                if (ctsSnap.exists()) {
+                    const cd = ctsSnap.data();
+                    if (cd.matrix && Object.keys(cd.matrix).length > 0) ctsMatrix = cd.matrix;
+                    if (cd.thicknesses && cd.thicknesses.length > 0) ctsThicknesses = cd.thicknesses;
+                    if (cd.edgeTypes && cd.edgeTypes.length > 0) ctsEdgeTypes = cd.edgeTypes;
+                    localStorage.setItem('ctsMatrix', JSON.stringify(ctsMatrix));
+                    localStorage.setItem('ctsThicknesses', JSON.stringify(ctsThicknesses));
+                    localStorage.setItem('ctsEdgeTypes', JSON.stringify(ctsEdgeTypes));
+                    console.log('CTS data loaded from Firestore');
+                }
+            } catch(ctsErr) { console.warn('CTS load error:', ctsErr.message); }
 
             //        5. Door Profiles                                                                                                          
             try {
@@ -22140,13 +22693,4 @@ function tourBack() {
 }
 
 function endTour() {
-    _tourClearTimer();
-    _tourActive = false;
-    document.getElementById('tourOverlay').style.display = 'none';
-    document.getElementById('tourSpotlight').style.display = 'none';
-    const card = document.getElementById('tourCard');
-    card.style.display = 'none';
-    card.style.transform = '';
-    const pdfModal = document.getElementById('pdfPreviewModal');
-    if (pdfModal && pdfModal.style.display !== 'none') {
-        if (typeof closePDFPreview === 'function') clos
+    _tourClearTime
