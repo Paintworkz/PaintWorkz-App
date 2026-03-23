@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.10.59-dev';
+    const CURRENT_VERSION = 'v1.10.61-dev';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1724,7 +1724,7 @@ const firebaseConfig = {
 
         <div id="loginError" style="color:red; font-weight:900; margin-top:15px; text-align:center; display:none;"></div>
     </div>
-    <div id="loginVersionText" style="text-align:center; margin-top:12px; font-size:10px; color:rgba(128,128,128,0.8); font-weight:700;">v1.10.59-dev</div>
+    <div id="loginVersionText" style="text-align:center; margin-top:12px; font-size:10px; color:rgba(128,128,128,0.8); font-weight:700;">v1.10.61-dev</div>
 </div>
 
 <div id="resetPasswordScreen" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:linear-gradient(135deg, #d4af37, #f9f1b0); z-index:10001; flex-direction:column; align-items:center; justify-content:center; padding:20px;">
@@ -1773,7 +1773,7 @@ const firebaseConfig = {
     </div>
 </div>
 <!-- HEADER + NAV always outside appContainer so banner/tabs are always rendered -->
-<div id="devBuildBanner">⚠ DEV BUILD — v1.10.59-dev ⚠</div>
+<div id="devBuildBanner">⚠ DEV BUILD — v1.10.61-dev ⚠</div>
 
 <div id="staffModeBanner">
     <span>&#x1F477; STAFF MODE</span>
@@ -2248,7 +2248,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.10.59-dev</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.10.61-dev</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-03-17</div>
                         </div>
                     </div>
@@ -8844,7 +8844,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.10.59-dev'; //     bump this on every release
+        const CURRENT_VERSION = 'v1.10.61-dev'; //     bump this on every release
         const CURRENT_DATE = '2026-03-17';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -15080,10 +15080,12 @@ const firebaseConfig = {
 
         //        Aggregate stats                                                                                                                                                       
         let totalSqm = 0, totalParts = 0, totalValue = 0;
-        const colourCount = {}, profileCount = {}, clientCount = {}, monthlyData = {}, finishCount = {};
+        const colourCount = {}, profileCount = {}, clientCount = {}, monthlyData = {}, finishCount = {}, weeklyData = {};
         const baseCodeLitres = {};
         let clearPaintLitres = 0;
         let clearSqm = 0;
+        let totalCtsRevenue = 0;
+        const ctsMonthlyData = {};
 
         jobs.forEach(job => {
             const sqm = parseFloat(job.totalSqm) || 0;
@@ -15119,6 +15121,22 @@ const firebaseConfig = {
             if (!monthlyData[mo]) monthlyData[mo] = { sqm: 0, jobs: 0 };
             monthlyData[mo].sqm += sqm;
             monthlyData[mo].jobs += 1;
+
+            // Weekly bucket (ISO week key: "2025-W12")
+            const wkNum = (() => { const t = new Date(d); t.setHours(0,0,0,0); t.setDate(t.getDate()+4-(t.getDay()||7)); const y=t.getFullYear(); const wk=Math.ceil(((t-new Date(y,0,1))/86400000+1)/7); return y+'-W'+(wk<10?'0'+wk:wk); })();
+            if (!weeklyData[wkNum]) weeklyData[wkNum] = { sqm: 0, jobs: 0, label: d.toLocaleDateString('en-AU',{day:'numeric',month:'short'}) };
+            weeklyData[wkNum].sqm += sqm;
+            weeklyData[wkNum].jobs += 1;
+
+            // CTS revenue for this job
+            const jobCtsRev = (job.items||[]).reduce(function(sum, it) {
+                if (!it.cts) return sum;
+                const p = getCtsPriceForPart(it);
+                return sum + (p ? p.total : 0);
+            }, 0);
+            totalCtsRevenue += jobCtsRev;
+            if (!ctsMonthlyData[mo]) ctsMonthlyData[mo] = 0;
+            ctsMonthlyData[mo] += jobCtsRev;
 
             const cl = job.client || 'Unknown';
             clientCount[cl] = (clientCount[cl] || 0) + sqm;
@@ -15246,6 +15264,9 @@ const firebaseConfig = {
         _totalPaintCost += parseFloat(undercoatL) * (_estCosts['UCWHITE'] || 0);
         const _grossProfit = _totalEstVal - _totalPaintCost;
         const _fmtKpi = v => v >= 1000 ? '$' + (v/1000).toFixed(1) + 'k' : '$' + Math.round(v).toLocaleString();
+        // Base cost fallback: if no formula matches, estimate from total SQM × avg rate
+        const _hasAnyCost = Object.values(getBaseCosts()).some(v => v > 0);
+        const _paintCostNote = (!_hasAnyCost) ? '<div style="font-size:9px;color:#e57373;margin-top:4px;">⚠ Set $/L in Admin → Paint Stock Settings</div>' : (Object.keys(baseCodeLitres).length === 0 && _hasAnyCost) ? '<div style="font-size:9px;color:#ff9800;margin-top:4px;">⚠ Add paint formulas to Database → Paint for cost analysis</div>' : '';
 
         const html = `
         <div id="reportsPrintArea">
@@ -15258,7 +15279,8 @@ const firebaseConfig = {
             ${kpiCard('    ', 'Parts', totalParts, '#ff9800')}
             ${kpiCard('    ', 'Colours', Object.keys(colourCount).length, '#9c27b0')}
             ${kpiCard('    ', 'Undercoat SQM', undercoatSqm + 'm  ', '#795548')}
-            ${_totalEstVal > 0 ? kpiCard('    ', 'Est. Revenue', _fmtKpi(_totalEstVal), '#1565c0') : ''}
+            ${kpiCard('    ', 'Est. Revenue', _fmtKpi(_totalEstVal), '#1565c0')}
+            ${totalCtsRevenue > 0 ? kpiCard('✂️', 'CTS Revenue', _fmtKpi(totalCtsRevenue), '#2c3e50') : ''}
             ${_totalPaintCost > 0 ? kpiCard('    ', 'Paint Cost', _fmtKpi(_totalPaintCost), '#e53935') : ''}
             ${(_totalEstVal > 0 && _totalPaintCost > 0) ? kpiCard('    ', 'Gross Margin', _fmtKpi(_grossProfit), _grossProfit >= 0 ? '#2e7d32' : '#c62828') : ''}
         </div>
@@ -15455,6 +15477,29 @@ const firebaseConfig = {
             </div>
         </div>
 
+        <!-- CTS Revenue section (only shown if there are CTS parts) -->
+        ${totalCtsRevenue > 0 ? `
+        <div class="report-card" style="margin-bottom:14px;">
+            <div class="report-card-title">✂️ Cut To Size Revenue</div>
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:12px;">
+                <div style="background:linear-gradient(135deg,#2c3e5015,#2c3e5005); border:2px solid #2c3e5030; border-radius:10px; padding:12px; text-align:center;">
+                    <div style="font-size:22px; font-weight:900; color:#2c3e50;">${_fmtKpi(totalCtsRevenue)}</div>
+                    <div style="font-size:10px; font-weight:700; color:#666; margin-top:2px;">CTS TOTAL</div>
+                </div>
+                <div style="background:linear-gradient(135deg,#1565c015,#1565c005); border:2px solid #1565c030; border-radius:10px; padding:12px; text-align:center;">
+                    <div style="font-size:22px; font-weight:900; color:#1565c0;">${_totalEstVal > 0 ? Math.round(totalCtsRevenue/_totalEstVal*100) : 0}%</div>
+                    <div style="font-size:10px; font-weight:700; color:#666; margin-top:2px;">OF TOTAL REVENUE</div>
+                </div>
+                <div style="background:linear-gradient(135deg,#2e7d3215,#2e7d3205); border:2px solid #2e7d3230; border-radius:10px; padding:12px; text-align:center;">
+                    <div style="font-size:22px; font-weight:900; color:#2e7d32;">${_fmtKpi(totalCtsRevenue / Math.max(jobs.length,1))}</div>
+                    <div style="font-size:10px; font-weight:700; color:#666; margin-top:2px;">AVG PER JOB</div>
+                </div>
+            </div>
+            <div style="position:relative; height:180px;">
+                <canvas id="chartCtsRevenue" style="position:absolute;top:0;left:0;width:100%;height:100%;"></canvas>
+            </div>
+        </div>` : ''}
+
         <!-- Row 6: Job breakdown full width -->
         <div class="report-card" style="margin-bottom:14px;">
             <div class="report-card-title">     Job Breakdown (${jobs.length} jobs)</div>
@@ -15468,11 +15513,14 @@ const firebaseConfig = {
                     <th style="padding:7px 8px; text-align:left;">Finish</th>
                     <th style="padding:7px 8px; text-align:right;">Parts</th>
                     <th style="padding:7px 8px; text-align:right;">Est. Value</th>
+                    <th style="padding:7px 8px; text-align:right;">CTS</th>
                     <th style="padding:7px 8px; text-align:right;">SQM</th>
                     <th style="padding:7px 8px; text-align:left;">Date</th>
                 </tr></thead>
                 <tbody>
-                ${jobs.map((j,i)=>`<tr style="background:${i%2?'#f9f9f9':'#fff'}; color:#000; border-bottom:1px solid #eee;">
+                ${jobs.map((j,i)=>{
+                    const jCts = (j.items||[]).reduce((s,it)=>{ if(!it.cts) return s; const p=getCtsPriceForPart(it); return s+(p?p.total:0); },0);
+                    return `<tr style="background:${i%2?'#f9f9f9':'#fff'}; color:#000; border-bottom:1px solid #eee;">
                     <td style="padding:6px 8px; font-weight:900; color:#000;">${j.jobNum||'   '}</td>
                     <td style="padding:6px 8px; color:#000;">${j.client||'   '}</td>
                     <td style="padding:6px 8px; color:#000;">${j.jobName||'   '}</td>
@@ -15480,14 +15528,16 @@ const firebaseConfig = {
                     <td style="padding:6px 8px; color:#000;">${j.finish||'   '}</td>
                     <td style="padding:6px 8px; text-align:right; color:#000;">${j.totalParts||0}</td>
                     <td style="padding:6px 8px; text-align:right; font-weight:900; color:#2196f3;">${(j._estValue||0).toFixed(0)}</td>
+                    <td style="padding:6px 8px; text-align:right; font-weight:900; color:#2c3e50;">${jCts>0?'$'+jCts.toFixed(0):'-'}</td>
                     <td style="padding:6px 8px; text-align:right; font-weight:900; color:#000;">${parseFloat(j.totalSqm||0).toFixed(2)}</td>
                     <td style="padding:6px 8px; color:#000;">${j.dateReceived||'   '}</td>
-                </tr>`).join('')}
+                </tr>`;}).join('')}
                 </tbody>
                 <tfoot><tr style="background:#e3f2fd; font-weight:900; color:#000;">
                     <td colspan="5" style="padding:7px 8px; color:#000;">TOTALS</td>
                     <td style="padding:7px 8px; text-align:right; color:#000;">${totalParts}</td>
                     <td style="padding:7px 8px; text-align:right; font-weight:900; color:#2196f3;">${totalValue.toFixed(0)}</td>
+                    <td style="padding:7px 8px; text-align:right; font-weight:900; color:#2c3e50;">${totalCtsRevenue>0?'$'+totalCtsRevenue.toFixed(0):'-'}</td>
                     <td style="padding:7px 8px; text-align:right; color:#000;">${totalSqm.toFixed(2)}</td>
                     <td></td>
                 </tr></tfoot>
@@ -15563,14 +15613,59 @@ const firebaseConfig = {
                 }
             };
 
-            // Monthly SQM line
+            // Monthly SQM line — switch to weekly if range ≤ 90 days
             if (months.length && co('chartMonthlySqm')) {
-                new Chart(co('chartMonthlySqm'), { type:'line', data:{
-                    labels: months,
-                    datasets:[{ label:'SQM', data: months.map(m=>+monthlyData[m].sqm.toFixed(2)),
-                        borderColor:'#2196f3', backgroundColor:'rgba(33,150,243,0.12)',
-                        borderWidth:2.5, fill:true, tension:0.35, pointRadius:4, pointBackgroundColor:'#2196f3' }]
-                }, options:{ responsive:true, plugins:{legend:{display:false}}, scales:{ y:{ beginAtZero:true, ticks:{font:{size:10}} }, x:{ ticks:{font:{size:10}} } } }});
+                const dayRange = (toDate - fromDate) / 86400000;
+                const useWeekly = dayRange <= 91 && Object.keys(weeklyData).length > 1;
+                const wkKeys = Object.keys(weeklyData).sort();
+                const chartLabels = useWeekly ? wkKeys.map(k => weeklyData[k].label) : months;
+                const chartData   = useWeekly ? wkKeys.map(k => +weeklyData[k].sqm.toFixed(2)) : months.map(m=>+monthlyData[m].sqm.toFixed(2));
+                // Point labels plugin
+                const sqmLabelPlugin = {
+                    id:'sqm_pt_labels',
+                    afterDatasetsDraw(chart) {
+                        const ctx=chart.ctx;
+                        chart.data.datasets.forEach((ds,di)=>{
+                            const meta=chart.getDatasetMeta(di);
+                            meta.data.forEach((pt,i)=>{
+                                const val=ds.data[i];
+                                if(!val) return;
+                                ctx.save();
+                                ctx.fillStyle='#1565c0';
+                                ctx.font='bold 9px sans-serif';
+                                ctx.textAlign='center';
+                                ctx.fillText(val.toFixed(1)+'m²', pt.x, pt.y-8);
+                                ctx.restore();
+                            });
+                        });
+                    }
+                };
+                new Chart(co('chartMonthlySqm'), {
+                    type:'line',
+                    plugins:[sqmLabelPlugin],
+                    data:{
+                        labels: chartLabels,
+                        datasets:[{ label:'SQM', data: chartData,
+                            borderColor:'#2196f3', backgroundColor:'rgba(33,150,243,0.12)',
+                            borderWidth:2.5, fill:true, tension:0.35, pointRadius:5, pointBackgroundColor:'#2196f3' }]
+                    },
+                    options:{ responsive:true, plugins:{legend:{display:false}}, scales:{ y:{ beginAtZero:true, ticks:{font:{size:10}} }, x:{ ticks:{font:{size:useWeekly?9:10}, maxRotation:45} } } }
+                });
+            }
+
+            // CTS Revenue monthly bar chart
+            if (totalCtsRevenue > 0 && co('chartCtsRevenue')) {
+                const ctsMonths = Object.keys(ctsMonthlyData).sort((a,b) => new Date('1 ' + a) - new Date('1 ' + b));
+                new Chart(co('chartCtsRevenue'), { type:'bar', data:{
+                    labels: ctsMonths,
+                    datasets:[
+                        { label:'CTS Revenue', data: ctsMonths.map(m=>(ctsMonthlyData[m]||0).toFixed(2)),
+                          backgroundColor:'rgba(44,62,80,0.75)', borderColor:'#2c3e50', borderWidth:1.5, borderRadius:4 },
+                        { label:'Paint Revenue', data: ctsMonths.map(m=>((monthlyData[m]||{sqm:0}).sqm*125 - (ctsMonthlyData[m]||0)).toFixed(2)),
+                          backgroundColor:'rgba(33,150,243,0.5)', borderColor:'#2196f3', borderWidth:1.5, borderRadius:4 }
+                    ]
+                }, options:{ responsive:true, plugins:{ legend:{ position:'bottom', labels:{ font:{size:9}, boxWidth:10 } } },
+                    scales:{ x:{ stacked:false, ticks:{font:{size:9}} }, y:{ beginAtZero:true, ticks:{ font:{size:9}, callback: v => '$'+v } } } }});
             }
 
             // Finish donut
@@ -15798,10 +15893,13 @@ const firebaseConfig = {
                     const costs = getBaseCosts();
                     const bcLabels = Object.keys(baseCodeLitres);
                     const hasCosts = bcLabels.some(k => costs[k] > 0);
-                    if (bcLabels.length === 0) {
-                        bcCtx.parentElement.innerHTML = '<div style="text-align:center;padding:40px;color:#999;font-size:12px;">No paint formula data yet     add formulas in Database     Paint to see base cost analysis.</div>';
+                    const hasAnyCostSet = Object.values(costs).some(v => v > 0);
+                    if (bcLabels.length === 0 && !hasAnyCostSet) {
+                        bcCtx.parentElement.innerHTML = '<div style="text-align:center;padding:30px;color:#999;font-size:12px;"><div style="font-size:24px;margin-bottom:8px;">⚠️</div>Two steps needed:<br><br>1. Add paint formulas in <strong>Database → Paint</strong><br>2. Set $/L in <strong>Admin → Reports → Paint Stock Settings</strong></div>';
+                    } else if (bcLabels.length === 0 && hasAnyCostSet) {
+                        bcCtx.parentElement.innerHTML = '<div style="text-align:center;padding:30px;color:#999;font-size:12px;"><div style="font-size:24px;margin-bottom:8px;">⚠️</div>Paint formulas not found for the colours in these jobs.<br>Add matching formulas in <strong>Database → Paint</strong> using the same colour names as in your jobs.</div>';
                     } else if (!hasCosts) {
-                        bcCtx.parentElement.innerHTML = '<div style="text-align:center;padding:40px;color:#999;font-size:12px;">Set paint base cost per litre in Admin     Paint Stock Settings to see cost analysis.</div>';
+                        bcCtx.parentElement.innerHTML = '<div style="text-align:center;padding:30px;color:#999;font-size:12px;"><div style="font-size:24px;margin-bottom:8px;">⚠️</div>$/L costs not set. Open <strong>Admin → Reports → Paint Stock Settings</strong> and enter your base cost per litre for each product.</div>';
                     } else {
                         const bcVals = bcLabels.map(k => +(((baseCodeLitres[k]||0) * (costs[k]||0)).toFixed(2)));
                         window._reportBaseCostTotal = bcVals.reduce((a,b)=>a+b,0)
@@ -19319,6 +19417,11 @@ if ('serviceWorker' in navigator && _swAllowed) {
     function renderCtsMatrix() {
         var target = document.getElementById('admin-cts-matrix');
         if (!target) return;
+        // Always pull latest profiles so dropdown stays in sync with paint matrix
+        try {
+            var _freshProfiles = JSON.parse(localStorage.getItem('doorProfiles') || '[]');
+            if (_freshProfiles.length > 0) profiles = _freshProfiles;
+        } catch(e) {}
         var thks = ctsThicknesses;
         var thkHeaders = thks.map(function(t, i) {
             return '<th style="padding:8px; text-align:center; min-width:70px;">' + t + 'mm<br>' +
@@ -19464,49 +19567,149 @@ if ('serviceWorker' in navigator && _swAllowed) {
         try {
             if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) { notify('PDF library not loaded'); return; }
             if (Object.keys(ctsMatrix).length === 0) { notify('No CTS profiles yet. Add in Admin > Price Matrix > Cut To Size.'); return; }
-            var jsPDF = window.jspdf.jsPDF;
-            var doc = new jsPDF('p','mm','a4');
-            var cs = JSON.parse(localStorage.getItem('companySettings') || '{}');
-            var lm = 12, rm = 198, y = 20;
-            var logo = window.currentCompanyLogo || localStorage.getItem('companyLogo');
-            if (logo) { try { doc.addImage(logo,'PNG',145,5,50,30); } catch(e){} }
-            doc.setFillColor(44,62,80); doc.rect(lm,y-5,rm-lm,12,'F');
-            doc.setTextColor(212,175,55); doc.setFont(undefined,'bold'); doc.setFontSize(14);
-            doc.text('CUT TO SIZE PRICE LIST', lm+2, y+3);
-            doc.setTextColor(100,100,100); doc.setFont(undefined,'normal'); doc.setFontSize(8);
-            doc.text(cs.name || '', rm-2, y+3, {align:'right'});
-            doc.text(new Date().toLocaleDateString('en-AU'), rm-2, y+7, {align:'right'});
-            doc.setTextColor(0,0,0); y += 16;
-            var thkCols = ctsThicknesses;
-            var pColW = 55, thkColW = Math.min(25, (rm-lm-pColW-5)/thkCols.length);
-            doc.setFillColor(44,62,80); doc.rect(lm,y-4,rm-lm,7,'F');
-            doc.setTextColor(212,175,55); doc.setFont(undefined,'bold'); doc.setFontSize(8);
-            doc.text('Profile', lm+2, y);
-            thkCols.forEach(function(t,i){ doc.text(t+'mm', lm+pColW+i*thkColW, y, {align:'center'}); });
-            doc.setTextColor(0,0,0); y += 8;
-            Object.keys(ctsMatrix).sort().forEach(function(tn) {
-                doc.setFillColor(212,175,55); doc.rect(lm,y-3,3,6,'F'); doc.rect(rm-3,y-3,3,6,'F');
-                doc.setFont(undefined,'bold'); doc.setFontSize(9); doc.setTextColor(44,62,80);
-                doc.text(tn, lm+6, y+1); doc.setTextColor(0,0,0); y += 8;
-                Object.values(ctsMatrix[tn]).forEach(function(row) {
-                    doc.setFont(undefined,'normal'); doc.setFontSize(8);
-                    doc.text(String(row[0]), lm+2, y);
-                    thkCols.forEach(function(t,i){ doc.text('$'+(row[i+1]||0), lm+pColW+i*thkColW, y, {align:'center'}); });
-                    y += 6.2; if (y > 275) { doc.addPage(); y = 20; }
-                }); y += 3;
-            });
-            if (ctsEdgeTypes.length > 0) {
-                y += 4;
-                doc.setFillColor(44,62,80); doc.rect(lm,y-4,rm-lm,7,'F');
-                doc.setTextColor(212,175,55); doc.setFont(undefined,'bold'); doc.setFontSize(9);
-                doc.text('Edge Routing (per lineal metre)', lm+2, y);
-                doc.setTextColor(0,0,0); y += 8;
-                ctsEdgeTypes.forEach(function(edge) {
-                    doc.setFont(undefined,'normal'); doc.setFontSize(8);
-                    doc.text(edge.name, lm+2, y); doc.text('$'+edge.lm+'/lm', lm+80, y); y += 6;
-                });
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+            const cs = JSON.parse(localStorage.getItem('companySettings') || '{}');
+
+            const pw=210, ph=297, lm=12, rm=pw-12;
+            let y = 8;
+
+            // ── HEADER (identical layout to paint price list) ──
+            const logoB64 = window.currentCompanyLogo || localStorage.getItem('companyLogo');
+            const totalW = rm - lm;
+            const zoneW = totalW / 3;
+            const leftEnd    = lm + zoneW;
+            const rightStart = lm + zoneW * 2;
+            const logoS = 24;
+            const logoX = rightStart + (zoneW - logoS) / 2;
+
+            if (logoB64) {
+                try { doc.addImage(logoB64,'PNG', logoX, y, logoS, logoS, undefined,'FAST'); }
+                catch(e){ try { doc.addImage(logoB64,'JPEG', logoX, y, logoS, logoS, undefined,'FAST'); } catch(e2){} }
             }
-            showPDFPreview(doc.output('datauristring'), 'CTS_PriceList.pdf', 'Cut To Size Price List');
+
+            const infoMaxW = zoneW - 4;
+            doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(22,22,22);
+            const nameLines = doc.splitTextToSize(cs.name||'PaintWorkz', infoMaxW);
+            doc.text(nameLines, lm, y+6);
+            let cy = y + 6 + nameLines.length * 4.5;
+            doc.setFont('helvetica','normal'); doc.setFontSize(6.8); doc.setTextColor(72,72,72);
+            if (cs.phone)   { doc.text('Ph: '+cs.phone, lm, cy); cy+=3.6; }
+            if (cs.email)   { doc.text(doc.splitTextToSize(cs.email, infoMaxW)[0], lm, cy); cy+=3.6; }
+            if (cs.address) { doc.splitTextToSize(cs.address, infoMaxW).slice(0,2).forEach(l=>{ doc.text(l,lm,cy); cy+=3.6; }); }
+
+            // Gold double-border title box
+            const boxW = zoneW - 6, boxH = 18, boxX = leftEnd + 3;
+            const boxCX = boxX + boxW / 2;
+            doc.setDrawColor(160,120,8); doc.setLineWidth(1.1);
+            doc.roundedRect(boxX, y, boxW, boxH, 2, 2, 'D');
+            doc.setDrawColor(212,175,55); doc.setLineWidth(0.4);
+            doc.roundedRect(boxX+1.5, y+1.5, boxW-3, boxH-3, 1.5, 1.5, 'D');
+            doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(148,108,4);
+            doc.text('CUT TO SIZE LIST', boxCX, y+8.5, {align:'center'});
+            doc.setFont('helvetica','normal'); doc.setFontSize(6.8); doc.setTextColor(108,108,108);
+            doc.text('as of '+new Date().toLocaleDateString('en-AU',{day:'2-digit',month:'long',year:'numeric'}), boxCX, y+14.5, {align:'center'});
+
+            y = Math.max(cy, y + logoS + 2) + 2;
+
+            // Rainbow stripe
+            const rcols=[[255,65,65],[255,145,25],[255,210,0],[55,180,55],[25,145,255],[130,50,235],[250,55,185]];
+            const sw2=(rm-lm)/rcols.length;
+            rcols.forEach((c,i)=>{ doc.setFillColor(...c); doc.rect(lm+i*sw2,y,sw2+0.4,2,'F'); });
+            y += 4;
+
+            // ── PRICING TABLE ──
+            const thks = ctsThicknesses;
+            const profColW = 58;
+            const thkColW = Math.min(22, (rm - lm - profColW) / thks.length);
+            const rH = 6.2;
+
+            // Column headers
+            doc.setFillColor(26,26,26); doc.rect(lm,y,rm-lm,rH,'F');
+            doc.setFont('helvetica','bold'); doc.setFontSize(7); doc.setTextColor(212,175,55);
+            doc.text('Profile', lm + profColW/2, y+4.2, {align:'center'});
+            thks.forEach(function(t,i){
+                doc.text(t+'mm', lm+profColW+(i+0.5)*thkColW, y+4.2, {align:'center'});
+            });
+            y += rH;
+
+            const tierAccent={'Tier 1':[33,150,243],'Tier 2':[76,175,80],'Tier 3':[255,152,0],'Tier 4':[156,39,176],'Tier 5':[244,67,54],'Other':[120,120,120]};
+            const tierBg    ={'Tier 1':[237,245,255],'Tier 2':[237,252,240],'Tier 3':[255,250,237],'Tier 4':[249,237,255],'Tier 5':[255,237,237],'Other':[246,246,246]};
+            let rowIdx = 0;
+
+            Object.keys(ctsMatrix).sort().forEach(function(tierName) {
+                // Tier group header
+                doc.setFillColor(245,245,245); doc.rect(lm,y,rm-lm,5.2,'F');
+                doc.setDrawColor(215,215,215); doc.setLineWidth(0.18); doc.line(lm,y+5.2,rm,y+5.2);
+                const ac = tierAccent[tierName] || [120,120,120];
+                doc.setFillColor(...ac); doc.rect(lm,y,1.3,5.2,'F'); doc.rect(rm-1.3,y,1.3,5.2,'F');
+                doc.setFont('helvetica','bold'); doc.setFontSize(6.5); doc.setTextColor(...ac);
+                doc.text(tierName.toUpperCase(), lm+4, y+3.6);
+                y += 5.2;
+
+                Object.values(ctsMatrix[tierName]).forEach(function(row) {
+                    if (!Array.isArray(row)) return;
+                    const name = row[0];
+                    const bg = rowIdx%2===0 ? (tierBg[tierName]||[248,248,248]) : [255,255,255];
+                    doc.setFillColor(...bg); doc.rect(lm,y,rm-lm,rH,'F');
+                    doc.setFillColor(...ac); doc.rect(lm,y,1.3,rH,'F'); doc.rect(rm-1.3,y,1.3,rH,'F');
+                    doc.setDrawColor(215,215,215); doc.setLineWidth(0.18); doc.line(lm,y+rH,rm,y+rH);
+
+                    doc.setFont('helvetica','bold'); doc.setFontSize(7); doc.setTextColor(28,28,28);
+                    doc.text(String(name||''), lm+3, y+4.2);
+                    thks.forEach(function(t,i){
+                        const price = row[i+1];
+                        const pStr = (price !== undefined && price !== null && Number(price) > 0) ? '$'+Number(price) : '—';
+                        doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(28,28,28);
+                        doc.text(pStr, lm+profColW+(i+0.5)*thkColW, y+4.2, {align:'center'});
+                    });
+                    y += rH; rowIdx++;
+                    if (y > 270) { doc.addPage(); y = 12; }
+                });
+            });
+
+            y += 3;
+
+            // ── EDGE ROUTING TABLE ──
+            if (ctsEdgeTypes.length > 0) {
+                doc.setFillColor(26,26,26); doc.rect(lm,y,rm-lm,rH,'F');
+                doc.setFont('helvetica','bold'); doc.setFontSize(7); doc.setTextColor(212,175,55);
+                doc.text('Edge Routing', lm+profColW/2, y+4.2, {align:'center'});
+                doc.text('$/lineal metre', lm+profColW+thkColW/2, y+4.2, {align:'center'});
+                y += rH;
+                ctsEdgeTypes.forEach(function(edge, i) {
+                    const bg = i%2===0 ? [250,250,250] : [255,255,255];
+                    doc.setFillColor(...bg); doc.rect(lm,y,rm-lm,rH,'F');
+                    doc.setDrawColor(215,215,215); doc.setLineWidth(0.18); doc.line(lm,y+rH,rm,y+rH);
+                    doc.setFont('helvetica','bold'); doc.setFontSize(7); doc.setTextColor(28,28,28);
+                    doc.text(String(edge.name||''), lm+3, y+4.2);
+                    doc.setFont('helvetica','normal');
+                    doc.text('$'+edge.lm, lm+profColW+thkColW/2, y+4.2, {align:'center'});
+                    y += rH;
+                });
+                y += 3;
+            }
+
+            // ── DISCLAIMER ──
+            const noteLines=['All prices per m² excl. GST. Prices subject to change without notice.','For profiles not listed, please contact us for an estimate.'];
+            const noteH = 3.5 + noteLines.length*4.5;
+            doc.setFillColor(255,252,235); doc.setDrawColor(198,168,28); doc.setLineWidth(0.22);
+            doc.roundedRect(lm,y,rm-lm,noteH,1.5,1.5,'FD');
+            doc.setFont('helvetica','italic'); doc.setFontSize(6.8); doc.setTextColor(88,68,8);
+            noteLines.forEach((line,i) => doc.text('* '+line, lm+3, y+4+i*4.5));
+            y += noteH + 2;
+
+            // ── FOOTER ──
+            doc.setDrawColor(200,200,200); doc.setLineWidth(0.22);
+            doc.line(lm,ph-11,rm,ph-11);
+            doc.setFont('helvetica','normal'); doc.setFontSize(6.5); doc.setTextColor(140,140,140);
+            doc.text('All prices per m² excl. GST. Prices subject to change without notice.',lm,ph-6.5);
+            doc.setFont('helvetica','bold'); doc.setTextColor(95,108,195);
+            doc.text('paintworkzpro.com.au',rm,ph-6.5,{align:'right'});
+            doc.setFont('helvetica','normal'); doc.setFontSize(5.5); doc.setTextColor(185,185,185);
+            doc.text('Created by paintworkzpro.com.au',pw/2,ph-2.5,{align:'center'});
+
+            showPDFPreview(doc.output('datauristring'), 'CTS_PriceList.pdf', '✂️ Cut To Size Price List');
         } catch(e) { console.error('genCtsPriceListPDF:', e); notify('PDF error: '+e.message); }
     }
     window.genCtsPriceListPDF = genCtsPriceListPDF;
@@ -19514,127 +19717,182 @@ if ('serviceWorker' in navigator && _swAllowed) {
     function genCtsOrderFormPDF() {
         try {
             if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) { notify('PDF library not loaded'); return; }
-            var jsPDF = window.jspdf.jsPDF;
-            var doc = new jsPDF('p','mm','a4');
-            var cs = JSON.parse(localStorage.getItem('companySettings') || '{}');
-            var lm = 12, rm = 198, y = 18;
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+            const cs = JSON.parse(localStorage.getItem('companySettings') || '{}');
 
-            var logo = window.currentCompanyLogo || localStorage.getItem('companyLogo');
-            if (logo) { try { doc.addImage(logo,'PNG',145,5,50,25); } catch(e){} }
+            const pw=210, ph=297, lm=12, rm=pw-12;
+            let y = 8;
 
-            doc.setFillColor(44,62,80); doc.rect(lm,y-5,rm-lm,14,'F');
-            doc.setTextColor(212,175,55); doc.setFont(undefined,'bold'); doc.setFontSize(15);
-            doc.text('CUT TO SIZE — ORDER FORM', lm+3, y+4);
-            doc.setTextColor(200,200,200); doc.setFont(undefined,'normal'); doc.setFontSize(8);
-            doc.text(cs.name || '', rm-3, y, {align:'right'});
-            if (cs.phone) doc.text(cs.phone, rm-3, y+5, {align:'right'});
-            y += 16;
+            // ── HEADER (same as paint price list) ──
+            const logoB64 = window.currentCompanyLogo || localStorage.getItem('companyLogo');
+            const totalW = rm - lm;
+            const zoneW = totalW / 3;
+            const leftEnd    = lm + zoneW;
+            const rightStart = lm + zoneW * 2;
+            const logoS = 24;
+            const logoX = rightStart + (zoneW - logoS) / 2;
 
-            doc.setDrawColor(180,180,180); doc.setFillColor(248,248,248);
-            doc.rect(lm, y, rm-lm, 22, 'FD');
-            doc.setTextColor(80,80,80); doc.setFont(undefined,'bold'); doc.setFontSize(8);
-            doc.text('CLIENT NAME:', lm+3, y+7); doc.text('DATE:', lm+100, y+7);
-            doc.text('CONTACT / PHONE:', lm+3, y+16); doc.text('DELIVERY / PICKUP:', lm+100, y+16);
-            doc.setDrawColor(150,150,150);
-            doc.line(lm+28, y+8, lm+88, y+8); doc.line(lm+115, y+8, rm-3, y+8);
-            doc.line(lm+37, y+17, lm+88, y+17); doc.line(lm+115, y+17, rm-3, y+17);
-            y += 27;
-
-            if (ctsEdgeTypes.length > 0) {
-                doc.setFillColor(240,240,240); doc.setDrawColor(180,180,180);
-                doc.rect(lm, y, rm-lm, 12, 'FD');
-                doc.setFont(undefined,'bold'); doc.setFontSize(8); doc.setTextColor(44,62,80);
-                doc.text('EDGE ROUTING:', lm+3, y+5);
-                var ex = lm+32;
-                ctsEdgeTypes.forEach(function(e) {
-                    doc.setFillColor(255,255,255); doc.rect(ex, y+2, 4, 4, 'FD');
-                    doc.setTextColor(60,60,60); doc.setFont(undefined,'normal');
-                    doc.text(e.name + ' ($'+e.lm+'/lm)', ex+6, y+6);
-                    ex += 45;
-                });
-                doc.setFillColor(255,255,255); doc.rect(ex, y+2, 4, 4, 'FD');
-                doc.text('None', ex+6, y+6);
-                y += 16;
+            if (logoB64) {
+                try { doc.addImage(logoB64,'PNG', logoX, y, logoS, logoS, undefined,'FAST'); }
+                catch(e){ try { doc.addImage(logoB64,'JPEG', logoX, y, logoS, logoS, undefined,'FAST'); } catch(e2){} }
             }
 
-            doc.setFont(undefined,'italic'); doc.setFontSize(7.5); doc.setTextColor(120,120,120);
-            doc.text('Fill in Qty and dimensions (H x W mm) for each profile and thickness required. Leave blank if not needed.', lm, y+4);
-            y += 9;
+            const infoMaxW = zoneW - 4;
+            doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(22,22,22);
+            const nameLines = doc.splitTextToSize(cs.name||'PaintWorkz', infoMaxW);
+            doc.text(nameLines, lm, y+6);
+            let cy = y + 6 + nameLines.length * 4.5;
+            doc.setFont('helvetica','normal'); doc.setFontSize(6.8); doc.setTextColor(72,72,72);
+            if (cs.phone) { doc.text('Ph: '+cs.phone, lm, cy); cy+=3.6; }
+            if (cs.email) { doc.text(doc.splitTextToSize(cs.email, infoMaxW)[0], lm, cy); cy+=3.6; }
 
-            var thks = ctsThicknesses;
-            var profColW = 52;
-            var thkColW = Math.min(28, (rm - lm - profColW) / (thks.length * 2));
-            var rowH = 9;
+            const boxW = zoneW - 6, boxH = 18, boxX = leftEnd + 3;
+            const boxCX = boxX + boxW / 2;
+            doc.setDrawColor(160,120,8); doc.setLineWidth(1.1);
+            doc.roundedRect(boxX, y, boxW, boxH, 2, 2, 'D');
+            doc.setDrawColor(212,175,55); doc.setLineWidth(0.4);
+            doc.roundedRect(boxX+1.5, y+1.5, boxW-3, boxH-3, 1.5, 1.5, 'D');
+            doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(148,108,4);
+            doc.text('CUT TO SIZE', boxCX, y+7, {align:'center'});
+            doc.text('ORDER FORM', boxCX, y+13, {align:'center'});
+            doc.setFont('helvetica','normal'); doc.setFontSize(6.8); doc.setTextColor(108,108,108);
 
-            doc.setFillColor(44,62,80); doc.rect(lm, y, rm-lm, 7, 'F');
-            doc.setTextColor(212,175,55); doc.setFont(undefined,'bold'); doc.setFontSize(8);
-            doc.text('Profile', lm+2, y+5);
-            var hx = lm + profColW;
-            thks.forEach(function(t) {
-                doc.text(t+'mm', hx + thkColW, y+5, {align:'center'});
-                hx += thkColW * 2;
+            y = Math.max(cy, y + logoS + 2) + 2;
+
+            // Rainbow stripe
+            const rcols=[[255,65,65],[255,145,25],[255,210,0],[55,180,55],[25,145,255],[130,50,235],[250,55,185]];
+            const sw2=(rm-lm)/rcols.length;
+            rcols.forEach((c,i)=>{ doc.setFillColor(...c); doc.rect(lm+i*sw2,y,sw2+0.4,2,'F'); });
+            y += 5;
+
+            // ── CLIENT DETAILS BOX ──
+            doc.setFillColor(250,250,250); doc.setDrawColor(215,215,215); doc.setLineWidth(0.22);
+            doc.roundedRect(lm, y, rm-lm, 16, 1.5, 1.5, 'FD');
+            doc.setFont('helvetica','bold'); doc.setFontSize(7); doc.setTextColor(28,28,28);
+            const midX = lm + (rm-lm)/2 + 3;
+            doc.text('CLIENT NAME:', lm+3, y+5.5);
+            doc.text('DATE:', midX, y+5.5);
+            doc.text('CONTACT / PHONE:', lm+3, y+12);
+            doc.text('DELIVERY / PICKUP:', midX, y+12);
+            doc.setDrawColor(150,150,150); doc.setLineWidth(0.3);
+            doc.line(lm+27, y+6.2, midX-4, y+6.2);
+            doc.line(midX+10, y+6.2, rm-3, y+6.2);
+            doc.line(lm+35, y+12.7, midX-4, y+12.7);
+            doc.line(midX+36, y+12.7, rm-3, y+12.7);
+            y += 20;
+
+            // ── EDGE ROUTING ──
+            if (ctsEdgeTypes.length > 0) {
+                doc.setFillColor(255,252,235); doc.setDrawColor(198,168,28); doc.setLineWidth(0.22);
+                doc.roundedRect(lm, y, rm-lm, 9, 1.5, 1.5, 'FD');
+                doc.setFont('helvetica','bold'); doc.setFontSize(7); doc.setTextColor(88,68,8);
+                doc.text('EDGE ROUTING:', lm+3, y+5.5);
+                // Spread checkboxes evenly
+                const edgeAreaW = rm - lm - 35;
+                const slotW = edgeAreaW / (ctsEdgeTypes.length + 1);
+                let ex = lm + 35;
+                ctsEdgeTypes.forEach(function(e) {
+                    // checkbox
+                    doc.setFillColor(255,255,255); doc.setDrawColor(140,110,0); doc.setLineWidth(0.4);
+                    doc.rect(ex, y+2.5, 4, 4, 'FD');
+                    doc.setFont('helvetica','normal'); doc.setFontSize(6.5); doc.setTextColor(50,35,0);
+                    doc.text(e.name + ' ($'+e.lm+'/lm)', ex+5.5, y+5.8);
+                    ex += slotW;
+                });
+                // None option
+                doc.setFillColor(255,255,255); doc.setDrawColor(140,110,0); doc.setLineWidth(0.4);
+                doc.rect(ex, y+2.5, 4, 4, 'FD');
+                doc.setFont('helvetica','normal'); doc.setFontSize(6.5); doc.setTextColor(50,35,0);
+                doc.text('None', ex+5.5, y+5.8);
+                y += 13;
+            }
+
+            // ── ORDER TABLE ──
+            // Columns: # | Part Type | Length (H) | Width (W) | Thickness | Comments
+            const cols = [
+                { label:'#',          w:8  },
+                { label:'Part Type',  w:38 },
+                { label:'Length (H)', w:28 },
+                { label:'Width (W)',  w:28 },
+                { label:'Thickness',  w:22 },
+                { label:'Comments',   w:62 }
+            ];
+            const totalColW = cols.reduce((s,c)=>s+c.w,0);
+            // Scale to fit
+            const scale = (rm-lm)/totalColW;
+            cols.forEach(c=>c.w=c.w*scale);
+
+            const rH = 8;
+            // Header
+            doc.setFillColor(26,26,26); doc.rect(lm,y,rm-lm,7,'F');
+            let cx = lm;
+            cols.forEach(function(col) {
+                doc.setFont('helvetica','bold'); doc.setFontSize(7); doc.setTextColor(212,175,55);
+                doc.text(col.label, cx+col.w/2, y+4.8, {align:'center'});
+                cx += col.w;
             });
             y += 7;
 
-            doc.setFillColor(30,50,70); doc.rect(lm, y, rm-lm, 6, 'F');
-            doc.setTextColor(180,200,220); doc.setFont(undefined,'normal'); doc.setFontSize(7);
-            hx = lm + profColW;
-            thks.forEach(function() {
-                doc.text('Qty', hx + thkColW/2, y+4, {align:'center'});
-                doc.text('H x W (mm)', hx + thkColW + thkColW/2, y+4, {align:'center'});
-                hx += thkColW * 2;
+            // Sub-header hint row
+            doc.setFillColor(40,40,40); doc.rect(lm,y,rm-lm,5,'F');
+            cx = lm;
+            const hints = ['','e.g. DOOR, PANEL','mm','mm','e.g. 18mm',''];
+            cols.forEach(function(col,i) {
+                doc.setFont('helvetica','normal'); doc.setFontSize(5.5); doc.setTextColor(150,150,150);
+                doc.text(hints[i], cx+col.w/2, y+3.5, {align:'center'});
+                cx += col.w;
             });
-            y += 6;
+            y += 5;
 
-            var allProfiles = [];
-            Object.values(ctsMatrix).forEach(function(tier) {
-                Object.values(tier).forEach(function(row) { if (row[0]) allProfiles.push(row[0]); });
-            });
-            if (allProfiles.length === 0) allProfiles = ['(add profiles in Admin > Price Matrix > Cut To Size)'];
-
-            function drawRow(label, ri) {
-                var fill = ri % 2 === 0 ? [255,255,255] : [247,247,250];
-                doc.setFillColor(fill[0],fill[1],fill[2]);
-                doc.rect(lm, y, rm-lm, rowH, 'F');
-                doc.setDrawColor(210,210,210); doc.rect(lm, y, rm-lm, rowH);
-                doc.setTextColor(30,30,30); doc.setFont(undefined,'bold'); doc.setFontSize(8);
-                if (label) doc.text(label.substring(0,26), lm+2, y+6);
-                doc.setDrawColor(180,180,180); doc.line(lm+profColW, y, lm+profColW, y+rowH);
-                hx = lm + profColW;
-                thks.forEach(function() {
-                    doc.setFillColor(255,255,255); doc.setDrawColor(200,200,200);
-                    doc.rect(hx, y+1, thkColW-1, rowH-2, 'F'); doc.rect(hx, y+1, thkColW-1, rowH-2);
-                    doc.rect(hx+thkColW, y+1, thkColW-1, rowH-2, 'F'); doc.rect(hx+thkColW, y+1, thkColW-1, rowH-2);
-                    hx += thkColW * 2;
+            // Data rows — 20 blank rows
+            for (let r = 0; r < 20; r++) {
+                const bg = r%2===0 ? [255,255,255] : [248,248,252];
+                doc.setFillColor(...bg); doc.rect(lm,y,rm-lm,rH,'F');
+                doc.setDrawColor(215,215,215); doc.setLineWidth(0.18); doc.rect(lm,y,rm-lm,rH);
+                // Row number
+                doc.setFont('helvetica','normal'); doc.setFontSize(6.5); doc.setTextColor(180,180,180);
+                doc.text(String(r+1), lm+cols[0].w/2, y+5.2, {align:'center'});
+                // Column dividers
+                cx = lm;
+                cols.forEach(function(col) {
+                    doc.setDrawColor(215,215,215); doc.setLineWidth(0.18);
+                    doc.line(cx+col.w, y, cx+col.w, y+rH);
+                    cx += col.w;
                 });
-                y += rowH;
-                if (y > 265) { doc.addPage(); y = 20; }
+                y += rH;
+                if (y > 265) { doc.addPage(); y = 12; }
             }
 
-            allProfiles.forEach(function(p, i) { drawRow(p, i); });
-            for (var b = 0; b < 5; b++) { drawRow('', allProfiles.length + b); }
+            y += 4;
 
-            y += 6;
-            if (y > 240) { doc.addPage(); y = 20; }
-            doc.setFillColor(248,248,248); doc.setDrawColor(180,180,180);
-            doc.rect(lm, y, rm-lm, 22, 'FD');
-            doc.setFont(undefined,'bold'); doc.setFontSize(8); doc.setTextColor(80,80,80);
-            doc.text('NOTES / SPECIAL REQUIREMENTS:', lm+3, y+6);
+            // ── NOTES BOX ──
+            if (y > 230) { doc.addPage(); y = 12; }
+            doc.setFillColor(255,252,235); doc.setDrawColor(198,168,28); doc.setLineWidth(0.22);
+            doc.roundedRect(lm, y, rm-lm, 18, 1.5, 1.5, 'FD');
+            doc.setFont('helvetica','bold'); doc.setFontSize(7); doc.setTextColor(88,68,8);
+            doc.text('NOTES / SPECIAL REQUIREMENTS:', lm+3, y+5.5);
 
-            var fy = doc.internal.pageSize.getHeight() - 8;
-            doc.setFont(undefined,'normal'); doc.setFontSize(7); doc.setTextColor(160,160,160);
-            doc.text('Created by paintworkzpro.com.au', rm, fy, {align:'right'});
-            doc.text(cs.name || '', lm, fy);
+            // ── FOOTER ──
+            doc.setDrawColor(200,200,200); doc.setLineWidth(0.22);
+            doc.line(lm,ph-11,rm,ph-11);
+            doc.setFont('helvetica','normal'); doc.setFontSize(6.5); doc.setTextColor(140,140,140);
+            doc.text('All prices excl. GST.',lm,ph-6.5);
+            doc.setFont('helvetica','bold'); doc.setTextColor(95,108,195);
+            doc.text('paintworkzpro.com.au',rm,ph-6.5,{align:'right'});
+            doc.setFont('helvetica','normal'); doc.setFontSize(5.5); doc.setTextColor(185,185,185);
+            doc.text('Created by paintworkzpro.com.au',pw/2,ph-2.5,{align:'center'});
 
-            var filename = 'CTS_OrderForm_' + (cs.name || 'PaintWorkz').replace(/\s+/g,'_') + '.pdf';
-            showPDFPreview(doc.output('datauristring'), filename, '\u2702\uFE0F CTS Order Form');
-        } catch(e) { console.error('genCtsOrderFormPDF:', e); notify('PDF error: ' + e.message); }
+            const filename = 'CTS_OrderForm_' + (cs.name||'PaintWorkz').replace(/\s+/g,'_') + '.pdf';
+            showPDFPreview(doc.output('datauristring'), filename, '✂️ CTS Order Form');
+        } catch(e) { console.error('genCtsOrderFormPDF:', e); notify('PDF error: '+e.message); }
     }
     window.genCtsOrderFormPDF = genCtsOrderFormPDF;
 
 
     function renderPricingMatrix() {
-        console.log('renderPricingMatrix called');
+        // Also refresh CTS matrix dropdown if CTS view is active
+        try { if (typeof renderCtsMatrix === 'function' && document.getElementById('admin-cts-matrix') && document.getElementById('admin-cts-matrix').style.display !== 'none') renderCtsMatrix(); } catch(e) {}
         const target = document.getElementById('admin-pricing-matrix');
         if (!target) {
             console.error('    admin-pricing-matrix div not found!');
