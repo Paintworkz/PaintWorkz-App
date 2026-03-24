@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.10.73';
+    const CURRENT_VERSION = 'v1.10.74';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -2018,6 +2018,7 @@ const firebaseConfig = {
                     <input type="text" id="new-client" placeholder="New Client Name" style="margin-bottom:0;">
                     <button class="btn-small" onclick="addClient()">ADD</button>
                 </div>
+                <input type="text" id="clientSearch" placeholder="🔍 Search clients..." oninput="filterDbList('clientSearch','list-clients')" style="width:100%; padding:8px 10px; border:1px solid #ddd; border-radius:6px; font-size:12px; margin-top:8px; box-sizing:border-box;">
                 <div class="db-list" id="list-clients"></div>
             </div>
         </div>
@@ -2032,7 +2033,8 @@ const firebaseConfig = {
                     <input type="text" id="new-profile" placeholder="New Profile Name (e.g., Shaker, Ashlee)" style="margin-bottom:0;">
                     <button class="btn-small" onclick="addProfile()">ADD</button>
                 </div>
-                <div class="db-list" id="list-profiles" style="margin-top:15px;"></div>
+                <input type="text" id="profileSearch" placeholder="🔍 Search profiles..." oninput="filterDbList('profileSearch','list-profiles')" style="width:100%; padding:8px 10px; border:1px solid #ddd; border-radius:6px; font-size:12px; margin-top:8px; box-sizing:border-box;">
+                <div class="db-list" id="list-profiles" style="margin-top:8px;"></div>
             </div>
         </div>
 
@@ -7259,7 +7261,7 @@ const firebaseConfig = {
             return;
         }
         
-        filteredHistory=filteredHistory.slice().sort(function(a,b){ var ta=b.timestamp||b.savedAt||"",tb=a.timestamp||a.savedAt||""; if(ta!==tb) return ta>tb?-1:1; return (parseInt(b.jobNum)||0)-(parseInt(a.jobNum)||0); }); filteredHistory.forEach((job, idx) => {
+        filteredHistory=filteredHistory.slice().sort(function(a,b){ var ta=a.timestamp||a.savedAt||"",tb=b.timestamp||b.savedAt||""; if(ta!==tb) return ta>tb?-1:1; return (parseInt(b.jobNum)||0)-(parseInt(a.jobNum)||0); }); filteredHistory.forEach((job, idx) => {
             // Find original index in full history
             const originalIdx = history.indexOf(job);
             
@@ -8994,7 +8996,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.10.73'; //     bump this on every release
+        const CURRENT_VERSION = 'v1.10.74'; //     bump this on every release
         const CURRENT_DATE = '2026-03-17';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -9517,6 +9519,30 @@ const firebaseConfig = {
     }
 
     // DATABASE OPS
+    // Generic db-list filter — hides items that don't match the search term
+    function filterDbList(inputId, listId) {
+        const term = (document.getElementById(inputId)?.value || '').trim().toLowerCase();
+        const list = document.getElementById(listId);
+        if (!list) return;
+        Array.from(list.children).forEach(function(item) {
+            const text = (item.textContent || '').toLowerCase();
+            item.style.display = term === '' || text.includes(term) ? '' : 'none';
+        });
+    }
+    window.filterDbList = filterDbList;
+
+    // Paint formula search
+    function searchFormulas() {
+        const term = (document.getElementById('formulaSearch')?.value || '').trim().toLowerCase();
+        const list = document.getElementById('paintFormulaList');
+        if (!list) return;
+        Array.from(list.children).forEach(function(item) {
+            const text = (item.textContent || '').toLowerCase();
+            item.style.display = term === '' || text.includes(term) ? '' : 'none';
+        });
+    }
+    window.searchFormulas = searchFormulas;
+
     function renderDB() {
         console.log(` renderDB() called`);
         
@@ -20010,19 +20036,21 @@ if ('serviceWorker' in navigator && _swAllowed) {
 
             // ── CLIENT DETAILS BOX ──
             doc.setFillColor(250,250,250); doc.setDrawColor(215,215,215); doc.setLineWidth(0.22);
-            doc.roundedRect(lm, y, rm-lm, 16, 1.5, 1.5, 'FD');
+            doc.roundedRect(lm, y, rm-lm, 22, 1.5, 1.5, 'FD');
             doc.setFont('helvetica','bold'); doc.setFontSize(7); doc.setTextColor(28,28,28);
             const midX = lm + (rm-lm)/2 + 3;
             doc.text('CLIENT NAME:', lm+3, y+5.5);
             doc.text('DATE:', midX, y+5.5);
-            doc.text('CONTACT / PHONE:', lm+3, y+12);
-            doc.text('DELIVERY / PICKUP:', midX, y+12);
+            doc.text('JOB NAME / REF:', lm+3, y+12);
+            doc.text('CONTACT / PHONE:', midX, y+12);
+            doc.text('DELIVERY / PICKUP:', lm+3, y+19);
             doc.setDrawColor(150,150,150); doc.setLineWidth(0.3);
             doc.line(lm+27, y+6.2, midX-4, y+6.2);
             doc.line(midX+10, y+6.2, rm-3, y+6.2);
-            doc.line(lm+35, y+12.7, midX-4, y+12.7);
-            doc.line(midX+36, y+12.7, rm-3, y+12.7);
-            y += 20;
+            doc.line(lm+33, y+12.7, midX-4, y+12.7);
+            doc.line(midX+35, y+12.7, rm-3, y+12.7);
+            doc.line(lm+37, y+19.7, rm-3, y+19.7);
+            y += 26;
 
             // ── EDGE ROUTING ──
             if (ctsEdgeTypes.length > 0) {
@@ -20115,7 +20143,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 doc.setFillColor(...bg); doc.rect(lm,y,pageW,rH,'F');
                 doc.setDrawColor(215,215,215); doc.setLineWidth(0.18); doc.rect(lm,y,pageW,rH);
                 cx = lm;
-                doc.setFont('helvetica','normal'); doc.setFontSize(6); doc.setTextColor(180,180,180);
+                doc.setFont('helvetica','bold'); doc.setFontSize(7); doc.setTextColor(60,60,60);
                 doc.text(String(r+1), cx+fixedCols[0].w/2, y+5.5, {align:'center'});
                 cx += fixedCols[0].w;
                 for (let i=1;i<fixedCols.length;i++){ doc.setDrawColor(215,215,215); doc.line(cx,y,cx,y+rH); cx+=fixedCols[i].w; }
@@ -20198,15 +20226,17 @@ if ('serviceWorker' in navigator && _swAllowed) {
             [[255,65,65],[255,145,25],[255,210,0],[55,180,55],[25,145,255],[130,50,235],[250,55,185]].forEach((c,i)=>{const sw=(rm-lm)/7;doc.setFillColor(...c);doc.rect(lm+i*sw,y,sw+0.4,2,'F');});
             y+=5;
             doc.setFillColor(250,250,250);doc.setDrawColor(215,215,215);doc.setLineWidth(0.22);
-            doc.roundedRect(lm,y,rm-lm,16,1.5,1.5,'FD');
+            doc.roundedRect(lm,y,rm-lm,22,1.5,1.5,'FD');
             doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor(28,28,28);
             const midX=lm+(rm-lm)/2+3;
             doc.text('CLIENT NAME:',lm+3,y+5.5);doc.text('DATE:',midX,y+5.5);
-            doc.text('CONTACT / PHONE:',lm+3,y+12);doc.text('DELIVERY / PICKUP:',midX,y+12);
+            doc.text('JOB NAME / REF:',lm+3,y+12);doc.text('CONTACT / PHONE:',midX,y+12);
+            doc.text('DELIVERY / PICKUP:',lm+3,y+19);
             doc.setDrawColor(150,150,150);doc.setLineWidth(0.3);
             doc.line(lm+27,y+6.2,midX-4,y+6.2);doc.line(midX+10,y+6.2,rm-3,y+6.2);
-            doc.line(lm+35,y+12.7,midX-4,y+12.7);doc.line(midX+36,y+12.7,rm-3,y+12.7);
-            y+=20;
+            doc.line(lm+33,y+12.7,midX-4,y+12.7);doc.line(midX+35,y+12.7,rm-3,y+12.7);
+            doc.line(lm+37,y+19.7,rm-3,y+19.7);
+            y+=26;
             doc.setFillColor(255,252,235);doc.setDrawColor(198,168,28);doc.setLineWidth(0.22);
             doc.roundedRect(lm,y,rm-lm,9,1.5,1.5,'FD');
             doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor(88,68,8);
@@ -20261,7 +20291,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 const bg=r%2===0?[255,255,255]:[248,248,252];
                 doc.setFillColor(...bg);doc.rect(lm,y,pW,rH,'F');
                 doc.setDrawColor(215,215,215);doc.setLineWidth(0.18);doc.rect(lm,y,pW,rH);
-                cx=lm;doc.setFont('helvetica','normal');doc.setFontSize(6);doc.setTextColor(180,180,180);
+                cx=lm;doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor(60,60,60);
                 doc.text(String(r+1),cx+fC[0].w/2,y+5.5,{align:'center'});cx+=fC[0].w;
                 for(let i=1;i<fC.length;i++){doc.setDrawColor(215,215,215);doc.line(cx,y,cx,y+rH);cx+=fC[i].w;}
                 doc.setDrawColor(140,140,140);doc.setLineWidth(0.4);doc.line(cx,y,cx,y+rH);
