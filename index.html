@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.10.75 | Updated: 2026-03-24                       ║
+║  Version: v1.10.76 | Updated: 2026-03-25                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.10.75';
+    const CURRENT_VERSION = 'v1.10.76';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1724,7 +1724,7 @@ const firebaseConfig = {
 
         <div id="loginError" style="color:red; font-weight:900; margin-top:15px; text-align:center; display:none;"></div>
     </div>
-    <div id="loginVersionText" style="text-align:center; margin-top:12px; font-size:10px; color:rgba(128,128,128,0.8); font-weight:700;">v1.10.75</div>
+    <div id="loginVersionText" style="text-align:center; margin-top:12px; font-size:10px; color:rgba(128,128,128,0.8); font-weight:700;">v1.10.76</div>
 </div>
 
 <div id="resetPasswordScreen" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:linear-gradient(135deg, #d4af37, #f9f1b0); z-index:10001; flex-direction:column; align-items:center; justify-content:center; padding:20px;">
@@ -2251,8 +2251,8 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.10.75</div>
-                            <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-03-24</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.10.76</div>
+                            <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-03-25</div>
                         </div>
                     </div>
                     <div style="margin-top:10px; padding-top:10px; border-top:1px solid #ddd; font-size:9px; color:#999;">
@@ -3015,7 +3015,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.10.75</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-24</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.10.76</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-25</span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);if(typeof tab==='function')tab('measure');setTimeout(function(){if(typeof startTour==='function')startTour();},300);" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -3937,9 +3937,9 @@ const firebaseConfig = {
     console.log('%cUnauthorized copying, modification, or claiming ownership is prohibited.', 'color:#ff0000;font-weight:bold;');
     console.log('%cAll rights reserved    2026 Colin Bedford', 'color:#ff0000;font-weight:bold;');
     console.log('');
-    //                    VERSION: v1.10.75 | 2026-03-24 | Colin Bedford                   
+    //                    VERSION: v1.10.76 | 2026-03-25 | Colin Bedford                   
     //                    ADMIN TABS FIXED | COVER SHEET FIXED | DELETE CONFIRMATION ADDED                   
-    console.log('%c PaintWorkz Pro v1.10.75 ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('%c PaintWorkz Pro v1.10.76 ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     // Changelog logs removed for production performance
     // ====================================
     
@@ -6582,13 +6582,27 @@ const firebaseConfig = {
             if (window.appliedCharges) window.appliedCharges.lastSnapshot = null;
             
             // Initialize default clients if database is empty
-            initializeDefaultClients();
+            // Skip for staff accounts - their data comes from owner's Firestore (async)
+            if (!window.isStaffAccount) {
+                initializeDefaultClients();
+            }
             
             // Populate client dropdown
+            // For staff: Firestore load will populate with owner data - do a quick local populate now
+            // and the proper one will arrive within seconds
             populateClientDropdown();
             
             // Populate paint brands dropdown
             populatePaintBrandsDropdown();
+            
+            // For staff accounts: schedule a re-populate after Firestore data arrives
+            if (window.isStaffAccount) {
+                setTimeout(function() {
+                    try { populateClientDropdown(); } catch(e) {}
+                    try { renderDB(); } catch(e) {}
+                    try { renderPaintFormulaList(); } catch(e) {}
+                }, 3000);
+            }
             
             // Render clients in admin tab
             renderClientsList();
@@ -6971,7 +6985,7 @@ const firebaseConfig = {
         if(window.currentUser&&window.firebaseDb&&window.doc&&window.setDoc&&jobData.id){
             try{
                 var _jfc=Object.assign({},jobData); delete _jfc.photos;
-                _jfc.userId=window.currentUser.uid; _jfc.lastModified=new Date().toISOString();
+                _jfc.userId = window.staffModeOwnerUid || window.currentUser.uid; _jfc.lastModified=new Date().toISOString();
                 try{if(typeof Blob!=='undefined'&&new Blob([JSON.stringify(_jfc)]).size>850000){_jfc.items=(_jfc.items||[]).map(function(it){return{h:it.h,w:it.w,qty:it.qty,desc:it.desc,prof:it.prof,fm:it.fm,mode:it.mode,e:it.e,type:it.type,thk:it.thk,brand:it.brand,color:it.color,finish:it.finish,sqm:it.sqm,cts:it.cts};});}}catch(se){}
                 var _jref=window.doc(window.firebaseDb,'users',window.currentUser.uid,'jobs',jobData.id);
                 window.setDoc(_jref,_jfc,{merge:false}).then(function(){console.log('Job pushed to Firestore:',jobData.jobNum);try{lastSyncTime=0;lastSyncedData='';if(typeof syncJobsToFirebase==='function')syncJobsToFirebase();}catch(_se){}}).catch(function(e){console.error('Direct job push failed:',e);});
@@ -7215,7 +7229,7 @@ const firebaseConfig = {
                     const targetUid = getTargetUid();
                     const jobDoc = window.doc(window.firebaseDb, 'users', targetUid, 'jobs', jobId);
                     var _pfc={...job}; delete _pfc.photos;
-                    await window.setDoc(jobDoc, { ..._pfc, id: jobId, lastModified: new Date().toISOString(), userId: window.currentUser.uid }, { merge: false });
+                    await window.setDoc(jobDoc, { ..._pfc, id: jobId, lastModified: new Date().toISOString(), userId: window.staffModeOwnerUid||window.currentUser.uid }, { merge: false });
                     pushed++;
                 } catch(e) { console.error('Push error for job', job.jobNum, e); }
             }
@@ -7712,7 +7726,7 @@ const firebaseConfig = {
             try {
                 const jobId = job.id || job.jobNum;
                 const jobDocRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'jobs', jobId);
-                var complJob={...job,id:jobId,completed:true,completedDate:job.completedDate,dateCompleted:job.dateCompleted,lastModified:new Date().toISOString(),userId:window.currentUser.uid};
+                var complJob={...job,id:jobId,completed:true,completedDate:job.completedDate,dateCompleted:job.dateCompleted,lastModified:new Date().toISOString(),userId:window.staffModeOwnerUid||window.currentUser.uid};
                 delete complJob.photos;
                 window.setDoc(jobDocRef, complJob, { merge: false }).then(function() {
                     console.log('Job completion pushed directly to Firestore:', jobId);
@@ -8997,8 +9011,8 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.10.75'; //     bump this on every release
-        const CURRENT_DATE = '2026-03-24';
+        const CURRENT_VERSION = 'v1.10.76'; //     bump this on every release
+        const CURRENT_DATE = '2026-03-25';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
         const versionDate = document.getElementById('adminVersionDate');
@@ -22346,7 +22360,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         window.setDoc(jobRef, {
             ...jobData,
             lastModified: new Date().toISOString(),
-            userId: window.currentUser.uid
+            userId: window.staffModeOwnerUid||window.currentUser.uid
         }, { merge: true }).then(() => {
             try { flashSaved('       Synced'); } catch(e) {}
         }).catch(e => console.warn('Firestore save error:', e));
@@ -22475,7 +22489,13 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             });
 
             // Safety filter: only load jobs that belong to THIS user (dataUid)
-            const safeJobs = jobs.filter(function(j) { return !j.userId || j.userId === dataUid; });
+            const safeJobs = jobs.filter(function(j) { 
+                if (!j.userId) return true; // no userId tag - allow
+                if (j.userId === dataUid) return true; // saved by owner - allow
+                // Staff-saved jobs: userId = staff uid, stored in owner's collection - allow
+                if (window.isStaffAccount && j.userId === window.currentUser.uid) return true;
+                return false;
+            });
             if (safeJobs.length < jobs.length) {
                 console.warn('⚠️ Filtered out ' + (jobs.length - safeJobs.length) + ' jobs from other users (dataUid: ' + dataUid + ')');
             } else if (jobs.length > 0) {
@@ -22942,7 +22962,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                 try {
                     const jobId = job.id || job.jobNum || Date.now().toString();
                     const jobDoc = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'jobs', jobId);
-                    var jobForCloud={...job,id:jobId,lastModified:new Date().toISOString(),userId:window.currentUser.uid};
+                    var jobForCloud={...job,id:jobId,lastModified:new Date().toISOString(),userId:window.staffModeOwnerUid||window.currentUser.uid};
                     delete jobForCloud.photos; // strip base64 photos - too large for Firestore 1MB limit
                     try{if(new Blob([JSON.stringify(jobForCloud)]).size>850000){jobForCloud.items=(jobForCloud.items||[]).map(function(it){return{h:it.h,w:it.w,qty:it.qty,desc:it.desc,prof:it.prof,fm:it.fm,mode:it.mode,e:it.e,type:it.type,thk:it.thk,brand:it.brand,color:it.color,finish:it.finish,sqm:it.sqm,cts:it.cts};});console.warn('Trimmed:',jobId);}}catch(_se){}
                     window.setDoc(jobDoc, jobForCloud, { merge: true }).catch(err => console.error('Firestore sync error for job', jobId, ':', err));
