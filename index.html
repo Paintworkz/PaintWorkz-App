@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.11.5 | Updated: 2026-03-25                       ║
+║  Version: v1.11.6 | Updated: 2026-03-25                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.11.5';
+    const CURRENT_VERSION = 'v1.11.6';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1800,7 +1800,7 @@ const firebaseConfig = {
 
         <div id="loginError" style="color:red; font-weight:900; margin-top:15px; text-align:center; display:none;"></div>
     </div>
-    <div id="loginVersionText" style="text-align:center; margin-top:12px; font-size:10px; color:rgba(128,128,128,0.8); font-weight:700;">v1.11.5</div>
+    <div id="loginVersionText" style="text-align:center; margin-top:12px; font-size:10px; color:rgba(128,128,128,0.8); font-weight:700;">v1.11.6</div>
 </div>
 
 <div id="resetPasswordScreen" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:linear-gradient(135deg, #d4af37, #f9f1b0); z-index:10001; flex-direction:column; align-items:center; justify-content:center; padding:20px;">
@@ -2339,7 +2339,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.11.5</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.11.6</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-03-25</div>
                         </div>
                     </div>
@@ -3105,7 +3105,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.11.5</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-25</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.11.6</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-25</span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);if(typeof tab==='function')tab('measure');setTimeout(function(){if(typeof startTour==='function')startTour();},300);" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -4049,9 +4049,9 @@ const firebaseConfig = {
     console.log('%cUnauthorized copying, modification, or claiming ownership is prohibited.', 'color:#ff0000;font-weight:bold;');
     console.log('%cAll rights reserved    2026 Colin Bedford', 'color:#ff0000;font-weight:bold;');
     console.log('');
-    //                    VERSION: v1.11.5 | 2026-03-25 | Colin Bedford                   
+    //                    VERSION: v1.11.6 | 2026-03-25 | Colin Bedford                   
     //                    ADMIN TABS FIXED | COVER SHEET FIXED | DELETE CONFIRMATION ADDED                   
-    console.log('%c PaintWorkz Pro v1.11.5 ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('%c PaintWorkz Pro v1.11.6 ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     // Changelog logs removed for production performance
     // ====================================
     
@@ -9150,7 +9150,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.11.5'; //     bump this on every release
+        const CURRENT_VERSION = 'v1.11.6'; //     bump this on every release
         const CURRENT_DATE = '2026-03-25';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -17753,6 +17753,19 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 renderAdminGanttChart();
                 loadCoverageRates();
                 loadStockSettings();
+                // Load additional charges from Firestore if available
+                if (window.currentUser && window.firebaseDb && window.doc && window.getDoc) {
+                    try {
+                        const _acRef = window.doc(window.firebaseDb, 'users', window.staffModeOwnerUid || window.currentUser.uid, 'appData', 'additionalCharges');
+                        window.getDoc(_acRef).then(snap => {
+                            if (snap.exists()) {
+                                const remote = snap.data();
+                                delete remote.lastUpdated;
+                                localStorage.setItem('additionalCharges', JSON.stringify(remote));
+                            }
+                        }).catch(e => {});
+                    } catch(e) {}
+                }
                 // Render delivery regions
                 try {
                     const charges = loadAdditionalCharges();
@@ -21727,12 +21740,16 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
     // ===== ADDITIONAL CHARGES FUNCTIONS =====
     function saveAdditionalCharges() {
         // Read delivery regions from dynamic list
+        // If list is empty/collapsed, preserve existing saved regions
         const deliveryRegions = {};
         document.querySelectorAll('#deliveryRegionsList .region-row').forEach(function(row) {
             const name = row.querySelector('.region-name-val')?.textContent.trim();
             const price = parseFloat(row.querySelector('.region-price-input')?.value || 0);
             if (name) deliveryRegions[name] = price;
         });
+        // If no rows found (section collapsed), fall back to currently saved regions
+        const existingSaved = JSON.parse(localStorage.getItem('additionalCharges') || '{}');
+        const finalRegions = Object.keys(deliveryRegions).length > 0 ? deliveryRegions : (existingSaved.deliveryRegions || {});
 
         const charges = {
             colourMultipliers: {
@@ -21745,13 +21762,24 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             },
             clearFlatRate: parseFloat(document.getElementById('chargeClearFlat')?.value || 110),
             colourMatchFlatRate: parseFloat(document.getElementById('chargeColourMatch')?.value || 85),
-            deliveryRegions: deliveryRegions,
+            deliveryRegions: finalRegions,
             gstRate: parseFloat(document.getElementById('gstRate')?.value || 10) / 100
         };
         
         localStorage.setItem('additionalCharges', JSON.stringify(charges));
+
+        // Sync to Firestore so it persists across devices
+        if (window.currentUser && window.firebaseDb && window.doc && window.setDoc) {
+            try {
+                const ref = window.doc(window.firebaseDb, 'users', window.staffModeOwnerUid || window.currentUser.uid, 'appData', 'additionalCharges');
+                window.setDoc(ref, { ...charges, lastUpdated: new Date().toISOString() }, { merge: false })
+                    .then(() => console.log('Additional charges synced to Firestore'))
+                    .catch(e => console.warn('Additional charges Firestore sync failed:', e));
+            } catch(e) {}
+        }
+
         // Update delivery dropdown in charges modal
-        try { if (typeof populateDeliveryDropdown === 'function') populateDeliveryDropdown(deliveryRegions); } catch(e){}
+        try { if (typeof populateDeliveryDropdown === 'function') populateDeliveryDropdown(finalRegions); } catch(e){}
         showGlobalNotification('✅ Additional Charges Saved', '#e8f5e9', '#34c759');
     }
     
