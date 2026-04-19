@@ -17010,7 +17010,10 @@ const firebaseConfig = {
     }
 
     function deductStockForJob(jobData) {
-        // Called when a job is saved     books out paint from stock
+        // Only deduct once per job — track which job IDs have been booked out
+        const deductedJobs = JSON.parse(localStorage.getItem('pwStockDeducted') || '{}');
+        const jobKey = String(jobData.jobNum || jobData.id || '');
+        if (!jobKey || deductedJobs[jobKey]) return; // already deducted for this job
         const CR2 = JSON.parse(localStorage.getItem('pwCoverageRates') || '{}');
         const _ucR  = parseFloat(CR2.undercoat) || 8;
         const _ucCR = parseFloat(CR2.clearUc)   || 8;
@@ -17058,6 +17061,9 @@ const firebaseConfig = {
                 deduct('ClearUC', sqm/_ucCR);
             }
         }
+        // Mark this job as deducted so re-saves don't double-deduct
+        deductedJobs[jobKey] = new Date().toISOString();
+        localStorage.setItem('pwStockDeducted', JSON.stringify(deductedJobs));
         localStorage.setItem('pwStockLevels', JSON.stringify(stock));
     }
 
@@ -24289,6 +24295,10 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
 
     // ---- DEDUCT TINTERS WHEN JOB COMPLETES ----
     function deductTinterStockForJob(jobData) {
+        // Only deduct once per job (same guard as base deduction)
+        const deductedJobs2 = JSON.parse(localStorage.getItem('pwStockDeducted') || '{}');
+        const jobKey2 = String(jobData.jobNum || jobData.id || '');
+        if (!jobKey2 || deductedJobs2[jobKey2 + '_tint']) return;
         const formulas = JSON.parse(localStorage.getItem('paintFormulas') || '[]');
         const getF = col => formulas.find(f => (f.color||'').toLowerCase().trim() === (col||'').toLowerCase().trim());
         const CR = JSON.parse(localStorage.getItem('pwCoverageRates') || '{}');
@@ -24313,6 +24323,9 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             });
         });
 
+        // Mark tinter deduction as done for this job
+        deductedJobs2[jobKey2 + '_tint'] = new Date().toISOString();
+        localStorage.setItem('pwStockDeducted', JSON.stringify(deductedJobs2));
         setStockLevels(levels);
         checkStockAlerts();
     }
