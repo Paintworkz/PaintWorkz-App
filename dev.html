@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.15.5-dev-s10';
+    const CURRENT_VERSION = 'v1.15.5-dev-s12';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -9591,7 +9591,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.15.5-dev-s10'; //     bump this on every release
+        const CURRENT_VERSION = 'v1.15.5-dev-s12'; //     bump this on every release
         const CURRENT_DATE = '2026-03-25';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -16204,26 +16204,34 @@ const firebaseConfig = {
             ${(_totalEstVal > 0 && _totalPaintCost > 0) ? kpiCard('    ', 'Gross Margin', _fmtKpi(_grossProfit), _grossProfit >= 0 ? '#2e7d32' : '#c62828') : ''}
         </div>
 
-        <!-- Row 1: Monthly SQM line chart + Finish donut -->
-        <div style="display:grid; grid-template-columns:2fr 1fr; gap:14px; margin-bottom:18px;">
+        <!-- Row 1: Monthly SQM — full width -->
+        <div style="margin-bottom:14px;">
             <div class="report-card">
-                <div class="report-card-title">     Monthly SQM Completed</div>
-                <canvas id="chartMonthlySqm" height="130"></canvas>
-            </div>
-            <div class="report-card">
-                <div class="report-card-title">    By Finish</div>
-                <canvas id="chartFinish" height="130"></canvas>
+                <div class="report-card-title">📈 Monthly SQM Completed</div>
+                <canvas id="chartMonthlySqm" height="90"></canvas>
             </div>
         </div>
 
-        <!-- Row 2: Top Colours + Top Profiles -->
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:18px;" class="report-grid-2">
+        <!-- Row 2: By Finish + By Colour — 50/50 -->
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px;">
             <div class="report-card">
-                <div class="report-card-title">     Top Colours by SQM</div>
+                <div class="report-card-title">🎨 By Finish</div>
+                <canvas id="chartFinish" height="160"></canvas>
+            </div>
+            <div class="report-card">
+                <div class="report-card-title">🎨 By Colour</div>
+                <canvas id="chartColourPie" height="160"></canvas>
+            </div>
+        </div>
+
+        <!-- Row 3: Top Colours + Top Door Profiles — 50/50 -->
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px;">
+            <div class="report-card">
+                <div class="report-card-title">🏆 Top Colours by SQM</div>
                 <canvas id="chartColours" height="200"></canvas>
             </div>
             <div class="report-card">
-                <div class="report-card-title">     Top Door Profiles by SQM</div>
+                <div class="report-card-title">🚪 Top Door Profiles by SQM</div>
                 <canvas id="chartProfiles" height="200"></canvas>
             </div>
         </div>
@@ -16312,33 +16320,27 @@ const firebaseConfig = {
 
         </div><!-- end paint quantities + stocktake grid -->
 
-        
-
-        
-
-        
-
-        <!-- Row 4: Client SQM + Finish breakdown -->
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:18px;" class="report-grid-2">
+        <!-- Row 6: SQM by Client + Jobs by Finish Type — 50/50 -->
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px;">
             <div class="report-card">
-                <div class="report-card-title">     SQM by Client</div>
+                <div class="report-card-title">👤 SQM by Client</div>
                 <canvas id="chartClients" height="130"></canvas>
             </div>
             <div class="report-card">
-                <div class="report-card-title">     Jobs by Finish Type</div>
+                <div class="report-card-title">📊 Jobs by Finish Type</div>
                 <canvas id="chartFinishBar" height="130"></canvas>
             </div>
         </div>
 
-        <!-- Row 5: Monthly jobs bar -->
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:18px;" class="report-grid-2">
+        <!-- Row 7: Jobs per Month + Jobs by Client — 50/50 -->
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px;">
             <div class="report-card">
-                <div class="report-card-title">     Jobs per Month</div>
-                <canvas id="chartMonthlyJobs" height="150"></canvas>
+                <div class="report-card-title">📅 Jobs per Month</div>
+                <canvas id="chartMonthlyJobs" height="130"></canvas>
             </div>
             <div class="report-card">
-                <div class="report-card-title">     Jobs by Client</div>
-                <canvas id="chartClientJobs" height="150"></canvas>
+                <div class="report-card-title">🏢 Jobs by Client</div>
+                <canvas id="chartClientJobs" height="130"></canvas>
             </div>
         </div>
 
@@ -16538,10 +16540,20 @@ const firebaseConfig = {
                 new Chart(co('chartFinish'), { type:'doughnut', data:{
                     labels: finishes.map(f=>f[0]),
                     datasets:[{ data: finishes.map(f=>f[1]), backgroundColor: palette, borderWidth:2 }]
-                }, options:{ responsive:true, plugins:{ legend:{ position:'bottom', labels:{ font:{size:9}, boxWidth:10 } } } }});
+                }, options:{ responsive:true, plugins:{ legend:{ position:'bottom', labels:{ font:{size:10}, boxWidth:12 } } } }});
             }
 
-            // Top colours bar (horizontal) - FIX 3: show SQM value in bar
+            // By Colour pie chart — top 10 colours by SQM as doughnut
+            if (topColours.length && co('chartColourPie')) {
+                const colourPalette = ['#2196f3','#4caf50','#ff9800','#9c27b0','#f44336','#00bcd4','#ff5722','#607d8b','#3f51b5','#8bc34a'];
+                new Chart(co('chartColourPie'), { type:'doughnut', data:{
+                    labels: topColours.slice(0,8).map(c => c[0].length > 18 ? c[0].slice(0,16)+'…' : c[0]),
+                    datasets:[{ data: topColours.slice(0,8).map(c=>+c[1].toFixed(1)), backgroundColor: colourPalette, borderWidth:2 }]
+                }, options:{ responsive:true, plugins:{ legend:{ position:'bottom', labels:{ font:{size:10}, boxWidth:12 } },
+                    tooltip:{ callbacks:{ label: ctx => ` ${ctx.label}: ${ctx.raw}m²` } } } }});
+            }
+
+            // Top colours bar (horizontal) - show SQM value in bar
             if (topColours.length && co('chartColours')) {
                 new Chart(co('chartColours'), {
                     type:'bar',
@@ -16549,13 +16561,13 @@ const firebaseConfig = {
                     data:{
                         labels: topColours.map(c=>c[0]),
                         datasets:[{ data: topColours.map(c=>+c[1].toFixed(2)),
-                            backgroundColor: palette, borderRadius:4 }]
+                            backgroundColor: palette, borderRadius:5 }]
                     }, options:{ indexAxis:'y', responsive:true, plugins:{legend:{display:false}},
-                        scales:{ x:{ beginAtZero:true, ticks:{font:{size:9}} }, y:{ ticks:{font:{size:9}} } } }
+                        scales:{ x:{ beginAtZero:true, ticks:{font:{size:11}, callback: v => v+'m²'} }, y:{ ticks:{font:{size:11}, crossAlign:'far'} } } }
                 });
             }
 
-            // Top profiles bar (horizontal) - FIX 1: now shows real profile names
+            // Top profiles bar (horizontal)
             if (topProfiles.length && co('chartProfiles')) {
                 new Chart(co('chartProfiles'), {
                     type:'bar',
@@ -16563,9 +16575,9 @@ const firebaseConfig = {
                     data:{
                         labels: topProfiles.map(p=>p[0]),
                         datasets:[{ data: topProfiles.map(p=>+p[1].toFixed(2)),
-                            backgroundColor: palette.slice(2), borderRadius:4 }]
+                            backgroundColor: palette.slice(2), borderRadius:5 }]
                     }, options:{ indexAxis:'y', responsive:true, plugins:{legend:{display:false}},
-                        scales:{ x:{ beginAtZero:true, ticks:{font:{size:9}} }, y:{ ticks:{font:{size:9}} } } }
+                        scales:{ x:{ beginAtZero:true, ticks:{font:{size:11}, callback: v => v+'m²'} }, y:{ ticks:{font:{size:11}, crossAlign:'far'} } } }
                 });
             }
 
@@ -16574,9 +16586,9 @@ const firebaseConfig = {
                 new Chart(co('chartClients'), { type:'bar', plugins:[datalabelPlugin], data:{
                     labels: topClients.map(c=>c[0]),
                     datasets:[{ data: topClients.map(c=>+c[1].toFixed(2)),
-                        backgroundColor: palette.slice(1), borderRadius:4 }]
+                        backgroundColor: palette.slice(1), borderRadius:5 }]
                 }, options:{ responsive:true, plugins:{legend:{display:false}},
-                    scales:{ y:{ beginAtZero:true, ticks:{font:{size:9}} }, x:{ ticks:{font:{size:9}, maxRotation:30} } } }});
+                    scales:{ y:{ beginAtZero:true, ticks:{font:{size:11}, callback: v => v+'m²'} }, x:{ ticks:{font:{size:11}, maxRotation:30} } } }});
             }
 
             // Monthly jobs bar
@@ -16928,13 +16940,14 @@ const firebaseConfig = {
         const levels = {};
         inputs.forEach(inp => { levels[inp.dataset.stockKey] = parseFloat(inp.value) || 0; });
         localStorage.setItem('pwStockLevels', JSON.stringify(levels));
-        notify('    Stock levels saved');
-        // Push to Firebase so all devices stay in sync
+        notify('✅ Stock levels saved');
+        // Push to Firebase — always use owner UID so staff updates go to the right account
         if (window.currentUser && window.firebaseDb && window.doc && window.setDoc) {
             try {
-                const stockRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'stockLevels');
+                const targetUid = window.staffModeOwnerUid || window.currentUser.uid;
+                const stockRef = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'stockLevels');
                 window.setDoc(stockRef, { levels, savedAt: new Date().toISOString() }, { merge: false })
-                    .then(() => console.log('       Stock levels pushed to Firebase'))
+                    .then(() => console.log('✅ Stock levels pushed to Firebase'))
                     .catch(e => console.warn('Stock sync error:', e));
             } catch(e) {}
         }
@@ -23687,7 +23700,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
 
             //        5b. Stock Levels                                                                                                             
             try {
-                const stockRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'stockLevels');
+                const stockRef = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'stockLevels');
                 const stockSnap = await window.getDoc(stockRef);
                 if (stockSnap.exists()) {
                     const sd = stockSnap.data();
@@ -24106,14 +24119,27 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         if (tintKeys.length === 0) {
             tintsHtml = '<p style="color:#999; font-size:11px; padding:8px;">Add paint formulas to Database → Paint to see tinter codes here.</p>';
         } else {
+            const tinterNames = JSON.parse(localStorage.getItem('pwTinterNames') || '{}');
             tintKeys.forEach(code => {
                 const tintKey = 'tint_' + code;
                 const current = parseFloat(getStockLevels()[tintKey] || 0);
-                tintsHtml += `<div style="display:flex; align-items:center; gap:8px; padding:6px 8px; margin-bottom:4px; background:${rowBg}; border-radius:6px; border:1px solid ${border};">
-                    <div style="flex:1; font-size:11px; font-weight:700; color:${textCol};">${code}<br><span style="font-size:9px; color:#888;">Current: ${current > 0 ? current.toFixed(0)+'g' : 'unknown'}</span></div>
-                    <button onclick="addReceiveQty('recvt_${tintKey}', 1000)" style="border:none; background:#9c27b0; color:#fff; padding:5px 8px; border-radius:6px; font-size:10px; font-weight:900; cursor:pointer; white-space:nowrap;">+1000g</button>
-                    <input type="number" id="recvt_${tintKey}" min="0" step="10" placeholder="0" style="width:80px; padding:5px; border:1px solid ${border}; border-radius:6px; font-size:12px; font-weight:900; text-align:right; background:${inputBg}; color:${textCol};">
-                    <span style="font-size:10px; color:#888;">g</span>
+                const baseCode = code.replace(/-\d+$/, '').toUpperCase();
+                const autoName = EVIC_ITE_NAMES[baseCode] || '';
+                const savedName = tinterNames[code] || '';
+                const displayName = savedName || autoName;
+                const iteCol = EVIC_ITE_COLOURS[baseCode];
+                // Use actual tint colour as background (slightly transparent overlay)
+                const cellBg = iteCol ? (_dm ? iteCol.dbg : iteCol.bg) : rowBg;
+                const cellTxt = iteCol ? '#fff' : textCol;
+                tintsHtml += `<div style="display:flex; align-items:center; gap:8px; padding:6px 8px; margin-bottom:4px; background:${cellBg}; border-radius:6px; border:1px solid ${iteCol ? 'rgba(255,255,255,0.2)' : border};">
+                    <div style="flex:1; min-width:0;">
+                        <div style="font-size:11px; font-weight:900; color:#fff; font-family:monospace; text-shadow:0 1px 2px rgba(0,0,0,0.4);">${code}</div>
+                        ${displayName ? `<div style="font-size:9px; color:#fff; opacity:0.85; text-shadow:0 1px 2px rgba(0,0,0,0.4);">${displayName}</div>` : ''}
+                        <div style="font-size:9px; color:#fff; opacity:0.7; text-shadow:0 1px 2px rgba(0,0,0,0.4);">On hand: ${current > 0 ? current.toFixed(0)+'g' : '–'}</div>
+                    </div>
+                    <button onclick="addReceiveQty('recvt_${tintKey}', 1000)" style="border:none; background:rgba(0,0,0,0.25); color:#fff; padding:5px 8px; border-radius:6px; font-size:10px; font-weight:900; cursor:pointer; white-space:nowrap; text-shadow:0 1px 2px rgba(0,0,0,0.4);">+1000g</button>
+                    <input type="number" id="recvt_${tintKey}" min="0" step="10" placeholder="0" style="width:72px; padding:5px; border:1px solid rgba(255,255,255,0.3); border-radius:6px; font-size:12px; font-weight:900; text-align:right; background:rgba(0,0,0,0.2); color:#fff;">
+                    <span style="font-size:10px; color:#fff; opacity:0.7;">g</span>
                 </div>`;
             });
         }
