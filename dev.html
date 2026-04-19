@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.15.5-dev-s7';
+    const CURRENT_VERSION = 'v1.15.5-dev-s8';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -9545,7 +9545,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.15.5-dev-s7'; //     bump this on every release
+        const CURRENT_VERSION = 'v1.15.5-dev-s8'; //     bump this on every release
         const CURRENT_DATE = '2026-03-25';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -23718,6 +23718,38 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
     // Default base definitions
     const EVIC_ITE_NAMES = {"ITE302": "Tinting Black", "ITE303": "Yellow Oxide", "ITE304": "Green", "ITE305": "Blue-Green", "ITE306": "Red Oxide", "ITE309": "Quinasia", "ITE310": "Blue-Red", "ITE410": "Violet", "ITE003": "Base Additive", "ITE102": "Carbon Black", "ITE104": "Phthalo Green", "ITE105": "Green-Blue", "ITE107": "Orange Organic", "ITE108": "Orange", "ITE109": "Quinacridone", "ITE110": "Red-Blue", "ITE111": "White", "ITE113": "Yellow Oxide", "ITE116": "Red Oxide", "ITE201": "Brilliant Yellow", "ITE203": "Yellow", "ITE209": "Bordeaux", "ITE210": "Violet", "ITE501": "Marigold Org", "ITE502": "Marigold", "ITE701": "Citron Yellow", "ITE708": "Bright Red", "ITE709": "Red"};
 
+    // Actual tint colour backgrounds — light mode bg, dark mode bg, text colour
+    const EVIC_ITE_COLOURS = {
+        'ITE302': { bg: '#2a2a2a', dbg: '#1a1a1a', txt: '#f0f0f0' },  // Tinting Black
+        'ITE303': { bg: '#e8c84a', dbg: '#6b5a10', txt: '#333' },      // Yellow Oxide
+        'ITE304': { bg: '#4a8a4a', dbg: '#1a3a1a', txt: '#fff' },      // Green
+        'ITE305': { bg: '#3a7a6a', dbg: '#0f2f2a', txt: '#fff' },      // Blue-Green
+        'ITE306': { bg: '#b84a2a', dbg: '#4a1a0a', txt: '#fff' },      // Red Oxide
+        'ITE309': { bg: '#c0a0d0', dbg: '#3a1f4a', txt: '#333' },      // Quinasia (quinacridone violet)
+        'ITE310': { bg: '#8a3060', dbg: '#3a0f28', txt: '#fff' },      // Blue-Red
+        'ITE410': { bg: '#7a4aaa', dbg: '#2a1540', txt: '#fff' },      // Violet
+        'ITE003': { bg: '#e8e8e8', dbg: '#3a3a3a', txt: '#333' },      // Base Additive
+        'ITE102': { bg: '#1a1a1a', dbg: '#111', txt: '#f0f0f0' },      // Carbon Black
+        'ITE104': { bg: '#1a6a3a', dbg: '#0a2a18', txt: '#fff' },      // Phthalo Green
+        'ITE105': { bg: '#2a6a7a', dbg: '#0a2a30', txt: '#fff' },      // Green-Blue
+        'ITE107': { bg: '#e07030', dbg: '#5a2a0a', txt: '#fff' },      // Orange Organic
+        'ITE108': { bg: '#e08030', dbg: '#5a3010', txt: '#fff' },      // Orange
+        'ITE109': { bg: '#cc3060', dbg: '#5a0a28', txt: '#fff' },      // Quinacridone
+        'ITE110': { bg: '#903060', dbg: '#380f28', txt: '#fff' },      // Red-Blue
+        'ITE111': { bg: '#f4f4f4', dbg: '#4a4a4a', txt: '#333' },      // White
+        'ITE113': { bg: '#d4a830', dbg: '#5a4410', txt: '#333' },      // Yellow Oxide
+        'ITE116': { bg: '#c04828', dbg: '#4a1808', txt: '#fff' },      // Red Oxide
+        'ITE201': { bg: '#f0d020', dbg: '#605000', txt: '#333' },      // Brilliant Yellow
+        'ITE203': { bg: '#e8c820', dbg: '#605000', txt: '#333' },      // Yellow
+        'ITE209': { bg: '#7a1830', dbg: '#300818', txt: '#fff' },      // Bordeaux
+        'ITE210': { bg: '#7050a0', dbg: '#281840', txt: '#fff' },      // Violet
+        'ITE501': { bg: '#e8900a', dbg: '#5a3800', txt: '#fff' },      // Marigold Org
+        'ITE502': { bg: '#f0980a', dbg: '#5a3c00', txt: '#fff' },      // Marigold
+        'ITE701': { bg: '#e0d010', dbg: '#504c00', txt: '#333' },      // Citron Yellow
+        'ITE708': { bg: '#cc2010', dbg: '#500808', txt: '#fff' },      // Bright Red
+        'ITE709': { bg: '#c02010', dbg: '#480808', txt: '#fff' },      // Red
+    };
+
     const STOCK_BASES = [
         { key: 'XB6930', label: 'XB6930 White Base (Satin)',   unit: 'L', drumSize: 15 },
         { key: 'XB6931', label: 'XB6931 Deep Base (Satin)',    unit: 'L', drumSize: 15 },
@@ -23891,28 +23923,40 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                     const baseCode = code.replace(/-\d+$/, '').toUpperCase();
                     const autoName = EVIC_ITE_NAMES[baseCode] || '';
                     const savedName = tinterNames[code] || '';
-                    const displayName = savedName || autoName;
+                    // Show name: saved override shows in input, autoName shows as label only if no saved name
+                    const displayLabel = savedName || autoName;
 
-                    if (!bgCache[code]) {
-                        bgCache[code] = _dm
-                            ? `hsl(${(pi * 47) % 360}, 18%, 22%)`
-                            : pastels[pi % pastels.length];
-                        pi++;
+                    // Background: actual tint colour if known, otherwise pastel
+                    const iteColour = EVIC_ITE_COLOURS[baseCode];
+                    let tintBg, tintTxt;
+                    if (isLow) {
+                        tintBg = _dm ? '#2a0808' : '#fff5f5';
+                        tintTxt = textCol;
+                    } else if (iteColour) {
+                        tintBg = _dm ? iteColour.dbg : iteColour.bg;
+                        tintTxt = iteColour.txt;
+                    } else {
+                        if (!bgCache[code]) {
+                            bgCache[code] = _dm ? `hsl(${(pi * 47) % 360}, 18%, 22%)` : pastels[pi % pastels.length];
+                            pi++;
+                        }
+                        tintBg = bgCache[code];
+                        tintTxt = textCol;
                     }
-                    const tintBg = isLow ? (_dm ? '#2a0808' : '#fff5f5') : bgCache[code];
 
                     html += `<div style="display:flex; align-items:center; gap:8px; padding:7px 10px; margin-bottom:4px; background:${tintBg}; border:1px solid ${isLow ? '#ff3b30' : border}; border-radius:8px; border-left:4px solid ${barCol};">
                         <div style="flex:1; min-width:0;">
                             <div style="display:flex; align-items:center; gap:5px;">
-                                <span style="font-size:11px; font-weight:900; color:${textCol}; font-family:monospace; white-space:nowrap;">${code}</span>
-                                <input type="text" placeholder="${autoName || 'Colour…'}"
+                                <span style="font-size:11px; font-weight:900; color:${tintTxt}; font-family:monospace; white-space:nowrap;">${code}</span>
+                                <span style="font-size:10px; font-weight:700; color:${tintTxt}; opacity:0.85; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:120px;">${displayLabel}</span>
+                                <input type="text" placeholder="${autoName || 'Override…'}"
                                     value="${savedName}"
-                                    style="font-size:9px; padding:2px 5px; border:1px solid ${border}; border-radius:4px; background:${_dm ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.6)'}; color:${textCol}; width:80px; flex-shrink:1; min-width:0;"
+                                    title="Custom name override"
+                                    style="font-size:9px; padding:2px 4px; border:1px solid ${border}; border-radius:3px; background:rgba(255,255,255,0.15); color:${tintTxt}; width:70px; flex-shrink:1; min-width:0; display:${savedName || !autoName ? 'block' : 'none'};"
                                     oninput="saveTinterName('${code}', this.value)"
                                     onchange="saveTinterName('${code}', this.value)">
-                                ${displayName && !savedName ? `<span style="font-size:9px; color:${mutedCol}; white-space:nowrap;">${displayName}</span>` : ''}
                             </div>
-                            <div style="height:3px; background:${_dm ? '#48484a' : 'rgba(0,0,0,0.1)'}; border-radius:2px; margin-top:3px;">
+                            <div style="height:3px; background:rgba(0,0,0,0.2); border-radius:2px; margin-top:3px;">
                                 <div style="width:${pct.toFixed(0)}%; height:100%; background:${barCol}; border-radius:2px; transition:width 0.3s;"></div>
                             </div>
                         </div>
@@ -23922,9 +23966,9 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                                 data-stock-key="${tintKey}"
                                 value="${qty > 0 ? qty.toFixed(0) : ''}"
                                 placeholder="0"
-                                style="width:72px; padding:5px 6px; border:1px solid ${border}; border-radius:6px; font-size:12px; font-weight:900; text-align:right; background:${_dm ? '#3a3a3c' : 'rgba(255,255,255,0.7)'}; color:${textCol};"
+                                style="width:72px; padding:5px 6px; border:1px solid ${border}; border-radius:6px; font-size:12px; font-weight:900; text-align:right; background:rgba(0,0,0,0.2); color:${tintTxt};"
                                 onchange="updateSingleStockLevel('${tintKey}', this.value)">
-                            <span style="font-size:10px; color:${mutedCol};">g</span>
+                            <span style="font-size:10px; color:${tintTxt}; opacity:0.7;">g</span>
                         </div>
                     </div>`;
                 });
