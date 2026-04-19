@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.15.5-dev-s9';
+    const CURRENT_VERSION = 'v1.15.5-dev-s10';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -6040,7 +6040,32 @@ const firebaseConfig = {
         }
         
         console.log('    FINAL: Captured', colourants.length, 'tinters:', colourants);
-        
+
+        // ── TINTER CODE VALIDATION ──
+        // Check every tinter code against the known Evic ITE list
+        // Warn user of any codes that don't exist (likely typos)
+        const knownITECodes = new Set([
+            'ITE003','ITE302','ITE303','ITE304','ITE305','ITE306','ITE309','ITE310','ITE410',
+            'ITE102','ITE104','ITE105','ITE107','ITE108','ITE109','ITE110','ITE111','ITE113','ITE116',
+            'ITE201','ITE203','ITE209','ITE210',
+            'ITE501','ITE502',
+            'ITE701','ITE708','ITE709',
+            // Also allow XB base codes, CLR etc in tinters
+            'XB6930','XB6931','XB6960','XB6961','XB6910','XB6911','CLEAR','CLEARUC','UNDERCOAT'
+        ]);
+        const unknownCodes = [];
+        colourants.forEach(c => {
+            // Strip any -001 / -004 suffix for lookup
+            const stripped = (c.code || '').toUpperCase().replace(/-\d+$/, '');
+            if (stripped && !knownITECodes.has(stripped)) {
+                unknownCodes.push(c.code);
+            }
+        });
+        if (unknownCodes.length > 0) {
+            const msg = `⚠️ Unknown tinter code${unknownCodes.length > 1 ? 's' : ''}:\n\n${unknownCodes.join(', ')}\n\nThis may be a typo. Check the Evic ITE list.\n\nSave anyway?`;
+            if (!confirm(msg)) return; // User can cancel to go back and fix
+        }
+
         // Calculate total weight from base codes + tinters (MOVED BEFORE LOGS)
         let totalWeight = 0;
         baseCodes.forEach(item => {
@@ -6392,6 +6417,19 @@ const firebaseConfig = {
                     f.colourants.push({ code: match[1], amount: amount });
                 }
             });
+        }
+
+        // ── TINTER CODE VALIDATION on edit save ──
+        const _knownITE = new Set([
+            'ITE003','ITE302','ITE303','ITE304','ITE305','ITE306','ITE309','ITE310','ITE410',
+            'ITE102','ITE104','ITE105','ITE107','ITE108','ITE109','ITE110','ITE111','ITE113','ITE116',
+            'ITE201','ITE203','ITE209','ITE210','ITE501','ITE502','ITE701','ITE708','ITE709',
+            'XB6930','XB6931','XB6960','XB6961','XB6910','XB6911','CLEAR','CLEARUC','UNDERCOAT'
+        ]);
+        const _badCodes = f.colourants.map(c => c.code).filter(c => c && !_knownITE.has(c.toUpperCase().replace(/-\d+$/, '')));
+        if (_badCodes.length > 0) {
+            const _msg = `⚠️ Unknown tinter code${_badCodes.length > 1 ? 's' : ''}:\n\n${_badCodes.join(', ')}\n\nThis may be a typo. Check the Evic ITE list.\n\nSave anyway?`;
+            if (!confirm(_msg)) return;
         }
         
         // Parse and store total weight as number
@@ -9553,7 +9591,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.15.5-dev-s9'; //     bump this on every release
+        const CURRENT_VERSION = 'v1.15.5-dev-s10'; //     bump this on every release
         const CURRENT_DATE = '2026-03-25';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -16632,15 +16670,20 @@ const firebaseConfig = {
                     const color = negative ? '#d32f2f' : low ? '#f57f17' : '#2e7d32';
                     const bg = negative ? '#ffebee' : low ? '#fff8e1' : '#f9fbe7';
                     if (low || negative) alerts.push({ label: stockLabels[k], onHand, needed, remaining, negative });
-                    return `<div style="background:${bg}; border:1px solid ${color}40; border-left:3px solid ${color}; border-radius:6px; padding:7px 10px; display:flex; align-items:center; gap:8px;">
+                    // Dark mode aware colours for stock grid
+                    const _sdm = document.body.dataset.theme === 'dark' || (!document.body.dataset.theme && window.matchMedia('(prefers-color-scheme:dark)').matches);
+                    const cellBg = _sdm ? (negative ? '#3a0808' : low ? '#2a1f00' : '#1a2a1a') : bg;
+                    const cellTxt = _sdm ? '#f2f2f7' : '#333';
+                    const mutedTxt = _sdm ? '#8e8e93' : '#666';
+                    return `<div style="background:${cellBg}; border:1px solid ${color}60; border-left:3px solid ${color}; border-radius:6px; padding:7px 10px; display:flex; align-items:center; gap:8px;">
                         <div style="flex:1; min-width:0;">
                             <div style="font-size:9px; font-weight:900; color:${color}; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${stockLabels[k]}</div>
-                            <div style="font-size:10px; color:#666; margin-top:2px;">Need: <strong>${needed}L</strong> &nbsp;<span style="font-weight:900; color:${color};">${remaining >= 0 ? '+' : ''}${remaining.toFixed(1)}L</span></div>
+                            <div style="font-size:10px; color:${mutedTxt}; margin-top:2px;">Need: <strong style="color:${cellTxt};">${needed}L</strong> &nbsp;<span style="font-weight:900; color:${color};">${remaining >= 0 ? '+' : ''}${remaining.toFixed(1)}L</span></div>
                         </div>
                         <div style="display:flex; align-items:center; gap:3px; flex-shrink:0;">
                             <input type="number" inputmode="decimal" data-stock-key="${k}" value="${onHand}" min="0" step="0.5"
-                                style="width:56px; padding:4px 5px; border:1px solid ${color}60; border-radius:4px; font-size:12px; font-weight:900; text-align:center; background:rgba(255,255,255,0.8);">
-                            <span style="font-size:9px; color:#888;">L</span>
+                                style="width:56px; padding:4px 5px; border:1px solid ${color}60; border-radius:4px; font-size:12px; font-weight:900; text-align:center; background:${_sdm ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.8)'}; color:${cellTxt};">
+                            <span style="font-size:9px; color:${mutedTxt};">L</span>
                         </div>
                     </div>`;
                 }).join('');
@@ -23953,24 +23996,25 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                     let tintBg, tintTxt;
                     if (isLow) {
                         tintBg = _dm ? '#2a0808' : '#fff5f5';
-                        tintTxt = textCol;
+                        tintTxt = _dm ? '#f2f2f7' : textCol;
                     } else if (iteColour) {
                         tintBg = _dm ? iteColour.dbg : iteColour.bg;
-                        tintTxt = iteColour.txt;
+                        // In dark mode always use white text regardless of light-mode txt value
+                        tintTxt = _dm ? '#f2f2f7' : iteColour.txt;
                     } else {
                         if (!bgCache[code]) {
                             bgCache[code] = _dm ? `hsl(${(pi * 47) % 360}, 18%, 22%)` : pastels[pi % pastels.length];
                             pi++;
                         }
                         tintBg = bgCache[code];
-                        tintTxt = textCol;
+                        tintTxt = _dm ? '#f2f2f7' : textCol;
                     }
 
                     html += `<div style="display:flex; align-items:center; gap:8px; padding:7px 10px; margin-bottom:4px; background:${tintBg}; border:1px solid ${isLow ? '#ff3b30' : border}; border-radius:8px; border-left:4px solid ${barCol};">
                         <div style="flex:1; min-width:0;">
                             <div style="display:flex; align-items:center; gap:5px;">
-                                <span style="font-size:11px; font-weight:900; color:${tintTxt}; font-family:monospace; white-space:nowrap;">${code}</span>
-                                <span style="font-size:10px; font-weight:700; color:${tintTxt}; opacity:0.85; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100px; display:inline-block; vertical-align:middle;">${displayLabel.length > 16 ? displayLabel.slice(0,14)+'…' : displayLabel}</span>
+                                <span style="font-size:11px; font-weight:900; color:#fff; font-family:monospace; white-space:nowrap; text-shadow:0 1px 2px rgba(0,0,0,0.4);">${code}</span>
+                                <span style="font-size:10px; font-weight:700; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100px; display:inline-block; vertical-align:middle; text-shadow:0 1px 2px rgba(0,0,0,0.4);">${displayLabel.length > 16 ? displayLabel.slice(0,14)+'…' : displayLabel}</span>
                                 <input type="text" placeholder="${autoName || 'Override…'}"
                                     value="${savedName}"
                                     title="Custom name override"
@@ -23988,9 +24032,9 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                                 data-stock-key="${tintKey}"
                                 value="${qty > 0 ? qty.toFixed(0) : ''}"
                                 placeholder="0"
-                                style="width:72px; padding:5px 6px; border:1px solid ${border}; border-radius:6px; font-size:12px; font-weight:900; text-align:right; background:rgba(0,0,0,0.2); color:${tintTxt};"
+                                style="width:72px; padding:5px 6px; border:1px solid rgba(255,255,255,0.3); border-radius:6px; font-size:12px; font-weight:900; text-align:right; background:rgba(0,0,0,0.2); color:#fff; text-shadow:0 1px 2px rgba(0,0,0,0.4);"
                                 onchange="updateSingleStockLevel('${tintKey}', this.value)">
-                            <span style="font-size:10px; color:${tintTxt}; opacity:0.7;">g</span>
+                            <span style="font-size:10px; color:#fff; opacity:0.8; text-shadow:0 1px 2px rgba(0,0,0,0.4);">g</span>
                         </div>
                     </div>`;
                 });
