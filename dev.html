@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.15.6-dev-s15';
+    const CURRENT_VERSION = 'v1.15.7-dev-s16';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -1784,7 +1784,7 @@ const firebaseConfig = {
                                 // Load paint brands and timeline early in parallel
                                 setTimeout(() => { if (typeof window.loadPaintBrandsEarly === 'function') window.loadPaintBrandsEarly(); }, 600);
                                 setTimeout(() => { if (typeof loadDefaultTimelineFromFirebase === 'function') loadDefaultTimelineFromFirebase(); }, 800);
-                                setTimeout(() => { if (typeof loadStockFromFirebase === 'function') loadStockFromFirebase(); }, 1000);
+                                setTimeout(() => { if (typeof loadStockFromFirebase === 'function') loadStockFromFirebase().then(() => { try { if (typeof renderStockTab === 'function') renderStockTab(); } catch(e){} }); }, 1000);
                             } else if (attempts > 0) {
                                 setTimeout(() => tryLoad(attempts - 1), 400);
                             }
@@ -9591,7 +9591,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.15.6-dev-s15'; //     bump this on every release
+        const CURRENT_VERSION = 'v1.15.7-dev-s16'; //     bump this on every release
         const CURRENT_DATE = '2026-03-25';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -17074,6 +17074,12 @@ const firebaseConfig = {
         // Mark this job as deducted so re-saves don't double-deduct
         deductedJobs[jobKey] = new Date().toISOString();
         localStorage.setItem('pwStockDeducted', JSON.stringify(deductedJobs));
+        if (window.currentUser && window.firebaseDb && window.doc && window.setDoc) {
+            try {
+                const _dRef = window.doc(window.firebaseDb, 'users', window.staffModeOwnerUid || window.currentUser.uid, 'appData', 'stockDeducted');
+                window.setDoc(_dRef, { jobs: deductedJobs, updatedAt: new Date().toISOString() }, { merge: false }).catch(() => {});
+            } catch(e) {}
+        }
         localStorage.setItem('pwStockLevels', JSON.stringify(stock));
     }
 
@@ -24389,6 +24395,13 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             const snap3 = await window.getDoc(ref3);
             if (snap3.exists() && snap3.data().names) {
                 localStorage.setItem('pwTinterNames', JSON.stringify(snap3.data().names));
+            }
+            const ref4 = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'stockDeducted');
+            const snap4 = await window.getDoc(ref4);
+            if (snap4.exists() && snap4.data().jobs) {
+                const remote = snap4.data().jobs;
+                const local = JSON.parse(localStorage.getItem('pwStockDeducted') || '{}');
+                localStorage.setItem('pwStockDeducted', JSON.stringify({ ...local, ...remote }));
             }
         } catch(e) { console.warn('loadStockFromFirebase error:', e.message); }
     }
