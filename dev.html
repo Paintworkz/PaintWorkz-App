@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.15.5-dev-s8';
+    const CURRENT_VERSION = 'v1.15.5-dev-s9';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -2520,7 +2520,11 @@ const firebaseConfig = {
                         <button onclick="syncAllFromFirebase()" style="flex:1; background:#2196f3; color:#fff; border:none; padding:7px 0; border-radius:6px; font-size:10px; font-weight:900; cursor:pointer;">☁️ Sync from Cloud</button>
                         <button onclick="forcePushFormulasToCloud()" style="flex:1; background:#34c759; color:#fff; border:none; padding:7px 0; border-radius:6px; font-size:10px; font-weight:900; cursor:pointer;">⬆️ Push to Cloud</button>
                     </div>
-                    <input type="text" id="formulaSearch" placeholder="Search formula..." style="width:100%; padding:6px; margin-bottom:4px; border:1px solid #ddd; border-radius:4px; font-size:11px; box-sizing:border-box;" oninput="searchFormulas()">
+                    <div style="display:flex; gap:6px; margin-bottom:4px; align-items:center;">
+                        <input type="text" id="formulaSearch" placeholder="🔍 Search colour, code or tinter (e.g. ITE2003)" style="flex:1; padding:7px 10px; border:1px solid #2196f3; border-radius:6px; font-size:11px; box-sizing:border-box;" oninput="searchFormulas()">
+                        <button onclick="document.getElementById('formulaSearch').value=''; searchFormulas();" style="padding:6px 10px; border:none; background:#eee; border-radius:6px; font-size:11px; font-weight:900; cursor:pointer; color:#666;">✕</button>
+                    </div>
+                    <div style="font-size:9px; color:#888; margin-bottom:6px;">Tip: search a tinter code like <strong>ITE2003</strong> to find which formulas have typos</div>
                     <div id="paintFormulaList" style="background:#fff; border:1px solid #ddd; border-radius:8px; overflow:hidden; max-height:400px; overflow-y:auto;"></div>
                 </div>
             </div>
@@ -5744,7 +5748,11 @@ const firebaseConfig = {
             html += '<div style="font-weight:900; font-size:11px; margin-bottom:2px; color:#666;">     ' + formulaHeader + '</div>';
             html += '<div style="font-size:10px; color:#2196f3; margin-bottom:6px; font-weight:bold;">-' + (f.product || 'Product') + '</div>';
             html += '<div style="font-size:10px; color:#666; margin-bottom:6px;">Code: ' + (f.code || '---') + '</div>';
-            html += '<div style="font-size:9px; color:#999; margin-bottom:8px;">' + baseTintCount + ' base codes     ' + colCount + ' colourants</div>';
+            // Embed tinter codes for search - hidden but searchable
+            const _tinterCodesStr = (f.colourants || []).map(c => c.code || '').filter(Boolean).join(' ');
+            const _baseCodesStr = (f.baseTinters || f.whiteBase || []).map(c => c.code || '').filter(Boolean).join(' ');
+            html += '<div style="font-size:9px; color:#999; margin-bottom:8px;">' + baseTintCount + ' base codes · ' + colCount + ' colourants</div>';
+            html += '<div data-tinter-codes="' + _tinterCodesStr + '" style="font-size:9px; color:#bbb; margin-bottom:6px; font-family:monospace;">' + [_baseCodesStr, _tinterCodesStr].filter(Boolean).join(' · ') + '</div>';
             html += '<div style="display:flex; gap:6px;">';
             html += '<button onclick="editPaintFormula(' + actualIndex + ')" style="padding:4px 10px; background:#2196f3; color:#fff; border:none; border-radius:3px; font-size:9px; font-weight:900; cursor:pointer;">Edit</button>';
             html += '<button onclick="deletePaintFormula(' + actualIndex + ')" style="padding:4px 10px; background:#ff3b30; color:#fff; border:none; border-radius:3px; font-size:9px; font-weight:900; cursor:pointer;">Delete</button>';
@@ -9545,7 +9553,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.15.5-dev-s8'; //     bump this on every release
+        const CURRENT_VERSION = 'v1.15.5-dev-s9'; //     bump this on every release
         const CURRENT_DATE = '2026-03-25';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -10091,10 +10099,24 @@ const firebaseConfig = {
         const term = (document.getElementById('formulaSearch')?.value || '').trim().toLowerCase();
         const list = document.getElementById('paintFormulaList');
         if (!list) return;
+        let visCount = 0;
         Array.from(list.children).forEach(function(item) {
             const text = (item.textContent || '').toLowerCase();
-            item.style.display = term === '' || text.includes(term) ? '' : 'none';
+            const show = term === '' || text.includes(term);
+            item.style.display = show ? '' : 'none';
+            if (show) visCount++;
+            // Highlight matching tinter code rows
+            const codeDiv = item.querySelector('[data-tinter-codes]');
+            if (codeDiv) {
+                codeDiv.style.background = (term && codeDiv.textContent.toLowerCase().includes(term))
+                    ? '#fff3cd' : 'transparent';
+                codeDiv.style.borderRadius = '3px';
+                codeDiv.style.padding = (term && codeDiv.textContent.toLowerCase().includes(term)) ? '2px 4px' : '0';
+            }
         });
+        // Show result count
+        const countEl = document.getElementById('formulaCount');
+        if (countEl) countEl.textContent = term ? visCount + ' of ' + paintDatabase.length : paintDatabase.length;
     }
     window.searchFormulas = searchFormulas;
 
@@ -23948,7 +23970,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                         <div style="flex:1; min-width:0;">
                             <div style="display:flex; align-items:center; gap:5px;">
                                 <span style="font-size:11px; font-weight:900; color:${tintTxt}; font-family:monospace; white-space:nowrap;">${code}</span>
-                                <span style="font-size:10px; font-weight:700; color:${tintTxt}; opacity:0.85; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:120px;">${displayLabel}</span>
+                                <span style="font-size:10px; font-weight:700; color:${tintTxt}; opacity:0.85; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100px; display:inline-block; vertical-align:middle;">${displayLabel.length > 16 ? displayLabel.slice(0,14)+'…' : displayLabel}</span>
                                 <input type="text" placeholder="${autoName || 'Override…'}"
                                     value="${savedName}"
                                     title="Custom name override"
