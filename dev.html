@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.15.5-dev-s13';
+    const CURRENT_VERSION = 'v1.15.5-dev-s14';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -9591,7 +9591,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.15.5-dev-s13'; //     bump this on every release
+        const CURRENT_VERSION = 'v1.15.5-dev-s14'; //     bump this on every release
         const CURRENT_DATE = '2026-03-25';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -16212,15 +16212,15 @@ const firebaseConfig = {
             </div>
         </div>
 
-        <!-- Row 2: By Finish + By Colour — 50/50 -->
+        <!-- Row 2: By Finish + By Colour — 50/50 stat tiles -->
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px;">
             <div class="report-card">
-                <div class="report-card-title">🎨 By Finish</div>
-                <canvas id="chartFinish" height="110"></canvas>
+                <div class="report-card-title">✨ By Finish</div>
+                <div id="finishStatTiles" style="padding-top:4px;"></div>
             </div>
             <div class="report-card">
-                <div class="report-card-title">🎨 By Colour</div>
-                <canvas id="chartColourPie" height="110"></canvas>
+                <div class="report-card-title">🎨 Top Colours</div>
+                <div id="colourStatTiles" style="padding-top:4px;"></div>
             </div>
         </div>
 
@@ -16536,21 +16536,77 @@ const firebaseConfig = {
             }
 
             // Finish donut
-            if (finishes.length && co('chartFinish')) {
-                new Chart(co('chartFinish'), { type:'doughnut', data:{
-                    labels: finishes.map(f=>f[0]),
-                    datasets:[{ data: finishes.map(f=>f[1]), backgroundColor: palette, borderWidth:2 }]
-                }, options:{ responsive:true, plugins:{ legend:{ position:'bottom', labels:{ font:{size:10}, boxWidth:12 } } } }});
+            // By Finish — stat tiles with proportion bar
+            if (finishes.length) {
+                const finishColours = { 'Satin':'#2196f3','Gloss':'#9c27b0','Matt':'#ff9800','Clear':'#00bcd4','Semi Gloss':'#4caf50','Semi-Gloss':'#4caf50' };
+                const totalFinSqm = finishes.reduce((s,f) => s + (colourCount ? 0 : 0) + f[1], 0);
+                // finishes is [label, count] pairs from finishCount
+                const totalJobs = finishes.reduce((s,f) => s + f[1], 0);
+                const _isDm = document.body.dataset.theme === 'dark' || (!document.body.dataset.theme && window.matchMedia('(prefers-color-scheme:dark)').matches);
+                const tileBg = _isDm ? '#3a3a3c' : '#f8f9fa';
+                const tileText = _isDm ? '#f2f2f7' : '#1a1a1a';
+                const tileSub = _isDm ? '#8e8e93' : '#6c757d';
+                let finHtml = '';
+                // Proportion bar
+                finHtml += `<div style="display:flex; height:6px; border-radius:3px; overflow:hidden; margin-bottom:12px; gap:1px;">`;
+                finishes.forEach(f => {
+                    const pct = (f[1] / totalJobs * 100).toFixed(1);
+                    const col = finishColours[f[0]] || '#607d8b';
+                    finHtml += `<div style="flex:${f[1]}; background:${col}; border-radius:1px;" title="${f[0]}: ${pct}%"></div>`;
+                });
+                finHtml += `</div>`;
+                // Tiles
+                finHtml += `<div style="display:flex; flex-direction:column; gap:6px;">`;
+                finishes.forEach(f => {
+                    const col = finishColours[f[0]] || '#607d8b';
+                    const pct = (f[1] / totalJobs * 100).toFixed(0);
+                    finHtml += `<div style="display:flex; align-items:center; gap:10px; padding:8px 10px; background:${tileBg}; border-radius:8px; border-left:4px solid ${col};">
+                        <div style="flex:1;">
+                            <div style="font-size:12px; font-weight:900; color:${tileText};">${f[0]}</div>
+                            <div style="height:3px; background:${_isDm ? '#48484a' : '#e9ecef'}; border-radius:2px; margin-top:4px;">
+                                <div style="width:${pct}%; height:100%; background:${col}; border-radius:2px;"></div>
+                            </div>
+                        </div>
+                        <div style="text-align:right; flex-shrink:0;">
+                            <div style="font-size:18px; font-weight:900; color:${col}; line-height:1;">${f[1]}</div>
+                            <div style="font-size:9px; color:${tileSub}; margin-top:1px;">${pct}% of jobs</div>
+                        </div>
+                    </div>`;
+                });
+                finHtml += `</div>`;
+                const finEl = document.getElementById('finishStatTiles');
+                if (finEl) finEl.innerHTML = finHtml;
             }
 
-            // By Colour pie chart — top 10 colours by SQM as doughnut
-            if (topColours.length && co('chartColourPie')) {
-                const colourPalette = ['#2196f3','#4caf50','#ff9800','#9c27b0','#f44336','#00bcd4','#ff5722','#607d8b','#3f51b5','#8bc34a'];
-                new Chart(co('chartColourPie'), { type:'doughnut', data:{
-                    labels: topColours.slice(0,8).map(c => c[0].length > 18 ? c[0].slice(0,16)+'…' : c[0]),
-                    datasets:[{ data: topColours.slice(0,8).map(c=>+c[1].toFixed(1)), backgroundColor: colourPalette, borderWidth:2 }]
-                }, options:{ responsive:true, plugins:{ legend:{ position:'bottom', labels:{ font:{size:10}, boxWidth:12 } },
-                    tooltip:{ callbacks:{ label: ctx => ` ${ctx.label}: ${ctx.raw}m²` } } } }});
+            // By Colour — top colour badges with SQM
+            if (topColours.length) {
+                const colPalette = ['#2196f3','#e91e63','#4caf50','#ff9800','#9c27b0','#f44336','#00bcd4','#ff5722','#607d8b','#795548'];
+                const _isDm2 = document.body.dataset.theme === 'dark' || (!document.body.dataset.theme && window.matchMedia('(prefers-color-scheme:dark)').matches);
+                const maxSqm = topColours[0][1];
+                let colHtml = `<div style="display:flex; flex-direction:column; gap:6px;">`;
+                topColours.slice(0,8).forEach((c, i) => {
+                    const col = colPalette[i % colPalette.length];
+                    const pct = (c[1] / maxSqm * 100).toFixed(0);
+                    const label = c[0].length > 22 ? c[0].slice(0,20)+'…' : c[0];
+                    const tileBg2 = _isDm2 ? '#3a3a3c' : '#f8f9fa';
+                    const tileText2 = _isDm2 ? '#f2f2f7' : '#1a1a1a';
+                    const tileSub2 = _isDm2 ? '#8e8e93' : '#6c757d';
+                    colHtml += `<div style="display:flex; align-items:center; gap:10px; padding:8px 10px; background:${tileBg2}; border-radius:8px; border-left:4px solid ${col};">
+                        <div style="flex:1; min-width:0;">
+                            <div style="font-size:11px; font-weight:900; color:${tileText2}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${label}</div>
+                            <div style="height:3px; background:${_isDm2 ? '#48484a' : '#e9ecef'}; border-radius:2px; margin-top:4px;">
+                                <div style="width:${pct}%; height:100%; background:${col}; border-radius:2px;"></div>
+                            </div>
+                        </div>
+                        <div style="text-align:right; flex-shrink:0;">
+                            <div style="font-size:15px; font-weight:900; color:${col}; line-height:1;">${c[1].toFixed(1)}</div>
+                            <div style="font-size:9px; color:${tileSub2}; margin-top:1px;">m²</div>
+                        </div>
+                    </div>`;
+                });
+                colHtml += `</div>`;
+                const colEl = document.getElementById('colourStatTiles');
+                if (colEl) colEl.innerHTML = colHtml;
             }
 
             // Top colours bar (horizontal) - show SQM value in bar
