@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.16.6';
+    const CURRENT_VERSION = 'v1.16.8';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -9548,7 +9548,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.16.6'; //     bump this on every release
+        const CURRENT_VERSION = 'v1.16.8'; //     bump this on every release
         const CURRENT_DATE = '2026-03-25';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -16004,14 +16004,17 @@ const firebaseConfig = {
 
             const d = parseReportDate(job.dateReceived) || new Date(job.timestamp || 0);
             const mo = d.toLocaleDateString('en-AU', { month: 'short', year: 'numeric' });
-            if (!monthlyData[mo]) monthlyData[mo] = { sqm: 0, jobs: 0 };
+            if (!monthlyData[mo]) monthlyData[mo] = { sqm: 0, jobs: 0, sqmActive: 0, sqmCompleted: 0 };
             monthlyData[mo].sqm += sqm;
             monthlyData[mo].jobs += 1;
+            if (job.completed) { monthlyData[mo].sqmCompleted += sqm; }
+            else { monthlyData[mo].sqmActive += sqm; }
 
             // Weekly bucket (ISO week key: "2025-W12")
             const wkNum = (() => { const t = new Date(d); t.setHours(0,0,0,0); t.setDate(t.getDate()+4-(t.getDay()||7)); const y=t.getFullYear(); const wk=Math.ceil(((t-new Date(y,0,1))/86400000+1)/7); return y+'-W'+(wk<10?'0'+wk:wk); })();
-            if (!weeklyData[wkNum]) weeklyData[wkNum] = { sqm: 0, jobs: 0, label: d.toLocaleDateString('en-AU',{day:'numeric',month:'short'}) };
+            if (!weeklyData[wkNum]) weeklyData[wkNum] = { sqm: 0, jobs: 0, sqmActive: 0, sqmCompleted: 0, label: d.toLocaleDateString('en-AU',{day:'numeric',month:'short'}) };
             weeklyData[wkNum].sqm += sqm;
+            if (job.completed) { weeklyData[wkNum].sqmCompleted += sqm; } else { weeklyData[wkNum].sqmActive += sqm; }
             weeklyData[wkNum].jobs += 1;
 
             // CTS revenue for this job
@@ -16466,37 +16469,30 @@ const firebaseConfig = {
                 const useWeekly = dayRange <= 91 && Object.keys(weeklyData).length > 1;
                 const wkKeys = Object.keys(weeklyData).sort();
                 const chartLabels = useWeekly ? wkKeys.map(k => weeklyData[k].label) : months;
-                const chartData   = useWeekly ? wkKeys.map(k => +weeklyData[k].sqm.toFixed(2)) : months.map(m=>+monthlyData[m].sqm.toFixed(2));
-                // Point labels plugin
-                const sqmLabelPlugin = {
-                    id:'sqm_pt_labels',
-                    afterDatasetsDraw(chart) {
-                        const ctx=chart.ctx;
-                        chart.data.datasets.forEach((ds,di)=>{
-                            const meta=chart.getDatasetMeta(di);
-                            meta.data.forEach((pt,i)=>{
-                                const val=ds.data[i];
-                                if(!val) return;
-                                ctx.save();
-                                ctx.fillStyle='#1565c0';
-                                ctx.font='bold 9px sans-serif';
-                                ctx.textAlign='center';
-                                ctx.fillText(val.toFixed(1)+'m²', pt.x, pt.y-8);
-                                ctx.restore();
-                            });
-                        });
-                    }
-                };
+                const allData       = useWeekly ? wkKeys.map(k => +weeklyData[k].sqm.toFixed(2)) : months.map(m=>+monthlyData[m].sqm.toFixed(2));
+                const activeData    = useWeekly ? wkKeys.map(k => +((weeklyData[k].sqmActive||0).toFixed(2))) : months.map(m=>+(((monthlyData[m]||{sqmActive:0}).sqmActive||0).toFixed(2)));
+                const completedData = useWeekly ? wkKeys.map(k => +((weeklyData[k].sqmCompleted||0).toFixed(2))) : months.map(m=>+(((monthlyData[m]||{sqmCompleted:0}).sqmCompleted||0).toFixed(2)));
+
+                const datasets = [];
+                if (_reportStatusFilter === 'all' || _reportStatusFilter === 'completed') {
+                    datasets.push({ label:'Completed SQM', data: _reportStatusFilter === 'all' ? completedData : allData,
+                        borderColor:'#34c759', backgroundColor:'rgba(52,199,89,0.12)',
+                        borderWidth:2.5, fill:true, tension:0.35, pointRadius:4, pointBackgroundColor:'#34c759' });
+                }
+                if (_reportStatusFilter === 'all' || _reportStatusFilter === 'active') {
+                    datasets.push({ label:'Active SQM', data: _reportStatusFilter === 'all' ? activeData : allData,
+                        borderColor:'#ff9500', backgroundColor:'rgba(255,149,0,0.10)',
+                        borderWidth:2.5, fill:true, tension:0.35, pointRadius:4, pointBackgroundColor:'#ff9500',
+                        borderDash: _reportStatusFilter === 'all' ? [5,3] : [] });
+                }
+
                 new Chart(co('chartMonthlySqm'), {
                     type:'line',
-                    plugins:[sqmLabelPlugin],
-                    data:{
-                        labels: chartLabels,
-                        datasets:[{ label:'SQM', data: chartData,
-                            borderColor:'#2196f3', backgroundColor:'rgba(33,150,243,0.12)',
-                            borderWidth:2.5, fill:true, tension:0.35, pointRadius:5, pointBackgroundColor:'#2196f3' }]
-                    },
-                    options:{ responsive:true, plugins:{legend:{display:false}}, scales:{ y:{ beginAtZero:true, ticks:{font:{size:10}} }, x:{ ticks:{font:{size:useWeekly?9:10}, maxRotation:45} } } }
+                    data:{ labels: chartLabels, datasets },
+                    options:{ responsive:true,
+                        plugins:{ legend:{ display: _reportStatusFilter === 'all', position:'top', labels:{ font:{size:10}, boxWidth:12 } } },
+                        scales:{ y:{ beginAtZero:true, ticks:{font:{size:10}, callback:v=>v+'m²'} }, x:{ ticks:{font:{size:useWeekly?9:10}, maxRotation:45} } }
+                    }
                 });
             }
 
@@ -16730,7 +16726,7 @@ const firebaseConfig = {
                         </div>
                         <div style="display:flex; align-items:center; gap:3px; flex-shrink:0;">
                             <input type="number" inputmode="decimal" data-stock-key="${k}" value="${onHand}" min="0" step="0.5"
-                                style="width:56px; padding:4px 5px; border:1px solid ${color}60; border-radius:4px; font-size:12px; font-weight:900; text-align:center; background:${_sdm ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.8)'}; color:${cellTxt};">
+                                style="width:90px; padding:4px 6px; border:1px solid ${color}60; border-radius:4px; font-size:13px; font-weight:900; text-align:center; background:${_sdm ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.8)'}; color:${cellTxt};">
                             <span style="font-size:9px; color:${mutedTxt};">L</span>
                         </div>
                     </div>`;
