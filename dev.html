@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.15.7-dev-s16';
+    const CURRENT_VERSION = 'v1.15.8-dev-s17';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -9591,7 +9591,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.15.7-dev-s16'; //     bump this on every release
+        const CURRENT_VERSION = 'v1.15.8-dev-s17'; //     bump this on every release
         const CURRENT_DATE = '2026-03-25';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -17983,7 +17983,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
         if (window.currentUser && window.firebaseDb && window.doc && window.setDoc) {
             try {
                 if (!job.id) {
-                    job.id = `job_${job.jobNum}_${Date.now()}`;
+                    job.id = String(job.jobNum);
                     history[jobIdx] = job;
                     safeStorage.setJSON('jobHistory', history);
                 }
@@ -18229,9 +18229,9 @@ if ('serviceWorker' in navigator && _swAllowed) {
             // Direct targeted Firestore push for just this job
             if (window.currentUser && window.firebaseDb && window.doc && window.setDoc) {
                 try {
-                    // Assign stable ID if job doesn't have one
+                    // Use jobNum as stable Firestore doc ID (consistent with syncJobsToFirebase)
                     if (!job.id) {
-                        job.id = `job_${job.jobNum}_${Date.now()}`;
+                        job.id = String(job.jobNum);
                         history[jobIdx] = job;
                         safeStorage.setJSON('jobHistory', history);
                     }
@@ -24536,19 +24536,18 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                                 cloudJob.dateCompleted = localMatch.dateCompleted || cloudJob.dateCompleted;
                             }
                             if (localMatch && localMatch.phases) {
-                                // Always initialise phases on cloud job
                                 if (!cloudJob.phases) cloudJob.phases = {};
                                 const _msSincePhase = window._lastLocalSaveTime ? Date.now() - window._lastLocalSaveTime : 99999;
                                 const _thisDeviceJustChangedPhase = _msSincePhase < 3000 && window._lastPhaseTouch && (Date.now() - window._lastPhaseTouch < 3000);
                                 if (_thisDeviceJustChangedPhase) {
-                                    // THIS device just tapped a phase — local wins
                                     Object.keys(localMatch.phases).forEach(k => {
                                         cloudJob.phases[k] = localMatch.phases[k];
                                     });
                                 } else {
-                                    // Cloud wins — this is an update from another device
-                                    // Only copy local phases that cloud doesn't have at all
                                     Object.keys(localMatch.phases).forEach(k => {
+                                        if (localMatch.phases[k] === true && !cloudJob.phases[k]) {
+                                            cloudJob.phases[k] = true;
+                                        }
                                         if (!(k in cloudJob.phases)) {
                                             cloudJob.phases[k] = localMatch.phases[k];
                                         }
