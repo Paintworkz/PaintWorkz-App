@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.16.3';
+    const CURRENT_VERSION = 'v1.16.4';
     const VERSION_KEY = 'paintworkz_version';
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
@@ -7772,7 +7772,7 @@ const firebaseConfig = {
             let pushed = 0;
             for (const job of jobs) {
                 try {
-                    const jobId = job.id || job.jobNum || `job_${Date.now()}_${pushed}`;
+                    const jobId = job.id || String(job.jobNum) || `job_${Date.now()}_${pushed}`;
                     if (!job.id) job.id = jobId;
                     const targetUid = getTargetUid();
                     const jobDoc = window.doc(window.firebaseDb, 'users', targetUid, 'jobs', jobId);
@@ -9548,7 +9548,7 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        const CURRENT_VERSION = 'v1.16.3'; //     bump this on every release
+        const CURRENT_VERSION = 'v1.16.4'; //     bump this on every release
         const CURRENT_DATE = '2026-03-25';
         
         const versionDisplay = document.getElementById('adminVersionDisplay');
@@ -17941,7 +17941,8 @@ if ('serviceWorker' in navigator && _swAllowed) {
         if (window.currentUser && window.firebaseDb && window.doc && window.setDoc) {
             try {
                 if (!job.id) {
-                    job.id = `job_${job.jobNum}_${Date.now()}`;
+                    // Use jobNum as stable Firestore doc ID (same as syncJobsToFirebase)
+                    job.id = String(job.jobNum);
                     history[jobIdx] = job;
                     safeStorage.setJSON('jobHistory', history);
                 }
@@ -18187,9 +18188,9 @@ if ('serviceWorker' in navigator && _swAllowed) {
             // Direct targeted Firestore push for just this job
             if (window.currentUser && window.firebaseDb && window.doc && window.setDoc) {
                 try {
-                    // Assign stable ID if job doesn't have one
+                    // Use jobNum as stable Firestore doc ID (consistent with syncJobsToFirebase)
                     if (!job.id) {
-                        job.id = `job_${job.jobNum}_${Date.now()}`;
+                        job.id = String(job.jobNum);
                         history[jobIdx] = job;
                         safeStorage.setJSON('jobHistory', history);
                     }
@@ -24501,14 +24502,18 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                                 const _msSincePhase = window._lastLocalSaveTime ? Date.now() - window._lastLocalSaveTime : 99999;
                                 const _thisDeviceJustChangedPhase = _msSincePhase < 3000 && window._lastPhaseTouch && (Date.now() - window._lastPhaseTouch < 3000);
                                 if (_thisDeviceJustChangedPhase) {
-                                    // THIS device just tapped a phase — local wins
+                                    // THIS device just tapped a phase — local wins completely
                                     Object.keys(localMatch.phases).forEach(k => {
                                         cloudJob.phases[k] = localMatch.phases[k];
                                     });
                                 } else {
-                                    // Cloud wins — this is an update from another device
-                                    // Only copy local phases that cloud doesn't have at all
+                                    // Merge: true always wins over false
+                                    // This prevents a stale snapshot from clearing a completed phase
                                     Object.keys(localMatch.phases).forEach(k => {
+                                        if (localMatch.phases[k] === true && !cloudJob.phases[k]) {
+                                            cloudJob.phases[k] = true;
+                                        }
+                                        // If cloud doesn't have this key at all, copy local
                                         if (!(k in cloudJob.phases)) {
                                             cloudJob.phases[k] = localMatch.phases[k];
                                         }
@@ -24644,7 +24649,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             
             jobHistory.forEach(job => {
                 try {
-                    const jobId = job.id || job.jobNum || Date.now().toString();
+                    const jobId = job.id || String(job.jobNum) || Date.now().toString();
                     const jobDoc = window.doc(window.firebaseDb, 'users', window.staffModeOwnerUid||window.currentUser.uid, 'jobs', jobId);
                     var jobForCloud={...job,id:jobId,lastModified:new Date().toISOString(),userId:window.staffModeOwnerUid||window.currentUser.uid};
                     delete jobForCloud.photos; // strip base64 photos - too large for Firestore 1MB limit
