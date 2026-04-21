@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.16.13';
+    const CURRENT_VERSION = 'v1.16.14';
     const VERSION_KEY = 'paintworkz_version';
 
     // Auto-update ALL version display elements as soon as DOM is ready
@@ -464,6 +464,10 @@
         .bubble-unit input { border: none; background: transparent; text-align: center; font-size: 18px; font-weight: 900; height: 25px; margin:0; padding:0; width: 100%; }
 
         #prof-select { height: 50px !important; margin: 0; width: 100%; font-size: 13px; text-overflow: ellipsis; }
+        .part-drag-handle { cursor: grab; padding: 0 8px; color: #bbb; font-size: 18px; display: flex; align-items: center; user-select: none; flex-shrink: 0; }
+        .part-drag-handle:active { cursor: grabbing; }
+        .part-label.drag-over { border-top: 3px solid #2196f3 !important; opacity: 0.85; }
+        .part-label.dragging { opacity: 0.4; }
 
         .p-card { flex:1; background:#fff; border:2px solid #ddd; border-radius:8px; padding:8px 2px; text-align:center; font-weight:900; font-size:9px; color:#444; display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer; transition:all 0.2s; touch-action:manipulation; -webkit-tap-highlight-color:transparent; font-family:inherit; -webkit-appearance:none; appearance:none; outline:none; user-select:none; -webkit-user-select:none; }
         .p-card.active { border-color:var(--gs); background:#fff9e6; color:#000; }
@@ -10966,7 +10970,20 @@ const firebaseConfig = {
                 }
             }
             
-            l.innerHTML += `<div class="part-label" style="border-left:5px solid ${clr}; position:relative;">
+            const _rowDiv = document.createElement('div');
+            _rowDiv.className = 'part-label';
+            _rowDiv.style.cssText = `border-left:5px solid ${clr}; position:relative; display:flex; align-items:stretch;`;
+            _rowDiv.draggable = true;
+            _rowDiv.dataset.index = originalIndex;
+            _rowDiv.addEventListener('dragstart', _onPartDragStart);
+            _rowDiv.addEventListener('dragover', _onPartDragOver);
+            _rowDiv.addEventListener('drop', _onPartDrop);
+            _rowDiv.addEventListener('dragend', _onPartDragEnd);
+            // Touch drag support
+            _rowDiv.addEventListener('touchstart', _onPartTouchStart, {passive:true});
+            _rowDiv.addEventListener('touchmove', _onPartTouchMove, {passive:false});
+            _rowDiv.addEventListener('touchend', _onPartTouchEnd, {passive:true});
+            _rowDiv.innerHTML = `<div class="part-drag-handle" title="Drag to reorder">⠿</div>
                 ${(function(){
                     var _pc=0;
                     try{
@@ -11002,12 +11019,83 @@ const firebaseConfig = {
                     <div style="font-size:11px; font-weight:900;">${rowSqm.toFixed(3)}</div>
                 </div>
                 <button class="edit-btn" onclick="editItem(${originalIndex})" style="background:#2196f3; color:#fff; border:none; padding:8px 10px; border-radius:4px 0 0 4px; font-weight:900; cursor:pointer; font-size:12px;">Edit</button><button class="del-btn" onclick="deleteItem(${originalIndex})">X</button>
-            </div>`;
+            `;
+            l.appendChild(_rowDiv);
         });
         
         if (document.getElementById('tA')) document.getElementById('tA').innerText = tA.toFixed(3);
         if (document.getElementById('tQ')) document.getElementById('tQ').innerText = tQ;
     }
+
+    // ── DRAG TO REORDER PARTS ──────────────────────────────────────────────────
+    let _dragSrcIdx = null;
+    let _touchDragSrcIdx = null;
+    let _touchDragClone = null;
+
+    function _onPartDragStart(e) {
+        _dragSrcIdx = parseInt(this.dataset.index);
+        this.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+    }
+    function _onPartDragOver(e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        document.querySelectorAll('.part-label').forEach(r => r.classList.remove('drag-over'));
+        this.classList.add('drag-over');
+    }
+    function _onPartDrop(e) {
+        e.preventDefault();
+        const destIdx = parseInt(this.dataset.index);
+        if (_dragSrcIdx === null || _dragSrcIdx === destIdx) return;
+        // Reorder items array
+        const moved = items.splice(_dragSrcIdx, 1)[0];
+        const newDest = destIdx > _dragSrcIdx ? destIdx - 1 : destIdx;
+        items.splice(newDest, 0, moved);
+        saveData();
+        render();
+        notify('↕️ Part reordered');
+    }
+    function _onPartDragEnd() {
+        _dragSrcIdx = null;
+        document.querySelectorAll('.part-label').forEach(r => {
+            r.classList.remove('dragging');
+            r.classList.remove('drag-over');
+        });
+    }
+
+    // Touch drag (mobile)
+    function _onPartTouchStart(e) {
+        _touchDragSrcIdx = parseInt(this.dataset.index);
+    }
+    function _onPartTouchMove(e) {
+        if (_touchDragSrcIdx === null) return;
+        e.preventDefault();
+        const touch = e.touches[0];
+        const el = document.elementFromPoint(touch.clientX, touch.clientY);
+        const row = el ? el.closest('.part-label') : null;
+        document.querySelectorAll('.part-label').forEach(r => r.classList.remove('drag-over'));
+        if (row && row.dataset.index !== undefined) row.classList.add('drag-over');
+    }
+    function _onPartTouchEnd(e) {
+        if (_touchDragSrcIdx === null) return;
+        const touch = e.changedTouches[0];
+        const el = document.elementFromPoint(touch.clientX, touch.clientY);
+        const row = el ? el.closest('.part-label') : null;
+        document.querySelectorAll('.part-label').forEach(r => r.classList.remove('drag-over'));
+        if (row && row.dataset.index !== undefined) {
+            const destIdx = parseInt(row.dataset.index);
+            if (destIdx !== _touchDragSrcIdx) {
+                const moved = items.splice(_touchDragSrcIdx, 1)[0];
+                const newDest = destIdx > _touchDragSrcIdx ? destIdx - 1 : destIdx;
+                items.splice(newDest, 0, moved);
+                saveData();
+                render();
+                notify('↕️ Part reordered');
+            }
+        }
+        _touchDragSrcIdx = null;
+    }
+    // ──────────────────────────────────────────────────────────────────────────
 
     function changeQty(index, delta) { 
         try {
