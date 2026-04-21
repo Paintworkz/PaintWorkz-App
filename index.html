@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.16.12';
+    const CURRENT_VERSION = 'v1.16.13';
     const VERSION_KEY = 'paintworkz_version';
 
     // Auto-update ALL version display elements as soon as DOM is ready
@@ -2190,7 +2190,7 @@ const firebaseConfig = {
             <div style="display:flex; gap:8px; margin-bottom: 8px;">
                 <div style="flex:2">
                     <label>Job Name / Reference</label>
-                    <input type="text" id="jNm" placeholder="e.g. Smith Residence" autocomplete="off" spellcheck="true" lang="en-AU">
+                    <input type="text" id="jNm" placeholder="e.g. Smith Residence" autocomplete="off" spellcheck="false">
                 </div>
                 <div style="flex:1">
                     <label>Job #</label>
@@ -2209,7 +2209,7 @@ const firebaseConfig = {
                     <div style="flex:1">
                         <label>Color Name <span class="pw-help">?<span class="pw-help-tip">The paint colour name — e.g. Lexicon, Vivid White, Hog Bristle. Type it to pull up matching formula from your database.</span></span></label>
                         <div style="display:flex; gap:4px; align-items:stretch;">
-                            <input type="text" id="p-color" placeholder="e.g. Lexicon" style="height:35px; font-size:12px; flex:1;" oninput="openPaintFormulaSearch()" onblur="checkBulkColourChange()">
+                            <input type="text" id="p-color" placeholder="e.g. Lexicon" style="height:35px; font-size:12px; flex:1;" autocomplete="off" spellcheck="false" lang="en-AU" oninput="openPaintFormulaSearch()" onblur="checkBulkColourChange()">
                             <button onclick="checkBulkColourChange()" style="background:#2196f3; color:#fff; border:none; padding:0 12px; border-radius:4px; font-size:11px; font-weight:900; cursor:pointer; white-space:nowrap; height:35px; align-self:stretch; box-sizing:border-box;" title="Apply colour + code to all parts">↻ UPDATE ALL</button>
                         </div>
                     </div>
@@ -2261,7 +2261,7 @@ const firebaseConfig = {
 
             <div class="bubble-row">
                 <div class="bubble-unit" style="flex:0.8"><input type="number" id="thk" value="18" inputmode="decimal" oninput="up()"><div style="font-size:9px;color:#888;">THICK <span class="pw-help">?<span class="pw-help-tip">Board thickness in mm. Default 18mm. Used on the shop label and supply docket to identify the substrate.</span></span></div></div>
-                <div style="flex:2"><select id="prof-select" oninput="up(); (function(v){if(v&&v.toLowerCase().startsWith('plain')&&typeof setFM==='function'){setFM('Flat');}})(this.value)"></select><div style="font-size:9px;color:#888;text-align:center;">PROFILE <span class="pw-help">?<span class="pw-help-tip">Door/panel profile type — Plain, Shaker, J-Mould etc. Links to your Price Matrix. Manage profiles in Admin → Database.</span></span></div></div>
+                <div style="flex:2"><select id="prof-select" oninput="up(); (function(v){if(!v)return; if(v.toLowerCase().startsWith('plain')){if(typeof setFM==='function')setFM('Flat');} else {if(typeof setFM==='function')setFM('Moulded');}})(this.value)"></select><div style="font-size:9px;color:#888;text-align:center;">PROFILE <span class="pw-help">?<span class="pw-help-tip">Door/panel profile type — Plain, Shaker, J-Mould etc. Links to your Price Matrix. Manage profiles in Admin → Database.</span></span></div></div>
                 <div class="bubble-unit" style="flex:0.8"><input type="number" id="qty" value="1" inputmode="numeric"><div style="font-size:9px;color:#888;">QTY <span class="pw-help">?<span class="pw-help-tip">Number of identical parts. SQM and price multiply by this.</span></span></div></div>
             </div>
 
@@ -10360,9 +10360,13 @@ const firebaseConfig = {
         mode = m;
         document.querySelectorAll('.mode-sel').forEach(b => b.classList.remove('active'));
         document.getElementById('m' + m).classList.add('active');
-        // REQUIREMENT: SE auto-selects one long edge by default
+        // Clear all edges first when switching modes
+        ['E1','E2','E3','E4'].forEach(id => document.getElementById(id).classList.remove('active'));
         if (m === 'SE') {
-            document.getElementById('E1').classList.add('active'); 
+            // SE: auto-select one long edge by default
+            document.getElementById('E1').classList.add('active');
+        } else if (m === 'DS' || m === 'SS') {
+            // SS/DS: no edges selected by default — clean slate
         }
         up();
     }
@@ -11147,7 +11151,7 @@ const firebaseConfig = {
                     
                     <div style="margin-bottom:15px;">
                         <label style="display:block; font-weight:900; margin-bottom:8px; font-size:12px; color:var(--modal-text,#666);">DOOR PROFILE</label>
-                        <select id="editProfSelect" style="width:100%; background:var(--modal-bg,#fff); color:var(--modal-text,#222); padding:10px; border:1px solid #ddd; border-radius:4px; font-size:14px; box-sizing:border-box;">
+                        <select id="editProfSelect" onchange="(function(v,idx){if(!v)return;var isMoulded=!v.toLowerCase().startsWith('plain');var bt=document.getElementById('editPanel-'+(isMoulded?'Moulded':'Flat'));if(bt)bt.click();})(this.value)" style="width:100%; background:var(--modal-bg,#fff); color:var(--modal-text,#222); padding:10px; border:1px solid #ddd; border-radius:4px; font-size:14px; box-sizing:border-box;">
                             ${profOptions}
                         </select>
                     </div>
