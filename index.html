@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.24'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.26'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1619,6 +1619,12 @@ const firebaseConfig = {
             app = initializeApp(firebaseConfig);
             auth = getAuth(app);
             db = getFirestore(app);
+            const _storage = getStorage(app);
+            window.firebaseStorage = _storage;
+            window.storageRef = ref;
+            window.uploadString = uploadString;
+            window.getDownloadURL = getDownloadURL;
+            window.deleteObject = deleteObject;
             // Session persistence: auth clears when tab/browser closes
             // Prevents Colin's account auto-logging in on fresh devices
             try {
@@ -7600,6 +7606,10 @@ const firebaseConfig = {
             if(_jobNum4Photos&&typeof jobPhotos!=='undefined'){
                 try{
                     await photoDB.savePhotos(_jobNum4Photos, jobPhotos);
+                    // Sync to Firebase Storage so other devices can access photos
+                    if (jobPhotos.length > 0) {
+                        syncPhotosToFirebase(_jobNum4Photos, jobPhotos).catch(e => console.warn('Photo sync error:', e));
+                    }
                 }catch(e){
                     console.error('%c❌ PHOTO SAVE ERROR', 'background:#ff3b30;color:#fff;font-weight:900;padding:4px;', e.message);
                 }
@@ -8137,7 +8147,17 @@ const firebaseConfig = {
                     jobPhotos = photos;
                     console.log('%c✅ PHOTOS LOADED FROM HISTORY', 'background:#34c759;color:#fff;font-weight:900;padding:4px;', 'Job#:', job.jobNum, 'Photos:', jobPhotos.length);
                 } else {
-                    console.log('%c❌ NO PHOTOS IN IndexedDB', 'background:#ff3b30;color:#fff;font-weight:900;padding:4px;', 'Job#:', job.jobNum);
+                    // IndexedDB empty — try Firebase Storage
+                    console.log('%c⏳ No photos in IndexedDB, trying Firebase...', 'background:#ff9500;color:#fff;font-weight:900;padding:4px;', 'Job#:', job.jobNum);
+                    try {
+                        const fbPhotos = await loadPhotosFromFirebase(job.jobNum);
+                        if (fbPhotos && fbPhotos.length > 0) {
+                            jobPhotos = fbPhotos;
+                            // Cache to IndexedDB for next time
+                            await photoDB.savePhotos(job.jobNum, jobPhotos);
+                            console.log('%c✅ PHOTOS LOADED FROM FIREBASE', 'background:#2196f3;color:#fff;font-weight:900;padding:4px;', 'Count:', fbPhotos.length);
+                        }
+                    } catch(fbErr) { console.warn('Firebase photo load error:', fbErr); }
                 }
                 // Render gallery AFTER photos are loaded
                 renderPhotoGallery();
@@ -9687,7 +9707,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.24';
+        const _ver = window.CURRENT_VERSION || 'v1.16.26';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
@@ -10503,11 +10523,17 @@ const firebaseConfig = {
                 const input = document.createElement('input');
                 input.type = 'file';
                 input.accept = 'image/*';
-                if (captureMode) input.capture = captureMode;
+                if (captureMode) {
+                    input.capture = captureMode; // camera — single shot
+                } else {
+                    input.multiple = true; // library — allow multi-select
+                }
                 input.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;';
-                input.onchange = (e) => {
-                    const f = e.target.files[0];
-                    if (f) snapHandleFile(f);
+                input.onchange = async (e) => {
+                    const files = Array.from(e.target.files || []);
+                    for (const f of files) {
+                        await new Promise(res => { snapHandleFile(f); setTimeout(res, 100); });
+                    }
                     try { document.body.removeChild(input); } catch(e) {}
                     const m = document.getElementById('snapChoiceModal');
                     if (m) m.remove();
@@ -10547,6 +10573,81 @@ const firebaseConfig = {
         }
     }
 
+    // ── PHOTO FIREBASE SYNC ──────────────────────────────────────────────────
+    // ── PHOTO COMPRESSION ────────────────────────────────────────────────────
+    function compressPhoto(base64DataUrl, maxPx = 1200, quality = 0.88) {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+                const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+                const w = Math.round(img.width * scale);
+                const h = Math.round(img.height * scale);
+                const canvas = document.createElement('canvas');
+                canvas.width = w; canvas.height = h;
+                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                resolve(canvas.toDataURL('image/jpeg', quality));
+            };
+            img.onerror = () => resolve(base64DataUrl);
+            img.src = base64DataUrl;
+        });
+    }
+
+    async function syncPhotosToFirebase(jobNum, photosArray) {
+        if (!window.currentUser || !window.firebaseDb || !window.doc || !window.setDoc) return;
+        if (!jobNum || jobNum === '_pending') return;
+        try {
+            const uid = window.staffModeOwnerUid || window.currentUser.uid;
+            let synced = 0;
+            for (const photo of photosArray) {
+                if (!photo.data || !photo.data.startsWith('data:image')) continue;
+                if (photo.firestoreSynced) continue;
+                // Compress to 1200px max — high quality, fits Firestore 1MB limit
+                let compressed = await compressPhoto(photo.data, 1200, 0.88);
+                const sizeKB = Math.round(compressed.length * 0.75 / 1024);
+                if (sizeKB > 900) compressed = await compressPhoto(photo.data, 900, 0.80);
+                photo.data = compressed;
+                // Store as individual Firestore doc: users/{uid}/jobPhotos/{jobNum}_{photoId}
+                const docId = String(jobNum) + '_' + photo.id;
+                const photoRef = window.doc(window.firebaseDb, 'users', uid, 'jobPhotos', docId);
+                await window.setDoc(photoRef, {
+                    jobNum: String(jobNum),
+                    id: photo.id,
+                    data: photo.data,
+                    timestamp: photo.timestamp || new Date().toISOString(),
+                    linkedPart: photo.linkedPart || null,
+                    syncedAt: new Date().toISOString()
+                }, { merge: false });
+                photo.firestoreSynced = true;
+                synced++;
+            }
+            if (synced > 0) {
+                await photoDB.savePhotos(jobNum, photosArray);
+                console.log('✅ ' + synced + ' photos synced to Firestore');
+            }
+        } catch(e) { console.warn('Photo Firestore sync error:', e.message); }
+    }
+
+    async function loadPhotosFromFirebase(jobNum) {
+        if (!window.currentUser || !window.firebaseDb || !window.getDocs || !window.collection) return [];
+        if (!jobNum || jobNum === '_pending') return [];
+        try {
+            const uid = window.staffModeOwnerUid || window.currentUser.uid;
+            const colRef = window.collection(window.firebaseDb, 'users', uid, 'jobPhotos');
+            const snap = await window.getDocs(colRef);
+            const photos = [];
+            snap.forEach(d => {
+                const data = d.data();
+                if (String(data.jobNum) === String(jobNum) && data.data) {
+                    photos.push({ id: data.id || d.id, data: data.data, timestamp: data.timestamp, linkedPart: data.linkedPart || null, firestoreSynced: true });
+                }
+            });
+            photos.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+            console.log('✅ Loaded ' + photos.length + ' photos from Firestore for job ' + jobNum);
+            return photos;
+        } catch(e) { console.warn('Photo load from Firestore error:', e.message); return []; }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     function snapHandleFile(file) {
         if (!file) return;
         const reader = new FileReader();
@@ -10567,8 +10668,9 @@ const firebaseConfig = {
                     // No job number yet - save to pending
                     await photoDB.savePhotos('_pending', jobPhotos);
                 } else {
-                    // Have job number - save to that job's photos
+                    // Have job number - save to IndexedDB and Firebase Storage
                     await photoDB.savePhotos(_jn, jobPhotos);
+                    syncPhotosToFirebase(_jn, jobPhotos).catch(e => console.warn('Photo Firebase sync error:', e));
                 }
                 window._preSnapJobNum=null; window._preSnapPart=null;
             }catch(e){
@@ -10590,7 +10692,13 @@ const firebaseConfig = {
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = 'image/*';
-        input.onchange = (e) => { snapHandleFile(e.target.files[0]); };
+        input.multiple = true; // allow multi-select on desktop too
+        input.onchange = async (e) => {
+            const files = Array.from(e.target.files || []);
+            for (const f of files) {
+                await new Promise(res => { snapHandleFile(f); setTimeout(res, 150); });
+            }
+        };
         input.click();
     }
 
