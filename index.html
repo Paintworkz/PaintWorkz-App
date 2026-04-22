@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.16.17';
+    const CURRENT_VERSION = 'v1.16.18';
     const VERSION_KEY = 'paintworkz_version';
 
     // Auto-update ALL version display elements as soon as DOM is ready
@@ -2540,6 +2540,7 @@ const firebaseConfig = {
                     <h4 style="margin:0; font-weight:900; font-size:14px;">📦 Paint Stock Ledger</h4>
                     <div style="display:flex; gap:8px;">
                         <button onclick="loadStockFromFirebase().then(()=>{try{renderStockTab();}catch(e){}});notify('✅ Stock synced');" style="background:#2196f3; color:#fff; border:none; padding:8px 12px; border-radius:8px; font-weight:900; font-size:11px; cursor:pointer;">🔄 Sync</button>
+                        <button onclick="bulkRecalcStockFromHistory()" style="background:#ff9500; color:#fff; border:none; padding:8px 12px; border-radius:8px; font-weight:900; font-size:11px; cursor:pointer;">⚡ Recalc All Jobs</button>
                         <button onclick="openReceiveStock()" style="background:#34c759; color:#fff; border:none; padding:8px 14px; border-radius:8px; font-weight:900; font-size:12px; cursor:pointer;">+ Receive Stock</button>
                     </div>
                 </div>
@@ -17248,6 +17249,121 @@ const firebaseConfig = {
                     .catch(e => console.warn('Stock sync error:', e));
             } catch(e) {}
         }
+    }
+
+    function bulkRecalcStockFromHistory() {
+        const history = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+        if (history.length === 0) { notify('No job history found'); return; }
+
+        const confirmed = confirm(
+            `⚡ RECALCULATE STOCK FROM ALL JOB HISTORY\n\n` +
+            `This will:\n` +
+            `• Process ALL ${history.length} jobs in history\n` +
+            `• Deduct paint for every job (bases + tinters)\n` +
+            `• Allow negative values — you'll need to manually correct after\n` +
+            `• Reset the deducted-jobs log so nothing double-counts\n\n` +
+            `Current stock levels will be the starting point.\n` +
+            `Tap OK to proceed.`
+        );
+        if (!confirmed) return;
+
+        const CR2 = JSON.parse(localStorage.getItem('pwCoverageRates') || '{}');
+        const _ucR  = parseFloat(CR2.undercoat) || 8;
+        const _ucCR = parseFloat(CR2.clearUc)   || 8;
+        const _satR = parseFloat(CR2.satin)      || 5;
+        const _glsR = parseFloat(CR2.gloss)      || 5;
+        const _matR = parseFloat(CR2.matt)       || 5;
+        const _clrR = parseFloat(CR2.clear)      || 5;
+        const paintDB2 = JSON.parse(localStorage.getItem('paintFormulas') || '[]');
+        const getF2 = col => paintDB2.find(f => (f.color||'').toLowerCase().trim() === (col||'').toLowerCase().trim());
+
+        // Start from current stock levels
+        const stock = JSON.parse(localStorage.getItem('pwStockLevels') || '{}');
+        const newDeducted = {};
+        let jobCount = 0, skipCount = 0;
+
+        history.forEach(job => {
+            const jobKey = String(job.jobNum || job.id || '');
+            if (!jobKey) { skipCount++; return; }
+
+            // Process base paint
+            (job.items || []).forEach(item => {
+                const sqm = parseFloat(item.sqm) || 0;
+                if (!sqm) return;
+                const col = (item.color || job.color || '').trim();
+                const fin = (item.finish || job.finish || '').toLowerCase();
+
+                if (col.toLowerCase().includes('clear')) {
+                    stock['Clear']   = (parseFloat(stock['Clear'])||0)   - sqm / _clrR;
+                    stock['ClearUC'] = (parseFloat(stock['ClearUC'])||0) - sqm / _ucCR;
+                } else {
+                    // Undercoat white for all coloured items
+                    stock['Undercoat'] = (parseFloat(stock['Undercoat'])||0) - sqm / _ucR;
+
+                    // Try to find the base code from formula
+                    const f2 = getF2(col);
+                    const wb = f2 ? (f2.whiteBase || f2.baseTinters || []) : [];
+                    const be = wb.find(b => (b.code||'').toUpperCase().startsWith('XB')) ||
+                               wb.find(b => (b.altCode||'').toUpperCase().startsWith('XB'));
+                    if (be) {
+                        const rc = (be.code||'').toUpperCase().startsWith('XB') ? be.code : be.altCode;
+                        const isD = parseInt((rc||'').slice(-1)) % 2 === 1;
+                        let bk;
+                        if (fin === 'matt')       bk = isD ? 'XB6911' : 'XB6910';
+                        else if (fin === 'gloss') bk = isD ? 'XB6961' : 'XB6960';
+                        else                      bk = isD ? 'XB6931' : 'XB6930';
+                        const _r = fin==='matt'?_matR : fin==='gloss'?_glsR : _satR;
+                        stock[bk] = (parseFloat(stock[bk])||0) - sqm / _r;
+                    } else {
+                        // No formula match — deduct from generic satin white
+                        const _r = fin==='matt'?_matR : fin==='gloss'?_glsR : _satR;
+                        stock['XB6930'] = (parseFloat(stock['XB6930'])||0) - sqm / _r;
+                    }
+                }
+            });
+
+            // Tinter deduction
+            if (f2 !== undefined) {} // already handled per-item above
+            (job.items || []).forEach(item => {
+                const sqm = parseFloat(item.sqm) || 0;
+                if (!sqm) return;
+                const col = (item.color || job.color || '').trim();
+                const fin = (item.finish || job.finish || '').toLowerCase();
+                const _r = fin==='matt'?_matR : fin==='gloss'?_glsR : _satR;
+                const litres = sqm / _r;
+                const formula = getF2(col);
+                if (!formula || !formula.colourants) return;
+                formula.colourants.forEach(c => {
+                    if (!c.code || !c.amount) return;
+                    const tKey = 'tint_' + c.code.toUpperCase().trim();
+                    stock[tKey] = (parseFloat(stock[tKey])||0) - (parseFloat(c.amount) * litres);
+                });
+            });
+
+            newDeducted[jobKey] = new Date().toISOString();
+            jobCount++;
+        });
+
+        // Round all values to 2 decimal places
+        Object.keys(stock).forEach(k => { stock[k] = Math.round((stock[k]||0) * 100) / 100; });
+
+        // Save everything
+        localStorage.setItem('pwStockLevels', JSON.stringify(stock));
+        localStorage.setItem('pwStockDeducted', JSON.stringify(newDeducted));
+
+        // Sync to Firestore
+        if (window.currentUser && window.firebaseDb && window.doc && window.setDoc) {
+            try {
+                const uid = window.staffModeOwnerUid || window.currentUser.uid;
+                window.setDoc(window.doc(window.firebaseDb,'users',uid,'appData','stockLevels'), { levels:stock, savedAt:new Date().toISOString() }, {merge:false}).catch(()=>{});
+                window.setDoc(window.doc(window.firebaseDb,'users',uid,'appData','stockDeducted'), { jobs:newDeducted, updatedAt:new Date().toISOString() }, {merge:false}).catch(()=>{});
+            } catch(e) {}
+        }
+
+        try { renderStockTab(); } catch(e) {}
+        checkStockAlerts();
+        notify(`⚡ Done — ${jobCount} jobs processed, ${skipCount} skipped. Adjust levels manually where needed.`);
+        addAdminAlert('STOCK_RECALC', `⚡ Stock recalculated from ${jobCount} historical jobs`);
     }
 
     function deductStockForJob(jobData) {
