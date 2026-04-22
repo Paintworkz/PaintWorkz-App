@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    const CURRENT_VERSION = 'v1.16.16';
+    const CURRENT_VERSION = 'v1.16.17';
     const VERSION_KEY = 'paintworkz_version';
 
     // Auto-update ALL version display elements as soon as DOM is ready
@@ -1771,7 +1771,22 @@ const firebaseConfig = {
                                 // Load paint brands and timeline early in parallel
                                 setTimeout(() => { if (typeof window.loadPaintBrandsEarly === 'function') window.loadPaintBrandsEarly(); }, 600);
                                 setTimeout(() => { if (typeof loadDefaultTimelineFromFirebase === 'function') loadDefaultTimelineFromFirebase(); }, 800);
-                                setTimeout(() => { if (typeof loadStockFromFirebase === 'function') loadStockFromFirebase().then(() => { try { if (typeof renderStockTab === 'function') renderStockTab(); } catch(e){} }); }, 1000);
+                                // Load stock with retry — phone Safari needs extra time for Firebase init
+                                (function() {
+                                    var _stockAttempts = 0;
+                                    var _stockInterval = setInterval(function() {
+                                        _stockAttempts++;
+                                        if (typeof loadStockFromFirebase === 'function' && window.currentUser && window.firebaseDb) {
+                                            clearInterval(_stockInterval);
+                                            loadStockFromFirebase().then(function() {
+                                                try { if (typeof renderStockTab === 'function') renderStockTab(); } catch(e) {}
+                                            });
+                                        } else if (_stockAttempts >= 15) {
+                                            clearInterval(_stockInterval);
+                                            console.warn('Stock load: Firebase not ready after 15 attempts');
+                                        }
+                                    }, 400);
+                                })();
                             } else if (attempts > 0) {
                                 setTimeout(() => tryLoad(attempts - 1), 400);
                             }
@@ -2523,7 +2538,10 @@ const firebaseConfig = {
                 <!-- Header with Receive button -->
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
                     <h4 style="margin:0; font-weight:900; font-size:14px;">📦 Paint Stock Ledger</h4>
-                    <button onclick="openReceiveStock()" style="background:#34c759; color:#fff; border:none; padding:8px 14px; border-radius:8px; font-weight:900; font-size:12px; cursor:pointer;">+ Receive Stock</button>
+                    <div style="display:flex; gap:8px;">
+                        <button onclick="loadStockFromFirebase().then(()=>{try{renderStockTab();}catch(e){}});notify('✅ Stock synced');" style="background:#2196f3; color:#fff; border:none; padding:8px 12px; border-radius:8px; font-weight:900; font-size:11px; cursor:pointer;">🔄 Sync</button>
+                        <button onclick="openReceiveStock()" style="background:#34c759; color:#fff; border:none; padding:8px 14px; border-radius:8px; font-weight:900; font-size:12px; cursor:pointer;">+ Receive Stock</button>
+                    </div>
                 </div>
                 <p style="font-size:11px; color:#666; margin-bottom:14px;">Live stock levels. Updated automatically when jobs complete. Tap <strong>+ Receive Stock</strong> when a delivery arrives.</p>
 
@@ -23633,7 +23651,8 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             window._loadingDataFromFirebase = false;
             return;
         }
-        window.loadAllDataFromFirebase = loadAllDataFromFirebase; // keep self-reference fresh
+        window.loadAllDataFromFirebase = loadAllDataFromFirebase;
+    window.loadStockFromFirebase = loadStockFromFirebase; // expose for manual sync // keep self-reference fresh
         
         // Check if current user is a staff account (first time only)
         if (!ownerUid && !window._staffCheckDone) {
@@ -24598,7 +24617,23 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
 
     // ---- LOAD STOCK FROM FIRESTORE ----
     async function loadStockFromFirebase() {
-        if (!window.currentUser || !window.firebaseDb || !window.getDoc || !window.doc) return;
+        // Retry up to 5 times if Firebase isn't ready yet (important on iPhone Safari)
+        if (!window.currentUser || !window.firebaseDb || !window.getDoc || !window.doc) {
+            return new Promise(resolve => {
+                let attempts = 0;
+                const retry = setInterval(() => {
+                    attempts++;
+                    if (window.currentUser && window.firebaseDb && window.getDoc && window.doc) {
+                        clearInterval(retry);
+                        loadStockFromFirebase().then(resolve);
+                    } else if (attempts >= 10) {
+                        clearInterval(retry);
+                        console.warn('loadStockFromFirebase: Firebase not ready after 10 retries');
+                        resolve();
+                    }
+                }, 500);
+            });
+        }
         try {
             const targetUid = window.staffModeOwnerUid || window.currentUser.uid;
             const ref = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'stockLevels');
