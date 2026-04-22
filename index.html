@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.28'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.29'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -9713,7 +9713,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.28';
+        const _ver = window.CURRENT_VERSION || 'v1.16.29';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
@@ -10538,7 +10538,12 @@ const firebaseConfig = {
                 input.onchange = async (e) => {
                     const files = Array.from(e.target.files || []);
                     for (const f of files) {
-                        await new Promise(res => { snapHandleFile(f); setTimeout(res, 100); });
+                        // Process sequentially - wait for each before starting next
+                        await new Promise(res => {
+                            const origOnLoad = FileReader.prototype.onload;
+                            snapHandleFile(f);
+                            setTimeout(res, 400); // give time for async IndexedDB write
+                        });
                     }
                     try { document.body.removeChild(input); } catch(e) {}
                     const m = document.getElementById('snapChoiceModal');
@@ -10651,11 +10656,14 @@ const firebaseConfig = {
             const uid = window.staffModeOwnerUid || window.currentUser.uid;
             const colRef = window.collection(window.firebaseDb, 'users', uid, 'jobPhotos');
             const snap = await window.getDocs(colRef);
+            const seen = new Set(); // deduplicate by id
             const photos = [];
             snap.forEach(d => {
                 const data = d.data();
-                if (String(data.jobNum) === String(jobNum) && data.data) {
-                    photos.push({ id: data.id || d.id, data: data.data, timestamp: data.timestamp, linkedPart: data.linkedPart || null, firestoreSynced: true });
+                const photoId = String(data.id || d.id);
+                if (String(data.jobNum) === String(jobNum) && data.data && !seen.has(photoId)) {
+                    seen.add(photoId);
+                    photos.push({ id: photoId, data: data.data, timestamp: data.timestamp, linkedPart: data.linkedPart || null, firestoreSynced: true });
                 }
             });
             photos.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
@@ -10713,7 +10721,7 @@ const firebaseConfig = {
         input.onchange = async (e) => {
             const files = Array.from(e.target.files || []);
             for (const f of files) {
-                await new Promise(res => { snapHandleFile(f); setTimeout(res, 150); });
+                await new Promise(res => { snapHandleFile(f); setTimeout(res, 400); });
             }
         };
         input.click();
@@ -10824,7 +10832,13 @@ const firebaseConfig = {
         });
         
         html += `</div>`;
-        html += `<p style="font-size:9px; color:#666; margin:10px 0 0 0;">Photos: ${jobPhotos.length} photo${jobPhotos.length !== 1 ? 's' : ''} | Latest: ${jobPhotos[jobPhotos.length-1]?.timestamp}</p>`;
+        // Show dedup button if duplicates detected
+        const uniqueIds = new Set(jobPhotos.map(p => String(p.id)));
+        const hasDups = uniqueIds.size < jobPhotos.length;
+        html += `<div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
+            <p style="font-size:9px; color:#666; margin:0;">${jobPhotos.length} photo${jobPhotos.length !== 1 ? 's' : ''} | ${jobPhotos[jobPhotos.length-1]?.timestamp}</p>
+            ${hasDups ? `<button onclick="deduplicatePhotos()" style="background:#ff9500;color:#fff;border:none;padding:4px 10px;border-radius:5px;font-size:10px;font-weight:900;cursor:pointer;">⚠️ ${jobPhotos.length - uniqueIds.size} duplicates — Clean Up</button>` : ''}
+        </div>`;
         
         container.innerHTML = html;
     }
@@ -10850,10 +10864,51 @@ const firebaseConfig = {
         document.body.appendChild(modal);
     }
     
-    function deletePhoto(photoId) {
+    async function deduplicatePhotos() {
+        const before = jobPhotos.length;
+        const seen = new Set();
+        jobPhotos = jobPhotos.filter(p => {
+            const key = String(p.id);
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+        const removed = before - jobPhotos.length;
+        if (removed > 0) {
+            const jobNum = document.getElementById('jN')?.value;
+            if (jobNum) await photoDB.savePhotos(jobNum, jobPhotos);
+            // Also clean Firestore - delete all docs for this job and re-sync
+            if (jobNum && window.currentUser && window.firebaseDb) {
+                const uid = window.staffModeOwnerUid || window.currentUser.uid;
+                // Re-sync the deduplicated array
+                jobPhotos.forEach(p => { p.firestoreSynced = false; }); // force re-upload
+                await syncPhotosToFirebase(jobNum, jobPhotos);
+            }
+            renderPhotoGallery();
+            notify('✅ Removed ' + removed + ' duplicate photo' + (removed > 1 ? 's' : ''));
+        } else {
+            notify('✅ No duplicates found');
+        }
+    }
+
+    async function deletePhoto(photoId) {
         jobPhotos = jobPhotos.filter(p => p.id !== photoId);
         renderPhotoGallery();
-        notify('Photo deleted');
+        const jobNum = document.getElementById('jN')?.value;
+        // Remove from IndexedDB
+        if (jobNum) {
+            try { await photoDB.savePhotos(jobNum, jobPhotos); } catch(e) {}
+        }
+        // Remove from Firestore
+        if (jobNum && window.currentUser && window.firebaseDb && window.doc && window.deleteDoc) {
+            try {
+                const uid = window.staffModeOwnerUid || window.currentUser.uid;
+                const docId = String(jobNum) + '_' + String(photoId);
+                await window.deleteDoc(window.doc(window.firebaseDb, 'users', uid, 'jobPhotos', docId));
+                console.log('✅ Photo deleted from Firestore:', docId);
+            } catch(e) { console.warn('Photo Firestore delete error:', e.message); }
+        }
+        notify('🗑️ Photo deleted');
     }
     
     function saveJobPhotos() {
