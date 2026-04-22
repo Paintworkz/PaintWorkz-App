@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.27'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.28'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -8141,30 +8141,36 @@ const firebaseConfig = {
         jobPhotos=[];
         // Load photos asynchronously - don't render gallery until photos are loaded
         (async () => {
-            try{
-                const photos = await photoDB.getPhotos(job.jobNum || '');
-                if(photos && photos.length){
-                    jobPhotos = photos;
-                    console.log('%c✅ PHOTOS LOADED FROM HISTORY', 'background:#34c759;color:#fff;font-weight:900;padding:4px;', 'Job#:', job.jobNum, 'Photos:', jobPhotos.length);
+            try {
+                // Always load from Firestore first — it's the source of truth across devices
+                // Then merge with local IndexedDB (catches any not yet synced)
+                const localPhotos = await photoDB.getPhotos(job.jobNum || '') || [];
+                let cloudPhotos = [];
+                try {
+                    cloudPhotos = await loadPhotosFromFirebase(job.jobNum) || [];
+                } catch(fbErr) { console.warn('Firebase photo load error:', fbErr); }
+
+                if (cloudPhotos.length > 0) {
+                    // Merge: cloud is authoritative, add any local-only photos
+                    const cloudIds = new Set(cloudPhotos.map(p => String(p.id)));
+                    const localOnly = localPhotos.filter(p => !cloudIds.has(String(p.id)));
+                    jobPhotos = [...cloudPhotos, ...localOnly];
+                    // Cache merged result to IndexedDB
+                    await photoDB.savePhotos(job.jobNum, jobPhotos);
+                    console.log('%c✅ PHOTOS: ' + cloudPhotos.length + ' cloud + ' + localOnly.length + ' local-only', 'background:#2196f3;color:#fff;font-weight:900;padding:4px;');
+                } else if (localPhotos.length > 0) {
+                    // No cloud photos — use local only
+                    jobPhotos = localPhotos;
+                    console.log('%c✅ PHOTOS FROM LOCAL ONLY: ' + localPhotos.length, 'background:#ff9500;color:#fff;font-weight:900;padding:4px;');
                 } else {
-                    // IndexedDB empty — try Firebase Storage
-                    console.log('%c⏳ No photos in IndexedDB, trying Firebase...', 'background:#ff9500;color:#fff;font-weight:900;padding:4px;', 'Job#:', job.jobNum);
-                    try {
-                        const fbPhotos = await loadPhotosFromFirebase(job.jobNum);
-                        if (fbPhotos && fbPhotos.length > 0) {
-                            jobPhotos = fbPhotos;
-                            // Cache to IndexedDB for next time
-                            await photoDB.savePhotos(job.jobNum, jobPhotos);
-                            console.log('%c✅ PHOTOS LOADED FROM FIREBASE', 'background:#2196f3;color:#fff;font-weight:900;padding:4px;', 'Count:', fbPhotos.length);
-                        }
-                    } catch(fbErr) { console.warn('Firebase photo load error:', fbErr); }
+                    jobPhotos = [];
+                    console.log('%cNo photos found for job ' + job.jobNum, 'background:#999;color:#fff;padding:4px;');
                 }
-                // Render gallery AFTER photos are loaded
                 renderPhotoGallery();
                 updatePhotoTargetIndicator();
-            }catch(_pe){
+            } catch(_pe) {
                 console.error('%c❌ PHOTO LOAD ERROR', 'background:#ff3b30;color:#fff;font-weight:900;padding:4px;', _pe.message);
-                renderPhotoGallery(); // Render empty gallery on error
+                renderPhotoGallery();
             }
         })();
         // Get brand from first item if it exists, otherwise from job.brand
@@ -9707,7 +9713,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.27';
+        const _ver = window.CURRENT_VERSION || 'v1.16.28';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
