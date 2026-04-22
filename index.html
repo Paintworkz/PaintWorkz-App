@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.32'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.33'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -8154,20 +8154,26 @@ const firebaseConfig = {
                 } catch(fbErr) { console.warn('Firebase photo load error:', fbErr); }
 
                 if (cloudPhotos.length > 0) {
-                    // Merge: cloud is authoritative, add any local-only photos
-                    const cloudIds = new Set(cloudPhotos.map(p => String(p.id)));
-                    const localOnly = localPhotos.filter(p => !cloudIds.has(String(p.id)));
-                    jobPhotos = [...cloudPhotos, ...localOnly];
-                    // Cache merged result to IndexedDB
+                    // Cloud is source of truth — use cloud photos only
+                    // Deduplicate by ID just in case
+                    const seen = new Set();
+                    jobPhotos = cloudPhotos.filter(p => {
+                        const k = String(p.id);
+                        if (seen.has(k)) return false;
+                        seen.add(k); return true;
+                    });
+                    // Cache to IndexedDB
                     await photoDB.savePhotos(job.jobNum, jobPhotos);
-                    console.log('%c✅ PHOTOS: ' + cloudPhotos.length + ' cloud + ' + localOnly.length + ' local-only', 'background:#2196f3;color:#fff;font-weight:900;padding:4px;');
+                    console.log('%c✅ ' + jobPhotos.length + ' photos from Firestore (job ' + job.jobNum + ')', 'background:#2196f3;color:#fff;font-weight:900;padding:4px;');
                 } else if (localPhotos.length > 0) {
-                    // No cloud photos — use local only
-                    jobPhotos = localPhotos;
-                    console.log('%c✅ PHOTOS FROM LOCAL ONLY: ' + localPhotos.length, 'background:#ff9500;color:#fff;font-weight:900;padding:4px;');
+                    // No cloud photos yet — use local, sync them up
+                    const seen2 = new Set();
+                    jobPhotos = localPhotos.filter(p => { const k=String(p.id); if(seen2.has(k))return false; seen2.add(k); return true; });
+                    console.log('%c✅ ' + jobPhotos.length + ' photos from local IndexedDB', 'background:#ff9500;color:#fff;font-weight:900;padding:4px;');
+                    // Sync to cloud in background
+                    syncPhotosToFirebase(job.jobNum, jobPhotos).catch(()=>{});
                 } else {
                     jobPhotos = [];
-                    console.log('%cNo photos found for job ' + job.jobNum, 'background:#999;color:#fff;padding:4px;');
                 }
                 renderPhotoGallery();
                 updatePhotoTargetIndicator();
@@ -9716,7 +9722,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.32';
+        const _ver = window.CURRENT_VERSION || 'v1.16.33';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
@@ -10565,8 +10571,16 @@ const firebaseConfig = {
                     </div>
                 </div>`;
             document.body.appendChild(modal);
-            document.getElementById('snapBtnCamera').onclick = () => { _makeInput('environment').click(); };
-            document.getElementById('snapBtnLibrary').onclick = () => { _makeInput(null).click(); };
+            document.getElementById('snapBtnCamera').onclick = () => {
+                const m = document.getElementById('snapChoiceModal');
+                if (m) m.remove(); // dismiss modal FIRST (iOS requires clean state before input.click)
+                setTimeout(() => { _makeInput('environment').click(); }, 80);
+            };
+            document.getElementById('snapBtnLibrary').onclick = () => {
+                const m = document.getElementById('snapChoiceModal');
+                if (m) m.remove();
+                setTimeout(() => { _makeInput(null).click(); }, 80);
+            };
         } else {
             // Desktop: show choice     webcam or file upload
             const existingModal = document.getElementById('snapChoiceModal');
