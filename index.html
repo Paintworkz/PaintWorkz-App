@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.26'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.27'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -9707,7 +9707,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.26';
+        const _ver = window.CURRENT_VERSION || 'v1.16.27';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
@@ -10593,25 +10593,31 @@ const firebaseConfig = {
     }
 
     async function syncPhotosToFirebase(jobNum, photosArray) {
-        if (!window.currentUser || !window.firebaseDb || !window.doc || !window.setDoc) return;
+        if (!window.currentUser || !window.firebaseDb || !window.doc || !window.setDoc) {
+            console.warn('syncPhotosToFirebase: Firebase not ready');
+            return;
+        }
         if (!jobNum || jobNum === '_pending') return;
-        try {
-            const uid = window.staffModeOwnerUid || window.currentUser.uid;
-            let synced = 0;
-            for (const photo of photosArray) {
-                if (!photo.data || !photo.data.startsWith('data:image')) continue;
-                if (photo.firestoreSynced) continue;
-                // Compress to 1200px max — high quality, fits Firestore 1MB limit
-                let compressed = await compressPhoto(photo.data, 1200, 0.88);
-                const sizeKB = Math.round(compressed.length * 0.75 / 1024);
-                if (sizeKB > 900) compressed = await compressPhoto(photo.data, 900, 0.80);
+        const uid = window.staffModeOwnerUid || window.currentUser.uid;
+        let synced = 0;
+        let failed = 0;
+        for (const photo of photosArray) {
+            if (!photo.data || !photo.data.startsWith('data:image')) continue;
+            if (photo.firestoreSynced) continue;
+            try {
+                // Compress aggressively — Firestore has 1MB doc limit
+                // base64 is ~1.37x the binary size, so target <700KB base64 string
+                let compressed = await compressPhoto(photo.data, 800, 0.82);
+                // Check size and compress harder if needed
+                if (compressed.length > 700000) compressed = await compressPhoto(photo.data, 600, 0.75);
+                if (compressed.length > 700000) compressed = await compressPhoto(photo.data, 500, 0.70);
                 photo.data = compressed;
-                // Store as individual Firestore doc: users/{uid}/jobPhotos/{jobNum}_{photoId}
-                const docId = String(jobNum) + '_' + photo.id;
+
+                const docId = String(jobNum) + '_' + String(photo.id);
                 const photoRef = window.doc(window.firebaseDb, 'users', uid, 'jobPhotos', docId);
                 await window.setDoc(photoRef, {
                     jobNum: String(jobNum),
-                    id: photo.id,
+                    id: String(photo.id),
                     data: photo.data,
                     timestamp: photo.timestamp || new Date().toISOString(),
                     linkedPart: photo.linkedPart || null,
@@ -10619,12 +10625,17 @@ const firebaseConfig = {
                 }, { merge: false });
                 photo.firestoreSynced = true;
                 synced++;
+                console.log('✅ Photo synced to Firestore: job', jobNum, 'photo', photo.id, 'size:', Math.round(photo.data.length/1024)+'KB');
+            } catch(e) {
+                failed++;
+                console.error('❌ Photo sync failed:', e.code, e.message);
+                notify('⚠️ Photo sync error: ' + (e.code || e.message));
             }
-            if (synced > 0) {
-                await photoDB.savePhotos(jobNum, photosArray);
-                console.log('✅ ' + synced + ' photos synced to Firestore');
-            }
-        } catch(e) { console.warn('Photo Firestore sync error:', e.message); }
+        }
+        if (synced > 0) {
+            await photoDB.savePhotos(jobNum, photosArray);
+            notify('☁️ ' + synced + ' photo' + (synced > 1 ? 's' : '') + ' synced to cloud');
+        }
     }
 
     async function loadPhotosFromFirebase(jobNum) {
