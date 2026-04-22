@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.30'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.32'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -9716,7 +9716,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.30';
+        const _ver = window.CURRENT_VERSION || 'v1.16.32';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
@@ -10828,9 +10828,9 @@ const firebaseConfig = {
 
             html += `
                 <div style="position:relative; cursor:pointer; border-radius:6px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,0.1); height:80px;">
-                    <img src="${photo.data}" style="width:100%; height:100%; object-fit:cover;" onclick="viewPhoto(${photo.id})">
+                    <img src="${photo.data}" style="width:100%; height:100%; object-fit:cover;" onclick="viewPhoto('${photo.id}')">
                     <div style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; font-size:8px; padding:2px 4px; border-radius:3px;">${_lp.length}</div>${_plabel}
-                    <button onclick="deletePhoto(${photo.id})" style="position:absolute; bottom:2px; right:2px; background:#ff3b30; border:none; color:#fff; padding:2px 4px; border-radius:3px; font-size:9px; cursor:pointer;">X</button>
+                    <button onclick="deletePhoto('${photo.id}')" style="position:absolute; bottom:2px; right:2px; background:#ff3b30; border:none; color:#fff; padding:2px 4px; border-radius:3px; font-size:9px; cursor:pointer;">X</button>
                 </div>
             `;
         });
@@ -10896,7 +10896,7 @@ const firebaseConfig = {
     }
 
     async function deletePhoto(photoId) {
-        jobPhotos = jobPhotos.filter(p => p.id !== photoId);
+        jobPhotos = jobPhotos.filter(p => String(p.id) !== String(photoId));
         renderPhotoGallery();
         const jobNum = document.getElementById('jN')?.value;
         // Remove from IndexedDB
@@ -17617,7 +17617,21 @@ const firebaseConfig = {
 
         try { renderStockTab(); } catch(e) {}
         checkStockAlerts();
-        notify(`⚡ Done — ${jobCount} jobs processed, ${skipCount} skipped. Adjust levels manually where needed.`);
+        // Show a detailed summary
+        const _ucTotal = Math.abs(Math.round(stock['Undercoat'] || 0));
+        const _satTotal = Math.abs(Math.round(stock['XB6930'] || 0)) + Math.abs(Math.round(stock['XB6931'] || 0));
+        const _glsTotal = Math.abs(Math.round(stock['XB6960'] || 0)) + Math.abs(Math.round(stock['XB6961'] || 0));
+        const _matTotal = Math.abs(Math.round(stock['XB6910'] || 0)) + Math.abs(Math.round(stock['XB6911'] || 0));
+        alert(
+            `⚡ RECALC COMPLETE — ${jobCount} jobs processed\n\n` +
+            `Undercoat deducted: ${_ucTotal}L (at ${_ucR}m²/L)\n` +
+            `Satin base deducted: ${_satTotal}L (at ${_satR}m²/L)\n` +
+            `Gloss base deducted: ${_glsTotal}L (at ${_glsR}m²/L)\n` +
+            `Matt base deducted: ${_matTotal}L (at ${_matR}m²/L)\n\n` +
+            `All values are now NEGATIVE (deducted from 0).\n` +
+            `Go to Database → Stock, enter your actual drum quantities,\n` +
+            `then the stock levels will show what you actually have left.`
+        );
         addAdminAlert('STOCK_RECALC', `⚡ Stock recalculated from ${jobCount} historical jobs`);
     }
 
