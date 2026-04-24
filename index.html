@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.35'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.36'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -9722,7 +9722,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.35';
+        const _ver = window.CURRENT_VERSION || 'v1.16.36';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
@@ -10398,16 +10398,9 @@ const firebaseConfig = {
             masterMatrix[targetTier][newCode] = [cleanName, 0, 0, 0, 0, 0];
             localStorage.setItem('masterMatrix', JSON.stringify(masterMatrix));
 
-            // Set a flag so loadAllDataFromFirebase knows not to overwrite local state
-            window._profileSyncInProgress = true;
-            try {
-                await new Promise(resolve => {
-                    syncProfilesToFirebase();
-                    setTimeout(resolve, 1500); // give Firestore write time to complete
-                });
-            } finally {
-                window._profileSyncInProgress = false;
-            }
+            // Stamp local version so Firestore loads don't overwrite newer local state
+            window._localProfilesTimestamp = Date.now();
+            syncProfilesToFirebase();
             
             document.getElementById('new-profile').value=''; 
             refreshLists();
@@ -22114,8 +22107,9 @@ if ('serviceWorker' in navigator && _swAllowed) {
     function updatePricingMatrix(tier, code, priceIndex, val) {
         masterMatrix[tier][code][priceIndex + 1] = parseFloat(val);
         localStorage.setItem('masterMatrix', JSON.stringify(masterMatrix));
+        window._localProfilesTimestamp = Date.now(); // mark local as newest so Firestore won't overwrite
         syncMasterMatrixToFirestore();
-        notify('    Price Updated');
+        notify('✅ Price Updated');
     }
     
     // Ensure every matrix row has 6 elements (name + 5 prices incl. clear)
@@ -24307,26 +24301,29 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
 
             //        5. Door Profiles                                                                                                          
             try {
-                // Skip if a local profile sync is in progress — avoid race condition
-                if (!window._profileSyncInProgress) {
                 const dpRef = window.doc(window.firebaseDb, 'users', dataUid, 'config', 'doorProfiles');
                 console.log('🔍 Loading door profiles from:', 'users/' + dataUid + '/config/doorProfiles');
                 const dpSnap = await window.getDoc(dpRef);
                 if (dpSnap.exists()) {
                     const dpData = dpSnap.data();
                     if (Array.isArray(dpData.doorProfiles) && dpData.doorProfiles.length > 0) {
-                        profiles = dpData.doorProfiles;
-                        localStorage.setItem('doorProfiles', JSON.stringify(profiles));
-                        // Only use embedded masterMatrix from doorProfiles if appData/masterMatrix hasn't loaded a clean version
-                        if (dpData.masterMatrix && typeof dpData.masterMatrix === 'object' && !window._masterMatrixLoadedFromAppData) {
-                            masterMatrix = dpData.masterMatrix;
-                            normaliseMasterMatrix();
-                            localStorage.setItem('masterMatrix', JSON.stringify(masterMatrix));
+                        // Only overwrite if Firestore data is newer than local edits
+                        const firestoreVersion = dpData.syncVersion || 0;
+                        const localVersion = window._localProfilesTimestamp || 0;
+                        if (firestoreVersion >= localVersion) {
+                            profiles = dpData.doorProfiles;
+                            localStorage.setItem('doorProfiles', JSON.stringify(profiles));
+                            if (dpData.masterMatrix && typeof dpData.masterMatrix === 'object' && !window._masterMatrixLoadedFromAppData) {
+                                masterMatrix = dpData.masterMatrix;
+                                normaliseMasterMatrix();
+                                localStorage.setItem('masterMatrix', JSON.stringify(masterMatrix));
+                            }
+                            console.log('       Door profiles loaded from Firestore:', profiles.length, 'profiles');
+                            try { if (typeof refreshLists === 'function') refreshLists(); } catch(e) {}
+                            try { if (typeof renderPricingMatrix === 'function') renderPricingMatrix(); } catch(e) {}
+                        } else {
+                            console.log('       Skipping Firestore profiles — local is newer (local:', localVersion, 'fs:', firestoreVersion, ')');
                         }
-                        console.log('       Door profiles loaded from Firestore:', profiles.length, 'profiles from UID:', dataUid);
-                        console.log('       First profile:', profiles[0]);
-                        try { if (typeof refreshLists === 'function') refreshLists(); } catch(e) {}
-                        try { if (typeof renderPricingMatrix === 'function') renderPricingMatrix(); } catch(e) {}
                     } else {
                         console.log('       Door profiles doc exists but empty - seeding demo data');
                         const _lp = JSON.parse(localStorage.getItem("doorProfiles") || "[]");
@@ -24353,7 +24350,6 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                         paintDatabase = seededFormulas;
                         console.log('       Loaded', seededFormulas.length, 'demo paint formula(s) after seeding');
                     }
-                }
                 }
             } catch(e) { console.warn('Door profiles load error:', e.message); }
 
@@ -25391,12 +25387,13 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         try {
             const targetUid = window.staffModeOwnerUid || window.currentUser.uid;
             const configDoc = window.doc(window.firebaseDb, 'users', targetUid, 'config', 'doorProfiles');
+            const _sv = window._localProfilesTimestamp || Date.now();
             window.setDoc(configDoc, {
                 doorProfiles: profiles,
                 masterMatrix: masterMatrix,
                 lastModified: new Date().toISOString(),
                 userId: window.currentUser.uid,
-                syncVersion: Date.now()
+                syncVersion: _sv  // use local timestamp so Firestore version matches
             }, { merge: false }).then(() => {
             }).catch(err => {
                 console.error('    Error syncing door profiles to Firebase:', err);
