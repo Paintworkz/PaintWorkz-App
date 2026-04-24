@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.36'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.38'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -5669,9 +5669,13 @@ const firebaseConfig = {
     }
 
     function updateFormulaScaling() {
+        const litres = parseFloat(document.getElementById('mixLitres').value) || 1;
+
+        // Auto-fill alt code columns on all base code rows when litres change
+        document.querySelectorAll('[data-base-code-row]').forEach(row => _autoMirrorBaseRow(row));
+
         if (!selectedFormula) return;
         
-        const litres = parseFloat(document.getElementById('mixLitres').value) || 1;
         const scaleFactor = litres / selectedFormula.baseSize;
         
         let html = `<div style="font-size:12px; font-weight:900; margin-bottom:10px;">Scaled for ${litres}L:</div>`;
@@ -5986,6 +5990,29 @@ const firebaseConfig = {
             <button type="button" onclick="this.closest('[data-base-code-row]').remove()" style="padding:0; width:28px; height:28px; border:none; background:#ff3b30; color:#fff; border-radius:4px; font-size:14px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center;">X</button>
         `;
         container.appendChild(row);
+        // Auto-mirror: when main code is typed, copy to alt code if alt is empty
+        const inputs = row.querySelectorAll('input');
+        inputs[0].addEventListener('blur', () => _autoMirrorBaseRow(row));
+        inputs[1].addEventListener('blur', () => _autoMirrorBaseRow(row));
+    }
+
+    function _autoMirrorBaseRow(row) {
+        const inputs = row.querySelectorAll('input');
+        const mainCode = inputs[0].value.trim();
+        const mainGrams = inputs[1].value.trim();
+        const litres = parseFloat(document.getElementById('mixLitres')?.value) || 1;
+        // Mirror code to alt if alt is empty
+        if (mainCode && !inputs[2].value.trim()) {
+            inputs[2].value = mainCode;
+        }
+        // Auto-fill alt threshold columns for each litre step
+        if (litres >= 2 && mainGrams && !inputs[3].value) {
+            inputs[3].value = '2'; // threshold: 2L
+        }
+        if (litres >= 2 && mainGrams && !inputs[4].value) {
+            // Alt grams = mainGrams scaled to 2L (mainGrams is per 1L)
+            inputs[4].value = (parseFloat(mainGrams) * 2).toFixed(2);
+        }
     }
 
     function syncBaseCodeRowsToObject() {
@@ -9722,7 +9749,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.36';
+        const _ver = window.CURRENT_VERSION || 'v1.16.38';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
