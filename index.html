@@ -21,49 +21,46 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.16.10 | Updated: 2026-03-25                       ║
+║  Version: v1.15.5 | Updated: 2026-03-25                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.39'; // global so all scripts can access it
-    const CURRENT_VERSION = window.CURRENT_VERSION;
+    const CURRENT_VERSION = 'v1.15.8-dev-s17';
     const VERSION_KEY = 'paintworkz_version';
-
-    // Auto-update ALL version display elements as soon as DOM is ready
-    // This means CURRENT_VERSION is the ONLY place you ever need to change the version
-    function _applyVersionToDOM() {
-        const ids = ['loginVersionText','adminVersionDisplay','versionDisplay'];
-        ids.forEach(function(id) {
-            var el = document.getElementById(id);
-            if (el) el.textContent = CURRENT_VERSION;
-        });
-        var dateEl = document.getElementById('versionDate') || document.getElementById('adminVersionDate');
-        if (dateEl) dateEl.textContent = ' | Updated ' + new Date().toLocaleDateString('en-AU', {day:'numeric',month:'short',year:'numeric'});
-    }
-    // Multiple timing approaches to guarantee it fires
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', _applyVersionToDOM);
-    } else {
-        _applyVersionToDOM();
-    }
-    // Fallback: also run after short delay in case DOMContentLoaded already fired
-    setTimeout(_applyVersionToDOM, 100);
-    setTimeout(_applyVersionToDOM, 500);
     
     const storedVersion = localStorage.getItem(VERSION_KEY);
     
     if (storedVersion !== CURRENT_VERSION) {
-        console.log(`VERSION CHANGE: ${storedVersion || 'NONE'} -> ${CURRENT_VERSION}`);
-        // Just update the version key — never wipe user data on version change
-        // All user data is in Firestore anyway and reloads from there on login
+        console.log(` VERSION CHANGE DETECTED: ${storedVersion || 'NONE'} -> ${CURRENT_VERSION}`);
+        
+        // Clear only cache-related localStorage items, keep user data
+        const keysToKeep = ['jobHistory', 'clientDatabase', 'appColors', 'adminAlerts',
+            'apiKeys', 'doorProfiles', 'masterMatrix', 'companySettings', 'paintFormulas',
+            'pwStockLevels', 'pwStockSettings', 'adminSettings', 'defaultSettings',
+            'additionalCharges', 'defaultTimeline', 'paintBrands', 'appColors',
+            'pw_tour_done_', 'pw_tooltips']; // preserve tour-done and tooltip preference
+        for (let i = localStorage.length - 1; i >= 0; i--) {
+            const key = localStorage.key(i);
+            if (key && !keysToKeep.some(k => key.startsWith(k))) {
+                localStorage.removeItem(key);
+            }
+        }
         localStorage.setItem(VERSION_KEY, CURRENT_VERSION);
-        // Unregister stale service worker only
+        
+        // Unregister stale service worker so it can't serve old cached files
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.getRegistrations().then(regs => {
                 regs.forEach(reg => reg.unregister());
-            }).catch(() => {});
+            }).then(() => {
+                // Force bypass cache on reload
+                window.location.reload(true);
+            }).catch(() => {
+                window.location.reload(true);
+            });
+        } else {
+            window.location.reload(true);
         }
     }
 })();
@@ -296,7 +293,24 @@
             /* header is fixed (not sticky) — only nav needs clearing */
             --top-total: calc(var(--nav-h) + 8px);
         }
-        
+        /* DEV BUILD BANNER */
+        #devBuildBanner {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            height: var(--dev-banner-h);
+            background: repeating-linear-gradient(90deg, #ff3b30 0px, #ff3b30 12px, #ff6b35 12px, #ff6b35 24px);
+            color: #fff;
+            font-size: 10px;
+            font-weight: 900;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 99999;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            pointer-events: none;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+        }
         /* Push everything down by banner height */
         /* nav/body offsets account for dev banner (0px in prod, 24px in dev) */
         .nav-tabs { top: calc(var(--dev-banner-h) + var(--header-h) + var(--safe-top)) !important; }
@@ -446,11 +460,6 @@
         .bubble-unit input { border: none; background: transparent; text-align: center; font-size: 18px; font-weight: 900; height: 25px; margin:0; padding:0; width: 100%; }
 
         #prof-select { height: 50px !important; margin: 0; width: 100%; font-size: 13px; text-overflow: ellipsis; }
-        .part-drag-handle { cursor: grab; padding: 0 3px; color: #ccc; font-size: 13px; display: flex; align-items: center; user-select: none; flex-shrink: 0; opacity: 0.5; touch-action: none; }
-        .part-label:hover .part-drag-handle { opacity: 1; }
-        .part-drag-handle:active { cursor: grabbing; }
-        .part-label.drag-over { border-top: 3px solid #2196f3 !important; opacity: 0.85; }
-        .part-label.dragging { opacity: 0.4; }
 
         .p-card { flex:1; background:#fff; border:2px solid #ddd; border-radius:8px; padding:8px 2px; text-align:center; font-weight:900; font-size:9px; color:#444; display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer; transition:all 0.2s; touch-action:manipulation; -webkit-tap-highlight-color:transparent; font-family:inherit; -webkit-appearance:none; appearance:none; outline:none; user-select:none; -webkit-user-select:none; }
         .p-card.active { border-color:var(--gs); background:#fff9e6; color:#000; }
@@ -470,20 +479,18 @@
         .add-main-btn { width:100%; background:var(--gold); border:none; padding:20px; border-radius:40px; font-weight:900; font-size:20px; box-shadow:0 4px 15px rgba(212, 175, 55, 0.4); margin-top:10px; cursor:pointer; transition:all 0.2s; }
         .add-main-btn:active { transform: scale(0.98); }
 
-        .part-label { display: flex; align-items: center; gap: 6px; padding: 8px 6px; background: #fff; border-radius: 10px; margin-bottom: 6px; border: 1px solid #eee; position:relative; }
-        .pl-qty { background: #000; color: var(--gs); min-width: 34px; height: 34px; border-radius: 6px; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:14px; }
-        .pl-center { flex:1; min-width:0; overflow:hidden; }
-        .pl-dims { font-size: 14px; font-weight: 900; color: #000; line-height:1.2; white-space:nowrap; }
-        .pl-brand { font-size:10px; font-weight:700; color:#666; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:1px; }
+        .part-label { display: flex; align-items: center; gap: 10px; padding: 10px; background: #fff; border-radius: 10px; margin-bottom: 8px; border: 1px solid #eee; position:relative; }
+        .pl-qty { background: #000; color: var(--gs); min-width: 40px; height: 40px; border-radius: 8px; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:16px; }
+        .pl-center { flex:1; }
+        .pl-dims { font-size: 18px; font-weight: 900;color: #000;line-height:1.1; }
         .edge-pill { display:inline-block; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 900; color: #fff; margin-right: 3px; }
-        .pl-right { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-width: 52px; padding: 0 4px; }
-        .pl-mode { width: 36px; height: 36px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 12px; border: 2px solid; }
-        .pl-sqm { font-size: 11px; font-weight: 900; text-align: center; color: #333; }
-        .del-btn { color: #ff3b30; font-size: 24px; border: none; background: none; cursor:pointer; transition:all 0.2s; padding: 4px 6px; }
+        .pl-right { display: flex; flex-direction: column; align-items: center; min-width: 60px; border-left: 1px solid #eee; }
+        .pl-mode { width: 35px; height: 35px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 12px; border: 2px solid; margin-bottom: 4px; }
+        .del-btn { color: #ff3b30; font-size: 24px; border: none; background: none; cursor:pointer; transition:all 0.2s; }
         .del-btn:active { transform: scale(1.2); }
 
-        .qty-controls { display:flex; flex-direction:column; align-items:center; gap:2px; min-width:38px; }
-        .qty-btn { border:none; background:#eee; width:100%; border-radius:4px; font-weight:900; font-size:14px; cursor:pointer; transition:all 0.2s; padding:0; height:24px; }
+        .qty-controls { display:flex; flex-direction:column; align-items:center; gap:2px; min-width:45px; }
+        .qty-btn { border:none; background:#eee; width:100%; border-radius:4px; font-weight:900; font-size:16px; cursor:pointer; transition:all 0.2s; padding:0; height:28px; }
         .qty-btn:active { background:#ddd; }
 
         .sticky-footer { background: #000; position: fixed; bottom: 0; left: 0; right: 0; height: 80px; border-top: 3px solid var(--gs); color: #fff; display: flex; justify-content: space-around; align-items: center; z-index: 2000; }
@@ -721,23 +728,6 @@
         /* Part labels */
         @media (prefers-color-scheme: dark) { body:not([data-theme="light"]) .part-label { background:#2c2c2e !important; border-color:#48484a !important; } body:not([data-theme="light"]) .pl-dims { color:#f2f2f7 !important; } body:not([data-theme="light"]) .pl-meta { color:#aaa !important; } }
         body[data-theme="dark"] .part-label { background:#2c2c2e !important; border-color:#48484a !important; }
-        /* Desktop: wider layout with more breathing room */
-        @media (min-width: 700px) {
-            .part-label { gap: 14px; padding: 12px 14px; }
-            .pl-dims { font-size: 18px; }
-            .pl-right { min-width: 70px; padding: 0 10px; gap: 6px; border-left: none; }
-            .pl-mode { width: 44px; height: 44px; font-size: 14px; }
-            .pl-sqm { font-size: 13px; }
-            .pl-brand { font-size: 11px; }
-            .edit-btn-text { display: inline !important; }
-            .edit-btn-icon { display: none !important; }
-            .qty-controls { min-width: 50px; }
-            .qty-btn { height: 30px; font-size: 16px; }
-            .pl-qty { min-width: 42px; height: 42px; font-size: 16px; }
-            .part-drag-handle { font-size: 16px; padding: 0 8px; }
-        }
-        body[data-theme="dark"] .pl-sqm { color:#f2f2f7 !important; }
-        @media (prefers-color-scheme: dark) { body:not([data-theme="light"]) .pl-sqm { color:#f2f2f7 !important; } }
         body[data-theme="dark"] .pl-dims { color:#f2f2f7 !important; }
 
         /* Edge boxes */
@@ -974,8 +964,8 @@
             body:not([data-theme="light"]) #admin-tab-general-content div[style*="background:#f5f5f5"] { background:#232325 !important; }
         }
         /* Global notifications dark mode */
-        body[data-theme="dark"] { --notif-text: #1a1a1a; }
-        @media (prefers-color-scheme: dark) { body:not([data-theme="light"]) { --notif-text: #1a1a1a; } }
+        body[data-theme="dark"] { --notif-text: #f2f2f7; }
+        @media (prefers-color-scheme: dark) { body:not([data-theme="light"]) { --notif-text: #f2f2f7; } }
 
         /* History job cards - white bg inline styled divs */
         @media (prefers-color-scheme: dark) { body:not([data-theme="light"]) #history-list > div { background:#2c2c2e !important; border-color:#48484a !important; color:#f2f2f7 !important; } }
@@ -1392,6 +1382,7 @@ window.getTooltipKey = getTooltipKey;
 </script>
 </head>
 <body>
+<div id="devBanner">🚧 DEVELOPMENT VERSION — NOT FOR PRODUCTION USE — v1.15.5-dev 🚧</div>
 <!-- COPYRIGHT NOTICE -->
 <div id="copyrightBanner" style="display:none;">
     ⚖️ PaintWorkz Pro © 2026 Colin Bedford | Unauthorized use prohibited
@@ -1568,6 +1559,30 @@ window.getTooltipKey = getTooltipKey;
             body:not([data-theme="light"]) code[style*="background:#f5f5f5"],
             body:not([data-theme="light"]) code[style*="background:#fff"] { background:#3a3a3c !important; color:#f2f2f7 !important; }
         }
+        /* ── DEV MODE BANNER ── */
+        #devBanner {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 99999;
+            background: repeating-linear-gradient(
+                -45deg,
+                #ff3b30,
+                #ff3b30 10px,
+                #ff9500 10px,
+                #ff9500 20px
+            );
+            color: #fff;
+            text-align: center;
+            font-weight: 900;
+            font-size: 11px;
+            letter-spacing: 1px;
+            padding: 4px 8px;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+            pointer-events: none;
+        }
+
     </style>
     <!-- Firebase SDK - Modern Modular Approach -->
     <script type="module">
@@ -1600,12 +1615,6 @@ const firebaseConfig = {
             app = initializeApp(firebaseConfig);
             auth = getAuth(app);
             db = getFirestore(app);
-            const _storage = getStorage(app);
-            window.firebaseStorage = _storage;
-            window.storageRef = ref;
-            window.uploadString = uploadString;
-            window.getDownloadURL = getDownloadURL;
-            window.deleteObject = deleteObject;
             // Session persistence: auth clears when tab/browser closes
             // Prevents Colin's account auto-logging in on fresh devices
             try {
@@ -1775,22 +1784,7 @@ const firebaseConfig = {
                                 // Load paint brands and timeline early in parallel
                                 setTimeout(() => { if (typeof window.loadPaintBrandsEarly === 'function') window.loadPaintBrandsEarly(); }, 600);
                                 setTimeout(() => { if (typeof loadDefaultTimelineFromFirebase === 'function') loadDefaultTimelineFromFirebase(); }, 800);
-                                // Load stock with retry — phone Safari needs extra time for Firebase init
-                                (function() {
-                                    var _stockAttempts = 0;
-                                    var _stockInterval = setInterval(function() {
-                                        _stockAttempts++;
-                                        if (typeof loadStockFromFirebase === 'function' && window.currentUser && window.firebaseDb) {
-                                            clearInterval(_stockInterval);
-                                            loadStockFromFirebase().then(function() {
-                                                try { if (typeof renderStockTab === 'function') renderStockTab(); } catch(e) {}
-                                            });
-                                        } else if (_stockAttempts >= 15) {
-                                            clearInterval(_stockInterval);
-                                            console.warn('Stock load: Firebase not ready after 15 attempts');
-                                        }
-                                    }, 400);
-                                })();
+                                setTimeout(() => { if (typeof loadStockFromFirebase === 'function') loadStockFromFirebase().then(() => { try { if (typeof renderStockTab === 'function') renderStockTab(); } catch(e){} }); }, 1000);
                             } else if (attempts > 0) {
                                 setTimeout(() => tryLoad(attempts - 1), 400);
                             }
@@ -2116,7 +2110,7 @@ const firebaseConfig = {
 
         <div id="loginError" style="color:red; font-weight:900; margin-top:15px; text-align:center; display:none;"></div>
     </div>
-    <div id="loginVersionText" style="text-align:center; margin-top:12px; font-size:10px; color:rgba(128,128,128,0.8); font-weight:700;"></div>
+    <div id="loginVersionText" style="text-align:center; margin-top:12px; font-size:10px; color:rgba(128,128,128,0.8); font-weight:700;">v1.15.5</div>
 </div>
 
 <div id="resetPasswordScreen" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:linear-gradient(135deg, #d4af37, #f9f1b0); z-index:10001; flex-direction:column; align-items:center; justify-content:center; padding:20px;">
@@ -2165,6 +2159,7 @@ const firebaseConfig = {
     </div>
 </div>
 <!-- HEADER + NAV always outside appContainer so banner/tabs are always rendered -->
+<div id="devBuildBanner" style="display:none;"></div>
 
 <div id="staffModeBanner">
     <span>&#x1F477; STAFF MODE</span>
@@ -2210,18 +2205,18 @@ const firebaseConfig = {
                 </div>
                 <div style="flex:1">
                     <label>Date Received</label>
-                    <input type="text" id="dRec" placeholder="DD/MM/YYYY" inputmode="numeric" style="text-align:center;" onclick="openCalendar()" autocomplete="off">
+                    <input type="text" id="dRec" placeholder="DD/MM/YYYY" inputmode="numeric" style="text-align:center;" onclick="openCalendar()">
                 </div>
             </div>
 
             <div style="display:flex; gap:8px; margin-bottom: 8px;">
                 <div style="flex:2">
                     <label>Job Name / Reference</label>
-                    <input type="text" id="jNm" placeholder="e.g. Smith Residence" autocomplete="off" spellcheck="false">
+                    <input type="text" id="jNm" placeholder="e.g. Smith Residence">
                 </div>
                 <div style="flex:1">
                     <label>Job #</label>
-                    <input type="text" id="jN" placeholder="####" style="text-align:center;" onchange="loadJobPhotosForCurrentJobNum()" autocomplete="off">
+                    <input type="text" id="jN" placeholder="####" style="text-align:center;" onchange="loadJobPhotosForCurrentJobNum()">
                 </div>
             </div>
 
@@ -2235,9 +2230,9 @@ const firebaseConfig = {
                     </div>
                     <div style="flex:1">
                         <label>Color Name <span class="pw-help">?<span class="pw-help-tip">The paint colour name — e.g. Lexicon, Vivid White, Hog Bristle. Type it to pull up matching formula from your database.</span></span></label>
-                        <div style="display:flex; gap:4px; align-items:stretch;">
-                            <input type="text" id="p-color" placeholder="e.g. Lexicon" style="height:35px; font-size:12px; flex:1;" autocomplete="off" spellcheck="false" lang="en-AU" oninput="openPaintFormulaSearch()" onblur="checkBulkColourChange()">
-                            <button onclick="checkBulkColourChange()" style="background:#2196f3; color:#fff; border:none; padding:0 12px; border-radius:4px; font-size:11px; font-weight:900; cursor:pointer; white-space:nowrap; height:35px; align-self:stretch; box-sizing:border-box;" title="Apply colour + code to all parts">↻ UPDATE ALL</button>
+                        <div style="display:flex; gap:4px;">
+                            <input type="text" id="p-color" placeholder="e.g. Lexicon" style="height:35px; font-size:12px; flex:1;" oninput="openPaintFormulaSearch()" onblur="checkBulkColourChange()">
+                            <button onclick="checkBulkColourChange()" style="background:#2196f3; color:#fff; border:none; padding:6px 10px; border-radius:4px; font-size:10px; font-weight:900; cursor:pointer; white-space:nowrap;" title="Apply colour + code to all parts">↻ UPDATE ALL</button>
                         </div>
                     </div>
                 </div>
@@ -2272,9 +2267,9 @@ const firebaseConfig = {
             </div>
 
             <label>Description of Part <span class="pw-help">?<span class="pw-help-tip">A short label for this part — e.g. DOOR, PANEL, DRAWER. Appears on your estimate and shop label to identify each line item.</span></span></label>
-            <div style="display:flex; align-items:stretch; gap:8px;">
-                <input type="text" id="desc" placeholder="e.g. DOOR, PANEL..." style="text-transform:uppercase; flex:1; min-width:0;" list="descSuggestions" autocomplete="off" oninput="updatePhotoTargetIndicator()">
-                <label id="ctsCheckLabel" style="display:flex; align-items:center; gap:5px; font-size:13px; font-weight:900; color:#2c3e50; white-space:nowrap; cursor:pointer; background:#f0f0f0; padding:0 12px; border-radius:6px; border:2px solid #ddd; user-select:none; flex-shrink:0; align-self:stretch;" title="Cut To Size - charge board supply price">
+            <div style="display:flex; align-items:center; gap:8px;">
+                <input type="text" id="desc" placeholder="e.g. DOOR, PANEL..." style="text-transform:uppercase; flex:1;" list="descSuggestions" autocomplete="off" oninput="updatePhotoTargetIndicator()">
+                <label id="ctsCheckLabel" style="display:flex; align-items:center; gap:5px; font-size:12px; font-weight:900; color:#2c3e50; white-space:nowrap; cursor:pointer; background:#f0f0f0; padding:0 9px; border-radius:6px; border:2px solid #ddd; user-select:none; height:35px; box-sizing:border-box;" title="Cut To Size - charge board supply price">
                     <input type="checkbox" id="ctsPart" onchange="toggleCtsLabel()" style="width:14px; height:14px; cursor:pointer; accent-color:#2c3e50;">
                     CTS <span class="pw-help">?<span class="pw-help-tip">Cut To Size — tick this to add board supply pricing on top of the paint price. Set rates per profile and thickness in Admin → Price Matrix → Cut To Size.</span></span>
                 </label>
@@ -2288,7 +2283,7 @@ const firebaseConfig = {
 
             <div class="bubble-row">
                 <div class="bubble-unit" style="flex:0.8"><input type="number" id="thk" value="18" inputmode="decimal" oninput="up()"><div style="font-size:9px;color:#888;">THICK <span class="pw-help">?<span class="pw-help-tip">Board thickness in mm. Default 18mm. Used on the shop label and supply docket to identify the substrate.</span></span></div></div>
-                <div style="flex:2"><select id="prof-select" oninput="up(); (function(v){if(!v)return; if(v.toLowerCase().startsWith('plain')){if(typeof setFM==='function')setFM('Flat');} else {if(typeof setFM==='function')setFM('Moulded');}})(this.value)"></select><div style="font-size:9px;color:#888;text-align:center;">PROFILE <span class="pw-help">?<span class="pw-help-tip">Door/panel profile type — Plain, Shaker, J-Mould etc. Links to your Price Matrix. Manage profiles in Admin → Database.</span></span></div></div>
+                <div style="flex:2"><select id="prof-select" oninput="up(); (function(v){if(v&&v.toLowerCase().startsWith('plain')&&typeof setFM==='function'){setFM('Flat');}})(this.value)"></select><div style="font-size:9px;color:#888;text-align:center;">PROFILE <span class="pw-help">?<span class="pw-help-tip">Door/panel profile type — Plain, Shaker, J-Mould etc. Links to your Price Matrix. Manage profiles in Admin → Database.</span></span></div></div>
                 <div class="bubble-unit" style="flex:0.8"><input type="number" id="qty" value="1" inputmode="numeric"><div style="font-size:9px;color:#888;">QTY <span class="pw-help">?<span class="pw-help-tip">Number of identical parts. SQM and price multiply by this.</span></span></div></div>
             </div>
 
@@ -2542,11 +2537,7 @@ const firebaseConfig = {
                 <!-- Header with Receive button -->
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
                     <h4 style="margin:0; font-weight:900; font-size:14px;">📦 Paint Stock Ledger</h4>
-                    <div style="display:flex; gap:8px;">
-                        <button onclick="loadStockFromFirebase().then(()=>{try{renderStockTab();}catch(e){}});notify('✅ Stock synced');" style="background:#2196f3; color:#fff; border:none; padding:8px 12px; border-radius:8px; font-weight:900; font-size:11px; cursor:pointer;">🔄 Sync</button>
-                        <button onclick="bulkRecalcStockFromHistory()" style="background:#ff9500; color:#fff; border:none; padding:8px 12px; border-radius:8px; font-weight:900; font-size:11px; cursor:pointer;">⚡ Recalc All Jobs</button>
-                        <button onclick="openReceiveStock()" style="background:#34c759; color:#fff; border:none; padding:8px 14px; border-radius:8px; font-weight:900; font-size:12px; cursor:pointer;">+ Receive Stock</button>
-                    </div>
+                    <button onclick="openReceiveStock()" style="background:#34c759; color:#fff; border:none; padding:8px 14px; border-radius:8px; font-weight:900; font-size:12px; cursor:pointer;">+ Receive Stock</button>
                 </div>
                 <p style="font-size:11px; color:#666; margin-bottom:14px;">Live stock levels. Updated automatically when jobs complete. Tap <strong>+ Receive Stock</strong> when a delivery arrives.</p>
 
@@ -2767,7 +2758,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.10</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.15.5</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-03-25</div>
                         </div>
                     </div>
@@ -3252,7 +3243,7 @@ const firebaseConfig = {
                 <div class="staff-hidden" style="background:linear-gradient(135deg,#fff8e1,#fff8e1cc); border:2px solid #f9a825; border-radius:12px; padding:12px 15px; margin-bottom:12px;">
                     <div style="display:flex; align-items:center; gap:8px; cursor:pointer;" onclick="toggleAdminAlerts()">
                         <span style="font-size:20px;">🔔</span>
-                        <div style="margin:0; font-weight:900; font-size:13px; color:#e65100; letter-spacing:0.5px; flex:1;">NOTIFICATION ARCHIVE <span id="archiveCountBadge" style="font-size:10px; font-weight:700; color:#999;"></span></div>
+                        <div style="margin:0; font-weight:900; font-size:13px; color:#e65100; letter-spacing:0.5px; flex:1;">NOTIFICATION ARCHIVE</div>
                         <button style="background:rgba(230,81,0,0.1); border:1px solid #e65100; cursor:pointer; font-weight:900; font-size:18px; color:#e65100; padding:4px 12px; border-radius:6px; min-width:32px;">−</button>
                     </div>
                 </div>
@@ -3533,7 +3524,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.10</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-04-21</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.15.5</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-03-25</span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);if(typeof tab==='function')tab('measure');setTimeout(function(){if(typeof startTour==='function')startTour();},300);" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -4477,9 +4468,9 @@ const firebaseConfig = {
     console.log('%cUnauthorized copying, modification, or claiming ownership is prohibited.', 'color:#ff0000;font-weight:bold;');
     console.log('%cAll rights reserved    2026 Colin Bedford', 'color:#ff0000;font-weight:bold;');
     console.log('');
-    //                    VERSION: v1.16.10 | 2026-03-25 | Colin Bedford                   
+    //                    VERSION: v1.15.5 | 2026-03-25 | Colin Bedford                   
     //                    ADMIN TABS FIXED | COVER SHEET FIXED | DELETE CONFIRMATION ADDED                   
-    console.log('%c PaintWorkz Pro v1.16.10 ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
+    console.log('%c PaintWorkz Pro v1.15.5 ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     // Changelog logs removed for production performance
     // ====================================
     
@@ -5647,13 +5638,9 @@ const firebaseConfig = {
     }
 
     function updateFormulaScaling() {
-        const litres = parseFloat(document.getElementById('mixLitres').value) || 1;
-
-        // Auto-fill alt code columns on all base code rows when litres change
-        document.querySelectorAll('[data-base-code-row]').forEach(row => _autoMirrorBaseRow(row));
-
         if (!selectedFormula) return;
         
+        const litres = parseFloat(document.getElementById('mixLitres').value) || 1;
         const scaleFactor = litres / selectedFormula.baseSize;
         
         let html = `<div style="font-size:12px; font-weight:900; margin-bottom:10px;">Scaled for ${litres}L:</div>`;
@@ -5688,29 +5675,8 @@ const firebaseConfig = {
         document.getElementById('p-color').value = (selectedFormula.color || '').toUpperCase();
         document.getElementById('p-code').value = `${(selectedFormula.code || '').toUpperCase()} - ${(selectedFormula.color || '').toUpperCase()} (${selectedFormula.product})`;
         
-        // Apply finish from formula — critical for correct pricing and stock deduction
-        const formulaFinish = selectedFormula.finish || '';
-        if (formulaFinish) {
-            const finishEl = document.getElementById('p-finish');
-            if (finishEl) {
-                // Match against available options (Satin, Gloss, Matt, Semi Gloss)
-                const opts = Array.from(finishEl.options).map(o => o.value.toLowerCase());
-                const match = opts.find(o => o === formulaFinish.toLowerCase());
-                if (match) finishEl.value = match.charAt(0).toUpperCase() + match.slice(1);
-                else if (formulaFinish) finishEl.value = formulaFinish; // set as-is if exact match not found
-            }
-        }
-
-        // Apply brand from formula if set
-        if (selectedFormula.brand) {
-            const brandEl = document.getElementById('p-brand');
-            if (brandEl) {
-                const brandOpts = Array.from(brandEl.options).map(o => o.value);
-                if (brandOpts.includes(selectedFormula.brand)) {
-                    brandEl.value = selectedFormula.brand;
-                }
-            }
-        }
+        // Note: Brand is NOT updated from formula - user can select their own brand
+        // This allows using Wattyl, Dulux, or other brands with the same color
         
         // Save to job data
         const jobData = {
@@ -5968,29 +5934,6 @@ const firebaseConfig = {
             <button type="button" onclick="this.closest('[data-base-code-row]').remove()" style="padding:0; width:28px; height:28px; border:none; background:#ff3b30; color:#fff; border-radius:4px; font-size:14px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center;">X</button>
         `;
         container.appendChild(row);
-        // Auto-mirror: when main code is typed, copy to alt code if alt is empty
-        const inputs = row.querySelectorAll('input');
-        inputs[0].addEventListener('blur', () => _autoMirrorBaseRow(row));
-        inputs[1].addEventListener('blur', () => _autoMirrorBaseRow(row));
-    }
-
-    function _autoMirrorBaseRow(row) {
-        const inputs = row.querySelectorAll('input');
-        const mainCode = inputs[0].value.trim();
-        const mainGrams = inputs[1].value.trim();
-        const litres = parseFloat(document.getElementById('mixLitres')?.value) || 1;
-        // Mirror code to alt if alt is empty
-        if (mainCode && !inputs[2].value.trim()) {
-            inputs[2].value = mainCode;
-        }
-        // Auto-fill alt threshold columns for each litre step
-        if (litres >= 2 && mainGrams && !inputs[3].value) {
-            inputs[3].value = '2'; // threshold: 2L
-        }
-        if (litres >= 2 && mainGrams && !inputs[4].value) {
-            // Alt grams = mainGrams scaled to 2L (mainGrams is per 1L)
-            inputs[4].value = (parseFloat(mainGrams) * 2).toFixed(2);
-        }
     }
 
     function syncBaseCodeRowsToObject() {
@@ -7614,10 +7557,6 @@ const firebaseConfig = {
             if(_jobNum4Photos&&typeof jobPhotos!=='undefined'){
                 try{
                     await photoDB.savePhotos(_jobNum4Photos, jobPhotos);
-                    // Sync to Firebase Storage so other devices can access photos
-                    if (jobPhotos.length > 0) {
-                        syncPhotosToFirebase(_jobNum4Photos, jobPhotos).catch(e => console.warn('Photo sync error:', e));
-                    }
                 }catch(e){
                     console.error('%c❌ PHOTO SAVE ERROR', 'background:#ff3b30;color:#fff;font-weight:900;padding:4px;', e.message);
                 }
@@ -7876,7 +7815,7 @@ const firebaseConfig = {
             let pushed = 0;
             for (const job of jobs) {
                 try {
-                    const jobId = job.id || String(job.jobNum) || `job_${Date.now()}_${pushed}`;
+                    const jobId = job.id || job.jobNum || `job_${Date.now()}_${pushed}`;
                     if (!job.id) job.id = jobId;
                     const targetUid = getTargetUid();
                     const jobDoc = window.doc(window.firebaseDb, 'users', targetUid, 'jobs', jobId);
@@ -8149,42 +8088,20 @@ const firebaseConfig = {
         jobPhotos=[];
         // Load photos asynchronously - don't render gallery until photos are loaded
         (async () => {
-            try {
-                // Always load from Firestore first — it's the source of truth across devices
-                // Then merge with local IndexedDB (catches any not yet synced)
-                const localPhotos = await photoDB.getPhotos(job.jobNum || '') || [];
-                let cloudPhotos = [];
-                try {
-                    cloudPhotos = await loadPhotosFromFirebase(job.jobNum) || [];
-                } catch(fbErr) { console.warn('Firebase photo load error:', fbErr); }
-
-                if (cloudPhotos.length > 0) {
-                    // Cloud is source of truth — use cloud photos only
-                    // Deduplicate by ID just in case
-                    const seen = new Set();
-                    jobPhotos = cloudPhotos.filter(p => {
-                        const k = String(p.id);
-                        if (seen.has(k)) return false;
-                        seen.add(k); return true;
-                    });
-                    // Cache to IndexedDB
-                    await photoDB.savePhotos(job.jobNum, jobPhotos);
-                    console.log('%c✅ ' + jobPhotos.length + ' photos from Firestore (job ' + job.jobNum + ')', 'background:#2196f3;color:#fff;font-weight:900;padding:4px;');
-                } else if (localPhotos.length > 0) {
-                    // No cloud photos yet — use local, sync them up
-                    const seen2 = new Set();
-                    jobPhotos = localPhotos.filter(p => { const k=String(p.id); if(seen2.has(k))return false; seen2.add(k); return true; });
-                    console.log('%c✅ ' + jobPhotos.length + ' photos from local IndexedDB', 'background:#ff9500;color:#fff;font-weight:900;padding:4px;');
-                    // Sync to cloud in background
-                    syncPhotosToFirebase(job.jobNum, jobPhotos).catch(()=>{});
+            try{
+                const photos = await photoDB.getPhotos(job.jobNum || '');
+                if(photos && photos.length){
+                    jobPhotos = photos;
+                    console.log('%c✅ PHOTOS LOADED FROM HISTORY', 'background:#34c759;color:#fff;font-weight:900;padding:4px;', 'Job#:', job.jobNum, 'Photos:', jobPhotos.length);
                 } else {
-                    jobPhotos = [];
+                    console.log('%c❌ NO PHOTOS IN IndexedDB', 'background:#ff3b30;color:#fff;font-weight:900;padding:4px;', 'Job#:', job.jobNum);
                 }
+                // Render gallery AFTER photos are loaded
                 renderPhotoGallery();
                 updatePhotoTargetIndicator();
-            } catch(_pe) {
+            }catch(_pe){
                 console.error('%c❌ PHOTO LOAD ERROR', 'background:#ff3b30;color:#fff;font-weight:900;padding:4px;', _pe.message);
-                renderPhotoGallery();
+                renderPhotoGallery(); // Render empty gallery on error
             }
         })();
         // Get brand from first item if it exists, otherwise from job.brand
@@ -8215,14 +8132,10 @@ const firebaseConfig = {
         setTimeout(() => {
             tab('measure');
             render();
-            // Scroll to top of measure tab so job details are visible (critical on iPhone)
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-            document.documentElement.scrollTop = 0;
-            document.body.scrollTop = 0;
             // Refresh charges panel on forms tab
             try { renderChargesHistoryPanel(); } catch(e) {}
         }, 300);
-        notify('✅ Job Loaded');
+        notify('    Job Loaded - View Only (changes can be saved)');
     }
 
     function updateGoBackButton() {
@@ -8695,63 +8608,24 @@ const firebaseConfig = {
         } catch(e) {}
     }
 
-    function syncNotifArchiveToFirebase(archive) {
-        if (!window.currentUser || !window.firebaseDb || !window.doc || !window.setDoc) return;
-        try {
-            const targetUid = window.staffModeOwnerUid || window.currentUser.uid;
-            const ref = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'notifArchive');
-            window.setDoc(ref, { archive: archive, updated: new Date().toISOString() }, { merge: false }).catch(() => {});
-        } catch(e) {}
-    }
-
     async function loadAdminAlertsFromFirebase() {
         if (!window.currentUser || !window.firebaseDb || !window.getDoc || !window.doc) return;
         try {
-            const targetUid = window.staffModeOwnerUid || window.currentUser.uid;
-            const ref = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'adminAlerts');
+            const ref = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'adminAlerts');
             const snap = await window.getDoc(ref);
             if (snap.exists()) {
                 const data = snap.data();
                 if (Array.isArray(data.alerts) && data.alerts.length > 0) {
                     localStorage.setItem('adminAlerts', JSON.stringify(data.alerts));
+                    console.log('       Loaded', data.alerts.length, 'admin alerts from Firebase');
                     try { if (typeof renderGlobalNotifications === 'function') renderGlobalNotifications(); } catch(e) {}
                     try { if (typeof updateNotificationBadge === 'function') updateNotificationBadge(); } catch(e) {}
                 }
-            }
-            // Also load notification archive
-            const ref2 = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'notifArchive');
-            const snap2 = await window.getDoc(ref2);
-            if (snap2.exists() && Array.isArray(snap2.data().archive)) {
-                const remoteArchive = snap2.data().archive;
-                const localArchive = JSON.parse(localStorage.getItem('pwNotifArchive') || '[]');
-                // Merge: combine both, deduplicate by timestamp, keep newest 500
-                const merged = [...remoteArchive];
-                localArchive.forEach(item => {
-                    if (!merged.some(r => r.timestamp === item.timestamp)) merged.push(item);
-                });
-                merged.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
-                const final = merged.slice(0, 500);
-                localStorage.setItem('pwNotifArchive', JSON.stringify(final));
-                try { if (typeof renderAdminAlerts === 'function') renderAdminAlerts(); } catch(e) {}
             }
         } catch(e) { console.warn('adminAlerts load error:', e.message); }
     }
     
     // Generic function for all notification types
-    // One-time migration: seed archive from adminAlerts if archive is empty
-    (function _migrateNotifArchive() {
-        try {
-            const existing = JSON.parse(localStorage.getItem('pwNotifArchive') || '[]');
-            if (existing.length === 0) {
-                const active = JSON.parse(localStorage.getItem('adminAlerts') || '[]');
-                if (active.length > 0) {
-                    localStorage.setItem('pwNotifArchive', JSON.stringify(active));
-                    console.log('✅ Migrated', active.length, 'notifications to archive');
-                }
-            }
-        } catch(e) {}
-    })();
-
     function addAdminAlert(type, message, details = {}) {
         const adminAlert = {
             timestamp: new Date().toISOString(),
@@ -8759,20 +8633,11 @@ const firebaseConfig = {
             message: message,
             ...details
         };
-        // Active list — capped at 20, shown in schedule notifications panel
         let adminAlerts = JSON.parse(localStorage.getItem('adminAlerts')) || [];
         adminAlerts.unshift(adminAlert);
-        adminAlerts = adminAlerts.slice(0, 20);
+        adminAlerts = adminAlerts.slice(0, 100);
         localStorage.setItem('adminAlerts', JSON.stringify(adminAlerts));
         syncAdminAlertsToFirebase(adminAlerts);
-
-        // Permanent archive — separate, never auto-deleted, capped at 500
-        let archive = JSON.parse(localStorage.getItem('pwNotifArchive') || '[]');
-        archive.unshift(adminAlert);
-        archive = archive.slice(0, 500);
-        localStorage.setItem('pwNotifArchive', JSON.stringify(archive));
-        syncNotifArchiveToFirebase(archive);
-
         showAdminAlert(message);
     }
 
@@ -9726,28 +9591,29 @@ const firebaseConfig = {
     }
 
     function updateVersionDisplay() {
-        // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.39';
-        const CURRENT_DATE = '2026-04-21';
-
-        const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
-        els.forEach(id => { const el = document.getElementById(id); if (el) el.innerText = _ver; });
-        const dateEl = document.getElementById('adminVersionDate') || document.getElementById('versionDate');
-        if (dateEl) dateEl.innerText = ' | ' + CURRENT_DATE;
-
-        localStorage.setItem('paintworkz_version', _ver);
+        const CURRENT_VERSION = 'v1.15.8-dev-s17'; //     bump this on every release
+        const CURRENT_DATE = '2026-03-25';
+        
+        const versionDisplay = document.getElementById('adminVersionDisplay');
+        const versionDate = document.getElementById('adminVersionDate');
+        
+        if (versionDisplay) versionDisplay.innerText = CURRENT_VERSION;
+        if (versionDate) versionDate.innerText = CURRENT_DATE;
+        
+        // Also update localStorage version
+        localStorage.setItem('paintworkz_version', CURRENT_VERSION);
+        
+        console.log(` Version display updated: ${CURRENT_VERSION} | ${CURRENT_DATE}`);
     }
     
     function renderAdminAlerts() {
         const adminAlertsDiv = document.getElementById('admin-alerts');
         if (!adminAlertsDiv) return;
         
-        const alerts = JSON.parse(localStorage.getItem('pwNotifArchive') || '[]');
-        const badge = document.getElementById('archiveCountBadge');
-        if (badge) badge.textContent = alerts.length > 0 ? `(${alerts.length})` : '';
+        const alerts = JSON.parse(localStorage.getItem('adminAlerts')) || [];
         
         if (alerts.length === 0) {
-            adminAlertsDiv.innerHTML = '<div class="card"><p style="color:#999; text-align:center; font-size:12px;">No notifications yet — notifications appear here permanently as they occur.</p></div>';
+            adminAlertsDiv.innerHTML = '<div class="card"><p style="color:#999; text-align:center; font-size:12px;">No notifications yet</p></div>';
             return;
         }
         
@@ -9801,10 +9667,6 @@ const firebaseConfig = {
                 </div>
             </div>`;
         });
-        // Add clear archive button at the bottom of the list
-        adminAlertsDiv.innerHTML += `<div style="text-align:center; padding:10px 0; margin-top:8px;">
-            <button onclick="clearNotifArchive()" style="background:#ff3b30; color:#fff; border:none; padding:8px 20px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">🗑️ Clear Entire Archive (${alerts.length} items)</button>
-        </div>`;
     }
 
     // ── Description dropdown system ───────────────────────────────────────────
@@ -10384,35 +10246,28 @@ const firebaseConfig = {
         } 
     }
     
-    async function addProfile() { 
+    function addProfile() { 
         let v = document.getElementById('new-profile').value.trim(); 
         if(v && !profiles.includes(v)){ 
-            // Strip code suffix if user typed it (e.g. "Demi Round 20 (702)" → "Demi Round 20")
-            const cleanName = v.replace(/\s*\(\d+\)\s*$/, '').trim();
-
-            profiles.push(cleanName); 
+            profiles.push(v); 
             saveProfilesToStorage();
             
-            // Add to masterMatrix so it appears in price matrix
+            // Also add to masterMatrix so it appears in price matrix and syncs to Firestore
             const tierNames = getSortedTierNames ? getSortedTierNames() : Object.keys(masterMatrix);
-            const targetTier = 'Unallocated'; // always add new profiles to Unallocated, not last tier
+            const targetTier = tierNames.length > 0 ? tierNames[tierNames.length-1] : 'Tier 1';
             if (!masterMatrix[targetTier]) masterMatrix[targetTier] = {};
-            // Find next available code starting from 900 for custom profiles
-            const allCodes = Object.keys(masterMatrix).flatMap(t => Object.keys(masterMatrix[t])).map(Number);
-            const newCode = allCodes.length ? Math.max(...allCodes) + 1 : 900;
-            masterMatrix[targetTier][newCode] = [cleanName, 0, 0, 0, 0, 0];
+            const existingCodes = Object.keys(masterMatrix[targetTier]).map(Number);
+            const newCode = existingCodes.length ? Math.max(...existingCodes) + 1 : 1;
+            masterMatrix[targetTier][newCode] = [v, 0, 0, 0, 0, 0];
             localStorage.setItem('masterMatrix', JSON.stringify(masterMatrix));
-
-            // Stamp local version so Firestore loads don't overwrite newer local state
-            window._localProfilesTimestamp = Date.now();
-            syncProfilesToFirebase();
+            try { if (typeof syncProfilesToFirebase === 'function') syncProfilesToFirebase(); } catch(e) {}
             
             document.getElementById('new-profile').value=''; 
             refreshLists();
-            addAdminAlert('PROFILE_ADDED', `NEW DOOR PROFILE ADDED: "${cleanName}"`, {profileName: cleanName});
+            addAdminAlert('PROFILE_ADDED', `NEW DOOR PROFILE ADDED: "${v}"`, {profileName: v});
             renderPricingMatrix();
-            notify(`✓ Profile "${cleanName} (${newCode})" added — set prices in Admin → Price Matrix`);
-        } else if (profiles.some(p => p.replace(/\s*\(\d+\)\s*$/, '').trim().toLowerCase() === v.replace(/\s*\(\d+\)\s*$/, '').trim().toLowerCase())) {
+            notify(`✓ Profile "${v}" added — set prices in Admin → Price Matrix`);
+        } else if (profiles.includes(v)) {
             notify('Profile Already Exists');
         }
     }
@@ -10476,13 +10331,9 @@ const firebaseConfig = {
         mode = m;
         document.querySelectorAll('.mode-sel').forEach(b => b.classList.remove('active'));
         document.getElementById('m' + m).classList.add('active');
-        // Clear all edges first when switching modes
-        ['E1','E2','E3','E4'].forEach(id => document.getElementById(id).classList.remove('active'));
+        // REQUIREMENT: SE auto-selects one long edge by default
         if (m === 'SE') {
-            // SE: auto-select one long edge by default
-            document.getElementById('E1').classList.add('active');
-        } else if (m === 'DS' || m === 'SS') {
-            // SS/DS: no edges selected by default — clean slate
+            document.getElementById('E1').classList.add('active'); 
         }
         up();
     }
@@ -10540,23 +10391,14 @@ const firebaseConfig = {
         
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         if (isMobile) {
-            // iOS Safari: plain file input with no capture attribute naturally shows
-            // "Take Photo" + "Photo Library" + "Browse" options in the native action sheet
-            // MUST be clicked synchronously during user gesture — no setTimeout allowed
             const input = document.createElement('input');
             input.type = 'file';
             input.accept = 'image/*';
-            input.multiple = true;
-            input.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;';
-            input.onchange = async (e) => {
-                const files = Array.from(e.target.files || []);
-                for (const f of files) {
-                    await new Promise(res => { snapHandleFile(f); setTimeout(res, 400); });
-                }
-                try { document.body.removeChild(input); } catch(err) {}
-            };
+            input.capture = 'environment';
+            input.style.cssText='position:fixed;top:-9999px;left:-9999px;opacity:0;';
+            input.onchange = (e) => { snapHandleFile(e.target.files[0]); document.body.removeChild(input); };
             document.body.appendChild(input);
-            input.click(); // synchronous — keeps trusted gesture chain intact
+            input.click();
         } else {
             // Desktop: show choice     webcam or file upload
             const existingModal = document.getElementById('snapChoiceModal');
@@ -10576,95 +10418,6 @@ const firebaseConfig = {
             document.body.appendChild(modal);
         }
     }
-
-    // ── PHOTO FIREBASE SYNC ──────────────────────────────────────────────────
-    // ── PHOTO COMPRESSION ────────────────────────────────────────────────────
-    function compressPhoto(base64DataUrl, maxPx = 1200, quality = 0.88) {
-        return new Promise((resolve) => {
-            const img = new Image();
-            img.onload = () => {
-                const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
-                const w = Math.round(img.width * scale);
-                const h = Math.round(img.height * scale);
-                const canvas = document.createElement('canvas');
-                canvas.width = w; canvas.height = h;
-                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-                resolve(canvas.toDataURL('image/jpeg', quality));
-            };
-            img.onerror = () => resolve(base64DataUrl);
-            img.src = base64DataUrl;
-        });
-    }
-
-    async function syncPhotosToFirebase(jobNum, photosArray) {
-        if (!window.currentUser || !window.firebaseDb || !window.doc || !window.setDoc) {
-            console.warn('syncPhotosToFirebase: Firebase not ready');
-            return;
-        }
-        if (!jobNum || jobNum === '_pending') return;
-        const uid = window.staffModeOwnerUid || window.currentUser.uid;
-        let synced = 0;
-        let failed = 0;
-        for (const photo of photosArray) {
-            if (!photo.data || !photo.data.startsWith('data:image')) continue;
-            if (photo.firestoreSynced) continue;
-            try {
-                // Compress aggressively — Firestore has 1MB doc limit
-                // base64 is ~1.37x the binary size, so target <700KB base64 string
-                let compressed = await compressPhoto(photo.data, 800, 0.82);
-                // Check size and compress harder if needed
-                if (compressed.length > 700000) compressed = await compressPhoto(photo.data, 600, 0.75);
-                if (compressed.length > 700000) compressed = await compressPhoto(photo.data, 500, 0.70);
-                photo.data = compressed;
-
-                const docId = String(jobNum) + '_' + String(photo.id);
-                const photoRef = window.doc(window.firebaseDb, 'users', uid, 'jobPhotos', docId);
-                await window.setDoc(photoRef, {
-                    jobNum: String(jobNum),
-                    id: String(photo.id),
-                    data: photo.data,
-                    timestamp: photo.timestamp || new Date().toISOString(),
-                    linkedPart: photo.linkedPart || null,
-                    syncedAt: new Date().toISOString()
-                }, { merge: false });
-                photo.firestoreSynced = true;
-                synced++;
-                console.log('✅ Photo synced to Firestore: job', jobNum, 'photo', photo.id, 'size:', Math.round(photo.data.length/1024)+'KB');
-            } catch(e) {
-                failed++;
-                console.error('❌ Photo sync failed:', e.code, e.message);
-                notify('⚠️ Photo sync error: ' + (e.code || e.message));
-            }
-        }
-        if (synced > 0) {
-            await photoDB.savePhotos(jobNum, photosArray);
-            notify('☁️ ' + synced + ' photo' + (synced > 1 ? 's' : '') + ' synced to cloud');
-        }
-    }
-
-    async function loadPhotosFromFirebase(jobNum) {
-        if (!window.currentUser || !window.firebaseDb || !window.getDocs || !window.collection) return [];
-        if (!jobNum || jobNum === '_pending') return [];
-        try {
-            const uid = window.staffModeOwnerUid || window.currentUser.uid;
-            const colRef = window.collection(window.firebaseDb, 'users', uid, 'jobPhotos');
-            const snap = await window.getDocs(colRef);
-            const seen = new Set(); // deduplicate by id
-            const photos = [];
-            snap.forEach(d => {
-                const data = d.data();
-                const photoId = String(data.id || d.id);
-                if (String(data.jobNum) === String(jobNum) && data.data && !seen.has(photoId)) {
-                    seen.add(photoId);
-                    photos.push({ id: photoId, data: data.data, timestamp: data.timestamp, linkedPart: data.linkedPart || null, firestoreSynced: true });
-                }
-            });
-            photos.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-            console.log('✅ Loaded ' + photos.length + ' photos from Firestore for job ' + jobNum);
-            return photos;
-        } catch(e) { console.warn('Photo load from Firestore error:', e.message); return []; }
-    }
-    // ─────────────────────────────────────────────────────────────────────────
 
     function snapHandleFile(file) {
         if (!file) return;
@@ -10686,9 +10439,8 @@ const firebaseConfig = {
                     // No job number yet - save to pending
                     await photoDB.savePhotos('_pending', jobPhotos);
                 } else {
-                    // Have job number - save to IndexedDB and Firebase Storage
+                    // Have job number - save to that job's photos
                     await photoDB.savePhotos(_jn, jobPhotos);
-                    syncPhotosToFirebase(_jn, jobPhotos).catch(e => console.warn('Photo Firebase sync error:', e));
                 }
                 window._preSnapJobNum=null; window._preSnapPart=null;
             }catch(e){
@@ -10710,13 +10462,7 @@ const firebaseConfig = {
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = 'image/*';
-        input.multiple = true; // allow multi-select on desktop too
-        input.onchange = async (e) => {
-            const files = Array.from(e.target.files || []);
-            for (const f of files) {
-                await new Promise(res => { snapHandleFile(f); setTimeout(res, 400); });
-            }
-        };
+        input.onchange = (e) => { snapHandleFile(e.target.files[0]); };
         input.click();
     }
 
@@ -10797,8 +10543,7 @@ const firebaseConfig = {
     }
     
     function renderPhotoGallery() {
-        // NOTE: Do NOT read from localStorage here - jobPhotos is managed by loadJobFromHistory
-        // Reading here would overwrite Firestore-loaded photos with stale local data
+        try{var _rjn=document.getElementById('jN')?document.getElementById('jN').value:'';if(_rjn){var _rp=JSON.parse(localStorage.getItem('jobPhotos_'+_rjn)||'[]');if(_rp.length>0)jobPhotos=_rp;}}catch(e){}
         const container = document.getElementById('jobPhotosContainer');
         if (!container) return;
         
@@ -10818,21 +10563,15 @@ const firebaseConfig = {
 
             html += `
                 <div style="position:relative; cursor:pointer; border-radius:6px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,0.1); height:80px;">
-                    <img src="${photo.data}" style="width:100%; height:100%; object-fit:cover;" onclick="viewPhoto('${photo.id}')">
+                    <img src="${photo.data}" style="width:100%; height:100%; object-fit:cover;" onclick="viewPhoto(${photo.id})">
                     <div style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; font-size:8px; padding:2px 4px; border-radius:3px;">${_lp.length}</div>${_plabel}
-                    <button onclick="deletePhoto('${photo.id}')" style="position:absolute; bottom:2px; right:2px; background:#ff3b30; border:none; color:#fff; padding:2px 4px; border-radius:3px; font-size:9px; cursor:pointer;">X</button>
+                    <button onclick="deletePhoto(${photo.id})" style="position:absolute; bottom:2px; right:2px; background:#ff3b30; border:none; color:#fff; padding:2px 4px; border-radius:3px; font-size:9px; cursor:pointer;">X</button>
                 </div>
             `;
         });
         
         html += `</div>`;
-        // Show dedup button if duplicates detected
-        const uniqueIds = new Set(jobPhotos.map(p => String(p.id)));
-        const hasDups = uniqueIds.size < jobPhotos.length;
-        html += `<div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
-            <p style="font-size:9px; color:#666; margin:0;">${jobPhotos.length} photo${jobPhotos.length !== 1 ? 's' : ''} | ${jobPhotos[jobPhotos.length-1]?.timestamp}</p>
-            ${hasDups ? `<button onclick="deduplicatePhotos()" style="background:#ff9500;color:#fff;border:none;padding:4px 10px;border-radius:5px;font-size:10px;font-weight:900;cursor:pointer;">⚠️ ${jobPhotos.length - uniqueIds.size} duplicates — Clean Up</button>` : ''}
-        </div>`;
+        html += `<p style="font-size:9px; color:#666; margin:10px 0 0 0;">Photos: ${jobPhotos.length} photo${jobPhotos.length !== 1 ? 's' : ''} | Latest: ${jobPhotos[jobPhotos.length-1]?.timestamp}</p>`;
         
         container.innerHTML = html;
     }
@@ -10858,51 +10597,10 @@ const firebaseConfig = {
         document.body.appendChild(modal);
     }
     
-    async function deduplicatePhotos() {
-        const before = jobPhotos.length;
-        const seen = new Set();
-        jobPhotos = jobPhotos.filter(p => {
-            const key = String(p.id);
-            if (seen.has(key)) return false;
-            seen.add(key);
-            return true;
-        });
-        const removed = before - jobPhotos.length;
-        if (removed > 0) {
-            const jobNum = document.getElementById('jN')?.value;
-            if (jobNum) await photoDB.savePhotos(jobNum, jobPhotos);
-            // Also clean Firestore - delete all docs for this job and re-sync
-            if (jobNum && window.currentUser && window.firebaseDb) {
-                const uid = window.staffModeOwnerUid || window.currentUser.uid;
-                // Re-sync the deduplicated array
-                jobPhotos.forEach(p => { p.firestoreSynced = false; }); // force re-upload
-                await syncPhotosToFirebase(jobNum, jobPhotos);
-            }
-            renderPhotoGallery();
-            notify('✅ Removed ' + removed + ' duplicate photo' + (removed > 1 ? 's' : ''));
-        } else {
-            notify('✅ No duplicates found');
-        }
-    }
-
-    async function deletePhoto(photoId) {
-        jobPhotos = jobPhotos.filter(p => String(p.id) !== String(photoId));
+    function deletePhoto(photoId) {
+        jobPhotos = jobPhotos.filter(p => p.id !== photoId);
         renderPhotoGallery();
-        const jobNum = document.getElementById('jN')?.value;
-        // Remove from IndexedDB
-        if (jobNum) {
-            try { await photoDB.savePhotos(jobNum, jobPhotos); } catch(e) {}
-        }
-        // Remove from Firestore
-        if (jobNum && window.currentUser && window.firebaseDb && window.doc && window.deleteDoc) {
-            try {
-                const uid = window.staffModeOwnerUid || window.currentUser.uid;
-                const docId = String(jobNum) + '_' + String(photoId);
-                await window.deleteDoc(window.doc(window.firebaseDb, 'users', uid, 'jobPhotos', docId));
-                console.log('✅ Photo deleted from Firestore:', docId);
-            } catch(e) { console.warn('Photo Firestore delete error:', e.message); }
-        }
-        notify('🗑️ Photo deleted');
+        notify('Photo deleted');
     }
     
     function saveJobPhotos() {
@@ -11235,17 +10933,7 @@ const firebaseConfig = {
                 }
             }
             
-            const _rowDiv = document.createElement('div');
-            _rowDiv.className = 'part-label';
-            _rowDiv.style.cssText = `border-left:5px solid ${clr}; position:relative; display:flex; align-items:stretch;`;
-            _rowDiv.draggable = true;
-            _rowDiv.dataset.index = originalIndex;
-            _rowDiv.addEventListener('dragstart', _onPartDragStart);
-            _rowDiv.addEventListener('dragover', _onPartDragOver);
-            _rowDiv.addEventListener('drop', _onPartDrop);
-            _rowDiv.addEventListener('dragend', _onPartDragEnd);
-            // Touch drag support
-            _rowDiv.innerHTML = `<div class="part-drag-handle" title="Hold to reorder">⠿</div>
+            l.innerHTML += `<div class="part-label" style="border-left:5px solid ${clr}; position:relative;">
                 ${(function(){
                     var _pc=0;
                     try{
@@ -11266,7 +10954,7 @@ const firebaseConfig = {
                 </div>
                 <div class="pl-center">
                     <div style="font-size:10px; font-weight:900; color:${clr}; text-transform:uppercase; line-height:1;">${it.desc} (${it.fm})${it.cts ? '<span style="background:#2c3e50; color:#d4af37; font-size:9px; font-weight:900; padding:2px 6px; border-radius:3px; margin-left:4px;">CTS</span>' : ''}</div>
-                    <div class="pl-brand">${it.brand} · ${it.color} · ${it.finish}</div>
+                    <div style="font-size:10px; font-weight:700; color:#666; margin-bottom:2px;">${it.brand} - ${it.color} | ${it.finish}</div>
                     <div class="pl-dims">${it.h} x ${it.w} x ${it.thk}</div>
                     <div class="pl-meta">
                         <span style="font-weight:700; background:${clr}; color:#fff; padding:2px 6px; border-radius:3px; font-size:9px; text-transform:uppercase;">${it.type}</span>
@@ -11277,94 +10965,16 @@ const firebaseConfig = {
                     </div>
                 </div>
                 <div class="pl-right">
-                    <div class="pl-mode" style="color:${mC}; border-color:${mC}; background:${mC}20">${it.mode}</div>
-                    <div class="pl-sqm">${rowSqm.toFixed(3)}<span style="font-size:9px; font-weight:700; color:#999;">m²</span></div>
+                    <div class="pl-mode" style="color:${mC}; border-color:${mC}; background:${mC}15">${it.mode}</div>
+                    <div style="font-size:11px; font-weight:900;">${rowSqm.toFixed(3)}</div>
                 </div>
-                <button class="edit-btn" onclick="editItem(${originalIndex})" style="background:rgba(33,150,243,0.12); color:#2196f3; border:1px solid rgba(33,150,243,0.3); padding:6px 12px; border-radius:6px; font-weight:900; cursor:pointer; font-size:11px; white-space:nowrap; flex-shrink:0;"><span class="edit-btn-icon">✏️</span><span class="edit-btn-text" style="display:none;">✏️ Edit</span></button><button class="del-btn" onclick="deleteItem(${originalIndex})">✕</button>
-            `;
-            // Touch drag only on the handle — prevents scroll interference
-            const _handle = _rowDiv.querySelector('.part-drag-handle');
-            if (_handle) {
-                _handle.addEventListener('touchstart', (e) => { _onPartTouchStart.call(_rowDiv, e); }, {passive:true});
-                _handle.addEventListener('touchmove', (e) => { _onPartTouchMove.call(_rowDiv, e); }, {passive:false});
-                _handle.addEventListener('touchend', (e) => { _onPartTouchEnd.call(_rowDiv, e); }, {passive:true});
-            }
-            l.appendChild(_rowDiv);
+                <button class="edit-btn" onclick="editItem(${originalIndex})" style="background:#2196f3; color:#fff; border:none; padding:8px 10px; border-radius:4px 0 0 4px; font-weight:900; cursor:pointer; font-size:12px;">Edit</button><button class="del-btn" onclick="deleteItem(${originalIndex})">X</button>
+            </div>`;
         });
         
         if (document.getElementById('tA')) document.getElementById('tA').innerText = tA.toFixed(3);
         if (document.getElementById('tQ')) document.getElementById('tQ').innerText = tQ;
     }
-
-    // ── DRAG TO REORDER PARTS ──────────────────────────────────────────────────
-    let _dragSrcIdx = null;
-    let _touchDragSrcIdx = null;
-    let _touchDragClone = null;
-
-    function _onPartDragStart(e) {
-        _dragSrcIdx = parseInt(this.dataset.index);
-        this.classList.add('dragging');
-        e.dataTransfer.effectAllowed = 'move';
-    }
-    function _onPartDragOver(e) {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        document.querySelectorAll('.part-label').forEach(r => r.classList.remove('drag-over'));
-        this.classList.add('drag-over');
-    }
-    function _onPartDrop(e) {
-        e.preventDefault();
-        const destIdx = parseInt(this.dataset.index);
-        if (_dragSrcIdx === null || _dragSrcIdx === destIdx) return;
-        // Reorder items array
-        const moved = items.splice(_dragSrcIdx, 1)[0];
-        const newDest = destIdx > _dragSrcIdx ? destIdx - 1 : destIdx;
-        items.splice(newDest, 0, moved);
-        saveData();
-        render();
-        notify('↕️ Part reordered');
-    }
-    function _onPartDragEnd() {
-        _dragSrcIdx = null;
-        document.querySelectorAll('.part-label').forEach(r => {
-            r.classList.remove('dragging');
-            r.classList.remove('drag-over');
-        });
-    }
-
-    // Touch drag (mobile)
-    function _onPartTouchStart(e) {
-        _touchDragSrcIdx = parseInt(this.dataset.index);
-    }
-    function _onPartTouchMove(e) {
-        if (_touchDragSrcIdx === null) return;
-        e.preventDefault();
-        const touch = e.touches[0];
-        const el = document.elementFromPoint(touch.clientX, touch.clientY);
-        const row = el ? el.closest('.part-label') : null;
-        document.querySelectorAll('.part-label').forEach(r => r.classList.remove('drag-over'));
-        if (row && row.dataset.index !== undefined) row.classList.add('drag-over');
-    }
-    function _onPartTouchEnd(e) {
-        if (_touchDragSrcIdx === null) return;
-        const touch = e.changedTouches[0];
-        const el = document.elementFromPoint(touch.clientX, touch.clientY);
-        const row = el ? el.closest('.part-label') : null;
-        document.querySelectorAll('.part-label').forEach(r => r.classList.remove('drag-over'));
-        if (row && row.dataset.index !== undefined) {
-            const destIdx = parseInt(row.dataset.index);
-            if (destIdx !== _touchDragSrcIdx) {
-                const moved = items.splice(_touchDragSrcIdx, 1)[0];
-                const newDest = destIdx > _touchDragSrcIdx ? destIdx - 1 : destIdx;
-                items.splice(newDest, 0, moved);
-                saveData();
-                render();
-                notify('↕️ Part reordered');
-            }
-        }
-        _touchDragSrcIdx = null;
-    }
-    // ──────────────────────────────────────────────────────────────────────────
 
     function changeQty(index, delta) { 
         try {
@@ -11445,80 +11055,72 @@ const firebaseConfig = {
             colorOptions = `<option value="">-- Select Colour --</option>` + colorOptions;
             
             const html = `
-                <div style="position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background:var(--modal-bg,#fff); color:var(--modal-text,#222); padding:25px; border-radius:8px; box-shadow:0 4px 20px rgba(0,0,0,0.3); z-index:10001; width:90%; max-width:500px; max-height:85vh; overflow-y:auto;">
-                    <h3 style="margin-top:0; margin-bottom:20px; color:var(--modal-text,#333);">    Edit Part</h3>
+                <div style="position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background:#fff; padding:25px; border-radius:8px; box-shadow:0 4px 20px rgba(0,0,0,0.3); z-index:10001; width:90%; max-width:500px; max-height:85vh; overflow-y:auto;">
+                    <h3 style="margin-top:0; margin-bottom:20px; color:#333;">    Edit Part</h3>
                     
                     <div style="margin-bottom:15px;">
-                        <label style="display:block; font-weight:900; margin-bottom:8px; font-size:12px; color:var(--modal-text,#666);">PART TYPE</label>
+                        <label style="display:block; font-weight:900; margin-bottom:8px; font-size:12px; color:#666;">PART TYPE</label>
                         <div style="display:flex; gap:6px;">
-                            <button onclick="setEditType(${index}, 'Door')" id="editType-Door" style="flex:1; padding:8px; background:${item.type === 'Door' ? '#2196f3' : 'var(--card-bg,#f0f0f0)'}; color:${item.type === 'Door' ? '#fff' : 'var(--modal-text,#000)'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">DOOR</button>
-                            <button onclick="setEditType(${index}, 'Panel')" id="editType-Panel" style="flex:1; padding:8px; background:${item.type === 'Panel' ? '#34c759' : 'var(--card-bg,#f0f0f0)'}; color:${item.type === 'Panel' ? '#fff' : 'var(--modal-text,#000)'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">PANEL</button>
-                            <button onclick="setEditType(${index}, 'Drawer')" id="editType-Drawer" style="flex:1; padding:8px; background:${item.type === 'Drawer' ? '#2196f3' : 'var(--card-bg,#f0f0f0)'}; color:${item.type === 'Drawer' ? '#fff' : 'var(--modal-text,#000)'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">DRAWER</button>
-                            <button onclick="setEditType(${index}, 'Custom')" id="editType-Custom" style="flex:1; padding:8px; background:${item.type === 'Custom' ? '#af52de' : 'var(--card-bg,#f0f0f0)'}; color:${item.type === 'Custom' ? '#fff' : 'var(--modal-text,#000)'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">CUSTOM</button>
+                            <button onclick="setEditType(${index}, 'Door')" id="editType-Door" style="flex:1; padding:8px; background:${item.type === 'Door' ? '#2196f3' : '#f0f0f0'}; color:${item.type === 'Door' ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">DOOR</button>
+                            <button onclick="setEditType(${index}, 'Panel')" id="editType-Panel" style="flex:1; padding:8px; background:${item.type === 'Panel' ? '#34c759' : '#f0f0f0'}; color:${item.type === 'Panel' ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">PANEL</button>
+                            <button onclick="setEditType(${index}, 'Drawer')" id="editType-Drawer" style="flex:1; padding:8px; background:${item.type === 'Drawer' ? '#2196f3' : '#f0f0f0'}; color:${item.type === 'Drawer' ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">DRAWER</button>
+                            <button onclick="setEditType(${index}, 'Custom')" id="editType-Custom" style="flex:1; padding:8px; background:${item.type === 'Custom' ? '#af52de' : '#f0f0f0'}; color:${item.type === 'Custom' ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">CUSTOM</button>
                         </div>
                     </div>
                     
                     <div style="margin-bottom:15px;">
-                        <label style="display:block; font-weight:900; margin-bottom:8px; font-size:12px; color:var(--modal-text,#666);">PANEL TYPE</label>
+                        <label style="display:block; font-weight:900; margin-bottom:8px; font-size:12px; color:#666;">PANEL TYPE</label>
                         <div style="display:flex; gap:6px;">
-                            <button onclick="setEditPanelType(${index}, 'Flat')" id="editPanel-Flat" style="flex:1; padding:8px; background:${(item.fm||item.panelType) === 'Flat' ? '#17a2b8' : 'var(--card-bg,#f0f0f0)'}; color:${(item.fm||item.panelType) === 'Flat' ? '#fff' : 'var(--modal-text,#000)'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">FLAT</button>
-                            <button onclick="setEditPanelType(${index}, 'Moulded')" id="editPanel-Moulded" style="flex:1; padding:8px; background:${(item.fm||item.panelType) === 'Moulded' ? '#17a2b8' : 'var(--card-bg,#f0f0f0)'}; color:${(item.fm||item.panelType) === 'Moulded' ? '#fff' : 'var(--modal-text,#000)'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">MOULDED</button>
+                            <button onclick="setEditPanelType(${index}, 'Flat')" id="editPanel-Flat" style="flex:1; padding:8px; background:${(item.fm||item.panelType) === 'Flat' ? '#17a2b8' : '#f0f0f0'}; color:${(item.fm||item.panelType) === 'Flat' ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">FLAT</button>
+                            <button onclick="setEditPanelType(${index}, 'Moulded')" id="editPanel-Moulded" style="flex:1; padding:8px; background:${(item.fm||item.panelType) === 'Moulded' ? '#17a2b8' : '#f0f0f0'}; color:${(item.fm||item.panelType) === 'Moulded' ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">MOULDED</button>
                         </div>
                     </div>
                     
                     <div style="margin-bottom:15px;">
-                        <label style="display:block; font-weight:900; margin-bottom:8px; font-size:12px; color:var(--modal-text,#666);">PAINT MODE</label>
+                        <label style="display:block; font-weight:900; margin-bottom:8px; font-size:12px; color:#666;">PAINT MODE</label>
                         <div style="display:flex; gap:6px;">
-                            <button onclick="setEditEdgeConfig(${index}, 'SS')" id="editEdge-SS" style="flex:1; padding:8px; background:${item.mode === 'SS' ? '#17a2b8' : 'var(--card-bg,#f0f0f0)'}; color:${item.mode === 'SS' ? '#fff' : 'var(--modal-text,#000)'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">SS</button>
-                            <button onclick="setEditEdgeConfig(${index}, 'SE')" id="editEdge-SE" style="flex:1; padding:8px; background:${item.mode === 'SE' ? '#17a2b8' : 'var(--card-bg,#f0f0f0)'}; color:${item.mode === 'SE' ? '#fff' : 'var(--modal-text,#000)'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">SE</button>
-                            <button onclick="setEditEdgeConfig(${index}, 'DS')" id="editEdge-DS" style="flex:1; padding:8px; background:${item.mode === 'DS' ? '#17a2b8' : 'var(--card-bg,#f0f0f0)'}; color:${item.mode === 'DS' ? '#fff' : 'var(--modal-text,#000)'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">DS</button>
-                            <button onclick="setEditEdgeConfig(${index}, 'Custom')" id="editEdge-Custom" style="flex:1; padding:8px; background:${item.mode === 'Custom' ? '#17a2b8' : 'var(--card-bg,#f0f0f0)'}; color:${item.mode === 'Custom' ? '#fff' : 'var(--modal-text,#000)'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">CUSTOM</button>
+                            <button onclick="setEditEdgeConfig(${index}, 'SS')" id="editEdge-SS" style="flex:1; padding:8px; background:${item.mode === 'SS' ? '#17a2b8' : '#f0f0f0'}; color:${item.mode === 'SS' ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">SS</button>
+                            <button onclick="setEditEdgeConfig(${index}, 'SE')" id="editEdge-SE" style="flex:1; padding:8px; background:${item.mode === 'SE' ? '#17a2b8' : '#f0f0f0'}; color:${item.mode === 'SE' ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">SE</button>
+                            <button onclick="setEditEdgeConfig(${index}, 'DS')" id="editEdge-DS" style="flex:1; padding:8px; background:${item.mode === 'DS' ? '#17a2b8' : '#f0f0f0'}; color:${item.mode === 'DS' ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">DS</button>
+                            <button onclick="setEditEdgeConfig(${index}, 'Custom')" id="editEdge-Custom" style="flex:1; padding:8px; background:${item.mode === 'Custom' ? '#17a2b8' : '#f0f0f0'}; color:${item.mode === 'Custom' ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">CUSTOM</button>
                         </div>
                     </div>
 
                     <div style="margin-bottom:15px;" id="editEdgeBoxesRow">
-                        <label style="display:block; font-weight:900; margin-bottom:8px; font-size:12px; color:var(--modal-text,#666);">EDGES <span style="font-weight:400; color:#999; font-size:10px;">(SE mode: E1=LR, E2=RR)</span></label>
+                        <label style="display:block; font-weight:900; margin-bottom:8px; font-size:12px; color:#666;">EDGES <span style="font-weight:400; color:#999; font-size:10px;">(SE mode: E1=LR, E2=RR)</span></label>
                         <div style="display:flex; gap:6px;">
-                            <button onclick="toggleEditEdge(${index}, 0)" id="editE1" style="flex:1; padding:8px; background:${item.e[0] ? '#f44336' : 'var(--card-bg,#f0f0f0)'}; color:${item.e[0] ? '#fff' : 'var(--modal-text,#000)'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">E1</button>
-                            <button onclick="toggleEditEdge(${index}, 1)" id="editE2" style="flex:1; padding:8px; background:${item.e[1] ? '#e91e63' : 'var(--card-bg,#f0f0f0)'}; color:${item.e[1] ? '#fff' : 'var(--modal-text,#000)'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">E2</button>
-                            <button onclick="toggleEditEdge(${index}, 2)" id="editE3" style="flex:1; padding:8px; background:${item.e[2] ? '#2196f3' : 'var(--card-bg,#f0f0f0)'}; color:${item.e[2] ? '#fff' : 'var(--modal-text,#000)'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">E3</button>
-                            <button onclick="toggleEditEdge(${index}, 3)" id="editE4" style="flex:1; padding:8px; background:${item.e[3] ? '#2196f3' : 'var(--card-bg,#f0f0f0)'}; color:${item.e[3] ? '#fff' : 'var(--modal-text,#000)'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">E4</button>
+                            <button onclick="toggleEditEdge(${index}, 0)" id="editE1" style="flex:1; padding:8px; background:${item.e[0] ? '#f44336' : '#f0f0f0'}; color:${item.e[0] ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">E1</button>
+                            <button onclick="toggleEditEdge(${index}, 1)" id="editE2" style="flex:1; padding:8px; background:${item.e[1] ? '#e91e63' : '#f0f0f0'}; color:${item.e[1] ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">E2</button>
+                            <button onclick="toggleEditEdge(${index}, 2)" id="editE3" style="flex:1; padding:8px; background:${item.e[2] ? '#2196f3' : '#f0f0f0'}; color:${item.e[2] ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">E3</button>
+                            <button onclick="toggleEditEdge(${index}, 3)" id="editE4" style="flex:1; padding:8px; background:${item.e[3] ? '#2196f3' : '#f0f0f0'}; color:${item.e[3] ? '#fff' : '#000'}; border:none; border-radius:4px; font-weight:900; font-size:12px; cursor:pointer;">E4</button>
                         </div>
                         <div style="font-size:9px; color:var(--muted-text,#999); margin-top:4px;">E1/E2 = long edges (${item.h}mm) &nbsp;|&nbsp; E3/E4 = short edges (${item.w}mm)</div>
                     </div>
                     
-                    <div style="display:flex; gap:8px; margin-bottom:15px;"><div style="flex:1;"><label style="display:block; font-weight:900; margin-bottom:8px; font-size:12px; color:var(--modal-text,#666);">Length (H) mm</label><input type="number" id="editH" inputmode="decimal" value="${item.h||''}" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:4px; font-size:16px; font-weight:900; box-sizing:border-box; text-align:center; background:var(--modal-bg,#fff); color:var(--modal-text,#222);"></div><div style="flex:1;"><label style="display:block; font-weight:900; margin-bottom:8px; font-size:12px; color:var(--modal-text,#666);">Width (W) mm</label><input type="number" id="editW" inputmode="decimal" value="${item.w||''}" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:4px; font-size:16px; font-weight:900; box-sizing:border-box; text-align:center; background:var(--modal-bg,#fff); color:var(--modal-text,#222);"></div></div>
-                    <div style="margin-bottom:15px; position:relative;">
-                        <label style="display:block; font-weight:900; margin-bottom:8px; font-size:12px; color:var(--modal-text,#666);">DESCRIPTION</label>
-                        <div style="display:flex; gap:6px; align-items:stretch;">
-                            <div style="flex:1; position:relative;">
-                                <input type="text" id="editDescInput" value="${item.desc}"
-                                    style="width:100%; padding:10px; border:1px solid #ddd; border-radius:4px; font-size:14px; box-sizing:border-box; background:var(--modal-bg,#fff); color:var(--modal-text,#222); text-transform:uppercase;"
-                                    list="editDescSuggest" autocomplete="off"
-                                    placeholder="e.g. DOOR, PANEL...">
-                                <datalist id="editDescSuggest">${getDescSuggestions().map(s=>'<option value="'+s+'">').join('')}</datalist>
-                            </div>
-                        </div>
+                    <div style="display:flex; gap:8px; margin-bottom:15px;"><div style="flex:1;"><label style="display:block; font-weight:900; margin-bottom:8px; font-size:12px; color:#555;">Length (H) mm</label><input type="number" id="editH" inputmode="decimal" value="${item.h||''}" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:4px; font-size:16px; font-weight:900; box-sizing:border-box; text-align:center;"></div><div style="flex:1;"><label style="display:block; font-weight:900; margin-bottom:8px; font-size:12px; color:#555;">Width (W) mm</label><input type="number" id="editW" inputmode="decimal" value="${item.w||''}" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:4px; font-size:16px; font-weight:900; box-sizing:border-box; text-align:center;"></div></div>
+                    <div style="margin-bottom:15px;">
+                        <label style="display:block; font-weight:900; margin-bottom:8px; font-size:12px; color:#666;">DESCRIPTION</label>
+                        <input type="text" id="editDescInput" value="${item.desc}" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:4px; font-size:14px; box-sizing:border-box;">
                     </div>
                     
                     <div style="margin-bottom:15px;">
-                        <label style="display:block; font-weight:900; margin-bottom:8px; font-size:12px; color:var(--modal-text,#666);">THICKNESS (mm)</label>
+                        <label style="display:block; font-weight:900; margin-bottom:8px; font-size:12px; color:#666;">THICKNESS (mm)</label>
                         <input type="number" inputmode="decimal" id="editThkInput" value="${item.thk || 18}" min="1" max="100" style="width:100px; padding:10px; border:1px solid #ddd; border-radius:4px; font-size:14px; box-sizing:border-box;">
                     </div>
                     
                     <div style="margin-bottom:15px;">
-                        <label style="display:block; font-weight:900; margin-bottom:8px; font-size:12px; color:var(--modal-text,#666);">DOOR PROFILE</label>
-                        <select id="editProfSelect" onchange="(function(v,idx){if(!v)return;var isMoulded=!v.toLowerCase().startsWith('plain');var bt=document.getElementById('editPanel-'+(isMoulded?'Moulded':'Flat'));if(bt)bt.click();})(this.value)" style="width:100%; background:var(--modal-bg,#fff); color:var(--modal-text,#222); padding:10px; border:1px solid #ddd; border-radius:4px; font-size:14px; box-sizing:border-box;">
+                        <label style="display:block; font-weight:900; margin-bottom:8px; font-size:12px; color:#666;">DOOR PROFILE</label>
+                        <select id="editProfSelect" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:4px; font-size:14px; box-sizing:border-box;">
                             ${profOptions}
                         </select>
                     </div>
                     
-                    <div style="margin-bottom:15px; padding:15px; background:var(--surface-bg,#f0f8ff); border-radius:6px; border-left:4px solid #2196f3;">
+                    <div style="margin-bottom:15px; padding:15px; background:#f0f8ff; border-radius:6px; border-left:4px solid #2196f3;">
                         <label style="display:block; font-weight:900; margin-bottom:8px; font-size:12px; color:#333;">     PAINT DETAILS</label>
                         
                         <div style="margin-bottom:10px;">
                             <label style="display:block; font-weight:900; margin-bottom:4px; font-size:11px; color:#666;">Brand</label>
-                            <select id="editBrandInput" style="width:100%; background:var(--modal-bg,#fff); color:var(--modal-text,#222); padding:8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
+                            <select id="editBrandInput" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
                                 ${brandOptions}
                             </select>
                         </div>
@@ -11535,7 +11137,7 @@ const firebaseConfig = {
                         
                         <div>
                             <label style="display:block; font-weight:900; margin-bottom:4px; font-size:11px; color:#666;">Finish</label>
-                            <select id="editFinishInput" style="width:100%; background:var(--modal-bg,#fff); color:var(--modal-text,#222); padding:8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
+                            <select id="editFinishInput" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
                                 <option value="Satin" ${item.finish === 'Satin' ? 'selected' : ''}>Satin</option>
                                 <option value="Gloss" ${item.finish === 'Gloss' ? 'selected' : ''}>Gloss</option>
                                 <option value="Matt" ${item.finish === 'Matt' ? 'selected' : ''}>Matt</option>
@@ -11585,9 +11187,6 @@ const firebaseConfig = {
     
     function setEditType(index, type) {
         items[index].type = type;
-        const isDark = document.body.dataset.theme === 'dark' || (!document.body.dataset.theme && window.matchMedia('(prefers-color-scheme:dark)').matches);
-        const inactiveBg = isDark ? 'var(--card-bg,#3a3a3c)' : '#f0f0f0';
-        const inactiveCol = isDark ? 'var(--modal-text,#f2f2f7)' : '#000';
         ['Door', 'Panel', 'Drawer', 'Custom'].forEach(t => {
             const btn = document.getElementById(`editType-${t}`);
             if (btn) {
@@ -11596,20 +11195,11 @@ const firebaseConfig = {
                     btn.style.background = colors[t];
                     btn.style.color = '#fff';
                 } else {
-                    btn.style.background = inactiveBg;
-                    btn.style.color = inactiveCol;
+                    btn.style.background = '#f0f0f0';
+                    btn.style.color = '#000';
                 }
             }
         });
-        // Auto-set description to part type name (same logic as main measure tab)
-        const descEl = document.getElementById('editDescInput');
-        if (descEl) {
-            const partTypeNames = ['Door', 'Panel', 'Drawer', 'Custom'];
-            const curDesc = (descEl.value || '').trim();
-            if (!curDesc || partTypeNames.some(n => n.toUpperCase() === curDesc.toUpperCase())) {
-                descEl.value = type.toUpperCase();
-            }
-        }
     }
     
     function confirmEditItem(index) {
@@ -11666,7 +11256,15 @@ const firebaseConfig = {
         if (modal) modal.remove();
     }
 
-
+    function setEditType(index, type) {
+        if (items[index]) {
+            items[index].type = type;
+            document.querySelectorAll('[id^="editType-"]').forEach(btn => {
+                btn.style.background = btn.id === `editType-${type}` ? '#2196f3' : '#f0f0f0';
+                btn.style.color = btn.id === `editType-${type}` ? '#fff' : '#000';
+            });
+        }
+    }
 
     function setEditPanelType(index, panelType) {
         if (items[index]) {
@@ -16449,17 +16047,14 @@ const firebaseConfig = {
 
             const d = parseReportDate(job.dateReceived) || new Date(job.timestamp || 0);
             const mo = d.toLocaleDateString('en-AU', { month: 'short', year: 'numeric' });
-            if (!monthlyData[mo]) monthlyData[mo] = { sqm: 0, jobs: 0, sqmActive: 0, sqmCompleted: 0 };
+            if (!monthlyData[mo]) monthlyData[mo] = { sqm: 0, jobs: 0 };
             monthlyData[mo].sqm += sqm;
             monthlyData[mo].jobs += 1;
-            if (job.completed) { monthlyData[mo].sqmCompleted += sqm; }
-            else { monthlyData[mo].sqmActive += sqm; }
 
             // Weekly bucket (ISO week key: "2025-W12")
             const wkNum = (() => { const t = new Date(d); t.setHours(0,0,0,0); t.setDate(t.getDate()+4-(t.getDay()||7)); const y=t.getFullYear(); const wk=Math.ceil(((t-new Date(y,0,1))/86400000+1)/7); return y+'-W'+(wk<10?'0'+wk:wk); })();
-            if (!weeklyData[wkNum]) weeklyData[wkNum] = { sqm: 0, jobs: 0, sqmActive: 0, sqmCompleted: 0, label: d.toLocaleDateString('en-AU',{day:'numeric',month:'short'}) };
+            if (!weeklyData[wkNum]) weeklyData[wkNum] = { sqm: 0, jobs: 0, label: d.toLocaleDateString('en-AU',{day:'numeric',month:'short'}) };
             weeklyData[wkNum].sqm += sqm;
-            if (job.completed) { weeklyData[wkNum].sqmCompleted += sqm; } else { weeklyData[wkNum].sqmActive += sqm; }
             weeklyData[wkNum].jobs += 1;
 
             // CTS revenue for this job
@@ -16628,7 +16223,7 @@ const firebaseConfig = {
         </div>
 
         <!-- Row 2: By Finish + By Colour — 50/50 stat tiles -->
-        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:14px; margin-bottom:14px;">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px;">
             <div class="report-card">
                 <div class="report-card-title">✨ By Finish</div>
                 <div id="finishStatTiles" style="padding-top:4px;"></div>
@@ -16640,7 +16235,7 @@ const firebaseConfig = {
         </div>
 
         <!-- Row 3: Top Colours + Top Door Profiles — 50/50 -->
-        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:14px; margin-bottom:14px;">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px;">
             <div class="report-card">
                 <div class="report-card-title">🏆 Top Colours by SQM</div>
                 <canvas id="chartColours" height="200"></canvas>
@@ -16652,7 +16247,7 @@ const firebaseConfig = {
         </div>
 
         <!-- Paint Quantities — same width as chart row above: table left, stock right -->
-        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:14px; margin-bottom:14px;">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px;">
 
             <!-- LEFT: Paint Used table -->
             <div class="report-card" style="padding:10px;">
@@ -16736,7 +16331,7 @@ const firebaseConfig = {
         </div><!-- end paint quantities + stocktake grid -->
 
         <!-- Row 6: SQM by Client + Jobs by Finish Type — 50/50 -->
-        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:14px; margin-bottom:14px;">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px;">
             <div class="report-card">
                 <div class="report-card-title">👤 SQM by Client</div>
                 <canvas id="chartClients" height="130"></canvas>
@@ -16748,7 +16343,7 @@ const firebaseConfig = {
         </div>
 
         <!-- Row 7: Jobs per Month + Jobs by Client — 50/50 -->
-        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:14px; margin-bottom:14px;">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px;">
             <div class="report-card">
                 <div class="report-card-title">📅 Jobs per Month</div>
                 <canvas id="chartMonthlyJobs" height="130"></canvas>
@@ -16828,7 +16423,7 @@ const firebaseConfig = {
         </div>
 
         <!-- Row 7+8: Estimated Job Value + Paint Base Cost — 50/50 -->
-        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:14px; margin-bottom:14px;">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px;">
             <div class="report-card">
                 <div class="report-card-title">💰 Estimated Job Value by Client</div>
                 <div style="position:relative; height:220px;">
@@ -16843,18 +16438,11 @@ const firebaseConfig = {
             </div>
         </div>
 
-        <!-- Row 9: Gross Profit + Tinter Usage — 50/50 -->
-        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:14px; margin-bottom:14px;">
-            <div class="report-card">
-                <div class="report-card-title">📊 Estimated Value vs Paint Cost <span style="font-size:9px; font-weight:400; color:#999;">(gross margin)</span></div>
-                <div style="position:relative; height:220px;">
-                    <canvas id="chartGrossProfit" style="position:absolute; top:0; left:0; width:100%; height:100%;"></canvas>
-                </div>
-            </div>
-            <div class="report-card">
-                <div class="report-card-title">🎨 Tinter Usage This Period</div>
-                <div style="font-size:10px; color:#888; margin-bottom:8px;">Estimated grams used per tinter code based on job formulas and SQM</div>
-                <div id="tinterUsageReport" style="overflow-y:auto; max-height:200px;"></div>
+        <!-- Row 9: Estimated Gross Profit -->
+        <div class="report-card" style="margin-bottom:14px;">
+            <div class="report-card-title">     Estimated Value vs Paint Cost <span style="font-size:9px; font-weight:400; color:#999;">(gross margin indicator)</span></div>
+            <div style="position:relative; height:240px;">
+                <canvas id="chartGrossProfit" style="position:absolute; top:0; left:0; width:100%; height:100%;"></canvas>
             </div>
         </div>
 
@@ -16868,12 +16456,6 @@ const firebaseConfig = {
             s.textContent = `.report-card { background:var(--modal-bg,#fff); border-radius:10px; padding:14px; box-shadow:0 2px 10px rgba(0,0,0,0.08); border:1px solid #f0f0f0; }
             .report-card-title { font-size:12px; font-weight:900; color:#333; margin-bottom:10px; text-transform:uppercase; letter-spacing:0.5px; }
             @media (min-width:1100px) { .report-grid-2 { grid-template-columns: 1fr 1fr 1fr !important; } }
-            .report-grid-2col { display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:14px; margin-bottom:14px; }
-            @media (max-width:700px) {
-                .report-grid-2col { grid-template-columns:1fr !important; }
-                .report-card { padding:10px !important; }
-                .report-card-title { font-size:11px !important; }
-            }
             @media print { .admin-header-section, .sub-nav, #reportDateFrom, #reportDateTo, button { display:none !important; } .report-card { box-shadow:none; border:1px solid #ccc; } }`;
             document.head.appendChild(s);
         }
@@ -16914,30 +16496,37 @@ const firebaseConfig = {
                 const useWeekly = dayRange <= 91 && Object.keys(weeklyData).length > 1;
                 const wkKeys = Object.keys(weeklyData).sort();
                 const chartLabels = useWeekly ? wkKeys.map(k => weeklyData[k].label) : months;
-                const allData       = useWeekly ? wkKeys.map(k => +weeklyData[k].sqm.toFixed(2)) : months.map(m=>+monthlyData[m].sqm.toFixed(2));
-                const activeData    = useWeekly ? wkKeys.map(k => +((weeklyData[k].sqmActive||0).toFixed(2))) : months.map(m=>+(((monthlyData[m]||{sqmActive:0}).sqmActive||0).toFixed(2)));
-                const completedData = useWeekly ? wkKeys.map(k => +((weeklyData[k].sqmCompleted||0).toFixed(2))) : months.map(m=>+(((monthlyData[m]||{sqmCompleted:0}).sqmCompleted||0).toFixed(2)));
-
-                const datasets = [];
-                if (_reportStatusFilter === 'all' || _reportStatusFilter === 'completed') {
-                    datasets.push({ label:'Completed SQM', data: _reportStatusFilter === 'all' ? completedData : allData,
-                        borderColor:'#34c759', backgroundColor:'rgba(52,199,89,0.12)',
-                        borderWidth:2.5, fill:true, tension:0.35, pointRadius:4, pointBackgroundColor:'#34c759' });
-                }
-                if (_reportStatusFilter === 'all' || _reportStatusFilter === 'active') {
-                    datasets.push({ label:'Active SQM', data: _reportStatusFilter === 'all' ? activeData : allData,
-                        borderColor:'#ff9500', backgroundColor:'rgba(255,149,0,0.10)',
-                        borderWidth:2.5, fill:true, tension:0.35, pointRadius:4, pointBackgroundColor:'#ff9500',
-                        borderDash: _reportStatusFilter === 'all' ? [5,3] : [] });
-                }
-
+                const chartData   = useWeekly ? wkKeys.map(k => +weeklyData[k].sqm.toFixed(2)) : months.map(m=>+monthlyData[m].sqm.toFixed(2));
+                // Point labels plugin
+                const sqmLabelPlugin = {
+                    id:'sqm_pt_labels',
+                    afterDatasetsDraw(chart) {
+                        const ctx=chart.ctx;
+                        chart.data.datasets.forEach((ds,di)=>{
+                            const meta=chart.getDatasetMeta(di);
+                            meta.data.forEach((pt,i)=>{
+                                const val=ds.data[i];
+                                if(!val) return;
+                                ctx.save();
+                                ctx.fillStyle='#1565c0';
+                                ctx.font='bold 9px sans-serif';
+                                ctx.textAlign='center';
+                                ctx.fillText(val.toFixed(1)+'m²', pt.x, pt.y-8);
+                                ctx.restore();
+                            });
+                        });
+                    }
+                };
                 new Chart(co('chartMonthlySqm'), {
                     type:'line',
-                    data:{ labels: chartLabels, datasets },
-                    options:{ responsive:true,
-                        plugins:{ legend:{ display: _reportStatusFilter === 'all', position:'top', labels:{ font:{size:10}, boxWidth:12 } } },
-                        scales:{ y:{ beginAtZero:true, ticks:{font:{size:10}, callback:v=>v+'m²'} }, x:{ ticks:{font:{size:useWeekly?9:10}, maxRotation:45} } }
-                    }
+                    plugins:[sqmLabelPlugin],
+                    data:{
+                        labels: chartLabels,
+                        datasets:[{ label:'SQM', data: chartData,
+                            borderColor:'#2196f3', backgroundColor:'rgba(33,150,243,0.12)',
+                            borderWidth:2.5, fill:true, tension:0.35, pointRadius:5, pointBackgroundColor:'#2196f3' }]
+                    },
+                    options:{ responsive:true, plugins:{legend:{display:false}}, scales:{ y:{ beginAtZero:true, ticks:{font:{size:10}} }, x:{ ticks:{font:{size:useWeekly?9:10}, maxRotation:45} } } }
                 });
             }
 
@@ -17171,7 +16760,7 @@ const firebaseConfig = {
                         </div>
                         <div style="display:flex; align-items:center; gap:3px; flex-shrink:0;">
                             <input type="number" inputmode="decimal" data-stock-key="${k}" value="${onHand}" min="0" step="0.5"
-                                style="width:90px; padding:4px 6px; border:1px solid ${color}60; border-radius:4px; font-size:13px; font-weight:900; text-align:center; background:${_sdm ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.8)'}; color:${cellTxt};">
+                                style="width:56px; padding:4px 5px; border:1px solid ${color}60; border-radius:4px; font-size:12px; font-weight:900; text-align:center; background:${_sdm ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.8)'}; color:${cellTxt};">
                             <span style="font-size:9px; color:${mutedTxt};">L</span>
                         </div>
                     </div>`;
@@ -17338,53 +16927,7 @@ const firebaseConfig = {
                 }
             }, 50);
 
-            // ── TINTER USAGE REPORT ──
-            setTimeout(() => {
-                const tinterEl = document.getElementById('tinterUsageReport');
-                if (!tinterEl) return;
-                const paintDB3 = JSON.parse(localStorage.getItem('paintFormulas') || '[]');
-                const CR3 = JSON.parse(localStorage.getItem('pwCoverageRates') || '{}');
-                const tinterTotals = {}; // { code: totalGrams }
-                jobs.forEach(job => {
-                    (job.items || []).forEach(item => {
-                        const col = item.color || job.color || '';
-                        const sqm = parseFloat(item.sqm) || 0;
-                        const fin = (item.finish || job.finish || '').toLowerCase();
-                        const rate = fin === 'matt' ? (parseFloat(CR3.matt)||5) : fin === 'gloss' ? (parseFloat(CR3.gloss)||5) : (parseFloat(CR3.satin)||5);
-                        const litres = sqm / rate;
-                        const formula = paintDB3.find(f => (f.color||'').toLowerCase().trim() === col.toLowerCase().trim());
-                        if (!formula || !formula.colourants) return;
-                        formula.colourants.forEach(c => {
-                            if (!c.code) return;
-                            const code = c.code.toUpperCase().trim();
-                            tinterTotals[code] = (tinterTotals[code] || 0) + ((parseFloat(c.amount) || 0) * litres);
-                        });
-                    });
-                });
-                const sortedTinters = Object.entries(tinterTotals).sort((a,b) => b[1]-a[1]);
-                if (sortedTinters.length === 0) {
-                    tinterEl.innerHTML = '<div style="color:#999;font-size:11px;text-align:center;padding:20px;">No tinter data — add paint formulas with tinter codes in Database → Paint</div>';
-                    return;
-                }
-                const maxG = sortedTinters[0][1];
-                const _dm3 = document.body.dataset.theme === 'dark' || (!document.body.dataset.theme && window.matchMedia('(prefers-color-scheme:dark)').matches);
-                const tinterColours = {"ITE302":"#2a2a2a","ITE303":"#e8c84a","ITE304":"#4a8a4a","ITE305":"#3a7a6a","ITE306":"#b84a2a","ITE309":"#c0a0d0","ITE310":"#8a3060","ITE410":"#7a4aaa","ITE003":"#e8e8e8","ITE102":"#1a1a1a","ITE104":"#1a6a3a","ITE105":"#2a6a7a","ITE107":"#e07030","ITE108":"#e08030","ITE109":"#cc3060","ITE110":"#903060","ITE111":"#ddd","ITE113":"#d4a830","ITE116":"#c04828","ITE201":"#f0d020","ITE203":"#e8c820","ITE209":"#7a1830","ITE210":"#7050a0","ITE501":"#e8900a","ITE502":"#f0980a","ITE701":"#e0d010","ITE708":"#cc2010","ITE709":"#c02010"};
-                tinterEl.innerHTML = sortedTinters.map(([code, grams]) => {
-                    const baseCode = code.replace(/-\d+$/, '');
-                    const col = tinterColours[baseCode] || '#9c27b0';
-                    const pct = (grams / maxG * 100).toFixed(0);
-                    const g = grams >= 1000 ? (grams/1000).toFixed(2)+'kg' : grams.toFixed(0)+'g';
-                    return `<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;margin-bottom:4px;background:${col}18;border-left:3px solid ${col};border-radius:4px;">
-                        <span style="font-size:10px;font-weight:900;color:${_dm3?'#f2f2f7':'#333'};font-family:monospace;width:60px;flex-shrink:0;">${code}</span>
-                        <div style="flex:1;height:6px;background:${_dm3?'#48484a':'#eee'};border-radius:3px;">
-                            <div style="width:${pct}%;height:100%;background:${col};border-radius:3px;"></div>
-                        </div>
-                        <span style="font-size:11px;font-weight:900;color:${col};width:50px;text-align:right;flex-shrink:0;">${g}</span>
-                    </div>`;
-                }).join('');
-            }, 80);
-
-            // Jobs by Finish Type bar
+            // Jobs by Finish Type bar     integer count, no unit suffix
             const countLabelPlugin = {
                 id: 'count_labels',
                 afterDatasetsDraw(chart) {
@@ -17476,155 +17019,6 @@ const firebaseConfig = {
         }
     }
 
-    function bulkRecalcStockFromHistory() {
-        const history = JSON.parse(localStorage.getItem('jobHistory') || '[]');
-        if (history.length === 0) { notify('No job history found'); return; }
-
-        const confirmed = confirm(
-            `⚡ RECALCULATE STOCK FROM ALL JOB HISTORY\n\n` +
-            `This will:\n` +
-            `• Process ALL ${history.length} jobs in history\n` +
-            `• Deduct paint for every job (bases + tinters)\n` +
-            `• Allow negative values — you'll need to manually correct after\n` +
-            `• Reset the deducted-jobs log so nothing double-counts\n\n` +
-            `Current stock levels will be the starting point.\n` +
-            `Tap OK to proceed.`
-        );
-        if (!confirmed) return;
-
-        const CR2 = JSON.parse(localStorage.getItem('pwCoverageRates') || '{}');
-        const _ucR  = parseFloat(CR2.undercoat) || 8;
-        const _ucCR = parseFloat(CR2.clearUc)   || 8;
-        const _satR = parseFloat(CR2.satin)      || 5;
-        const _glsR = parseFloat(CR2.gloss)      || 5;
-        const _matR = parseFloat(CR2.matt)       || 5;
-        const _clrR = parseFloat(CR2.clear)      || 5;
-        const paintDB2 = JSON.parse(localStorage.getItem('paintFormulas') || '[]');
-        const getF2 = col => paintDB2.find(f => (f.color||'').toLowerCase().trim() === (col||'').toLowerCase().trim());
-
-        // Start from current stock levels
-        const stock = JSON.parse(localStorage.getItem('pwStockLevels') || '{}');
-        const newDeducted = {};
-        let jobCount = 0, skipCount = 0;
-
-        history.forEach(job => {
-            const jobKey = String(job.jobNum || job.id || '');
-            if (!jobKey) { skipCount++; return; }
-
-            // Process base paint
-            const jobItems = job.items || [];
-            if (jobItems.length > 0) {
-                jobItems.forEach(item => {
-                    // item.sqm is PER UNIT — must multiply by qty
-                    const sqm = (parseFloat(item.sqm) || 0) * (parseInt(item.qty) || 1);
-                    if (!sqm) return;
-                    const col = (item.color || job.color || '').trim();
-                    const fin = (item.finish || job.finish || '').toLowerCase();
-
-                    if (col.toLowerCase().includes('clear')) {
-                        stock['Clear']   = (parseFloat(stock['Clear'])||0)   - sqm / _clrR;
-                        stock['ClearUC'] = (parseFloat(stock['ClearUC'])||0) - sqm / _ucCR;
-                    } else {
-                        // Undercoat white for all coloured items
-                        stock['Undercoat'] = (parseFloat(stock['Undercoat'])||0) - sqm / _ucR;
-
-                        // Try to find the base code from formula
-                        const f2 = getF2(col);
-                        const wb = f2 ? (f2.whiteBase || f2.baseTinters || []) : [];
-                        const be = wb.find(b => (b.code||'').toUpperCase().startsWith('XB')) ||
-                                   wb.find(b => (b.altCode||'').toUpperCase().startsWith('XB'));
-                        if (be) {
-                            const rc = (be.code||'').toUpperCase().startsWith('XB') ? be.code : be.altCode;
-                            const isD = parseInt((rc||'').slice(-1)) % 2 === 1;
-                            let bk;
-                            if (fin === 'matt')       bk = isD ? 'XB6911' : 'XB6910';
-                            else if (fin === 'gloss') bk = isD ? 'XB6961' : 'XB6960';
-                            else                      bk = isD ? 'XB6931' : 'XB6930';
-                            const _r = fin==='matt'?_matR : fin==='gloss'?_glsR : _satR;
-                            stock[bk] = (parseFloat(stock[bk])||0) - sqm / _r;
-                        } else {
-                            // No formula match — deduct from generic satin white by finish
-                            const _r = fin==='matt'?_matR : fin==='gloss'?_glsR : _satR;
-                            const bk = fin==='matt'?'XB6910' : fin==='gloss'?'XB6960' : 'XB6930';
-                            stock[bk] = (parseFloat(stock[bk])||0) - sqm / _r;
-                        }
-                    }
-                });
-            } else {
-                // Fallback: job has no items[] — use totalSqm on the job object
-                const sqm = parseFloat(job.totalSqm) || 0;
-                if (sqm > 0) {
-                    const col = (job.color || '').trim();
-                    const fin = (job.finish || '').toLowerCase();
-                    if (col.toLowerCase().includes('clear')) {
-                        stock['Clear']   = (parseFloat(stock['Clear'])||0)   - sqm / _clrR;
-                        stock['ClearUC'] = (parseFloat(stock['ClearUC'])||0) - sqm / _ucCR;
-                    } else {
-                        stock['Undercoat'] = (parseFloat(stock['Undercoat'])||0) - sqm / _ucR;
-                        const _r = fin==='matt'?_matR : fin==='gloss'?_glsR : _satR;
-                        const bk = fin==='matt'?'XB6910' : fin==='gloss'?'XB6960' : 'XB6930';
-                        stock[bk] = (parseFloat(stock[bk])||0) - sqm / _r;
-                    }
-                }
-            }
-
-            // Tinter deduction — separate pass to calculate grams per tint code
-            jobItems.forEach(item => {
-                const sqm = (parseFloat(item.sqm) || 0) * (parseInt(item.qty) || 1);
-                if (!sqm) return;
-                const col = (item.color || job.color || '').trim();
-                const fin = (item.finish || job.finish || '').toLowerCase();
-                const _r = fin==='matt'?_matR : fin==='gloss'?_glsR : _satR;
-                const litres = sqm / _r;
-                const formula = getF2(col);
-                if (!formula || !formula.colourants) return;
-                formula.colourants.forEach(c => {
-                    if (!c.code || !c.amount) return;
-                    const tKey = 'tint_' + c.code.toUpperCase().trim();
-                    stock[tKey] = (parseFloat(stock[tKey])||0) - (parseFloat(c.amount) * litres);
-                });
-            });
-
-            newDeducted[jobKey] = new Date().toISOString();
-            jobCount++;
-        });
-
-        // Round all values to 2 decimal places
-        Object.keys(stock).forEach(k => { stock[k] = Math.round((stock[k]||0) * 100) / 100; });
-
-        // Save everything
-        localStorage.setItem('pwStockLevels', JSON.stringify(stock));
-        localStorage.setItem('pwStockDeducted', JSON.stringify(newDeducted));
-
-        // Sync to Firestore
-        if (window.currentUser && window.firebaseDb && window.doc && window.setDoc) {
-            try {
-                const uid = window.staffModeOwnerUid || window.currentUser.uid;
-                window.setDoc(window.doc(window.firebaseDb,'users',uid,'appData','stockLevels'), { levels:stock, savedAt:new Date().toISOString() }, {merge:false}).catch(()=>{});
-                window.setDoc(window.doc(window.firebaseDb,'users',uid,'appData','stockDeducted'), { jobs:newDeducted, updatedAt:new Date().toISOString() }, {merge:false}).catch(()=>{});
-            } catch(e) {}
-        }
-
-        try { renderStockTab(); } catch(e) {}
-        checkStockAlerts();
-        // Show a detailed summary
-        const _ucTotal = Math.abs(Math.round(stock['Undercoat'] || 0));
-        const _satTotal = Math.abs(Math.round(stock['XB6930'] || 0)) + Math.abs(Math.round(stock['XB6931'] || 0));
-        const _glsTotal = Math.abs(Math.round(stock['XB6960'] || 0)) + Math.abs(Math.round(stock['XB6961'] || 0));
-        const _matTotal = Math.abs(Math.round(stock['XB6910'] || 0)) + Math.abs(Math.round(stock['XB6911'] || 0));
-        alert(
-            `⚡ RECALC COMPLETE — ${jobCount} jobs processed\n\n` +
-            `Undercoat deducted: ${_ucTotal}L (at ${_ucR}m²/L)\n` +
-            `Satin base deducted: ${_satTotal}L (at ${_satR}m²/L)\n` +
-            `Gloss base deducted: ${_glsTotal}L (at ${_glsR}m²/L)\n` +
-            `Matt base deducted: ${_matTotal}L (at ${_matR}m²/L)\n\n` +
-            `All values are now NEGATIVE (deducted from 0).\n` +
-            `Go to Database → Stock, enter your actual drum quantities,\n` +
-            `then the stock levels will show what you actually have left.`
-        );
-        addAdminAlert('STOCK_RECALC', `⚡ Stock recalculated from ${jobCount} historical jobs`);
-    }
-
     function deductStockForJob(jobData) {
         // Only deduct once per job — track which job IDs have been booked out
         const deductedJobs = JSON.parse(localStorage.getItem('pwStockDeducted') || '{}');
@@ -17680,7 +17074,6 @@ const firebaseConfig = {
         // Mark this job as deducted so re-saves don't double-deduct
         deductedJobs[jobKey] = new Date().toISOString();
         localStorage.setItem('pwStockDeducted', JSON.stringify(deductedJobs));
-        // Also sync the deducted log to Firestore so other devices don't double-deduct
         if (window.currentUser && window.firebaseDb && window.doc && window.setDoc) {
             try {
                 const _dRef = window.doc(window.firebaseDb, 'users', window.staffModeOwnerUid || window.currentUser.uid, 'appData', 'stockDeducted');
@@ -18590,7 +17983,6 @@ if ('serviceWorker' in navigator && _swAllowed) {
         if (window.currentUser && window.firebaseDb && window.doc && window.setDoc) {
             try {
                 if (!job.id) {
-                    // Use jobNum as stable Firestore doc ID (same as syncJobsToFirebase)
                     job.id = String(job.jobNum);
                     history[jobIdx] = job;
                     safeStorage.setJSON('jobHistory', history);
@@ -18664,7 +18056,6 @@ if ('serviceWorker' in navigator && _swAllowed) {
     
     // Delete individual admin alert — syncs to Firestore so it stays deleted
     function deleteAdminAlert(index) {
-        // Remove from active list only — archive is preserved permanently
         const adminAlerts = JSON.parse(localStorage.getItem('adminAlerts')) || [];
         adminAlerts.splice(index, 1);
         localStorage.setItem('adminAlerts', JSON.stringify(adminAlerts));
@@ -18675,21 +18066,11 @@ if ('serviceWorker' in navigator && _swAllowed) {
 
     // Clear ALL admin alerts permanently
     function clearAllAdminAlerts() {
-        const count = (JSON.parse(localStorage.getItem('adminAlerts')) || []).length;
-        if (!confirm(`Clear ${count} active notifications?\n\nNote: The Notification Archive in Admin is kept permanently.`)) return;
+        if (!confirm(`Clear all ${(JSON.parse(localStorage.getItem('adminAlerts')) || []).length} notifications?\n\nThis cannot be undone.`)) return;
         localStorage.setItem('adminAlerts', JSON.stringify([]));
         syncAdminAlertsToFirebase([]);
         renderGlobalNotifications();
         updateNotificationBadge();
-    }
-
-    function clearNotifArchive() {
-        const count = (JSON.parse(localStorage.getItem('pwNotifArchive') || '[]')).length;
-        if (!confirm(`Permanently delete all ${count} archived notifications?\n\nThis cannot be undone.`)) return;
-        localStorage.setItem('pwNotifArchive', JSON.stringify([]));
-        syncNotifArchiveToFirebase([]);
-        renderAdminAlerts();
-        notify('🗑️ Archive cleared');
     }
     
     // Toggle notifications visibility and update badge
@@ -22112,9 +21493,8 @@ if ('serviceWorker' in navigator && _swAllowed) {
     function updatePricingMatrix(tier, code, priceIndex, val) {
         masterMatrix[tier][code][priceIndex + 1] = parseFloat(val);
         localStorage.setItem('masterMatrix', JSON.stringify(masterMatrix));
-        window._localProfilesTimestamp = Date.now(); // mark local as newest so Firestore won't overwrite
         syncMasterMatrixToFirestore();
-        notify('✅ Price Updated');
+        notify('    Price Updated');
     }
     
     // Ensure every matrix row has 6 elements (name + 5 prices incl. clear)
@@ -24027,8 +23407,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             window._loadingDataFromFirebase = false;
             return;
         }
-        window.loadAllDataFromFirebase = loadAllDataFromFirebase;
-    window.loadStockFromFirebase = loadStockFromFirebase; // expose for manual sync // keep self-reference fresh
+        window.loadAllDataFromFirebase = loadAllDataFromFirebase; // keep self-reference fresh
         
         // Check if current user is a staff account (first time only)
         if (!ownerUid && !window._staffCheckDone) {
@@ -24312,23 +23691,18 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                 if (dpSnap.exists()) {
                     const dpData = dpSnap.data();
                     if (Array.isArray(dpData.doorProfiles) && dpData.doorProfiles.length > 0) {
-                        // Only overwrite if Firestore data is newer than local edits
-                        const firestoreVersion = dpData.syncVersion || 0;
-                        const localVersion = window._localProfilesTimestamp || 0;
-                        if (firestoreVersion >= localVersion) {
-                            profiles = dpData.doorProfiles;
-                            localStorage.setItem('doorProfiles', JSON.stringify(profiles));
-                            if (dpData.masterMatrix && typeof dpData.masterMatrix === 'object' && !window._masterMatrixLoadedFromAppData) {
-                                masterMatrix = dpData.masterMatrix;
-                                normaliseMasterMatrix();
-                                localStorage.setItem('masterMatrix', JSON.stringify(masterMatrix));
-                            }
-                            console.log('       Door profiles loaded from Firestore:', profiles.length, 'profiles');
-                            try { if (typeof refreshLists === 'function') refreshLists(); } catch(e) {}
-                            try { if (typeof renderPricingMatrix === 'function') renderPricingMatrix(); } catch(e) {}
-                        } else {
-                            console.log('       Skipping Firestore profiles — local is newer (local:', localVersion, 'fs:', firestoreVersion, ')');
+                        profiles = dpData.doorProfiles;
+                        localStorage.setItem('doorProfiles', JSON.stringify(profiles));
+                        // Only use embedded masterMatrix from doorProfiles if appData/masterMatrix hasn't loaded a clean version
+                        if (dpData.masterMatrix && typeof dpData.masterMatrix === 'object' && !window._masterMatrixLoadedFromAppData) {
+                            masterMatrix = dpData.masterMatrix;
+                            normaliseMasterMatrix();
+                            localStorage.setItem('masterMatrix', JSON.stringify(masterMatrix));
                         }
+                        console.log('       Door profiles loaded from Firestore:', profiles.length, 'profiles from UID:', dataUid);
+                        console.log('       First profile:', profiles[0]);
+                        try { if (typeof refreshLists === 'function') refreshLists(); } catch(e) {}
+                        try { if (typeof renderPricingMatrix === 'function') renderPricingMatrix(); } catch(e) {}
                     } else {
                         console.log('       Door profiles doc exists but empty - seeding demo data');
                         const _lp = JSON.parse(localStorage.getItem("doorProfiles") || "[]");
@@ -24998,23 +24372,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
 
     // ---- LOAD STOCK FROM FIRESTORE ----
     async function loadStockFromFirebase() {
-        // Retry up to 5 times if Firebase isn't ready yet (important on iPhone Safari)
-        if (!window.currentUser || !window.firebaseDb || !window.getDoc || !window.doc) {
-            return new Promise(resolve => {
-                let attempts = 0;
-                const retry = setInterval(() => {
-                    attempts++;
-                    if (window.currentUser && window.firebaseDb && window.getDoc && window.doc) {
-                        clearInterval(retry);
-                        loadStockFromFirebase().then(resolve);
-                    } else if (attempts >= 10) {
-                        clearInterval(retry);
-                        console.warn('loadStockFromFirebase: Firebase not ready after 10 retries');
-                        resolve();
-                    }
-                }, 500);
-            });
-        }
+        if (!window.currentUser || !window.firebaseDb || !window.getDoc || !window.doc) return;
         try {
             const targetUid = window.staffModeOwnerUid || window.currentUser.uid;
             const ref = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'stockLevels');
@@ -25038,11 +24396,9 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             if (snap3.exists() && snap3.data().names) {
                 localStorage.setItem('pwTinterNames', JSON.stringify(snap3.data().names));
             }
-            // Load the job deduction log so other devices don't double-deduct
             const ref4 = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'stockDeducted');
             const snap4 = await window.getDoc(ref4);
             if (snap4.exists() && snap4.data().jobs) {
-                // Merge with local (keep any that are only on this device)
                 const remote = snap4.data().jobs;
                 const local = JSON.parse(localStorage.getItem('pwStockDeducted') || '{}');
                 localStorage.setItem('pwStockDeducted', JSON.stringify({ ...local, ...remote }));
@@ -25180,23 +24536,18 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                                 cloudJob.dateCompleted = localMatch.dateCompleted || cloudJob.dateCompleted;
                             }
                             if (localMatch && localMatch.phases) {
-                                // Always initialise phases on cloud job
                                 if (!cloudJob.phases) cloudJob.phases = {};
                                 const _msSincePhase = window._lastLocalSaveTime ? Date.now() - window._lastLocalSaveTime : 99999;
                                 const _thisDeviceJustChangedPhase = _msSincePhase < 3000 && window._lastPhaseTouch && (Date.now() - window._lastPhaseTouch < 3000);
                                 if (_thisDeviceJustChangedPhase) {
-                                    // THIS device just tapped a phase — local wins completely
                                     Object.keys(localMatch.phases).forEach(k => {
                                         cloudJob.phases[k] = localMatch.phases[k];
                                     });
                                 } else {
-                                    // Merge: true always wins over false
-                                    // This prevents a stale snapshot from clearing a completed phase
                                     Object.keys(localMatch.phases).forEach(k => {
                                         if (localMatch.phases[k] === true && !cloudJob.phases[k]) {
                                             cloudJob.phases[k] = true;
                                         }
-                                        // If cloud doesn't have this key at all, copy local
                                         if (!(k in cloudJob.phases)) {
                                             cloudJob.phases[k] = localMatch.phases[k];
                                         }
@@ -25332,7 +24683,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             
             jobHistory.forEach(job => {
                 try {
-                    const jobId = job.id || String(job.jobNum) || Date.now().toString();
+                    const jobId = job.id || job.jobNum || Date.now().toString();
                     const jobDoc = window.doc(window.firebaseDb, 'users', window.staffModeOwnerUid||window.currentUser.uid, 'jobs', jobId);
                     var jobForCloud={...job,id:jobId,lastModified:new Date().toISOString(),userId:window.staffModeOwnerUid||window.currentUser.uid};
                     delete jobForCloud.photos; // strip base64 photos - too large for Firestore 1MB limit
@@ -25392,13 +24743,12 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         try {
             const targetUid = window.staffModeOwnerUid || window.currentUser.uid;
             const configDoc = window.doc(window.firebaseDb, 'users', targetUid, 'config', 'doorProfiles');
-            const _sv = window._localProfilesTimestamp || Date.now();
             window.setDoc(configDoc, {
                 doorProfiles: profiles,
                 masterMatrix: masterMatrix,
                 lastModified: new Date().toISOString(),
                 userId: window.currentUser.uid,
-                syncVersion: _sv  // use local timestamp so Firestore version matches
+                syncVersion: Date.now()
             }, { merge: false }).then(() => {
             }).catch(err => {
                 console.error('    Error syncing door profiles to Firebase:', err);
@@ -25446,8 +24796,6 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
     // Also attach on DOMContentLoaded in case script runs before DOM is ready
     document.addEventListener('DOMContentLoaded', () => {
         attachTabListeners();
-        // Update all version displays including login screen
-        try { updateVersionDisplay(); } catch(e) {}
         setTimeout(() => {
             populatePaintBrandsDropdown();
             setTimeout(() => {
