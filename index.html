@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.34'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.35'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -9722,7 +9722,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.34';
+        const _ver = window.CURRENT_VERSION || 'v1.16.35';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
@@ -10379,28 +10379,42 @@ const firebaseConfig = {
         } 
     }
     
-    function addProfile() { 
+    async function addProfile() { 
         let v = document.getElementById('new-profile').value.trim(); 
         if(v && !profiles.includes(v)){ 
-            profiles.push(v); 
+            // Strip code suffix if user typed it (e.g. "Demi Round 20 (702)" → "Demi Round 20")
+            const cleanName = v.replace(/\s*\(\d+\)\s*$/, '').trim();
+
+            profiles.push(cleanName); 
             saveProfilesToStorage();
             
-            // Also add to masterMatrix so it appears in price matrix and syncs to Firestore
+            // Add to masterMatrix so it appears in price matrix
             const tierNames = getSortedTierNames ? getSortedTierNames() : Object.keys(masterMatrix);
-            const targetTier = tierNames.length > 0 ? tierNames[tierNames.length-1] : 'Tier 1';
+            const targetTier = 'Unallocated'; // always add new profiles to Unallocated, not last tier
             if (!masterMatrix[targetTier]) masterMatrix[targetTier] = {};
-            const existingCodes = Object.keys(masterMatrix[targetTier]).map(Number);
-            const newCode = existingCodes.length ? Math.max(...existingCodes) + 1 : 1;
-            masterMatrix[targetTier][newCode] = [v, 0, 0, 0, 0, 0];
+            // Find next available code starting from 900 for custom profiles
+            const allCodes = Object.keys(masterMatrix).flatMap(t => Object.keys(masterMatrix[t])).map(Number);
+            const newCode = allCodes.length ? Math.max(...allCodes) + 1 : 900;
+            masterMatrix[targetTier][newCode] = [cleanName, 0, 0, 0, 0, 0];
             localStorage.setItem('masterMatrix', JSON.stringify(masterMatrix));
-            try { if (typeof syncProfilesToFirebase === 'function') syncProfilesToFirebase(); } catch(e) {}
+
+            // Set a flag so loadAllDataFromFirebase knows not to overwrite local state
+            window._profileSyncInProgress = true;
+            try {
+                await new Promise(resolve => {
+                    syncProfilesToFirebase();
+                    setTimeout(resolve, 1500); // give Firestore write time to complete
+                });
+            } finally {
+                window._profileSyncInProgress = false;
+            }
             
             document.getElementById('new-profile').value=''; 
             refreshLists();
-            addAdminAlert('PROFILE_ADDED', `NEW DOOR PROFILE ADDED: "${v}"`, {profileName: v});
+            addAdminAlert('PROFILE_ADDED', `NEW DOOR PROFILE ADDED: "${cleanName}"`, {profileName: cleanName});
             renderPricingMatrix();
-            notify(`✓ Profile "${v}" added — set prices in Admin → Price Matrix`);
-        } else if (profiles.includes(v)) {
+            notify(`✓ Profile "${cleanName} (${newCode})" added — set prices in Admin → Price Matrix`);
+        } else if (profiles.some(p => p.replace(/\s*\(\d+\)\s*$/, '').trim().toLowerCase() === v.replace(/\s*\(\d+\)\s*$/, '').trim().toLowerCase())) {
             notify('Profile Already Exists');
         }
     }
@@ -24293,6 +24307,8 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
 
             //        5. Door Profiles                                                                                                          
             try {
+                // Skip if a local profile sync is in progress — avoid race condition
+                if (!window._profileSyncInProgress) {
                 const dpRef = window.doc(window.firebaseDb, 'users', dataUid, 'config', 'doorProfiles');
                 console.log('🔍 Loading door profiles from:', 'users/' + dataUid + '/config/doorProfiles');
                 const dpSnap = await window.getDoc(dpRef);
@@ -24337,6 +24353,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                         paintDatabase = seededFormulas;
                         console.log('       Loaded', seededFormulas.length, 'demo paint formula(s) after seeding');
                     }
+                }
                 }
             } catch(e) { console.warn('Door profiles load error:', e.message); }
 
