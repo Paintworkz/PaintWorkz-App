@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.45'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.46'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1655,6 +1655,8 @@ const firebaseConfig = {
         onAuthStateChanged(auth, user => {
             window.currentUser = user;
             if (user) {
+                // Cancel any pending logout timer (token refresh completed)
+                if (window._authNullTimer) { clearTimeout(window._authNullTimer); window._authNullTimer = null; }
                 // Store last UID for reference
                 localStorage.setItem('pw_last_uid', user.uid);
 
@@ -1761,27 +1763,28 @@ const firebaseConfig = {
                     if (typeof maybeStartTour === 'function') maybeStartTour();
                 }, 3000);
             } else {
-                // Clean up listener when logging out
-                if (window.realtimeSyncUnsubscribe) {
-                    try {
-                        window.realtimeSyncUnsubscribe();
-                    } catch (e) {
-                        console.warn('Error unsubscribing:', e);
+                // user === null: Firebase says logged out
+                // Wait 1.5s before showing login screen — token refresh might be in progress
+                window._authNullTimer = setTimeout(() => {
+                    // Double-check: if currentUser is back, abort
+                    if (window.currentUser) return;
+                    // Clean up listener
+                    if (window.realtimeSyncUnsubscribe) {
+                        try { window.realtimeSyncUnsubscribe(); } catch(e) {}
+                        window.realtimeSyncUnsubscribe = null;
                     }
-                    window.realtimeSyncUnsubscribe = null;
-                }
-                window.realtimeSyncActive = false;
-                
-                const loginScreen = document.getElementById('loginScreen');
-                const appContainer = document.getElementById('appContainer');
-                if (loginScreen) loginScreen.style.display = 'flex';
-                if (appContainer) appContainer.style.display = 'none';
-                const mh2 = document.getElementById('mainHeader');
-                const mn2 = document.getElementById('mainNavTabs');
-                if (mh2) mh2.style.display = 'none';
-                if (mn2) mn2.style.display = 'none';
-                var sf3 = document.getElementById('stickyFooter');
-                if (sf3) sf3.style.display = 'none';
+                    window.realtimeSyncActive = false;
+                    const loginScreen = document.getElementById('loginScreen');
+                    const appContainer = document.getElementById('appContainer');
+                    if (loginScreen) loginScreen.style.display = 'flex';
+                    if (appContainer) appContainer.style.display = 'none';
+                    const mh2 = document.getElementById('mainHeader');
+                    const mn2 = document.getElementById('mainNavTabs');
+                    if (mh2) mh2.style.display = 'none';
+                    if (mn2) mn2.style.display = 'none';
+                    var sf3 = document.getElementById('stickyFooter');
+                    if (sf3) sf3.style.display = 'none';
+                }, 1500);
             }
         });
         
@@ -9659,7 +9662,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.45';
+        const _ver = window.CURRENT_VERSION || 'v1.16.46';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
