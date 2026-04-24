@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.40'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.42'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1606,11 +1606,10 @@ const firebaseConfig = {
             window.uploadString = uploadString;
             window.getDownloadURL = getDownloadURL;
             window.deleteObject = deleteObject;
-            // Session persistence: auth clears when tab/browser closes
-            // Prevents Colin's account auto-logging in on fresh devices
+            // Local persistence: stays logged in across tab closes and refreshes
             try {
-                const { setPersistence, browserSessionPersistence } = await import('https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js');
-                await setPersistence(auth, browserSessionPersistence);
+                const { setPersistence, browserLocalPersistence } = await import('https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js');
+                await setPersistence(auth, browserLocalPersistence);
             } catch(pe) {}
             console.log('✓ Firebase initialized successfully');
         } catch(fbError) {
@@ -1663,7 +1662,7 @@ const firebaseConfig = {
             if (user) {
                 // SECURITY GUARD: only open app if user explicitly logged in this session
                 // Prevents auto-open on shared devices or cached sessions
-                const explicitLogin = sessionStorage.getItem('pw_explicit_login');
+                const explicitLogin = sessionStorage.getItem('pw_explicit_login') || localStorage.getItem('pw_explicit_login');
                 console.log('%c🛡️ SECURITY GUARD CHECK', 'background:#9c27b0;color:#fff;font-weight:900;padding:4px;', {
                     explicitLogin: explicitLogin,
                     staffMode: sessionStorage.getItem('staffMode'),
@@ -4522,7 +4521,7 @@ const firebaseConfig = {
     }
     //        End onboarding                                                                                                                            
     function logout() {
-        sessionStorage.removeItem('pw_explicit_login');
+        sessionStorage.removeItem('pw_explicit_login'); localStorage.removeItem('pw_explicit_login');
         // Unsubscribe realtime listener before signing out
         if (window.realtimeSyncUnsubscribe) {
             try { window.realtimeSyncUnsubscribe(); } catch(e) {}
@@ -8962,7 +8961,7 @@ const firebaseConfig = {
             await window.signInWithEmailAndPassword(adminEmail, adminPassword);
             
             // Explicitly mark that we're logging in (for session guard)
-            sessionStorage.setItem('pw_explicit_login', '1');
+            sessionStorage.setItem('pw_explicit_login', '1'); localStorage.setItem('pw_explicit_login', '1');
 
             // Now currentUser is admin again - store staff relationship in admin's document
             const staffAccountRef = window.doc(window.firebaseDb, 'users', adminUid, 'staffAccounts', staffUid);
@@ -9727,7 +9726,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.40';
+        const _ver = window.CURRENT_VERSION || 'v1.16.42';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
@@ -23772,7 +23771,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
 
         // Clear forced-signout flag and set explicit login flag
         sessionStorage.removeItem('pw_forced_signout');
-        sessionStorage.setItem('pw_explicit_login', '1');
+        sessionStorage.setItem('pw_explicit_login', '1'); localStorage.setItem('pw_explicit_login', '1');
 
         function showApp() {
             if (errorDiv) errorDiv.style.display = 'none';
@@ -23806,7 +23805,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             window.reauthenticateWithCredential(window.currentUser, credential)
                 .then(() => { showApp(); })
                 .catch(err => {
-                    sessionStorage.removeItem('pw_explicit_login');
+                    sessionStorage.removeItem('pw_explicit_login'); localStorage.removeItem('pw_explicit_login');
                     errorDiv.textContent = 'Incorrect credentials: ' + err.message;
                     errorDiv.style.display = 'block';
                 });
@@ -23817,7 +23816,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         window.signInWithEmailAndPassword(email, password)
             .then(() => { showApp(); })
             .catch(error => {
-                sessionStorage.removeItem('pw_explicit_login'); // clear flag on failure
+                sessionStorage.removeItem('pw_explicit_login'); localStorage.removeItem('pw_explicit_login'); // clear flag on failure
                 errorDiv.textContent = error.message;
                 errorDiv.style.display = 'block';
             });
@@ -23868,7 +23867,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         
         // Set flag BEFORE calling createUserWithEmailAndPassword so the
         // onAuthStateChanged security guard doesn't immediately sign them back out
-        sessionStorage.setItem('pw_explicit_login', '1');
+        sessionStorage.setItem('pw_explicit_login', '1'); localStorage.setItem('pw_explicit_login', '1');
 
         window.createUserWithEmailAndPassword(email, password)
             .then(async (userCredential) => {
@@ -23902,7 +23901,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                 } catch (firestoreError) {
                     console.error('❌ Error creating user document:', firestoreError);
                     alert('Account created but there was an error setting up your data. Please try logging in again.');
-                    sessionStorage.removeItem('pw_explicit_login');
+                    sessionStorage.removeItem('pw_explicit_login'); localStorage.removeItem('pw_explicit_login');
                     return; // Don't show app if document creation failed
                 }
                 
@@ -23936,7 +23935,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                 }
             })
             .catch(error => {
-                sessionStorage.removeItem('pw_explicit_login'); // clear flag on failure
+                sessionStorage.removeItem('pw_explicit_login'); localStorage.removeItem('pw_explicit_login'); // clear flag on failure
                 errorDiv.textContent = error.message;
                 errorDiv.style.display = 'block';
             });
