@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.33'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.34'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -9722,7 +9722,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.33';
+        const _ver = window.CURRENT_VERSION || 'v1.16.34';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
@@ -10528,59 +10528,23 @@ const firebaseConfig = {
         
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         if (isMobile) {
-            // Show choice modal — camera OR photo library
-            const existingModal = document.getElementById('snapChoiceModal');
-            if (existingModal) existingModal.remove();
-            const modal = document.createElement('div');
-            modal.id = 'snapChoiceModal';
-            modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:flex-end;justify-content:center;';
-            const _makeInput = (captureMode) => {
-                const input = document.createElement('input');
-                input.type = 'file';
-                input.accept = 'image/*';
-                if (captureMode) {
-                    input.capture = captureMode; // camera — single shot
-                } else {
-                    input.multiple = true; // library — allow multi-select
+            // iOS Safari: plain file input with no capture attribute naturally shows
+            // "Take Photo" + "Photo Library" + "Browse" options in the native action sheet
+            // MUST be clicked synchronously during user gesture — no setTimeout allowed
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.multiple = true;
+            input.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;';
+            input.onchange = async (e) => {
+                const files = Array.from(e.target.files || []);
+                for (const f of files) {
+                    await new Promise(res => { snapHandleFile(f); setTimeout(res, 400); });
                 }
-                input.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;';
-                input.onchange = async (e) => {
-                    const files = Array.from(e.target.files || []);
-                    for (const f of files) {
-                        // Process sequentially - wait for each before starting next
-                        await new Promise(res => {
-                            const origOnLoad = FileReader.prototype.onload;
-                            snapHandleFile(f);
-                            setTimeout(res, 400); // give time for async IndexedDB write
-                        });
-                    }
-                    try { document.body.removeChild(input); } catch(e) {}
-                    const m = document.getElementById('snapChoiceModal');
-                    if (m) m.remove();
-                };
-                document.body.appendChild(input);
-                return input;
+                try { document.body.removeChild(input); } catch(err) {}
             };
-            modal.innerHTML = `
-                <div style="background:var(--modal-bg,#fff);border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:500px;box-shadow:0 -4px 20px rgba(0,0,0,0.3);color:var(--modal-text,inherit);padding-bottom:calc(20px + env(safe-area-inset-bottom));">
-                    <div style="font-size:13px;font-weight:900;text-align:center;margin-bottom:16px;color:#999;letter-spacing:0.5px;">ADD PHOTO</div>
-                    <div style="display:flex;flex-direction:column;gap:10px;">
-                        <button id="snapBtnCamera" style="padding:16px;background:#2196f3;color:#fff;border:none;border-radius:10px;font-weight:900;font-size:15px;cursor:pointer;">📷 Take Photo</button>
-                        <button id="snapBtnLibrary" style="padding:16px;background:#34c759;color:#fff;border:none;border-radius:10px;font-weight:900;font-size:15px;cursor:pointer;">🖼️ Choose from Library</button>
-                        <button onclick="document.getElementById('snapChoiceModal').remove()" style="padding:14px;background:#f0f0f0;color:#555;border:none;border-radius:10px;font-weight:900;font-size:14px;cursor:pointer;">Cancel</button>
-                    </div>
-                </div>`;
-            document.body.appendChild(modal);
-            document.getElementById('snapBtnCamera').onclick = () => {
-                const m = document.getElementById('snapChoiceModal');
-                if (m) m.remove(); // dismiss modal FIRST (iOS requires clean state before input.click)
-                setTimeout(() => { _makeInput('environment').click(); }, 80);
-            };
-            document.getElementById('snapBtnLibrary').onclick = () => {
-                const m = document.getElementById('snapChoiceModal');
-                if (m) m.remove();
-                setTimeout(() => { _makeInput(null).click(); }, 80);
-            };
+            document.body.appendChild(input);
+            input.click(); // synchronous — keeps trusted gesture chain intact
         } else {
             // Desktop: show choice     webcam or file upload
             const existingModal = document.getElementById('snapChoiceModal');
