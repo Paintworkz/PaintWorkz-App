@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.51'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.52'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -5589,7 +5589,107 @@ const firebaseConfig = {
         console.log('   Modal computed display:', window.getComputedStyle(modal).display);
     }
 
-    function _editSelectSize(size, idx) {
+    function openAddSizeModal(idx) {
+        const f = paintDatabase[idx];
+        if (!f) return;
+        const existing = document.getElementById('addSizeModal');
+        if (existing) existing.remove();
+        const confirmed = new Set(f.confirmedSizes || [1]);
+        const modal = document.createElement('div');
+        modal.id = 'addSizeModal';
+        modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;';
+        modal.innerHTML = `
+        <div style="background:#fff;border-radius:12px;padding:20px;width:100%;max-width:480px;max-height:85vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,0.4);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                <div><div style="font-weight:900;font-size:14px;">${f.color}</div><div style="font-size:10px;color:#666;">${f.brand} · ${f.finish}</div></div>
+                <button onclick="document.getElementById('addSizeModal').remove()" style="background:#eee;border:none;padding:6px 12px;border-radius:6px;font-weight:900;cursor:pointer;">✕</button>
+            </div>
+            <div style="font-size:10px;font-weight:900;color:#e65100;margin-bottom:10px;">SELECT SIZE TO ADD:</div>
+            <div style="display:flex;gap:6px;margin-bottom:16px;" id="addSizeBtns">
+                ${[2,3].map(s => `<button onclick="_switchAddSize(${idx}, ${s})" id="addSizeBtn${s}"
+                    style="flex:1;padding:12px 0;border:2px solid ${confirmed.has(s)?'#34c759':'#ff9500'};
+                    background:${confirmed.has(s)?'#e8f5e9':'#fff3e0'};color:${confirmed.has(s)?'#2e7d32':'#e65100'};
+                    border-radius:8px;font-weight:900;font-size:16px;cursor:pointer;">${s}L ${confirmed.has(s)?'✅':'⚠️'}</button>`).join('')}
+            </div>
+            <div id="addSizeContent"><div style="color:#999;text-align:center;padding:20px;">Select 2L or 3L above</div></div>
+            <div id="addSizeSaveRow" style="display:none;margin-top:16px;">
+                <button onclick="_saveAddedSize(${idx})" style="width:100%;padding:14px;background:#34c759;color:#fff;border:none;border-radius:8px;font-weight:900;font-size:14px;cursor:pointer;">✅ Save & Confirm This Size</button>
+            </div>
+        </div>`;
+        document.body.appendChild(modal);
+    }
+
+    window._addSizeCurrentSize = null;
+    window._addSizePaintIdx = null;
+
+    function _switchAddSize(idx, size) {
+        window._addSizeCurrentSize = size;
+        window._addSizePaintIdx = idx;
+        const f = paintDatabase[idx];
+        if (!f) return;
+        const confirmed = new Set(f.confirmedSizes || [1]);
+        [2,3].forEach(s => {
+            const btn = document.getElementById('addSizeBtn' + s);
+            if (!btn) return;
+            const isConf = confirmed.has(s);
+            if (s === size) { btn.style.background='#ff9500'; btn.style.borderColor='#ff9500'; btn.style.color='#fff'; }
+            else { btn.style.background=isConf?'#e8f5e9':'#fff3e0'; btn.style.borderColor=isConf?'#34c759':'#ff9500'; btn.style.color=isConf?'#2e7d32':'#e65100'; }
+        });
+        const sizes = f.sizes || {};
+        const data1L = sizes[1] || { baseTinters: f.baseTinters || f.whiteBase || [], colourants: f.colourants || [] };
+        const sizeData = sizes[size];
+        const scale = size;
+        const baseCodes = sizeData ? sizeData.baseTinters : data1L.baseTinters.map(b => ({...b, grams: +((parseFloat(b.grams)||0)*scale).toFixed(2)}));
+        const tinters = sizeData ? sizeData.colourants : data1L.colourants.map(c => ({...c, amount: +((parseFloat(c.amount||c.grams)||0)*scale).toFixed(2)}));
+        const isEst = !sizeData;
+        const content = document.getElementById('addSizeContent');
+        if (!content) return;
+        let html = `<div style="background:${isEst?'#fff3e0':'#e8f5e9'};border-radius:6px;padding:8px;margin-bottom:12px;font-size:10px;color:${isEst?'#e65100':'#2e7d32'};font-weight:900;">${isEst?'⚠️ Estimated from 1L ×'+size+' — adjust to correct values':'✅ Confirmed '+size+'L — edit if needed'}</div>`;
+        if (baseCodes.length > 0) {
+            html += `<div style="font-size:10px;font-weight:900;color:#555;margin-bottom:6px;">BASE CODES</div>`;
+            baseCodes.forEach((b,i) => { html += `<div style="display:flex;gap:6px;margin-bottom:4px;align-items:center;"><input value="${b.code||''}" style="flex:2;padding:6px;border:1px solid #ddd;border-radius:4px;font-size:11px;font-family:monospace;" id="asz_base_code_${i}"><input type="number" value="${b.grams||0}" step="0.01" style="flex:1;padding:6px;border:1px solid #ddd;border-radius:4px;font-size:11px;text-align:right;" id="asz_base_grams_${i}"><span style="font-size:10px;color:#999;">g</span></div>`; });
+            html += `<input type="hidden" id="asz_base_count" value="${baseCodes.length}">`;
+        }
+        html += `<div style="font-size:10px;font-weight:900;color:#555;margin:10px 0 6px;">TINTERS</div>`;
+        tinters.forEach((t,i) => { html += `<div style="display:flex;gap:6px;margin-bottom:4px;align-items:center;"><input value="${t.code||''}" style="flex:2;padding:6px;border:1px solid #ddd;border-radius:4px;font-size:11px;font-family:monospace;" id="asz_code_${i}"><input type="number" value="${parseFloat(t.amount||t.grams)||0}" step="0.01" style="flex:1;padding:6px;border:1px solid #ddd;border-radius:4px;font-size:11px;text-align:right;" id="asz_grams_${i}"><span style="font-size:10px;color:#999;">g</span></div>`; });
+        html += `<input type="hidden" id="asz_tinter_count" value="${tinters.length}">`;
+        content.innerHTML = html;
+        const saveRow = document.getElementById('addSizeSaveRow');
+        if (saveRow) saveRow.style.display = 'block';
+    }
+
+    function _saveAddedSize(idx) {
+        const size = window._addSizeCurrentSize;
+        const f = paintDatabase[idx];
+        if (!f || !size) return;
+        const baseCount = parseInt(document.getElementById('asz_base_count')?.value || '0');
+        const baseTinters = [];
+        for (let i=0; i<baseCount; i++) {
+            const code = document.getElementById('asz_base_code_'+i)?.value?.trim();
+            const grams = parseFloat(document.getElementById('asz_base_grams_'+i)?.value) || 0;
+            if (code) baseTinters.push({code, grams});
+        }
+        const tinterCount = parseInt(document.getElementById('asz_tinter_count')?.value || '0');
+        const colourants = [];
+        for (let i=0; i<tinterCount; i++) {
+            const code = document.getElementById('asz_code_'+i)?.value?.trim();
+            const amount = parseFloat(document.getElementById('asz_grams_'+i)?.value) || 0;
+            if (code) colourants.push({code, amount});
+        }
+        if (!f.sizes) f.sizes = {};
+        // Also save 1L baseline if not stored yet
+        if (!f.sizes[1]) f.sizes[1] = { baseTinters: f.baseTinters || f.whiteBase || [], colourants: f.colourants || [] };
+        f.sizes[size] = { baseTinters, colourants };
+        const confirmed = new Set(f.confirmedSizes || [1]);
+        confirmed.add(size);
+        f.confirmedSizes = Array.from(confirmed).sort((a,b) => a-b);
+        savePaintFormulas();
+        renderPaintFormulaList();
+        document.getElementById('addSizeModal')?.remove();
+        notify('\u2705 ' + f.color + ' ' + size + 'L confirmed and saved');
+    }
+
+        function _editSelectSize(size, idx) {
         const f = paintDatabase[idx];
         if (!f) return;
         document.getElementById('mixLitres').value = size;
@@ -5944,8 +6044,9 @@ const firebaseConfig = {
             const _baseCodesStr = (f.baseTinters || f.whiteBase || []).map(c => c.code || '').filter(Boolean).join(' ');
             html += `<div style="font-size:9px; color:#999; margin-bottom:8px;">${baseTintCount} base codes · ${colCount} colourants</div>`;
             html += `<div data-tinter-codes="${_tinterCodesStr}" style="font-size:9px; color:#bbb; margin-bottom:6px; font-family:monospace;">${[_baseCodesStr, _tinterCodesStr].filter(Boolean).join(' · ')}</div>`;
-            html += `<div style="display:flex; gap:6px;">`;
-            html += `<button onclick="editPaintFormula(${actualIndex})" style="padding:4px 10px; background:#2196f3; color:#fff; border:none; border-radius:3px; font-size:9px; font-weight:900; cursor:pointer;">Edit</button>`;
+            html += `<div style="display:flex; gap:6px; flex-wrap:wrap;">`;
+            html += `<button onclick="editPaintFormula(${actualIndex})" style="padding:4px 10px; background:#2196f3; color:#fff; border:none; border-radius:3px; font-size:9px; font-weight:900; cursor:pointer;">✏️ Edit 1L/4L</button>`;
+            html += `<button onclick="openAddSizeModal(${actualIndex})" style="padding:4px 10px; background:#ff9500; color:#fff; border:none; border-radius:3px; font-size:9px; font-weight:900; cursor:pointer;">+ Add 2L/3L</button>`;
             html += `<button onclick="printFormulaFromDB(${actualIndex})" style="padding:4px 10px; background:#9c27b0; color:#fff; border:none; border-radius:3px; font-size:9px; font-weight:900; cursor:pointer;">🖨️ Print</button>`;
             html += `<button onclick="deletePaintFormula(${actualIndex})" style="padding:4px 10px; background:#ff3b30; color:#fff; border:none; border-radius:3px; font-size:9px; font-weight:900; cursor:pointer;">Delete</button>`;
             html += `</div></div>`;
@@ -6371,20 +6472,6 @@ const firebaseConfig = {
         // Build HTML for edit dialog
         let html = `
         <div style="font-size:12px; max-width:600px; max-height:600px; overflow-y:auto;">
-
-            <!-- Size selector -->
-            <div style="background:#fff3e0; border:2px solid #ff9500; border-radius:8px; padding:10px; margin-bottom:14px;">
-                <div style="font-size:10px; font-weight:900; color:#e65100; margin-bottom:8px;">FORMULA SIZE — select which size you are viewing/editing</div>
-                <div style="display:flex; gap:6px; margin-bottom:6px;">
-                    <button type="button" onclick="_editSelectSize(1, ${idx})" id="editSizeBtn1" style="flex:1; padding:10px 0; border:2px solid #2196f3; background:#2196f3; color:#fff; border-radius:6px; font-weight:900; font-size:14px; cursor:pointer;">1L</button>
-                    <button type="button" onclick="_editSelectSize(2, ${idx})" id="editSizeBtn2" style="flex:1; padding:10px 0; border:2px solid #ddd; background:#fff; color:#666; border-radius:6px; font-weight:900; font-size:14px; cursor:pointer;">2L</button>
-                    <button type="button" onclick="_editSelectSize(3, ${idx})" id="editSizeBtn3" style="flex:1; padding:10px 0; border:2px solid #ddd; background:#fff; color:#666; border-radius:6px; font-weight:900; font-size:14px; cursor:pointer;">3L</button>
-                    <button type="button" onclick="_editSelectSize(4, ${idx})" id="editSizeBtn4" style="flex:1; padding:10px 0; border:2px solid #ddd; background:#fff; color:#666; border-radius:6px; font-weight:900; font-size:14px; cursor:pointer;">4L</button>
-                </div>
-                <div id="editSizeStatus" style="font-size:9px; text-align:center; color:#ff9500; font-weight:900;">Currently viewing: 1L</div>
-            </div>
-            <input type="hidden" id="mixLitres" value="1">
-
             <div style="margin-bottom:12px;">
                 <label style="font-weight:bold; display:block; margin-bottom:4px;">Paint Brand:</label>
                 <select id="editBrand" style="width:100%; padding:6px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box; font-weight:bold;">
@@ -6705,26 +6792,6 @@ const firebaseConfig = {
         }
         
         // Close dialog
-        // Update confirmedSizes and store size-specific tinter data
-        const _editSize = saveCurrentFormulaSize();
-        if (_editSize) {
-            const _confirmed = new Set(f.confirmedSizes || []);
-            _confirmed.add(_editSize);
-            f.confirmedSizes = Array.from(_confirmed).sort((a,b) => a-b);
-            // Store the actual grams for this size
-            if (!f.sizes) f.sizes = {};
-            f.sizes[_editSize] = {
-                baseTinters: JSON.parse(JSON.stringify(f.whiteBase || f.baseTinters || [])),
-                colourants: JSON.parse(JSON.stringify(f.colourants || []))
-            };
-            // Also ensure 1L is always stored (for scaling base)
-            if (_editSize !== 1 && !f.sizes[1]) {
-                f.sizes[1] = {
-                    baseTinters: (f.whiteBase || f.baseTinters || []).map(b => ({ ...b, grams: +((parseFloat(b.grams)||0) / _editSize).toFixed(2) })),
-                    colourants: (f.colourants || []).map(c => ({ ...c, amount: +((parseFloat(c.amount||c.grams)||0) / _editSize).toFixed(2) }))
-                };
-            }
-        }
         closeFormulaDialog();
         savePaintFormulas();
         renderPaintFormulaList();
@@ -9940,7 +10007,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.51';
+        const _ver = window.CURRENT_VERSION || 'v1.16.52';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
