@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.50'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.51'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -5595,52 +5595,57 @@ const firebaseConfig = {
         document.getElementById('mixLitres').value = size;
 
         // Update button styles
+        const confirmed = new Set(f.confirmedSizes || []);
         [1,2,3,4].forEach(s => {
             const btn = document.getElementById('editSizeBtn' + s);
             if (!btn) return;
-            const confirmed = new Set(f.confirmedSizes || []);
-            const isConfirmed = confirmed.has(s);
+            const isConf = confirmed.has(s);
             if (s === size) {
                 btn.style.background = '#2196f3'; btn.style.borderColor = '#2196f3'; btn.style.color = '#fff';
             } else {
-                btn.style.background = isConfirmed ? '#e8f5e9' : '#fff';
-                btn.style.borderColor = isConfirmed ? '#34c759' : '#ddd';
-                btn.style.color = isConfirmed ? '#34c759' : '#666';
+                btn.style.background = isConf ? '#e8f5e9' : '#fff';
+                btn.style.borderColor = isConf ? '#34c759' : '#ddd';
+                btn.style.color = isConf ? '#2e7d32' : '#666';
             }
         });
 
-        const confirmed = new Set(f.confirmedSizes || []);
         const status = document.getElementById('editSizeStatus');
         if (status) {
             if (confirmed.has(size)) {
                 status.textContent = `✅ ${size}L — confirmed formula`;
                 status.style.color = '#34c759';
             } else {
-                status.textContent = `⚠️ ${size}L — not yet confirmed. Adjust grams below then Save.`;
+                status.textContent = `⚠️ ${size}L — not confirmed. Grams below are estimated (×${size} from 1L). Adjust if needed then Save.`;
                 status.style.color = '#ff9500';
             }
         }
 
-        // Load grams for this size from stored sizes, OR scale from 1L as estimate
-        const sizeData = f.sizes && f.sizes[size];
-        const base1L = f.sizes && f.sizes[1] ? f.sizes[1] : { baseTinters: f.baseTinters || f.whiteBase || [], colourants: f.colourants || [] };
-        const scale = size; // simple linear scale from 1L
+        // Get 1L data as base for scaling
+        const sizes = f.sizes || {};
+        const data1L = sizes[1] || { baseTinters: f.baseTinters || f.whiteBase || [], colourants: f.colourants || [] };
+        const sizeData = sizes[size]; // confirmed data for this size if exists
+        const scale = size;
 
-        const baseCodes = sizeData ? sizeData.baseTinters : base1L.baseTinters.map(b => ({ ...b, grams: +(b.grams * scale).toFixed(2) }));
-        const tinters = sizeData ? sizeData.colourants : base1L.colourants.map(c => ({ ...c, amount: +(c.amount * scale).toFixed(2) }));
+        const baseCodes = sizeData ? sizeData.baseTinters
+            : data1L.baseTinters.map(b => ({ ...b, grams: +(( parseFloat(b.grams) || 0) * scale).toFixed(2) }));
+        const tinters = sizeData ? sizeData.colourants
+            : data1L.colourants.map(c => ({ ...c, amount: +((parseFloat(c.amount || c.grams) || 0) * scale).toFixed(2) }));
 
-        // Reload the row inputs
-        const editBaseRows = document.getElementById('editBaseRows');
-        const editTinterRows = document.getElementById('editTinterRows');
-        if (editBaseRows) {
-            editBaseRows.innerHTML = '';
+        // Reload base rows — use correct container ID from edit dialog
+        const baseContainer = document.getElementById('editBaseRows');
+        if (baseContainer) {
+            baseContainer.innerHTML = '';
             baseCodes.forEach(b => addEditBaseRow(b.code, b.grams, b.altCode, b.altThreshold, b.altGrams));
         }
-        if (editTinterRows) {
-            editTinterRows.innerHTML = '';
-            tinters.forEach(t => addEditTinterRow(t.code, t.amount, t.altCode, t.altThreshold, t.altGrams));
+
+        // Reload tinter rows — correct container ID is editTintersRows (with s)
+        const tinterContainer = document.getElementById('editTintersRows');
+        if (tinterContainer) {
+            tinterContainer.innerHTML = '';
+            tinters.forEach(t => addEditTinterRow(t.code, t.amount || t.grams, t.altCode, t.altThreshold, t.altGrams));
         }
-        if (!sizeData) notify(`📐 ${size}L estimated from 1L × ${size} — adjust if needed`);
+
+        if (!sizeData) notify(`📐 ${size}L estimated from 1L ×${size} — check grams before saving`);
     }
 
     // ── PRINT FORMULA FROM DATABASE ──────────────────────────────────────────
@@ -6706,12 +6711,19 @@ const firebaseConfig = {
             const _confirmed = new Set(f.confirmedSizes || []);
             _confirmed.add(_editSize);
             f.confirmedSizes = Array.from(_confirmed).sort((a,b) => a-b);
-            // Store the actual grams for this size separately
+            // Store the actual grams for this size
             if (!f.sizes) f.sizes = {};
             f.sizes[_editSize] = {
-                baseTinters: f.whiteBase || f.baseTinters || [],
-                colourants: f.colourants || []
+                baseTinters: JSON.parse(JSON.stringify(f.whiteBase || f.baseTinters || [])),
+                colourants: JSON.parse(JSON.stringify(f.colourants || []))
             };
+            // Also ensure 1L is always stored (for scaling base)
+            if (_editSize !== 1 && !f.sizes[1]) {
+                f.sizes[1] = {
+                    baseTinters: (f.whiteBase || f.baseTinters || []).map(b => ({ ...b, grams: +((parseFloat(b.grams)||0) / _editSize).toFixed(2) })),
+                    colourants: (f.colourants || []).map(c => ({ ...c, amount: +((parseFloat(c.amount||c.grams)||0) / _editSize).toFixed(2) }))
+                };
+            }
         }
         closeFormulaDialog();
         savePaintFormulas();
@@ -9928,7 +9940,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.50';
+        const _ver = window.CURRENT_VERSION || 'v1.16.51';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
