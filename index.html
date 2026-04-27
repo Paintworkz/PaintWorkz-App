@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.48'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.49'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -2319,8 +2319,15 @@ const firebaseConfig = {
             </div>
             
             <div style="background:#f0f0f0; padding:8px; border-radius:4px; margin-bottom:10px;">
-                <label style="font-size:9px; font-weight:900; display:block; margin-bottom:4px;">Litres to Mix</label>
-                <input type="number" inputmode="decimal" id="mixLitres" value="1" min="0.1" step="0.1" style="width:100%; padding:6px; border:1px solid #ddd; border-radius:3px; font-size:12px; box-sizing:border-box; font-weight:900;" oninput="updateFormulaScaling()">
+                <label style="font-size:9px; font-weight:900; display:block; margin-bottom:6px;">Formula Size</label>
+                <div style="display:flex; gap:4px; margin-bottom:6px;">
+                    <button type="button" onclick="_selectFormulaSize(1)" id="sizeBtn1" style="flex:1; padding:8px 0; border:2px solid #2196f3; background:#2196f3; color:#fff; border-radius:6px; font-weight:900; font-size:13px; cursor:pointer;">1L</button>
+                    <button type="button" onclick="_selectFormulaSize(2)" id="sizeBtn2" style="flex:1; padding:8px 0; border:2px solid #ddd; background:#fff; color:#666; border-radius:6px; font-weight:900; font-size:13px; cursor:pointer;">2L</button>
+                    <button type="button" onclick="_selectFormulaSize(3)" id="sizeBtn3" style="flex:1; padding:8px 0; border:2px solid #ddd; background:#fff; color:#666; border-radius:6px; font-weight:900; font-size:13px; cursor:pointer;">3L</button>
+                    <button type="button" onclick="_selectFormulaSize(4)" id="sizeBtn4" style="flex:1; padding:8px 0; border:2px solid #ddd; background:#fff; color:#666; border-radius:6px; font-weight:900; font-size:13px; cursor:pointer;">4L</button>
+                </div>
+                <input type="hidden" id="mixLitres" value="1">
+                <div id="sizeConfirmStatus" style="font-size:9px; color:#999; text-align:center;"></div>
             </div>
             
             <div id="scaledFormula" style="background:#fafafa; padding:10px; border-radius:4px; margin-bottom:12px; font-size:10px; max-height:220px; overflow-y:auto; line-height:1.8;">
@@ -2462,7 +2469,8 @@ const firebaseConfig = {
                     </div>
                     <div style="display:flex; gap:6px; margin-bottom:4px; align-items:center;">
                         <input type="text" id="formulaSearch" placeholder="🔍 Search colour, code or tinter (e.g. ITE2003)" style="flex:1; padding:7px 10px; border:1px solid #2196f3; border-radius:6px; font-size:11px; box-sizing:border-box;" oninput="searchFormulas()">
-                        <button onclick="document.getElementById('formulaSearch').value=''; searchFormulas();" style="padding:6px 10px; border:none; background:#eee; border-radius:6px; font-size:11px; font-weight:900; cursor:pointer; color:#666;">✕</button>
+                        <button id="incompleteFilterBtn" onclick="toggleIncompleteFilter()" style="padding:6px 10px; border:2px solid #ff9500; background:#fff; border-radius:6px; font-size:10px; font-weight:900; cursor:pointer; color:#ff9500; white-space:nowrap;" title="Show formulas missing 2L or 3L">⚠️ Incomplete</button>
+                        <button onclick="document.getElementById('formulaSearch').value=''; window._incompleteFilterOn=false; document.getElementById('incompleteFilterBtn').style.background='#fff'; document.getElementById('incompleteFilterBtn').style.color='#ff9500'; searchFormulas();" style="padding:6px 10px; border:none; background:#eee; border-radius:6px; font-size:11px; font-weight:900; cursor:pointer; color:#666;">✕</button>
                     </div>
                     <div style="font-size:9px; color:#888; margin-bottom:6px;">Tip: search a tinter code like <strong>ITE2003</strong> to find which formulas have typos</div>
                     <div id="paintFormulaList" style="background:#fff; border:1px solid #ddd; border-radius:8px; overflow:hidden; max-height:400px; overflow-y:auto;"></div>
@@ -5581,6 +5589,38 @@ const firebaseConfig = {
         console.log('   Modal computed display:', window.getComputedStyle(modal).display);
     }
 
+    function _selectFormulaSize(size) {
+        document.getElementById('mixLitres').value = size;
+        [1,2,3,4].forEach(s => {
+            const btn = document.getElementById('sizeBtn' + s);
+            if (!btn) return;
+            if (s === size) {
+                btn.style.background = '#2196f3'; btn.style.borderColor = '#2196f3'; btn.style.color = '#fff';
+            } else {
+                btn.style.background = '#fff'; btn.style.borderColor = '#ddd'; btn.style.color = '#666';
+            }
+        });
+        updateFormulaScaling();
+        // Show status
+        const status = document.getElementById('sizeConfirmStatus');
+        if (status) {
+            const editing = window._editingFormulaId;
+            const f = editing ? paintDatabase.find(x => x.id === editing) : null;
+            const confirmed = new Set(f ? (f.confirmedSizes || []) : []);
+            status.textContent = confirmed.has(size) ? `✅ ${size}L already confirmed` : `⚠️ ${size}L not yet confirmed — fill in grams and Save`;
+            status.style.color = confirmed.has(size) ? '#34c759' : '#ff9500';
+        }
+    }
+
+    window._editingFormulaId = null; // track which formula is being edited
+
+    function saveCurrentFormulaSize() {
+        // Called when user saves a formula — marks the current size as confirmed
+        const litres = parseFloat(document.getElementById('mixLitres')?.value) || 1;
+        const size = [1,2,3,4].includes(litres) ? litres : null;
+        return size;
+    }
+
     function updateFormulaScaling() {
         const litres = parseFloat(document.getElementById('mixLitres').value) || 1;
 
@@ -5682,50 +5722,87 @@ const firebaseConfig = {
     }
 
     // ===== PAINT FORMULA DATABASE MANAGEMENT =====
+    function isFormulaComplete(f) {
+        const confirmed = f.confirmedSizes || [];
+        return [1,2,3,4].every(s => confirmed.includes(s));
+    }
+
+    function formulaSizeBadges(f) {
+        const confirmed = new Set(f.confirmedSizes || []);
+        // Default: if formula has colourants but no confirmedSizes, assume 1L and 4L are confirmed
+        // (existing formulas were entered as 1L base with 4L alt)
+        if (confirmed.size === 0 && (f.colourants || []).length > 0) {
+            confirmed.add(1);
+            if ((f.colourants || []).some(c => c.altCode)) confirmed.add(4);
+        }
+        return [1,2,3,4].map(s => {
+            const ok = confirmed.has(s);
+            return `<span style="font-size:9px; font-weight:900; padding:2px 5px; border-radius:3px; background:${ok ? '#34c759' : '#ff9500'}; color:#fff; margin-right:2px;">${s}L${ok ? ' ✓' : ' ·'}</span>`;
+        }).join('');
+    }
+
+    window._incompleteFilterOn = false;
+
+    function toggleIncompleteFilter() {
+        window._incompleteFilterOn = !window._incompleteFilterOn;
+        const btn = document.getElementById('incompleteFilterBtn');
+        if (btn) {
+            btn.style.background = window._incompleteFilterOn ? '#ff9500' : '#fff';
+            btn.style.color = window._incompleteFilterOn ? '#fff' : '#ff9500';
+        }
+        searchFormulas();
+    }
+
     function renderPaintFormulaList(formulasToDisplay = null) {
         const list = document.getElementById('paintFormulaList');
         const countSpan = document.getElementById('formulaCount');
         
         if (!list) return;
         
-        // Use provided array or default to paintDatabase
-        const displayFormulas = formulasToDisplay || paintDatabase;
+        let displayFormulas = formulasToDisplay || paintDatabase;
+
+        // Apply incomplete filter
+        if (window._incompleteFilterOn) {
+            displayFormulas = displayFormulas.filter(f => !isFormulaComplete(f));
+        }
         
         // Update the count
         if (countSpan) {
-            countSpan.innerText = displayFormulas.length;
+            countSpan.innerText = displayFormulas.length + (window._incompleteFilterOn ? ' (incomplete)' : '');
         }
         
         if (displayFormulas.length === 0) {
-            list.innerHTML = '<div style="padding:15px; text-align:center; color:#999; font-size:11px;">No formulas found.</div>';
+            list.innerHTML = window._incompleteFilterOn
+                ? '<div style="padding:15px; text-align:center; color:#34c759; font-size:11px; font-weight:900;">🎉 All formulas complete!</div>'
+                : '<div style="padding:15px; text-align:center; color:#999; font-size:11px;">No formulas found.</div>';
             return;
         }
         
         let html = '';
         for (let i = 0; i < displayFormulas.length; i++) {
             const f = displayFormulas[i];
-            // Find the actual index in paintDatabase for the edit/delete buttons
             const actualIndex = paintDatabase.findIndex(formula => formula.id === f.id);
             
             const baseTintCount = (f.baseTinters || []).length;
             const colCount = (f.colourants || []).length;
-            
-            // Build formula header: BRAND / COLOUR / FINISH
             const formulaHeader = `${f.brand || 'Brand'} / ${f.color} / ${f.finish || 'Satin'}`;
+            const complete = isFormulaComplete(f);
             
-            html += '<div style="padding:12px; border-bottom:1px solid #eee;">';
-            html += '<div style="font-weight:900; font-size:11px; margin-bottom:2px; color:#666;">     ' + formulaHeader + '</div>';
-            html += '<div style="font-size:10px; color:#2196f3; margin-bottom:6px; font-weight:bold;">-' + (f.product || 'Product') + '</div>';
-            html += '<div style="font-size:10px; color:#666; margin-bottom:6px;">Code: ' + (f.code || '---') + '</div>';
-            // Embed tinter codes for search - hidden but searchable
+            html += `<div style="padding:12px; border-bottom:1px solid #eee; ${!complete ? 'border-left:3px solid #ff9500;' : ''}">`;
+            html += `<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:4px;">`;
+            html += `<div style="font-weight:900; font-size:11px; color:#666;">     ${formulaHeader}</div>`;
+            html += `<div style="flex-shrink:0; margin-left:6px;">${formulaSizeBadges(f)}</div>`;
+            html += `</div>`;
+            html += `<div style="font-size:10px; color:#2196f3; margin-bottom:6px; font-weight:bold;">-${f.product || 'Product'}</div>`;
+            html += `<div style="font-size:10px; color:#666; margin-bottom:6px;">Code: ${f.code || '---'}</div>`;
             const _tinterCodesStr = (f.colourants || []).map(c => c.code || '').filter(Boolean).join(' ');
             const _baseCodesStr = (f.baseTinters || f.whiteBase || []).map(c => c.code || '').filter(Boolean).join(' ');
-            html += '<div style="font-size:9px; color:#999; margin-bottom:8px;">' + baseTintCount + ' base codes · ' + colCount + ' colourants</div>';
-            html += '<div data-tinter-codes="' + _tinterCodesStr + '" style="font-size:9px; color:#bbb; margin-bottom:6px; font-family:monospace;">' + [_baseCodesStr, _tinterCodesStr].filter(Boolean).join(' · ') + '</div>';
-            html += '<div style="display:flex; gap:6px;">';
-            html += '<button onclick="editPaintFormula(' + actualIndex + ')" style="padding:4px 10px; background:#2196f3; color:#fff; border:none; border-radius:3px; font-size:9px; font-weight:900; cursor:pointer;">Edit</button>';
-            html += '<button onclick="deletePaintFormula(' + actualIndex + ')" style="padding:4px 10px; background:#ff3b30; color:#fff; border:none; border-radius:3px; font-size:9px; font-weight:900; cursor:pointer;">Delete</button>';
-            html += '</div></div>';
+            html += `<div style="font-size:9px; color:#999; margin-bottom:8px;">${baseTintCount} base codes · ${colCount} colourants</div>`;
+            html += `<div data-tinter-codes="${_tinterCodesStr}" style="font-size:9px; color:#bbb; margin-bottom:6px; font-family:monospace;">${[_baseCodesStr, _tinterCodesStr].filter(Boolean).join(' · ')}</div>`;
+            html += `<div style="display:flex; gap:6px;">`;
+            html += `<button onclick="editPaintFormula(${actualIndex})" style="padding:4px 10px; background:#2196f3; color:#fff; border:none; border-radius:3px; font-size:9px; font-weight:900; cursor:pointer;">Edit</button>`;
+            html += `<button onclick="deletePaintFormula(${actualIndex})" style="padding:4px 10px; background:#ff3b30; color:#fff; border:none; border-radius:3px; font-size:9px; font-weight:900; cursor:pointer;">Delete</button>`;
+            html += `</div></div>`;
         }
         
         list.innerHTML = html;
@@ -6073,6 +6150,7 @@ const firebaseConfig = {
         console.log('  Grand total:', totalWeight.toFixed(2) + 'g');
         
         // Create new formula with structured format INCLUDING BRAND & FINISH
+        const _savedSize = saveCurrentFormulaSize(); // which size button was selected (1/2/3/4 or null)
         const newFormula = {
             id: 'formula-' + Date.now(),
             brand: brand,  // Use selected brand
@@ -6085,11 +6163,12 @@ const firebaseConfig = {
             baseColor: baseColor || 'White',  // NEW: Base paint color
             version: version || '',  // Version from user input
             finishes: [finish],  // Store finish in array
-            baseSize: 1,
+            baseSize: _savedSize || 1,
             baseTinters: baseCodes,
             whiteBase: baseCodes,  // WHITE BASE as array (now can have 1-3 items)
             colourants: colourants,
             totalWeight: totalWeight > 0 ? totalWeight : null,  // Auto-calculated
+            confirmedSizes: _savedSize ? [_savedSize] : [1], // mark this size as confirmed
             notes: `${colourants.length} tinters`
         };
         
@@ -6446,8 +6525,14 @@ const firebaseConfig = {
         }
         
         // Close dialog
+        // Update confirmedSizes — mark the current size as confirmed
+        const _editSize = saveCurrentFormulaSize();
+        if (_editSize) {
+            const _confirmed = new Set(f.confirmedSizes || []);
+            _confirmed.add(_editSize);
+            f.confirmedSizes = Array.from(_confirmed).sort((a,b) => a-b);
+        }
         closeFormulaDialog();
-        
         savePaintFormulas();
         renderPaintFormulaList();
         notify(` Formula updated: ${f.color}`);
@@ -9662,7 +9747,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.48';
+        const _ver = window.CURRENT_VERSION || 'v1.16.49';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
