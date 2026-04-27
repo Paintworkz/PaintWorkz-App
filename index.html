@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.53'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.54'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -5752,85 +5752,154 @@ const firebaseConfig = {
     function printFormulaFromDB(idx) {
         const f = paintDatabase[idx];
         if (!f) return;
+        // Show size picker modal first
+        const existing = document.getElementById('printSizeModal');
+        if (existing) existing.remove();
+        const confirmed = new Set(f.confirmedSizes || [1]);
+        const modal = document.createElement('div');
+        modal.id = 'printSizeModal';
+        modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;';
+        modal.innerHTML = `
+        <div style="background:#fff;border-radius:12px;padding:20px;width:100%;max-width:360px;box-shadow:0 8px 40px rgba(0,0,0,0.4);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                <div><div style="font-weight:900;font-size:14px;">🖨️ Print Formula</div><div style="font-size:11px;color:#666;">${f.color} — ${f.brand} ${f.finish}</div></div>
+                <button onclick="document.getElementById('printSizeModal').remove()" style="background:#eee;border:none;padding:6px 12px;border-radius:6px;font-weight:900;cursor:pointer;">✕</button>
+            </div>
+            <div style="font-size:10px;font-weight:900;color:#555;margin-bottom:10px;">SELECT SIZE TO PRINT:</div>
+            <div style="display:flex;gap:8px;margin-bottom:20px;">
+                ${[1,2,3,4].map(s => `
+                <button onclick="_doPrintFormula(${idx},${s})" style="flex:1;padding:14px 0;border:2px solid ${confirmed.has(s)?'#34c759':'#ddd'};
+                    background:${confirmed.has(s)?'#e8f5e9':'#fafafa'};color:${confirmed.has(s)?'#2e7d32':'#999'};
+                    border-radius:8px;font-weight:900;font-size:15px;cursor:pointer;">
+                    ${s}L${confirmed.has(s)?'<br><span style=\'font-size:9px;\'>✅</span>':'<br><span style=\'font-size:9px;\'>·</span>'}
+                </button>`).join('')}
+            </div>
+            <div style="font-size:9px;color:#999;text-align:center;">Green = confirmed formula · Grey = estimated from 1L</div>
+        </div>`;
+        document.body.appendChild(modal);
+    }
+
+    function _doPrintFormula(idx, size) {
+        document.getElementById('printSizeModal')?.remove();
+        const f = paintDatabase[idx];
+        if (!f) return;
         if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) { notify('PDF library not loaded'); return; }
         const { jsPDF } = window.jspdf;
-        const size = parseFloat(document.getElementById('mixLitres')?.value) || 1;
-        const sizeData = f.sizes && f.sizes[size];
-        const base1L = { baseTinters: f.baseTinters || f.whiteBase || [], colourants: f.colourants || [] };
+
+        // Get size data or scale from 1L
+        const sizes = f.sizes || {};
+        const data1L = sizes[1] || { baseTinters: f.baseTinters || f.whiteBase || [], colourants: f.colourants || [] };
+        const sizeData = sizes[size];
         const scale = size;
-        const baseCodes = sizeData ? sizeData.baseTinters : base1L.baseTinters.map(b => ({ ...b, grams: +(b.grams * scale).toFixed(2) }));
-        const tinters = sizeData ? sizeData.colourants : base1L.colourants.map(c => ({ ...c, amount: +(c.amount * scale).toFixed(2) }));
+        const whiteBase = sizeData ? sizeData.baseTinters : data1L.baseTinters.map(b => ({...b, grams: +((parseFloat(b.grams)||0)*scale).toFixed(2)}));
+        const colourants = sizeData ? sizeData.colourants : data1L.colourants.map(c => ({...c, amount: +((parseFloat(c.amount||c.grams)||0)*scale).toFixed(2)}));
+
+        const headerLogo = window.currentHeaderLogo || localStorage.getItem('headerLogo') || '';
+        const supplierCfg = getSupplierConfig ? getSupplierConfig() : {};
+        const supplierCodeLabel = supplierCfg.codeLabel || 'Evic Code';
+        const supplierSectionHdr = supplierCfg.sectionHeader || 'TINT FORMULA     EVIC DETAILS';
+        const _CR = JSON.parse(localStorage.getItem('pwCoverageRates') || '{}');
+        const _fin = (f.finish || '').toLowerCase();
+        const _coverageRate = _fin==='matt'?(parseFloat(_CR.matt)||5):_fin==='gloss'?(parseFloat(_CR.gloss)||5):(parseFloat(_CR.satin)||5);
 
         const doc = new jsPDF('p', 'mm', 'a4');
-        const headerLogo = window.currentHeaderLogo || localStorage.getItem('headerLogo') || '';
-        const company = JSON.parse(localStorage.getItem('companySettings') || '{}');
-        const companyName = company.name || 'PaintWorkz';
-        const W = 210, margin = 15;
-        let y = margin;
+        const pageHeight = doc.internal.pageSize.getHeight();
+        let y = 15;
 
-        // Header
-        if (headerLogo) { try { doc.addImage(headerLogo, 'PNG', margin, y, 40, 14); } catch(e) {} }
-        doc.setFont('helvetica','bold'); doc.setFontSize(16);
-        doc.text('MIXING CARD', W - margin, y + 8, { align: 'right' });
-        doc.setFont('helvetica','normal'); doc.setFontSize(9);
-        doc.text(companyName, W - margin, y + 13, { align: 'right' });
-        doc.text(new Date().toLocaleDateString('en-AU'), W - margin, y + 17, { align: 'right' });
-        y += 24;
+        // Logo
+        if (headerLogo) { try { doc.addImage(headerLogo, 'PNG', 145, 5, 50, 20); } catch(e) {} }
 
-        // Colour details box
-        doc.setFillColor(30,30,30); doc.roundedRect(margin, y, W - margin*2, 28, 2, 2, 'F');
-        doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(18);
-        doc.text((f.color || '').toUpperCase(), margin + 6, y + 10);
-        doc.setFontSize(10);
-        doc.text(`${f.brand || ''} · ${f.finish || 'Satin'} · ${size}L`, margin + 6, y + 18);
-        doc.text(`Code: ${f.code || f.evicCode || '—'}`, margin + 6, y + 24);
+        // Title — same as genMixingCard
+        doc.setFontSize(28); doc.setFont(undefined,'bold');
+        const hdrColor = _pdfHeaderColor ? _pdfHeaderColor('Mixing Card PDF Header') : [0,0,0];
+        doc.setTextColor(...hdrColor);
+        doc.text('MIXING CARD', 20, y);
         doc.setTextColor(0,0,0);
-        y += 34;
+        y += 12;
 
-        // Base codes section
-        if (baseCodes.length > 0) {
-            doc.setFont('helvetica','bold'); doc.setFontSize(10);
-            doc.setFillColor(240,240,240); doc.rect(margin, y, W - margin*2, 7, 'F');
-            doc.text('BASE CODES', margin + 3, y + 5);
-            y += 10;
-            doc.setFont('helvetica','normal'); doc.setFontSize(9);
-            baseCodes.forEach(b => {
-                doc.text(b.code || '', margin + 3, y);
-                doc.text((b.grams || 0) + 'g', W - margin - 3, y, { align: 'right' });
-                y += 6;
+        // Paint info box
+        doc.setFontSize(18); doc.setFont(undefined,'bold'); doc.setTextColor(0,0,0);
+        doc.setFillColor(255,255,255); doc.setDrawColor(200,200,200); doc.setLineWidth(1);
+        doc.rect(20, y, 170, 24, 'FD');
+        const paintInfo = `${f.brand || ''} | ${(f.color||'').toUpperCase()} | ${f.finish||'Satin'} | ${size}L`;
+        doc.text(paintInfo, 25, y+16);
+        y += 32;
+
+        // Formula details (no job fields — formula card)
+        doc.setFontSize(11); doc.setFont(undefined,'bold');
+        doc.text('Formula Size', 20, y); doc.text('Coverage Rate', 110, y);
+        y += 6;
+        doc.setFont(undefined,'normal'); doc.setFontSize(13);
+        doc.setTextColor(200,30,30);
+        doc.text(size + 'L', 20, y);
+        doc.text(_coverageRate + ' m²/L', 110, y);
+        doc.setTextColor(0,0,0);
+        y += 14;
+
+        // Divider
+        doc.setDrawColor(170,132,30); doc.setLineWidth(1.5); doc.line(20,y,190,y); y += 8;
+
+        // Tint formula header
+        doc.setFontSize(13); doc.setFont(undefined,'bold');
+        doc.text(supplierSectionHdr, 20, y); y += 5;
+        doc.setFontSize(10); doc.setFont(undefined,'normal'); doc.setTextColor(200,30,30);
+        doc.text(`(Weights for ${size} Litre of Paint)`, 20, y);
+        doc.setTextColor(0,0,0); y += 8;
+
+        // Formula box
+        const boxHeight = pageHeight - y - 30;
+        doc.setDrawColor(0,0,0); doc.setLineWidth(0.5); doc.rect(20, y, 170, boxHeight);
+        let boxY = y + 10;
+
+        // Evic code / base type
+        doc.setFontSize(12); doc.setFont(undefined,'bold');
+        doc.text(`${supplierCodeLabel}: ${f.evicCode || f.code || '_____'}`, 25, boxY); boxY += 7;
+        doc.text(`Base Type: ${f.baseType || '______'}`, 25, boxY); boxY += 7;
+        doc.text(`Base Color: ${f.baseColor || 'White'}`, 25, boxY); boxY += 7;
+        if (f.version) { doc.text(`Version: ${f.version}`, 25, boxY); boxY += 7; }
+        boxY += 5;
+
+        // Base codes
+        doc.setFontSize(12); doc.setFont(undefined,'bold');
+        doc.text('Base:', 25, boxY); doc.text('RUNNING TOTAL', 140, boxY); boxY += 7;
+        doc.setFontSize(11); doc.setFont(undefined,'normal');
+        let runningTotal = 0;
+        if (whiteBase && whiteBase.length > 0) {
+            whiteBase.forEach(item => {
+                const grams = parseFloat(item.grams) || 0;
+                runningTotal += grams;
+                doc.text(`${item.code}: ${grams.toFixed(2)}g`, 30, boxY);
+                doc.text(`${runningTotal.toFixed(2)}g`, 140, boxY);
+                boxY += 5;
             });
-            y += 4;
+        } else {
+            for (let i=0;i<3;i++) { doc.text(`Item ${i+1}: _____________ g`, 30, boxY); doc.text('_________ g', 140, boxY); boxY+=5; }
         }
 
-        // Tinters section
-        if (tinters.length > 0) {
-            doc.setFont('helvetica','bold'); doc.setFontSize(10);
-            doc.setFillColor(33,150,243); doc.setTextColor(255,255,255);
-            doc.rect(margin, y, W - margin*2, 7, 'F');
-            doc.text('TINT FORMULA', margin + 3, y + 5);
-            doc.setTextColor(0,0,0); doc.setFont('helvetica','normal'); doc.setFontSize(9);
-            y += 10;
-            let totalG = 0;
-            tinters.forEach(t => {
-                doc.text(t.code || '', margin + 3, y);
-                const g = parseFloat(t.amount) || 0;
-                doc.text(g.toFixed(2) + 'g', W - margin - 3, y, { align: 'right' });
-                totalG += g;
-                y += 6;
+        boxY += 5;
+        doc.setFontSize(11); doc.setFont(undefined,'bold'); doc.text('Tinters / Colourants:', 25, boxY); doc.text('RUNNING TOTAL', 140, boxY); boxY += 7;
+        doc.setFont(undefined,'normal');
+        if (colourants && colourants.length > 0) {
+            colourants.forEach(c => {
+                const g = parseFloat(c.amount || c.grams) || 0;
+                runningTotal += g;
+                doc.text(`${c.code}: ${g.toFixed(2)}g`, 30, boxY);
+                doc.text(`${runningTotal.toFixed(2)}g`, 140, boxY);
+                boxY += 5;
             });
-            y += 2;
-            doc.setFont('helvetica','bold');
-            doc.text('TOTAL', margin + 3, y);
-            doc.text(totalG.toFixed(2) + 'g', W - margin - 3, y, { align: 'right' });
         }
 
-        const filename = `Formula_${(f.color || 'formula').replace(/\s+/g,'_')}_${size}L.pdf`;
+        // Footer
+        doc.setFontSize(10); doc.setFont(undefined,'normal'); doc.setTextColor(80,80,80);
+        doc.text(`Generated: ${new Date().toLocaleString('en-AU')}`, 15, pageHeight-10);
+        doc.setFontSize(6.5); doc.setFont('helvetica','normal'); doc.setTextColor(170,170,170);
+        doc.text('Created by paintworkzpro.com.au', doc.internal.pageSize.getWidth()-10, pageHeight-4, {align:'right'});
+
+        const filename = `Formula_${(f.color||'formula').replace(/\s+/g,'_')}_${size}L.pdf`;
         const pdfUri = doc.output('datauristring');
         if (typeof showPDFPreview === 'function') {
             showPDFPreview(pdfUri, filename, `🖨️ ${f.color} ${size}L Formula`);
-        } else {
-            doc.save(filename);
-        }
+        } else { doc.save(filename); }
     }
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -6047,7 +6116,7 @@ const firebaseConfig = {
             html += `<div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">`;
             html += `<button onclick="editPaintFormula(${actualIndex})" style="padding:5px 12px; background:#2196f3; color:#fff; border:none; border-radius:4px; font-size:10px; font-weight:900; cursor:pointer;">✏️ Edit</button>`;
             html += `<button onclick="openAddSizeModal(${actualIndex})" style="padding:5px 12px; background:#ff9500; color:#fff; border:none; border-radius:4px; font-size:10px; font-weight:900; cursor:pointer;">+ Sizes</button>`;
-            html += `<button onclick="printFormulaFromDB(${actualIndex})" style="padding:5px 12px; background:#9c27b0; color:#fff; border:none; border-radius:4px; font-size:10px; font-weight:900; cursor:pointer;">🖨️</button>`;
+            html += `<button onclick="printFormulaFromDB(${actualIndex})" style="padding:5px 16px; background:#9c27b0; color:#fff; border:none; border-radius:4px; font-size:10px; font-weight:900; cursor:pointer;">🖨️ Print</button>`;
             html += `<button onclick="deletePaintFormula(${actualIndex})" style="padding:5px 12px; background:#ff3b30; color:#fff; border:none; border-radius:4px; font-size:10px; font-weight:900; cursor:pointer;">🗑️</button>`;
             html += `</div></div>`;
         }
@@ -10007,7 +10076,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.53';
+        const _ver = window.CURRENT_VERSION || 'v1.16.54';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
