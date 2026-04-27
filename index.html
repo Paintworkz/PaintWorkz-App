@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.55'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.56'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -10076,7 +10076,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.55';
+        const _ver = window.CURRENT_VERSION || 'v1.16.56';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
@@ -14505,11 +14505,52 @@ const firebaseConfig = {
                 doc.text(supplierSectionHdr, 20, y);
                 y += 5;
                 
-                // Add subtitle showing this is for 1 litre
+                // Add subtitle showing formula size being used
                 doc.setFontSize(10);
                 doc.setFont(undefined, 'normal');
                 doc.setTextColor(200, 30, 30);
-                doc.text('(Weights for 1 Litre of Paint)', 20, y);
+
+                // ── SMART SIZE SELECTION ──────────────────────────────────────
+                // Pick the confirmed formula size closest to the actual litres needed
+                let _formulaSize = 1;
+                let _formulaWhiteBase = formula ? (formula.whiteBase || formula.baseTinters || []) : [];
+                let _formulaColourants = formula ? (formula.colourants || []) : [];
+                let _sizeNote = '';
+
+                if (formula && formula.sizes) {
+                    // Calculate litres needed for this colour
+                    const _CR2 = JSON.parse(localStorage.getItem('pwCoverageRates') || '{}');
+                    const _finLower = (paintFinish || '').toLowerCase();
+                    const _covRate = _finLower==='matt'?(parseFloat(_CR2.matt)||5):_finLower==='gloss'?(parseFloat(_CR2.gloss)||5):(parseFloat(_CR2.satin)||5);
+                    const _litresNeeded = colorSQM / _covRate;
+
+                    // Determine target size bracket
+                    let _targetSize;
+                    if (_litresNeeded < 1.5) _targetSize = 1;
+                    else if (_litresNeeded < 2.5) _targetSize = 2;
+                    else if (_litresNeeded < 3.5) _targetSize = 3;
+                    else _targetSize = 4;
+
+                    // Find best confirmed size — prefer exact match, then nearest confirmed
+                    const confirmed = new Set(formula.confirmedSizes || [1]);
+                    if (confirmed.has(_targetSize)) {
+                        _formulaSize = _targetSize;
+                    } else {
+                        // Find nearest confirmed size
+                        const confirmedArr = Array.from(confirmed).sort((a,b) => Math.abs(a-_targetSize)-Math.abs(b-_targetSize));
+                        _formulaSize = confirmedArr[0] || 1;
+                        _sizeNote = ` (${_targetSize}L needed — ${_formulaSize}L formula used, ${_formulaSize !== _targetSize ? 'confirm '+_targetSize+'L for accuracy' : ''})`;
+                    }
+
+                    const sizeData = formula.sizes[_formulaSize];
+                    if (sizeData) {
+                        _formulaWhiteBase = sizeData.baseTinters || [];
+                        _formulaColourants = sizeData.colourants || [];
+                    }
+                }
+
+                doc.text(`(Weights for ${_formulaSize} Litre of Paint${_sizeNote})`, 20, y);
+                // ─────────────────────────────────────────────────────────────
                 doc.setTextColor(0, 0, 0);
                 y += 8;
                 
@@ -14566,9 +14607,9 @@ const firebaseConfig = {
                     let runningTotal = 0;
                     const baseItemsToShow = 3;  // Always show 3 base item rows
                     
-                    if (formula.whiteBase && formula.whiteBase.length > 0) {
-                        formula.whiteBase.forEach((item, idx) => {
-                            // Page 1 always shows 1L original formula - no alt logic
+                    if (_formulaWhiteBase && _formulaWhiteBase.length > 0) {
+                        _formulaWhiteBase.forEach((item, idx) => {
+                            // Use the selected formula size's base codes
                             const code = item.code || '';
                             let gramStr = String(item.grams || 0).trim();
                             let grams = 0;
@@ -14595,9 +14636,9 @@ const firebaseConfig = {
                             boxY += 5;
                         });
                         // Fill remaining rows with blanks
-                        for (let i = formula.whiteBase.length; i < baseItemsToShow; i++) {
+                        for (let i = _formulaWhiteBase.length; i < baseItemsToShow; i++) {
                             doc.text(`Item ${i + 1}: _____________ g`, 30, boxY);
-                            doc.text('_________ g', 140, boxY);  // MOVED LEFT
+                            doc.text('_________ g', 140, boxY);
                             boxY += 5;
                         }
                     } else {
@@ -14625,9 +14666,9 @@ const firebaseConfig = {
                     let tinterRunningTotal = 0;
                     let actualTinterCount = 0;
                     
-                    if (formula.colourants && formula.colourants.length > 0) {
-                        // Page 1: always show original 1L formula - no alt logic
-                        formula.colourants.forEach((tint, idx) => {
+                    if (_formulaColourants && _formulaColourants.length > 0) {
+                        // Use the selected formula size's tinters
+                        _formulaColourants.forEach((tint, idx) => {
                             const code = tint.code || '';
                             
                             let gramStr = String(tint.amount || tint.grams || 0).trim();
