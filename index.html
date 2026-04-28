@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.60'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.61'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -10165,7 +10165,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.60';
+        const _ver = window.CURRENT_VERSION || 'v1.16.61';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
@@ -25729,6 +25729,22 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                         // Debounce UI renders — max once per 2s to prevent lag with multiple users
                         if (window._snapRenderTimer) clearTimeout(window._snapRenderTimer);
                         window._snapRenderTimer = setTimeout(() => {
+                            // Don't render if user is actively interacting with a form element
+                            // This prevents dropdowns/inputs being disrupted mid-interaction
+                            const active = document.activeElement;
+                            const measureInputIds = ['p-finish','p-brand','prof-select','p-color','p-code','jN','jNm','dRec','desc','cli'];
+                            if (active && (active.tagName === 'SELECT' || active.tagName === 'INPUT') && 
+                                measureInputIds.some(id => active.id === id)) {
+                                // User is in a form field — delay render another 3s
+                                window._snapRenderTimer = setTimeout(() => {
+                                    try { if (typeof renderHistory === 'function') renderHistory(); } catch(e) {}
+                                    if (hasChanges) {
+                                        try { if (typeof renderScheduleCalendar === 'function') renderScheduleCalendar(); } catch(e) {}
+                                        try { if (typeof renderAdminGanttChart === 'function') renderAdminGanttChart(); } catch(e) {}
+                                    }
+                                }, 3000);
+                                return;
+                            }
                             try { if (typeof renderHistory === 'function') renderHistory(); } catch(e) {}
                             if (hasChanges) {
                                 try { if (typeof renderScheduleCalendar === 'function') renderScheduleCalendar(); } catch(e) {}
