@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.56'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.57'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -5689,6 +5689,69 @@ const firebaseConfig = {
         notify('\u2705 ' + f.color + ' ' + size + 'L confirmed and saved');
     }
 
+        function switchEditSize(idx, size) {
+        // Update the hidden tracking variable
+        window._editCurrentSize = size;
+        const f = paintDatabase[idx];
+        if (!f) return;
+        const confirmed = new Set(f.confirmedSizes || [1]);
+
+        // Update size buttons
+        [1,2,3,4].forEach(s => {
+            const btn = document.getElementById('editSizeBtn' + s);
+            if (!btn) return;
+            const isConf = confirmed.has(s);
+            if (s === size) {
+                btn.style.background = '#2196f3'; btn.style.borderColor = '#2196f3'; btn.style.color = '#fff';
+            } else {
+                btn.style.background = isConf ? '#e8f5e9' : '#fff';
+                btn.style.borderColor = isConf ? '#34c759' : '#ddd';
+                btn.style.color = isConf ? '#2e7d32' : '#666';
+            }
+        });
+
+        // Update hint
+        const hint = document.getElementById('editSizeHint');
+        if (hint) {
+            if (confirmed.has(size)) {
+                hint.textContent = '✅ ' + size + 'L confirmed — you can edit grams and re-save';
+                hint.style.color = '#34c759';
+            } else {
+                hint.textContent = '⚠️ Showing estimated ' + size + 'L (×' + size + ' from 1L) — adjust grams then Save';
+                hint.style.color = '#ff9500';
+            }
+        }
+
+        // Update save button label
+        const saveBtn = document.querySelector('#paintFormulaEditDialog button[onclick*="saveFormulaEdit"]');
+        if (saveBtn) saveBtn.textContent = 'Save ✓ Confirm ' + size + 'L';
+
+        // Load size-specific or scaled grams into the rows
+        const sizes = f.sizes || {};
+        const data1L = sizes[1] || { baseTinters: f.baseTinters || f.whiteBase || [], colourants: f.colourants || [] };
+        const sizeData = sizes[size];
+        const scale = size;
+
+        const baseCodes = sizeData ? sizeData.baseTinters
+            : data1L.baseTinters.map(b => ({...b, grams: +((parseFloat(b.grams)||0)*scale).toFixed(2)}));
+        const tinters = sizeData ? sizeData.colourants
+            : data1L.colourants.map(c => ({...c, amount: +((parseFloat(c.amount||c.grams)||0)*scale).toFixed(2)}));
+
+        // Reload base rows
+        const baseContainer = document.getElementById('editBaseRows');
+        if (baseContainer) {
+            baseContainer.innerHTML = '';
+            baseCodes.forEach(b => addEditBaseRow(b.code, b.grams, b.altCode, b.altThreshold, b.altGrams));
+        }
+
+        // Reload tinter rows
+        const tinterContainer = document.getElementById('editTintersRows');
+        if (tinterContainer) {
+            tinterContainer.innerHTML = '';
+            tinters.forEach(t => addEditTinterRow(t.code, t.amount||t.grams, t.altCode, t.altThreshold, t.altGrams));
+        }
+    }
+
         function _editSelectSize(size, idx) {
         const f = paintDatabase[idx];
         if (!f) return;
@@ -6107,7 +6170,8 @@ const firebaseConfig = {
             html += `<div style="font-weight:900; font-size:11px; color:#666;">     ${formulaHeader}</div>`;
             html += `<div style="flex-shrink:0; margin-left:6px;">${formulaSizeBadges(f)}</div>`;
             html += `</div>`;
-            html += `<div style="font-size:10px; color:#2196f3; margin-bottom:6px; font-weight:bold;">-${f.product || 'Product'}</div>`;
+            html += `<div style="font-size:10px; color:#2196f3; margin-bottom:2px; font-weight:bold;">-${f.product || 'Product'}</div>`;
+            if (f.version) html += `<div style="font-size:9px; color:#9c27b0; margin-bottom:4px; font-weight:700;">Version: ${f.version}</div>`;
             html += `<div style="font-size:10px; color:#666; margin-bottom:6px;">Code: ${f.code || '---'}</div>`;
             const _tinterCodesStr = (f.colourants || []).map(c => c.code || '').filter(Boolean).join(' ');
             const _baseCodesStr = (f.baseTinters || f.whiteBase || []).map(c => c.code || '').filter(Boolean).join(' ');
@@ -6537,6 +6601,7 @@ const firebaseConfig = {
         
         // Store which formula is being edited (for confirmedSizes tracking)
         window._editingFormulaId = f.id;
+        window._editCurrentSize = 1; // default to 1L
 
         // Build HTML for edit dialog
         let html = `
@@ -6641,9 +6706,9 @@ const firebaseConfig = {
             return `<span id="editSizeBadge${s}" style="font-size:10px;font-weight:900;padding:3px 8px;border-radius:4px;background:${ok?'#34c759':'#ff9500'};color:#fff;">${s}L${ok?' ✓':' ·'}</span>`;
         }).join('');
         dialog.innerHTML = `
-            <div style="background:white; padding:20px; border-radius:8px; width:90%; max-width:600px; max-height:90vh; overflow-y:auto;">
+            <div style="background:var(--modal-bg,#fff); color:var(--modal-text,#222); padding:20px; border-radius:12px; width:90%; max-width:600px; max-height:90vh; overflow-y:auto; box-shadow:0 8px 32px rgba(0,0,0,0.4);">
                 <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
-                    <h3 style="margin:0; color:#333;">Edit Formula: ${f.color}</h3>
+                    <h3 style="margin:0; color:var(--modal-text,#222); font-size:15px;">Edit Formula: ${f.color}</h3>
                     <button onclick="printFormula(${idx})" style="padding:6px 12px; background:#2196f3; color:#fff; border:none; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer; white-space:nowrap;">🖨️ Print</button>
                 </div>
                 <!-- Size selector -->
@@ -6861,10 +6926,26 @@ const firebaseConfig = {
         }
         
         // Close dialog
+        // Save size-specific data
+        const _savedSize = window._editCurrentSize || 1;
+        if (!f.sizes) f.sizes = {};
+        f.sizes[_savedSize] = {
+            baseTinters: JSON.parse(JSON.stringify(f.whiteBase || f.baseTinters || [])),
+            colourants: JSON.parse(JSON.stringify(f.colourants || []))
+        };
+        if (_savedSize !== 1 && !f.sizes[1]) {
+            f.sizes[1] = {
+                baseTinters: (f.whiteBase || f.baseTinters || []).map(b => ({...b, grams: +((parseFloat(b.grams)||0)/_savedSize).toFixed(2)})),
+                colourants: (f.colourants || []).map(c => ({...c, amount: +((parseFloat(c.amount||c.grams)||0)/_savedSize).toFixed(2)}))
+            };
+        }
+        const _conf = new Set(f.confirmedSizes || [1]);
+        _conf.add(_savedSize);
+        f.confirmedSizes = Array.from(_conf).sort((a,b) => a-b);
         closeFormulaDialog();
         savePaintFormulas();
         renderPaintFormulaList();
-        notify(` Formula updated: ${f.color}`);
+        notify(` Formula updated: ${f.color} (${_savedSize}L confirmed)`);
     }
 
     function deletePaintFormula(idx) {
@@ -10076,7 +10157,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.56';
+        const _ver = window.CURRENT_VERSION || 'v1.16.57';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
