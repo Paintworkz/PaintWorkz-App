@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.64'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.65'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1685,6 +1685,11 @@ const firebaseConfig = {
                     window.currentHeaderLogo = null;
                     window._userHasRealData = false;
                     try { sessionStorage.removeItem('pw_demo_seeded_' + user.uid); } catch(e) {}
+                    // Reset in-memory profiles to defaults immediately
+                    try { profiles = ['Plain (101)','Shaker (401)','Shaker 45 (402)','Bevelled Edge (104)','Custom']; } catch(e) {}
+                    try { masterMatrix = {}; } catch(e) {}
+                    try { paintDatabase = []; } catch(e) {}
+                    try { if (typeof refreshLists === 'function') setTimeout(refreshLists, 500); } catch(e) {}
                 }
 
                 // Store last UID
@@ -10190,7 +10195,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.64';
+        const _ver = window.CURRENT_VERSION || 'v1.16.65';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
@@ -11808,6 +11813,34 @@ const firebaseConfig = {
         _touchDragSrcIdx = null;
     }
     // ──────────────────────────────────────────────────────────────────────────
+
+
+    // Force-reset a free/demo account's data in Firestore so they get clean demo data
+    async function resetDemoAccountData() {
+        if (!window.currentUser || !window.firebaseDb) return;
+        if (isOwner()) { notify('Cannot reset owner account'); return; }
+        if (!confirm('Reset this account to demo data? Your saved data will be cleared.')) return;
+        const uid = window.currentUser.uid;
+        // Clear Firestore config docs
+        const docsToDelete = ['doorProfiles','stockLevels','stockSettings','tinterNames','stockDeducted','notifArchive','adminAlerts'];
+        for (const docId of docsToDelete) {
+            try {
+                await window.deleteDoc(window.doc(window.firebaseDb,'users',uid,'config',docId)).catch(()=>{});
+                await window.deleteDoc(window.doc(window.firebaseDb,'users',uid,'appData',docId)).catch(()=>{});
+            } catch(e) {}
+        }
+        // Clear localStorage
+        const keepKeys = ['paintworkz_version','app_theme'];
+        for (let i = localStorage.length-1; i>=0; i--) {
+            const k = localStorage.key(i);
+            if (k && !keepKeys.includes(k)) localStorage.removeItem(k);
+        }
+        sessionStorage.removeItem('pw_demo_seeded_' + uid);
+        window._userHasRealData = false;
+        notify('✅ Account reset — reloading...');
+        setTimeout(() => window.location.reload(), 1000);
+    }
+    window.resetDemoAccountData = resetDemoAccountData;
 
     function _checkDuplicateJobNum(val) {
         if (!val) return;
