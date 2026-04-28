@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.67'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.68'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -10211,7 +10211,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.67';
+        const _ver = window.CURRENT_VERSION || 'v1.16.68';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
@@ -11844,8 +11844,8 @@ const firebaseConfig = {
             await window.setDoc(window.doc(window.firebaseDb,'users',uid,'config','doorProfiles'),
                 { doorProfiles: demoProfiles, masterMatrix: {}, lastModified: new Date().toISOString() }, { merge: false });
         } catch(e) { console.warn('doorProfiles reset:', e.message); }
-        // Wipe appData docs
-        for (const docId of ['stockLevels','stockSettings2','tinterNames','stockDeducted','notifArchive','adminAlerts']) {
+        // Wipe appData docs including paint formulas
+        for (const docId of ['stockLevels','stockSettings2','tinterNames','stockDeducted','notifArchive','adminAlerts','paintFormulas']) {
             try { await window.deleteDoc(window.doc(window.firebaseDb,'users',uid,'appData',docId)).catch(()=>{}); } catch(e) {}
         }
         // Wipe jobs collection
@@ -11857,8 +11857,13 @@ const firebaseConfig = {
         } catch(e) {}
         // Clear ALL localStorage
         localStorage.clear();
-        sessionStorage.removeItem('pw_demo_seeded_' + uid);
-        sessionStorage.removeItem('pw_explicit_login');
+        // Clear ALL session flags
+        for (const key of Object.keys(sessionStorage)) {
+            if (key.includes('demo_seeded') || key.includes('explicit_login')) {
+                sessionStorage.removeItem(key);
+            }
+        }
+        window._userHasRealData = false;
         notify('✅ Account reset — logging out...');
         setTimeout(() => window.signOut(window.firebaseAuth || auth).then(() => window.location.reload()), 1000);
     }
@@ -24887,6 +24892,15 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                             try { if (typeof renderPricingMatrix === 'function') renderPricingMatrix(); } catch(e) {}
                         } else {
                             console.log('       Skipping Firestore profiles — local is newer (local:', localVersion, 'fs:', firestoreVersion, ')');
+                        }
+                        // Always attempt demo seeding for non-owner accounts — function guards itself
+                        if (window.currentUser && window.currentUser.email !== OWNER_EMAIL) {
+                            seedDemoDataForNewUser();
+                            const _sf = JSON.parse(localStorage.getItem('paintFormulas') || '[]');
+                            if (_sf.length > 0 && paintDatabase.length === 0) {
+                                paintDatabase = _sf;
+                                try { if (typeof renderPaintFormulaList === 'function') renderPaintFormulaList(); } catch(e) {}
+                            }
                         }
                     } else {
                         console.log('       Door profiles doc exists but empty - seeding demo data');
