@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.58'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.60'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -2156,7 +2156,8 @@ const firebaseConfig = {
                 </div>
                 <div style="flex:1">
                     <label>Job #</label>
-                    <input type="text" id="jN" placeholder="####" style="text-align:center;" onchange="loadJobPhotosForCurrentJobNum()" autocomplete="off">
+                    <input type="text" id="jN" placeholder="####" style="text-align:center;" autocomplete="off" onchange="loadJobPhotosForCurrentJobNum(); _checkDuplicateJobNum(this.value);">
+                    <div id="jNDuplicateWarning" style="display:none; font-size:9px; color:#ff3b30; font-weight:900; padding:2px 0; text-align:center;"></div>
                 </div>
             </div>
 
@@ -7608,7 +7609,15 @@ const firebaseConfig = {
             if (cliEl) cliEl.value = '';
             if (dRecEl) dRecEl.value = '';
             if (jNmEl) jNmEl.value = '';
-            if (jNEl) jNEl.value = '';
+            // Auto-set next consecutive job number
+            if (jNEl) {
+                const history = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+                const maxNum = history.reduce((mx, j) => {
+                    const n = parseInt(j.jobNum) || 0;
+                    return n > mx ? n : mx;
+                }, 0);
+                jNEl.value = String(maxNum + 1);
+            }
             if (pBrandEl) pBrandEl.value = 'Dulux';
             if (pColorEl) pColorEl.value = '';
             if (pCodeEl) pCodeEl.value = '';
@@ -8863,6 +8872,13 @@ const firebaseConfig = {
         
         const job = history[jobIdx];
         job.completed = true;
+        // Register in completed-jobs registry so staff syncs can't overwrite
+        try {
+            const _reg = JSON.parse(localStorage.getItem('pwCompletedJobs') || '{}');
+            const _regId = job.id || String(job.jobNum);
+            _reg[_regId] = job.completedDate || new Date().toISOString();
+            localStorage.setItem('pwCompletedJobs', JSON.stringify(_reg));
+        } catch(e) {}
         job.completedDate = chosenDateISOfull;
         job.dateCompleted = chosenDateDisplay;
         history[jobIdx] = job;
@@ -10149,7 +10165,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.58';
+        const _ver = window.CURRENT_VERSION || 'v1.16.60';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
@@ -10374,23 +10390,14 @@ const firebaseConfig = {
     window.buildDescSuggestions = buildDescSuggestions;
 
     function refreshLists() {
-        console.log(` REFRESHING LISTS (refreshLists called)`);
-        console.log(`  Current profiles array:`, profiles);
-        
-        // NOTE: cli dropdown is managed exclusively by populateClientDropdown()
-        // which reads from clientDatabase. Do NOT touch it here     the old clients[]
-        // array is empty and would wipe the dropdown.
-        
         const profSel = document.getElementById('prof-select'); 
-        if (!profSel) {
-            console.error('      CRITICAL: prof-select element NOT FOUND!');
-            return;
-        }
-        console.log(`   Found prof-select dropdown element`);
-        
-        // Preserve the current selection if it still exists in the new list
-        const prevVal = profSel.value;
+        if (!profSel) return;
 
+        // Don't rebuild dropdown if user is actively interacting with it
+        if (document.activeElement === profSel) return;
+
+        // Preserve the current selection
+        const prevVal = profSel.value;
         profSel.innerHTML = '';
         
         if (profiles.length === 0) {
@@ -11777,7 +11784,23 @@ const firebaseConfig = {
     }
     // ──────────────────────────────────────────────────────────────────────────
 
-    function changeQty(index, delta) { 
+    function _checkDuplicateJobNum(val) {
+        if (!val) return;
+        const history = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+        const current = items.length > 0 || document.getElementById('jNm')?.value; // has data = editing existing
+        const match = history.find(j => String(j.jobNum) === String(val));
+        const indicator = document.getElementById('jNDuplicateWarning');
+        if (indicator) {
+            if (match && !current) {
+                indicator.textContent = '⚠️ Job #' + val + ' already exists (' + match.client + ')';
+                indicator.style.display = 'block';
+            } else {
+                indicator.style.display = 'none';
+            }
+        }
+    }
+
+        function changeQty(index, delta) { 
         try {
             if (index < 0 || index >= items.length) {
                 console.error('Invalid item index:', index);
@@ -25703,12 +25726,16 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                         safeStorage.setJSON('jobHistory', _snapStrip);
                         window._syncingFromCloud = false;
 
-                        try { if (typeof renderHistory === 'function') renderHistory(); } catch(e) {}
-                        if (hasChanges) {
-                            try { if (typeof renderScheduleCalendar === 'function') renderScheduleCalendar(); } catch(e) {}
-                            try { if (typeof renderAdminGanttChart === 'function') renderAdminGanttChart(); } catch(e) {}
-                            try { if (typeof renderJobTasks === 'function') renderJobTasks(); } catch(e) {}
-                        }
+                        // Debounce UI renders — max once per 2s to prevent lag with multiple users
+                        if (window._snapRenderTimer) clearTimeout(window._snapRenderTimer);
+                        window._snapRenderTimer = setTimeout(() => {
+                            try { if (typeof renderHistory === 'function') renderHistory(); } catch(e) {}
+                            if (hasChanges) {
+                                try { if (typeof renderScheduleCalendar === 'function') renderScheduleCalendar(); } catch(e) {}
+                                try { if (typeof renderAdminGanttChart === 'function') renderAdminGanttChart(); } catch(e) {}
+                                try { if (typeof renderJobTasks === 'function') renderJobTasks(); } catch(e) {}
+                            }
+                        }, 2000);
                     } catch(e) { console.error('Snapshot handler error:', e); }
                 },
                 error => {
@@ -25755,7 +25782,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
     // Track last synced data to avoid redundant syncs
     let lastSyncedData = '';
     let lastSyncTime = 0;
-    const SYNC_DEBOUNCE_MS = 2000; // Minimum 2 seconds between syncs
+    const SYNC_DEBOUNCE_MS = 3000; // Minimum 2 seconds between syncs
     
     // Helper function to sync all jobs to Firebase
     function syncJobsToFirebase() {
@@ -25790,7 +25817,14 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                     const jobId = job.id || String(job.jobNum) || Date.now().toString();
                     const jobDoc = window.doc(window.firebaseDb, 'users', window.staffModeOwnerUid||window.currentUser.uid, 'jobs', jobId);
                     var jobForCloud={...job,id:jobId,lastModified:new Date().toISOString(),userId:window.staffModeOwnerUid||window.currentUser.uid};
-                    delete jobForCloud.photos; // strip base64 photos - too large for Firestore 1MB limit
+                    delete jobForCloud.photos; // strip base64 photos
+                    // Never let a non-completed sync overwrite a completed job
+                    // Check local completed-jobs registry (set by owner when completing)
+                    const _completedRegistry = JSON.parse(localStorage.getItem('pwCompletedJobs') || '{}');
+                    if (_completedRegistry[jobId] && !jobForCloud.completed) {
+                        jobForCloud.completed = true; // protect completed status
+                        jobForCloud.completedDate = _completedRegistry[jobId];
+                    }
                     try{if(new Blob([JSON.stringify(jobForCloud)]).size>850000){jobForCloud.items=(jobForCloud.items||[]).map(function(it){return{h:it.h,w:it.w,qty:it.qty,desc:it.desc,prof:it.prof,fm:it.fm,mode:it.mode,e:it.e,type:it.type,thk:it.thk,brand:it.brand,color:it.color,finish:it.finish,sqm:it.sqm,cts:it.cts};});console.warn('Trimmed:',jobId);}}catch(_se){}
                     window.setDoc(jobDoc, jobForCloud, { merge: true }).catch(err => console.error('Firestore sync error for job', jobId, ':', err));
                 } catch(e) {
