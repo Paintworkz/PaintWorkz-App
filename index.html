@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.66'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.67'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -7395,23 +7395,21 @@ const firebaseConfig = {
     // Only runs when the user has no Firestore data (first login on a fresh account).
     // Does NOT run for the owner account.
     function seedDemoDataForNewUser() {
-        console.log('%c🌱 SEED DEMO DATA CALLED', 'background:#4caf50;color:#fff;font-weight:900;padding:4px;');
-        if (!window.currentUser) { console.log('     ❌ No currentUser'); return; }
-        if (window.currentUser.email === OWNER_EMAIL) { console.log('     ❌ Owner email, skip'); return; }
-        // Never seed if flag set (user has real Firestore data)
-        if (window._userHasRealData) { console.log('     ❌ Has real data flag set'); return; }
+        if (!window.currentUser) return;
+        if (window.currentUser.email === OWNER_EMAIL) return;
         // Skip if already seeded this session
-        if (sessionStorage.getItem('pw_demo_seeded_' + window.currentUser.uid)) { console.log('     ❌ Already seeded this session'); return; }
-        // Skip seeding if user already has real jobs
+        if (sessionStorage.getItem('pw_demo_seeded_' + window.currentUser.uid)) return;
+        // Skip seeding jobs/clients if user has real (non-demo) jobs
         const preCheckJobs = JSON.parse(localStorage.getItem('jobHistory') || '[]');
         const realJobs = preCheckJobs.filter(function(j) { return !j.id || !j.id.startsWith('demo-'); });
-        if (realJobs.length > 0) { window._userHasRealData = true; console.log('     ❌ Real jobs exist'); return; }
+        const hasRealJobs = realJobs.length > 0;
+        // NOTE: paint formulas always seeded if empty regardless of job status
         
         console.log('     ✅ All checks passed - seeding demo data...');
 
         // --- Demo Clients ---
         const existingClients = getClientDatabase();
-        if (Object.keys(existingClients).length === 0) {
+        if (!hasRealJobs && Object.keys(existingClients).length === 0) {
             const demoClients = {
                 'demo-client-001': { id:'demo-client-001', name:'Sample Kitchens',   phone:'', email:'', address:'', notes:'Demo client     replace with your own', createdDate: new Date().toISOString() },
                 'demo-client-002': { id:'demo-client-002', name:'Test Cabinetry Co', phone:'', email:'', address:'', notes:'Demo client     replace with your own', createdDate: new Date().toISOString() },
@@ -7425,26 +7423,44 @@ const firebaseConfig = {
             // Mark seeded so we don't repeat this login session
         }
 
-        // --- Demo Paint Formula ---
+        // --- Demo Paint Formula --- always seed if empty
         const existingFormulas = JSON.parse(localStorage.getItem('paintFormulas') || '[]');
         if (!Array.isArray(existingFormulas) || existingFormulas.length === 0) {
-            const demoFormulas = [{
-                id: 'demo-lexicon-001',
-                brand: 'Dulux',
-                color: 'Sample Paint Color',
-                product: '690 30% XTint Poly',
-                code: 'DEMO001',
-                evicCode: 'DEMO001',
-                baseType: '690 30% XTint Poly',
-                baseColor: 'White',
-                version: 'Demo Formula — replace with your own',
-                finishes: ['Satin'],
-                baseSize: 1,
-                whiteBase: [{ code: 'ITE003', grams: 7.47 }, { code: 'XB6930', grams: 1359.04 }],
-                colourants: [{ code: 'ITE303', amount: 5.88 }, { code: 'ITE306', amount: 5.95 }],
-                totalWeight: 1378.34,
-                notes: 'Demo formula — add your own via Database > Paint'
-            }];
+            const demoFormulas = [
+                {
+                    id: 'demo-formula-001', brand: 'Dulux', color: 'LEXICON QUARTER', finish: 'Satin',
+                    product: 'Aquanamel Poly', code: 'XTSW1C2', evicCode: 'XTSW1C2',
+                    baseType: '690 30% XTint Poly', baseColor: 'White', version: 'Chip 7',
+                    baseSize: 1, confirmedSizes: [1, 4],
+                    whiteBase: [{ code: 'ITE003', grams: 7.47 }, { code: 'XB6930', grams: 1359.04 }],
+                    colourants: [{ code: 'ITE302', amount: 2.66 }, { code: 'ITE108', amount: 0.81 }],
+                    sizes: {
+                        1: { baseTinters: [{ code: 'ITE003', grams: 7.47 }, { code: 'XB6930', grams: 1359.04 }], colourants: [{ code: 'ITE302', amount: 2.66 }, { code: 'ITE108', amount: 0.81 }] },
+                        4: { baseTinters: [{ code: 'ITE003', grams: 29.88 }, { code: 'XB6930', grams: 5436.16 }], colourants: [{ code: 'ITE302', amount: 10.64 }, { code: 'ITE108', amount: 3.24 }] }
+                    },
+                    notes: 'Demo formula — add your own via Database > Paint'
+                },
+                {
+                    id: 'demo-formula-002', brand: 'Dulux', color: 'VIVID WHITE', finish: 'Satin',
+                    product: 'Aquanamel Poly', code: 'DXTSW1', evicCode: 'DXTSW1',
+                    baseType: '690 30% XTint Poly', baseColor: 'White', version: '',
+                    baseSize: 1, confirmedSizes: [1],
+                    whiteBase: [{ code: 'ITE003', grams: 3.20 }, { code: 'XB6930', grams: 1363.00 }],
+                    colourants: [],
+                    sizes: { 1: { baseTinters: [{ code: 'ITE003', grams: 3.20 }, { code: 'XB6930', grams: 1363.00 }], colourants: [] } },
+                    notes: 'Demo formula'
+                },
+                {
+                    id: 'demo-formula-003', brand: 'Dulux', color: 'NATURAL WHITE', finish: 'Satin',
+                    product: 'Aquanamel Poly', code: 'DXTSW2', evicCode: 'DXTSW2',
+                    baseType: '690 30% XTint Poly', baseColor: 'White', version: '',
+                    baseSize: 1, confirmedSizes: [1],
+                    whiteBase: [{ code: 'ITE003', grams: 7.47 }, { code: 'XB6930', grams: 1359.04 }],
+                    colourants: [{ code: 'ITE302', amount: 3.50 }, { code: 'ITE503', amount: 1.20 }],
+                    sizes: { 1: { baseTinters: [{ code: 'ITE003', grams: 7.47 }, { code: 'XB6930', grams: 1359.04 }], colourants: [{ code: 'ITE302', amount: 3.50 }, { code: 'ITE503', amount: 1.20 }] } },
+                    notes: 'Demo formula'
+                }
+            ];
             paintDatabase = demoFormulas;
             localStorage.setItem('paintFormulas', JSON.stringify(demoFormulas));
             try { if (typeof renderPaintFormulaList === 'function') renderPaintFormulaList(); } catch(e) {}
@@ -7468,7 +7484,7 @@ const firebaseConfig = {
 
         // --- Demo Jobs ---
         const existingJobs = JSON.parse(localStorage.getItem('jobHistory') || '[]');
-        if (existingJobs.length === 0) {
+        if (!hasRealJobs && existingJobs.length === 0) {
             const today = new Date();
             const fmt = d => d.toLocaleDateString('en-AU');
             const iso = d => d.toISOString();
@@ -10195,7 +10211,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.66';
+        const _ver = window.CURRENT_VERSION || 'v1.16.67';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
