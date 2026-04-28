@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.65'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.66'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -10195,7 +10195,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.65';
+        const _ver = window.CURRENT_VERSION || 'v1.16.66';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
@@ -11819,26 +11819,32 @@ const firebaseConfig = {
     async function resetDemoAccountData() {
         if (!window.currentUser || !window.firebaseDb) return;
         if (isOwner()) { notify('Cannot reset owner account'); return; }
-        if (!confirm('Reset this account to demo data? Your saved data will be cleared.')) return;
+        if (!confirm('Reset this account to demo data?\n\nThis will wipe all data for this account and reload with sample data.')) return;
         const uid = window.currentUser.uid;
-        // Clear Firestore config docs
-        const docsToDelete = ['doorProfiles','stockLevels','stockSettings','tinterNames','stockDeducted','notifArchive','adminAlerts'];
-        for (const docId of docsToDelete) {
-            try {
-                await window.deleteDoc(window.doc(window.firebaseDb,'users',uid,'config',docId)).catch(()=>{});
-                await window.deleteDoc(window.doc(window.firebaseDb,'users',uid,'appData',docId)).catch(()=>{});
-            } catch(e) {}
+        notify('⏳ Resetting account...');
+        // Overwrite Firestore config with empty/demo defaults
+        try {
+            const demoProfiles = ['Plain (101)','Shaker (401)','Shaker 45 (402)','Bevelled Edge (104)','Custom'];
+            await window.setDoc(window.doc(window.firebaseDb,'users',uid,'config','doorProfiles'),
+                { doorProfiles: demoProfiles, masterMatrix: {}, lastModified: new Date().toISOString() }, { merge: false });
+        } catch(e) { console.warn('doorProfiles reset:', e.message); }
+        // Wipe appData docs
+        for (const docId of ['stockLevels','stockSettings2','tinterNames','stockDeducted','notifArchive','adminAlerts']) {
+            try { await window.deleteDoc(window.doc(window.firebaseDb,'users',uid,'appData',docId)).catch(()=>{}); } catch(e) {}
         }
-        // Clear localStorage
-        const keepKeys = ['paintworkz_version','app_theme'];
-        for (let i = localStorage.length-1; i>=0; i--) {
-            const k = localStorage.key(i);
-            if (k && !keepKeys.includes(k)) localStorage.removeItem(k);
-        }
+        // Wipe jobs collection
+        try {
+            const jobsSnap = await window.getDocs(window.collection(window.firebaseDb,'users',uid,'jobs'));
+            for (const d of jobsSnap.docs) {
+                await window.deleteDoc(d.ref).catch(()=>{});
+            }
+        } catch(e) {}
+        // Clear ALL localStorage
+        localStorage.clear();
         sessionStorage.removeItem('pw_demo_seeded_' + uid);
-        window._userHasRealData = false;
-        notify('✅ Account reset — reloading...');
-        setTimeout(() => window.location.reload(), 1000);
+        sessionStorage.removeItem('pw_explicit_login');
+        notify('✅ Account reset — logging out...');
+        setTimeout(() => window.signOut(window.firebaseAuth || auth).then(() => window.location.reload()), 1000);
     }
     window.resetDemoAccountData = resetDemoAccountData;
 
@@ -24941,7 +24947,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
 
             //        5b. Stock Levels                                                                                                             
             try {
-                const stockRef = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'stockLevels');
+                const stockRef = window.doc(window.firebaseDb, 'users', dataUid, 'appData', 'stockLevels');
                 const stockSnap = await window.getDoc(stockRef);
                 if (stockSnap.exists()) {
                     const sd = stockSnap.data();
