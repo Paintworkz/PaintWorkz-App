@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.82'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.83'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1665,11 +1665,12 @@ const firebaseConfig = {
                 // Cancel any pending logout timer
                 if (window._authNullTimer) { clearTimeout(window._authNullTimer); window._authNullTimer = null; }
 
-                // DATA ISOLATION: non-owner accounts get clean slate on UID switch
+                // DATA ISOLATION: non-owner accounts get clean slate on every fresh login
                 const lastUid = localStorage.getItem('pw_last_uid');
                 const isOwnerLogin = (user.email === 'ckbedford@outlook.com');
-                if (!isOwnerLogin && lastUid !== user.uid) {
-                    console.log('Account switch — wiping user-specific localStorage for:', user.email);
+                const _freshSession = !sessionStorage.getItem('pw_session_active_' + user.uid);
+                if (!isOwnerLogin && (lastUid !== user.uid || _freshSession)) {
+                    console.log('Non-owner login — wiping localStorage for clean slate:', user.email);
                     const keepGlobal = ['paintworkz_version', 'app_theme'];
                     for (let i = localStorage.length - 1; i >= 0; i--) {
                         const k = localStorage.key(i);
@@ -1681,10 +1682,13 @@ const firebaseConfig = {
                     try { profiles = ['Plain (101)','Shaker (401)','Shaker 45 (402)','Bevelled Edge (104)','Custom']; } catch(e) {}
                     try { masterMatrix = {}; } catch(e) {}
                     try { paintDatabase = []; } catch(e) {}
+                    try { if (typeof companySettings !== 'undefined') companySettings = {}; } catch(e) {}
                     window.currentCompanyLogo = null;
                     window.currentHeaderLogo = null;
                     window._userHasRealData = false;
                 }
+                // Mark this session as active so we don't re-wipe mid-session
+                sessionStorage.setItem('pw_session_active_' + user.uid, '1');
                 // Store last UID
                 localStorage.setItem('pw_last_uid', user.uid);
 
@@ -7477,6 +7481,42 @@ const firebaseConfig = {
             console.log('     Demo door profiles seeded for new user');
         }
 
+        // --- Demo Company Settings ---
+        if (!localStorage.getItem('companySettings')) {
+            const demoCompany = {
+                name: 'Demo Cabinet Co Pty Ltd',
+                phone: '0400 000 000',
+                email: 'info@democabinetco.com.au',
+                address: '123 Sample Street, Melbourne VIC 3000',
+                abn: '00 000 000 000',
+                gst: true
+            };
+            localStorage.setItem('companySettings', JSON.stringify(demoCompany));
+        }
+
+        // --- Demo Price Matrix ---
+        if (!localStorage.getItem('masterMatrix') || localStorage.getItem('masterMatrix') === '{}') {
+            const demoMatrix = {
+                'Tier 1 - Budget': {
+                    '101': ['Plain', 125, 135, 145, 130, 110],
+                    '401': ['Shaker', 145, 155, 165, 150, 130]
+                },
+                'Tier 2 - Standard': {
+                    '201': ['Bevelled Edge', 160, 170, 180, 165, 145],
+                    '402': ['Shaker 45', 165, 175, 185, 170, 150]
+                },
+                'Tier 3 - Premium': {
+                    '301': ['Arch Profile', 195, 210, 225, 200, 180],
+                    '302': ['Demi Round', 200, 215, 230, 205, 185]
+                },
+                'Unallocated': {
+                    '104': ['Bevelled Edge 104', 0, 0, 0, 0, 0],
+                    '701': ['Custom', 0, 0, 0, 0, 0]
+                }
+            };
+            localStorage.setItem('masterMatrix', JSON.stringify(demoMatrix));
+        }
+
         // Mark fully seeded — AFTER all blocks run
         try { sessionStorage.setItem('pw_demo_seeded_' + window.currentUser.uid, '1'); } catch(e) {}
 
@@ -10218,7 +10258,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.82';
+        const _ver = window.CURRENT_VERSION || 'v1.16.83';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
@@ -11851,6 +11891,15 @@ const firebaseConfig = {
             await window.setDoc(window.doc(window.firebaseDb,'users',uid,'config','doorProfiles'),
                 { doorProfiles: demoProfiles, masterMatrix: {}, lastModified: new Date().toISOString() }, { merge: false });
         } catch(e) { console.warn('doorProfiles reset:', e.message); }
+        // Clear company settings
+        try {
+            await window.setDoc(window.doc(window.firebaseDb,'users',uid,'config','companySettings'),
+                { name:'', phone:'', email:'', address:'', abn:'' }, { merge: false });
+        } catch(e) {}
+        // Clear logos
+        try {
+            await window.deleteDoc(window.doc(window.firebaseDb,'users',uid,'appData','logos')).catch(()=>{});
+        } catch(e) {}
         // Wipe appData docs including paint formulas
         for (const docId of ['stockLevels','stockSettings2','tinterNames','stockDeducted','notifArchive','adminAlerts','paintFormulas']) {
             try { await window.deleteDoc(window.doc(window.firebaseDb,'users',uid,'appData',docId)).catch(()=>{}); } catch(e) {}
