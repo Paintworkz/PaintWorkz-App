@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.69'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.70'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1665,33 +1665,26 @@ const firebaseConfig = {
                 // Cancel any pending logout timer
                 if (window._authNullTimer) { clearTimeout(window._authNullTimer); window._authNullTimer = null; }
 
-                // DATA ISOLATION: if a different user logs in, wipe user-specific localStorage
-                // This prevents data leaking between accounts (e.g. owner's profiles showing to free users)
+                // DATA ISOLATION: non-owner accounts get clean slate on UID switch
                 const lastUid = localStorage.getItem('pw_last_uid');
-                if (lastUid && lastUid !== user.uid) {
-                    console.log('New user detected — clearing user-specific localStorage to prevent data leak');
-                    const keepKeys = ['paintworkz_version', 'pw_tooltips', 'pw_tour_done_' + user.uid, 'app_theme'];
+                const isOwnerLogin = (user.email === 'ckbedford@outlook.com');
+                if (!isOwnerLogin && lastUid !== user.uid) {
+                    console.log('Account switch — wiping user-specific localStorage for:', user.email);
+                    const keepGlobal = ['paintworkz_version', 'app_theme'];
                     for (let i = localStorage.length - 1; i >= 0; i--) {
                         const k = localStorage.key(i);
-                        if (k && !keepKeys.some(keep => k === keep || k.startsWith('pw_tooltips_') || k.startsWith('pw_tour_done_') || k.startsWith('jobPhotos_'))) {
+                        if (k && !keepGlobal.some(g => k === g) && !k.startsWith('pw_tour_done_') && !k.startsWith('jobPhotos_')) {
                             localStorage.removeItem(k);
                         }
                     }
-                    // Reset in-memory state
-                    try { profiles = [...DEFAULT_PROFILES]; } catch(e) {}
-                    try { items = []; } catch(e) {}
-                    try { clientDatabase = []; } catch(e) {}
-                    window.currentCompanyLogo = null;
-                    window.currentHeaderLogo = null;
-                    window._userHasRealData = false;
                     try { sessionStorage.removeItem('pw_demo_seeded_' + user.uid); } catch(e) {}
-                    // Reset in-memory profiles to defaults immediately
                     try { profiles = ['Plain (101)','Shaker (401)','Shaker 45 (402)','Bevelled Edge (104)','Custom']; } catch(e) {}
                     try { masterMatrix = {}; } catch(e) {}
                     try { paintDatabase = []; } catch(e) {}
-                    try { if (typeof refreshLists === 'function') setTimeout(refreshLists, 500); } catch(e) {}
+                    window.currentCompanyLogo = null;
+                    window.currentHeaderLogo = null;
+                    window._userHasRealData = false;
                 }
-
                 // Store last UID
                 localStorage.setItem('pw_last_uid', user.uid);
 
@@ -10213,7 +10206,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.69';
+        const _ver = window.CURRENT_VERSION || 'v1.16.70';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
@@ -24697,8 +24690,15 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                     if (userSnap.exists()) {
                         const userData = userSnap.data();
                         if (userData.plan && !isOwner()) {
-                            window.currentPlan = userData.plan;
-                            console.log('Plan loaded from Firestore:', window.currentPlan);
+                            // Check if there's an active promo that overrides the base plan
+                            const now = Date.now();
+                            if (userData.promoPlan && userData.promoExpiresAt && now < userData.promoExpiresAt) {
+                                window.currentPlan = userData.promoPlan;
+                                console.log('Plan loaded from Firestore (promo active):', window.currentPlan);
+                            } else {
+                                window.currentPlan = userData.plan;
+                                console.log('Plan loaded from Firestore:', window.currentPlan);
+                            }
                             if (typeof applyProLocks === 'function') applyProLocks();
                             if (typeof updateSubscriptionToggle === 'function') updateSubscriptionToggle();
                         }
