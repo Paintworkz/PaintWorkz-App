@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.68'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.69'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -6720,7 +6720,9 @@ const firebaseConfig = {
         // Show custom dialog with unique ID
         const dialog = document.createElement('div');
         dialog.id = 'paintFormulaEditDialog';
-        dialog.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:10000;';
+        dialog.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.7); display:flex; align-items:center; justify-content:center; z-index:10000;';
+        // Tap backdrop to close
+        dialog.addEventListener('click', (e) => { if (e.target === dialog) closeFormulaDialog(); });
         const _confirmed = f.confirmedSizes || [];
         const _sizeBadgeHtml = [1,2,3,4].map(s => {
             const ok = _confirmed.includes(s);
@@ -6743,7 +6745,7 @@ const firebaseConfig = {
                 </div>
                 ${html}
                 <div style="display:flex; gap:10px; margin-top:20px;">
-                    <button onclick="closeFormulaDialog()" style="flex:1; padding:10px; background:#ccc; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">Cancel</button>
+                    <button onclick="closeFormulaDialog()" style="flex:1; padding:10px; background:#e0e0e0; color:#333; border:2px solid #999; border-radius:4px; cursor:pointer; font-weight:900; font-size:13px; z-index:10; position:relative;">✕ Cancel</button>
                     <button onclick="saveFormulaEdit(${idx})" style="flex:1; padding:10px; background:#4CAF50; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">Save ✓ Confirm ${1}L</button>
                 </div>
             </div>
@@ -10211,7 +10213,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.68';
+        const _ver = window.CURRENT_VERSION || 'v1.16.69';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
@@ -24778,10 +24780,23 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                         paintDatabase = localFormulas;
                         console.log('       No paint formulas in Firestore - keeping demo formula from seed');
                     } else {
-                        // Clear stale data
-                        paintDatabase = [];
-                        localStorage.removeItem('paintFormulas');
-                        console.log('       No paint formulas in Firestore for this user - cleared');
+                        // No Firestore formulas — seed demo formulas for non-owner accounts
+                        if (window.currentUser && window.currentUser.email !== OWNER_EMAIL) {
+                            const _demoF = [
+                                { id:'demo-formula-001', brand:'Dulux', color:'LEXICON QUARTER', finish:'Satin', product:'Aquanamel Poly', code:'XTSW1C2', evicCode:'XTSW1C2', baseType:'690 30% XTint Poly', baseColor:'White', version:'Chip 7', baseSize:1, confirmedSizes:[1,4], whiteBase:[{code:'ITE003',grams:7.47},{code:'XB6930',grams:1359.04}], colourants:[{code:'ITE302',amount:2.66},{code:'ITE108',amount:0.81}], sizes:{1:{baseTinters:[{code:'ITE003',grams:7.47},{code:'XB6930',grams:1359.04}],colourants:[{code:'ITE302',amount:2.66},{code:'ITE108',amount:0.81}]},4:{baseTinters:[{code:'ITE003',grams:29.88},{code:'XB6930',grams:5436.16}],colourants:[{code:'ITE302',amount:10.64},{code:'ITE108',amount:3.24}]}}, notes:'Demo formula' },
+                                { id:'demo-formula-002', brand:'Dulux', color:'VIVID WHITE', finish:'Satin', product:'Aquanamel Poly', code:'DXTSW1', evicCode:'DXTSW1', baseType:'690 30% XTint Poly', baseColor:'White', version:'', baseSize:1, confirmedSizes:[1], whiteBase:[{code:'ITE003',grams:3.20},{code:'XB6930',grams:1363.00}], colourants:[], sizes:{1:{baseTinters:[{code:'ITE003',grams:3.20},{code:'XB6930',grams:1363.00}],colourants:[]}}, notes:'Demo formula' },
+                                { id:'demo-formula-003', brand:'Dulux', color:'NATURAL WHITE', finish:'Satin', product:'Aquanamel Poly', code:'DXTSW2', evicCode:'DXTSW2', baseType:'690 30% XTint Poly', baseColor:'White', version:'', baseSize:1, confirmedSizes:[1], whiteBase:[{code:'ITE003',grams:7.47},{code:'XB6930',grams:1359.04}], colourants:[{code:'ITE302',amount:3.50},{code:'ITE503',amount:1.20}], sizes:{1:{baseTinters:[{code:'ITE003',grams:7.47},{code:'XB6930',grams:1359.04}],colourants:[{code:'ITE302',amount:3.50},{code:'ITE503',amount:1.20}]}}, notes:'Demo formula' }
+                            ];
+                            paintDatabase = _demoF;
+                            localStorage.setItem('paintFormulas', JSON.stringify(_demoF));
+                            // Push to Firestore so they persist
+                            try { window.setDoc(window.doc(window.firebaseDb,'users',dataUid,'appData','paintFormulas'),{formulas:_demoF,updated:new Date().toISOString()},{merge:false}).catch(()=>{}); } catch(e) {}
+                            console.log('       Seeded 3 demo paint formulas for new user');
+                        } else {
+                            paintDatabase = [];
+                            localStorage.removeItem('paintFormulas');
+                            console.log('       No paint formulas in Firestore for this user - cleared');
+                        }
                     }
                 }
             } catch(e) { console.warn('Paint formula load error:', e.message); }
