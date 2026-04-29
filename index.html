@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.87'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.88'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -6154,15 +6154,26 @@ const firebaseConfig = {
     function renderPaintFormulaList(formulasToDisplay = null) {
         const list = document.getElementById('paintFormulaList');
         const countSpan = document.getElementById('formulaCount');
-        
         if (!list) return;
-        
-        let displayFormulas = formulasToDisplay || paintDatabase;
+
+        // If no explicit list passed, apply current search + incomplete filter
+        if (!formulasToDisplay) {
+            const term = (document.getElementById('formulaSearch')?.value || '').trim().toLowerCase();
+            formulasToDisplay = paintDatabase;
+            if (term) {
+                formulasToDisplay = formulasToDisplay.filter(f => {
+                    const text = `${f.brand||''} ${f.color||''} ${f.finish||''} ${f.code||''} ${f.evicCode||''} ${(f.colourants||[]).map(c=>c.code||'').join(' ')} ${(f.baseTinters||f.whiteBase||[]).map(c=>c.code||'').join(' ')}`.toLowerCase();
+                    return text.includes(term);
+                });
+            }
+        }
 
         // Apply incomplete filter
         if (window._incompleteFilterOn) {
-            displayFormulas = displayFormulas.filter(f => !isFormulaComplete(f));
+            formulasToDisplay = formulasToDisplay.filter(f => !isFormulaComplete(f));
         }
+
+        const displayFormulas = formulasToDisplay;
         
         // Update the count
         if (countSpan) {
@@ -10292,7 +10303,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.87';
+        const _ver = window.CURRENT_VERSION || 'v1.16.88';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
