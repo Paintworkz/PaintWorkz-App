@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.71'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.72'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -10206,7 +10206,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.71';
+        const _ver = window.CURRENT_VERSION || 'v1.16.72';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
@@ -13037,7 +13037,7 @@ const firebaseConfig = {
                 // Calculate x position for Total column (sum of all column widths before it)
                 const totalColX = x + (8+16+16+14+14+15+10+15+26+12+12);
                 doc.text(`Subtotal (${colourName}):`, x, y);
-                doc.text(`$${colourTotal.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
+                doc.text(`$${colourTotal.toFixed(2)} (exc)   $${(colourTotal * 1.1).toFixed(2)} (inc)`, totalColX + 8, y, { align: 'right' });
                 y += 8;
                 
                 // Add colour-specific surcharge if applicable
@@ -13051,7 +13051,7 @@ const firebaseConfig = {
                                 doc.setFont(undefined, 'normal');
                                 doc.setFontSize(8);
                                 doc.text(`  Paint Surcharge (${s.label}):`, x, y);
-                                doc.text(`$${s.amount.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
+                                doc.text(`$${s.amount.toFixed(2)} (exc)   $${(s.amount*1.1).toFixed(2)} (inc)`, totalColX + 8, y, { align: 'right' });
                                 y += 8;
                                 grandTotal += s.amount;
                             }
@@ -13127,7 +13127,7 @@ const firebaseConfig = {
                 doc.setFillColor(44,62,80); doc.rect(x, y, 180-2*x, 7, 'F');
                 doc.setFont(undefined,'bold'); doc.setFontSize(9); doc.setTextColor(212,175,55);
                 doc.text('CTS Subtotal:', x+2, y+5);
-                doc.text('$'+ctsGrandTotal.toFixed(2), totalColX+8, y+5, {align:'right'});
+                doc.text('$'+ctsGrandTotal.toFixed(2)+' (exc)   $'+(ctsGrandTotal*1.1).toFixed(2)+' (inc)', totalColX+8, y+5, {align:'right'});
                 doc.setTextColor(0,0,0);
                 grandTotal += ctsGrandTotal; y += 10;
             }
@@ -13151,14 +13151,14 @@ const firebaseConfig = {
             
             if (appliedCharges && appliedCharges.courierCost > 0) {
                 doc.text(`Freight Charge:`, x, y);
-                doc.text(`$${appliedCharges.courierCost.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
+                doc.text(`$${appliedCharges.courierCost.toFixed(2)} (exc)   $${(appliedCharges.courierCost*1.1).toFixed(2)} (inc)`, totalColX + 8, y, { align: 'right' });
                 grandTotal += appliedCharges.courierCost;
                 y += 6;
             }
             
             if (appliedCharges && appliedCharges.otherChargeAmount > 0) {
                 doc.text(`${appliedCharges.otherChargeDesc || 'Other Charges'}:`, x, y);
-                doc.text(`$${appliedCharges.otherChargeAmount.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
+                doc.text(`$${appliedCharges.otherChargeAmount.toFixed(2)} (exc)   $${(appliedCharges.otherChargeAmount * 1.1).toFixed(2)} (inc)`, totalColX + 8, y, { align: 'right' });
                 grandTotal += appliedCharges.otherChargeAmount;
                 y += 6;
             }
@@ -13168,49 +13168,24 @@ const firebaseConfig = {
             const gstAmount = grandTotal * gstRate;
             const totalWithGST = grandTotal + gstAmount;
 
-            // Ensure enough room for summary box
-            if (y > 240) { doc.addPage(); y = 25; }
+            // Check if we need a new page for the final summary
+            if (y > 265) { doc.addPage(); y = 25; }
 
+            // Final totals
+            y += 5;
+            doc.setFont(undefined, 'bold'); doc.setFontSize(9);
+            doc.text(`Subtotal (inc. charges):`, x, y);
+            doc.text(`$${grandTotal.toFixed(2)} (exc)   $${totalWithGST.toFixed(2)} (inc)`, totalColX + 8, y, { align: 'right' });
+            y += 7;
+            doc.setFont(undefined, 'normal'); doc.setFontSize(8);
+            doc.text(`GST (${(gstRate*100).toFixed(0)}%):`, x, y);
+            doc.text(`$${gstAmount.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
             y += 6;
-            // ── GST SUMMARY BOX for Xero ──────────────────────────────────
-            const bx = totalColX - 60; // right-align the box
-            const bw = 68;
-            // Box border
-            doc.setDrawColor(180,180,180); doc.setLineWidth(0.4);
-            doc.rect(bx, y, bw, 38);
-            // Header row
-            doc.setFillColor(30,30,30); doc.rect(bx, y, bw, 7, 'F');
-            doc.setTextColor(255,255,255); doc.setFont(undefined,'bold'); doc.setFontSize(8);
-            doc.text('GST SUMMARY', bx + bw/2, y+5, { align:'center' });
-            doc.setTextColor(0,0,0);
-            y += 10;
-            // Excl GST row
-            doc.setFont(undefined,'normal'); doc.setFontSize(8.5);
-            doc.text('Total (excl. GST):', bx+3, y);
-            doc.setFont(undefined,'bold');
-            doc.text('$'+grandTotal.toFixed(2), bx+bw-3, y, { align:'right' });
-            y += 7;
-            // GST row
-            doc.setFont(undefined,'normal');
-            doc.text('GST ('+( gstRate*100).toFixed(0)+'%):', bx+3, y);
-            doc.setFont(undefined,'bold');
-            doc.text('$'+gstAmount.toFixed(2), bx+bw-3, y, { align:'right' });
-            y += 7;
-            // Divider
-            doc.setDrawColor(100,100,100); doc.setLineWidth(0.5);
-            doc.line(bx+2, y, bx+bw-2, y);
-            y += 4;
-            // Total incl GST
-            doc.setFont(undefined,'bold'); doc.setFontSize(10);
-            doc.text('TOTAL (incl. GST):', bx+3, y);
-            doc.text('$'+totalWithGST.toFixed(2), bx+bw-3, y, { align:'right' });
-            y += 8;
-            // ─────────────────────────────────────────────────────────────
-            doc.setFont(undefined,'normal'); doc.setFontSize(7.5);
-            doc.setTextColor(120,120,120);
-            doc.text('All prices include GST at '+( gstRate*100).toFixed(0)+'%', x, y);
-            doc.setTextColor(0,0,0);
-            doc.setLineWidth(0.4);
+            doc.setFont(undefined, 'bold'); doc.setFontSize(11);
+            doc.text(`TOTAL (inc. GST): $${totalWithGST.toFixed(2)}`, x, y);
+            y += 2;
+            doc.setDrawColor(0,0,0);
+            doc.line(x, y, totalColX + 15, y);
             
             // 15mm Footer Zone (reserved)
             doc.setDrawColor(200, 200, 200);  // Light gray separator
@@ -13493,7 +13468,7 @@ const firebaseConfig = {
                 // Calculate x position for Total column (sum of all column widths before it)
                 const totalColX = x + (8+16+16+14+14+15+10+15+26+12+12);
                 doc.text(`Subtotal (${colourName}):`, x, y);
-                doc.text(`$${colourTotal.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
+                doc.text(`$${colourTotal.toFixed(2)} (exc)   $${(colourTotal * 1.1).toFixed(2)} (inc)`, totalColX + 8, y, { align: 'right' });
                 y += 8;
                 
                 // Add colour-specific surcharge if applicable
@@ -13507,7 +13482,7 @@ const firebaseConfig = {
                                 doc.setFont(undefined, 'normal');
                                 doc.setFontSize(8);
                                 doc.text(`  Paint Surcharge (${s.label}):`, x, y);
-                                doc.text(`$${s.amount.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
+                                doc.text(`$${s.amount.toFixed(2)} (exc)   $${(s.amount*1.1).toFixed(2)} (inc)`, totalColX + 8, y, { align: 'right' });
                                 y += 8;
                                 grandTotal += s.amount;
                             }
@@ -13583,7 +13558,7 @@ const firebaseConfig = {
                 doc.setFillColor(44,62,80); doc.rect(x, y, 180-2*x, 7, 'F');
                 doc.setFont(undefined,'bold'); doc.setFontSize(9); doc.setTextColor(212,175,55);
                 doc.text('CTS Subtotal:', x+2, y+5);
-                doc.text('$'+ctsGrandTotal.toFixed(2), totalColX+8, y+5, {align:'right'});
+                doc.text('$'+ctsGrandTotal.toFixed(2)+' (exc)   $'+(ctsGrandTotal*1.1).toFixed(2)+' (inc)', totalColX+8, y+5, {align:'right'});
                 doc.setTextColor(0,0,0);
                 grandTotal += ctsGrandTotal; y += 10;
             }
@@ -13607,14 +13582,14 @@ const firebaseConfig = {
             
             if (appliedCharges && appliedCharges.courierCost > 0) {
                 doc.text(`Freight Charge:`, x, y);
-                doc.text(`$${appliedCharges.courierCost.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
+                doc.text(`$${appliedCharges.courierCost.toFixed(2)} (exc)   $${(appliedCharges.courierCost*1.1).toFixed(2)} (inc)`, totalColX + 8, y, { align: 'right' });
                 grandTotal += appliedCharges.courierCost;
                 y += 6;
             }
             
             if (appliedCharges && appliedCharges.otherChargeAmount > 0) {
                 doc.text(`${appliedCharges.otherChargeDesc || 'Other Charges'}:`, x, y);
-                doc.text(`$${appliedCharges.otherChargeAmount.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
+                doc.text(`$${appliedCharges.otherChargeAmount.toFixed(2)} (exc)   $${(appliedCharges.otherChargeAmount * 1.1).toFixed(2)} (inc)`, totalColX + 8, y, { align: 'right' });
                 grandTotal += appliedCharges.otherChargeAmount;
                 y += 6;
             }
@@ -13624,49 +13599,24 @@ const firebaseConfig = {
             const gstAmount = grandTotal * gstRate;
             const totalWithGST = grandTotal + gstAmount;
 
-            // Ensure enough room for summary box
-            if (y > 240) { doc.addPage(); y = 25; }
+            // Check if we need a new page for the final summary
+            if (y > 265) { doc.addPage(); y = 25; }
 
+            // Final totals
+            y += 5;
+            doc.setFont(undefined, 'bold'); doc.setFontSize(9);
+            doc.text(`Subtotal (inc. charges):`, x, y);
+            doc.text(`$${grandTotal.toFixed(2)} (exc)   $${totalWithGST.toFixed(2)} (inc)`, totalColX + 8, y, { align: 'right' });
+            y += 7;
+            doc.setFont(undefined, 'normal'); doc.setFontSize(8);
+            doc.text(`GST (${(gstRate*100).toFixed(0)}%):`, x, y);
+            doc.text(`$${gstAmount.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
             y += 6;
-            // ── GST SUMMARY BOX for Xero ──────────────────────────────────
-            const bx = totalColX - 60; // right-align the box
-            const bw = 68;
-            // Box border
-            doc.setDrawColor(180,180,180); doc.setLineWidth(0.4);
-            doc.rect(bx, y, bw, 38);
-            // Header row
-            doc.setFillColor(30,30,30); doc.rect(bx, y, bw, 7, 'F');
-            doc.setTextColor(255,255,255); doc.setFont(undefined,'bold'); doc.setFontSize(8);
-            doc.text('GST SUMMARY', bx + bw/2, y+5, { align:'center' });
-            doc.setTextColor(0,0,0);
-            y += 10;
-            // Excl GST row
-            doc.setFont(undefined,'normal'); doc.setFontSize(8.5);
-            doc.text('Total (excl. GST):', bx+3, y);
-            doc.setFont(undefined,'bold');
-            doc.text('$'+grandTotal.toFixed(2), bx+bw-3, y, { align:'right' });
-            y += 7;
-            // GST row
-            doc.setFont(undefined,'normal');
-            doc.text('GST ('+( gstRate*100).toFixed(0)+'%):', bx+3, y);
-            doc.setFont(undefined,'bold');
-            doc.text('$'+gstAmount.toFixed(2), bx+bw-3, y, { align:'right' });
-            y += 7;
-            // Divider
-            doc.setDrawColor(100,100,100); doc.setLineWidth(0.5);
-            doc.line(bx+2, y, bx+bw-2, y);
-            y += 4;
-            // Total incl GST
-            doc.setFont(undefined,'bold'); doc.setFontSize(10);
-            doc.text('TOTAL (incl. GST):', bx+3, y);
-            doc.text('$'+totalWithGST.toFixed(2), bx+bw-3, y, { align:'right' });
-            y += 8;
-            // ─────────────────────────────────────────────────────────────
-            doc.setFont(undefined,'normal'); doc.setFontSize(7.5);
-            doc.setTextColor(120,120,120);
-            doc.text('All prices include GST at '+( gstRate*100).toFixed(0)+'%', x, y);
-            doc.setTextColor(0,0,0);
-            doc.setLineWidth(0.4);
+            doc.setFont(undefined, 'bold'); doc.setFontSize(11);
+            doc.text(`TOTAL (inc. GST): $${totalWithGST.toFixed(2)}`, x, y);
+            y += 2;
+            doc.setDrawColor(0,0,0);
+            doc.line(x, y, totalColX + 15, y);
             
             // 15mm Footer Zone (reserved)
             doc.setDrawColor(200, 200, 200);  // Light gray separator
@@ -13949,7 +13899,7 @@ const firebaseConfig = {
                 // Calculate x position for Total column (sum of all column widths before it)
                 const totalColX = x + (8+16+16+14+14+15+10+15+26+12+12);
                 doc.text(`Subtotal (${colourName}):`, x, y);
-                doc.text(`$${colourTotal.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
+                doc.text(`$${colourTotal.toFixed(2)} (exc)   $${(colourTotal * 1.1).toFixed(2)} (inc)`, totalColX + 8, y, { align: 'right' });
                 y += 8;
                 
                 // Add colour-specific surcharge if applicable
@@ -13963,7 +13913,7 @@ const firebaseConfig = {
                                 doc.setFont(undefined, 'normal');
                                 doc.setFontSize(8);
                                 doc.text(`  Paint Surcharge (${s.label}):`, x, y);
-                                doc.text(`$${s.amount.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
+                                doc.text(`$${s.amount.toFixed(2)} (exc)   $${(s.amount*1.1).toFixed(2)} (inc)`, totalColX + 8, y, { align: 'right' });
                                 y += 8;
                                 grandTotal += s.amount;
                             }
@@ -14039,7 +13989,7 @@ const firebaseConfig = {
                 doc.setFillColor(44,62,80); doc.rect(x, y, 180-2*x, 7, 'F');
                 doc.setFont(undefined,'bold'); doc.setFontSize(9); doc.setTextColor(212,175,55);
                 doc.text('CTS Subtotal:', x+2, y+5);
-                doc.text('$'+ctsGrandTotal.toFixed(2), totalColX+8, y+5, {align:'right'});
+                doc.text('$'+ctsGrandTotal.toFixed(2)+' (exc)   $'+(ctsGrandTotal*1.1).toFixed(2)+' (inc)', totalColX+8, y+5, {align:'right'});
                 doc.setTextColor(0,0,0);
                 grandTotal += ctsGrandTotal; y += 10;
             }
@@ -14063,14 +14013,14 @@ const firebaseConfig = {
             
             if (appliedCharges && appliedCharges.courierCost > 0) {
                 doc.text(`Freight Charge:`, x, y);
-                doc.text(`$${appliedCharges.courierCost.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
+                doc.text(`$${appliedCharges.courierCost.toFixed(2)} (exc)   $${(appliedCharges.courierCost*1.1).toFixed(2)} (inc)`, totalColX + 8, y, { align: 'right' });
                 grandTotal += appliedCharges.courierCost;
                 y += 6;
             }
             
             if (appliedCharges && appliedCharges.otherChargeAmount > 0) {
                 doc.text(`${appliedCharges.otherChargeDesc || 'Other Charges'}:`, x, y);
-                doc.text(`$${appliedCharges.otherChargeAmount.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
+                doc.text(`$${appliedCharges.otherChargeAmount.toFixed(2)} (exc)   $${(appliedCharges.otherChargeAmount * 1.1).toFixed(2)} (inc)`, totalColX + 8, y, { align: 'right' });
                 grandTotal += appliedCharges.otherChargeAmount;
                 y += 6;
             }
@@ -14080,49 +14030,24 @@ const firebaseConfig = {
             const gstAmount = grandTotal * gstRate;
             const totalWithGST = grandTotal + gstAmount;
 
-            // Ensure enough room for summary box
-            if (y > 240) { doc.addPage(); y = 25; }
+            // Check if we need a new page for the final summary
+            if (y > 265) { doc.addPage(); y = 25; }
 
+            // Final totals
+            y += 5;
+            doc.setFont(undefined, 'bold'); doc.setFontSize(9);
+            doc.text(`Subtotal (inc. charges):`, x, y);
+            doc.text(`$${grandTotal.toFixed(2)} (exc)   $${totalWithGST.toFixed(2)} (inc)`, totalColX + 8, y, { align: 'right' });
+            y += 7;
+            doc.setFont(undefined, 'normal'); doc.setFontSize(8);
+            doc.text(`GST (${(gstRate*100).toFixed(0)}%):`, x, y);
+            doc.text(`$${gstAmount.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
             y += 6;
-            // ── GST SUMMARY BOX for Xero ──────────────────────────────────
-            const bx = totalColX - 60; // right-align the box
-            const bw = 68;
-            // Box border
-            doc.setDrawColor(180,180,180); doc.setLineWidth(0.4);
-            doc.rect(bx, y, bw, 38);
-            // Header row
-            doc.setFillColor(30,30,30); doc.rect(bx, y, bw, 7, 'F');
-            doc.setTextColor(255,255,255); doc.setFont(undefined,'bold'); doc.setFontSize(8);
-            doc.text('GST SUMMARY', bx + bw/2, y+5, { align:'center' });
-            doc.setTextColor(0,0,0);
-            y += 10;
-            // Excl GST row
-            doc.setFont(undefined,'normal'); doc.setFontSize(8.5);
-            doc.text('Total (excl. GST):', bx+3, y);
-            doc.setFont(undefined,'bold');
-            doc.text('$'+grandTotal.toFixed(2), bx+bw-3, y, { align:'right' });
-            y += 7;
-            // GST row
-            doc.setFont(undefined,'normal');
-            doc.text('GST ('+( gstRate*100).toFixed(0)+'%):', bx+3, y);
-            doc.setFont(undefined,'bold');
-            doc.text('$'+gstAmount.toFixed(2), bx+bw-3, y, { align:'right' });
-            y += 7;
-            // Divider
-            doc.setDrawColor(100,100,100); doc.setLineWidth(0.5);
-            doc.line(bx+2, y, bx+bw-2, y);
-            y += 4;
-            // Total incl GST
-            doc.setFont(undefined,'bold'); doc.setFontSize(10);
-            doc.text('TOTAL (incl. GST):', bx+3, y);
-            doc.text('$'+totalWithGST.toFixed(2), bx+bw-3, y, { align:'right' });
-            y += 8;
-            // ─────────────────────────────────────────────────────────────
-            doc.setFont(undefined,'normal'); doc.setFontSize(7.5);
-            doc.setTextColor(120,120,120);
-            doc.text('All prices include GST at '+( gstRate*100).toFixed(0)+'%', x, y);
-            doc.setTextColor(0,0,0);
-            doc.setLineWidth(0.4);
+            doc.setFont(undefined, 'bold'); doc.setFontSize(11);
+            doc.text(`TOTAL (inc. GST): $${totalWithGST.toFixed(2)}`, x, y);
+            y += 2;
+            doc.setDrawColor(0,0,0);
+            doc.line(x, y, totalColX + 15, y);
             
             // 15mm Footer Zone (reserved)
             doc.setDrawColor(200, 200, 200);  // Light gray separator
