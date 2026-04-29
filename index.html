@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.73'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.74'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -10206,7 +10206,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.73';
+        const _ver = window.CURRENT_VERSION || 'v1.16.74';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
@@ -13129,8 +13129,10 @@ const firebaseConfig = {
                 doc.setFillColor(44,62,80); doc.rect(x, y, 180-2*x, 7, 'F');
                 doc.setFont(undefined,'bold'); doc.setFontSize(9); doc.setTextColor(212,175,55);
                 doc.text('CTS Subtotal:', x+2, y+5);
-                doc.text('$'+ctsGrandTotal.toFixed(2)+' excl.', totalColX+8, y+4, {align:'right'});
-                doc.setFontSize(7.5); doc.text('$'+(ctsGrandTotal*1.1).toFixed(2)+' incl.', totalColX+8, y+8, {align:'right'}); doc.setFontSize(9);
+                doc.setTextColor(255,255,255); // white text on dark header
+                doc.text('$'+ctsGrandTotal.toFixed(2)+' excl.', 190, y+4, {align:'right'});
+                doc.setFontSize(7.5); doc.text('$'+(ctsGrandTotal*1.1).toFixed(2)+' incl.', 190, y+8, {align:'right'}); doc.setFontSize(9);
+                doc.setTextColor(0,0,0);
                 doc.setTextColor(0,0,0);
                 grandTotal += ctsGrandTotal; y += 10;
             }
@@ -13160,12 +13162,32 @@ const firebaseConfig = {
                 y += 6;
             }
             
-            if (appliedCharges && appliedCharges.otherChargeAmount > 0) {
-                doc.text(`${appliedCharges.otherChargeDesc || 'Other Charges'}:`, x, y);
-                doc.text(`$${appliedCharges.otherChargeAmount.toFixed(2)} excl.`, totalColX + 8, y, { align: 'right' });
-                doc.setFontSize(7.5); doc.text(`$${(appliedCharges.otherChargeAmount * 1.1).toFixed(2)} incl.`, totalColX + 8, y+4, { align: 'right' }); doc.setFontSize(9);
+            if (appliedCharges && appliedCharges.otherRows && appliedCharges.otherRows.length > 0) {
+                // Each additional charge row on its own line
+                appliedCharges.otherRows.forEach(function(row) {
+                    if (!row.amount || row.amount <= 0) return;
+                    if (y > 265) { doc.addPage(); y = 20; }
+                    doc.setFontSize(8); doc.setFont(undefined, 'normal');
+                    // Word-wrap description to max 120mm wide
+                    const descLines = doc.splitTextToSize((row.desc || 'Other Charges') + ':', 120);
+                    descLines.forEach(function(line, li) { doc.text(line, x, y + li * 4.5); });
+                    const descH = descLines.length * 4.5;
+                    doc.setFont(undefined, 'bold');
+                    doc.text('$'+row.amount.toFixed(2)+' excl.', totalColX + 8, y, { align: 'right' });
+                    doc.setFontSize(7.5); doc.text('$'+(row.amount*1.1).toFixed(2)+' incl.', totalColX + 8, y+4, { align: 'right' });
+                    doc.setFontSize(9); doc.setFont(undefined, 'normal');
+                    grandTotal += row.amount;
+                    y += Math.max(descH, 9);
+                });
+            } else if (appliedCharges && appliedCharges.otherChargeAmount > 0) {
+                // Legacy single row fallback
+                const descLines = doc.splitTextToSize((appliedCharges.otherChargeDesc || 'Other Charges') + ':', 120);
+                descLines.forEach(function(line, li) { doc.text(line, x, y + li * 4.5); });
+                const descH = descLines.length * 4.5;
+                doc.text('$'+appliedCharges.otherChargeAmount.toFixed(2)+' excl.', totalColX + 8, y, { align: 'right' });
+                doc.setFontSize(7.5); doc.text('$'+(appliedCharges.otherChargeAmount*1.1).toFixed(2)+' incl.', totalColX + 8, y+4, { align: 'right' }); doc.setFontSize(9);
                 grandTotal += appliedCharges.otherChargeAmount;
-                y += 6;
+                y += Math.max(descH, 9);
             }
             
             // Calculate GST
@@ -13180,8 +13202,7 @@ const firebaseConfig = {
             y += 5;
             doc.setFont(undefined, 'bold'); doc.setFontSize(9);
             doc.text(`Subtotal (inc. charges):`, x, y);
-            doc.text(`$${grandTotal.toFixed(2)} excl.`, totalColX + 8, y, { align: 'right' });
-            doc.setFontSize(7.5); doc.text(`$${totalWithGST.toFixed(2)} incl.`, totalColX + 8, y+4, { align: 'right' }); doc.setFontSize(9);
+            doc.text(`$${grandTotal.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
             y += 7;
             doc.setFont(undefined, 'normal'); doc.setFontSize(8);
             doc.text(`GST (${(gstRate*100).toFixed(0)}%):`, x, y);
@@ -13566,8 +13587,10 @@ const firebaseConfig = {
                 doc.setFillColor(44,62,80); doc.rect(x, y, 180-2*x, 7, 'F');
                 doc.setFont(undefined,'bold'); doc.setFontSize(9); doc.setTextColor(212,175,55);
                 doc.text('CTS Subtotal:', x+2, y+5);
-                doc.text('$'+ctsGrandTotal.toFixed(2)+' excl.', totalColX+8, y+4, {align:'right'});
-                doc.setFontSize(7.5); doc.text('$'+(ctsGrandTotal*1.1).toFixed(2)+' incl.', totalColX+8, y+8, {align:'right'}); doc.setFontSize(9);
+                doc.setTextColor(255,255,255); // white text on dark header
+                doc.text('$'+ctsGrandTotal.toFixed(2)+' excl.', 190, y+4, {align:'right'});
+                doc.setFontSize(7.5); doc.text('$'+(ctsGrandTotal*1.1).toFixed(2)+' incl.', 190, y+8, {align:'right'}); doc.setFontSize(9);
+                doc.setTextColor(0,0,0);
                 doc.setTextColor(0,0,0);
                 grandTotal += ctsGrandTotal; y += 10;
             }
@@ -13597,12 +13620,32 @@ const firebaseConfig = {
                 y += 6;
             }
             
-            if (appliedCharges && appliedCharges.otherChargeAmount > 0) {
-                doc.text(`${appliedCharges.otherChargeDesc || 'Other Charges'}:`, x, y);
-                doc.text(`$${appliedCharges.otherChargeAmount.toFixed(2)} excl.`, totalColX + 8, y, { align: 'right' });
-                doc.setFontSize(7.5); doc.text(`$${(appliedCharges.otherChargeAmount * 1.1).toFixed(2)} incl.`, totalColX + 8, y+4, { align: 'right' }); doc.setFontSize(9);
+            if (appliedCharges && appliedCharges.otherRows && appliedCharges.otherRows.length > 0) {
+                // Each additional charge row on its own line
+                appliedCharges.otherRows.forEach(function(row) {
+                    if (!row.amount || row.amount <= 0) return;
+                    if (y > 265) { doc.addPage(); y = 20; }
+                    doc.setFontSize(8); doc.setFont(undefined, 'normal');
+                    // Word-wrap description to max 120mm wide
+                    const descLines = doc.splitTextToSize((row.desc || 'Other Charges') + ':', 120);
+                    descLines.forEach(function(line, li) { doc.text(line, x, y + li * 4.5); });
+                    const descH = descLines.length * 4.5;
+                    doc.setFont(undefined, 'bold');
+                    doc.text('$'+row.amount.toFixed(2)+' excl.', totalColX + 8, y, { align: 'right' });
+                    doc.setFontSize(7.5); doc.text('$'+(row.amount*1.1).toFixed(2)+' incl.', totalColX + 8, y+4, { align: 'right' });
+                    doc.setFontSize(9); doc.setFont(undefined, 'normal');
+                    grandTotal += row.amount;
+                    y += Math.max(descH, 9);
+                });
+            } else if (appliedCharges && appliedCharges.otherChargeAmount > 0) {
+                // Legacy single row fallback
+                const descLines = doc.splitTextToSize((appliedCharges.otherChargeDesc || 'Other Charges') + ':', 120);
+                descLines.forEach(function(line, li) { doc.text(line, x, y + li * 4.5); });
+                const descH = descLines.length * 4.5;
+                doc.text('$'+appliedCharges.otherChargeAmount.toFixed(2)+' excl.', totalColX + 8, y, { align: 'right' });
+                doc.setFontSize(7.5); doc.text('$'+(appliedCharges.otherChargeAmount*1.1).toFixed(2)+' incl.', totalColX + 8, y+4, { align: 'right' }); doc.setFontSize(9);
                 grandTotal += appliedCharges.otherChargeAmount;
-                y += 6;
+                y += Math.max(descH, 9);
             }
             
             // Calculate GST
@@ -13617,8 +13660,7 @@ const firebaseConfig = {
             y += 5;
             doc.setFont(undefined, 'bold'); doc.setFontSize(9);
             doc.text(`Subtotal (inc. charges):`, x, y);
-            doc.text(`$${grandTotal.toFixed(2)} excl.`, totalColX + 8, y, { align: 'right' });
-            doc.setFontSize(7.5); doc.text(`$${totalWithGST.toFixed(2)} incl.`, totalColX + 8, y+4, { align: 'right' }); doc.setFontSize(9);
+            doc.text(`$${grandTotal.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
             y += 7;
             doc.setFont(undefined, 'normal'); doc.setFontSize(8);
             doc.text(`GST (${(gstRate*100).toFixed(0)}%):`, x, y);
@@ -14003,8 +14045,10 @@ const firebaseConfig = {
                 doc.setFillColor(44,62,80); doc.rect(x, y, 180-2*x, 7, 'F');
                 doc.setFont(undefined,'bold'); doc.setFontSize(9); doc.setTextColor(212,175,55);
                 doc.text('CTS Subtotal:', x+2, y+5);
-                doc.text('$'+ctsGrandTotal.toFixed(2)+' excl.', totalColX+8, y+4, {align:'right'});
-                doc.setFontSize(7.5); doc.text('$'+(ctsGrandTotal*1.1).toFixed(2)+' incl.', totalColX+8, y+8, {align:'right'}); doc.setFontSize(9);
+                doc.setTextColor(255,255,255); // white text on dark header
+                doc.text('$'+ctsGrandTotal.toFixed(2)+' excl.', 190, y+4, {align:'right'});
+                doc.setFontSize(7.5); doc.text('$'+(ctsGrandTotal*1.1).toFixed(2)+' incl.', 190, y+8, {align:'right'}); doc.setFontSize(9);
+                doc.setTextColor(0,0,0);
                 doc.setTextColor(0,0,0);
                 grandTotal += ctsGrandTotal; y += 10;
             }
@@ -14034,12 +14078,32 @@ const firebaseConfig = {
                 y += 6;
             }
             
-            if (appliedCharges && appliedCharges.otherChargeAmount > 0) {
-                doc.text(`${appliedCharges.otherChargeDesc || 'Other Charges'}:`, x, y);
-                doc.text(`$${appliedCharges.otherChargeAmount.toFixed(2)} excl.`, totalColX + 8, y, { align: 'right' });
-                doc.setFontSize(7.5); doc.text(`$${(appliedCharges.otherChargeAmount * 1.1).toFixed(2)} incl.`, totalColX + 8, y+4, { align: 'right' }); doc.setFontSize(9);
+            if (appliedCharges && appliedCharges.otherRows && appliedCharges.otherRows.length > 0) {
+                // Each additional charge row on its own line
+                appliedCharges.otherRows.forEach(function(row) {
+                    if (!row.amount || row.amount <= 0) return;
+                    if (y > 265) { doc.addPage(); y = 20; }
+                    doc.setFontSize(8); doc.setFont(undefined, 'normal');
+                    // Word-wrap description to max 120mm wide
+                    const descLines = doc.splitTextToSize((row.desc || 'Other Charges') + ':', 120);
+                    descLines.forEach(function(line, li) { doc.text(line, x, y + li * 4.5); });
+                    const descH = descLines.length * 4.5;
+                    doc.setFont(undefined, 'bold');
+                    doc.text('$'+row.amount.toFixed(2)+' excl.', totalColX + 8, y, { align: 'right' });
+                    doc.setFontSize(7.5); doc.text('$'+(row.amount*1.1).toFixed(2)+' incl.', totalColX + 8, y+4, { align: 'right' });
+                    doc.setFontSize(9); doc.setFont(undefined, 'normal');
+                    grandTotal += row.amount;
+                    y += Math.max(descH, 9);
+                });
+            } else if (appliedCharges && appliedCharges.otherChargeAmount > 0) {
+                // Legacy single row fallback
+                const descLines = doc.splitTextToSize((appliedCharges.otherChargeDesc || 'Other Charges') + ':', 120);
+                descLines.forEach(function(line, li) { doc.text(line, x, y + li * 4.5); });
+                const descH = descLines.length * 4.5;
+                doc.text('$'+appliedCharges.otherChargeAmount.toFixed(2)+' excl.', totalColX + 8, y, { align: 'right' });
+                doc.setFontSize(7.5); doc.text('$'+(appliedCharges.otherChargeAmount*1.1).toFixed(2)+' incl.', totalColX + 8, y+4, { align: 'right' }); doc.setFontSize(9);
                 grandTotal += appliedCharges.otherChargeAmount;
-                y += 6;
+                y += Math.max(descH, 9);
             }
             
             // Calculate GST
@@ -14054,8 +14118,7 @@ const firebaseConfig = {
             y += 5;
             doc.setFont(undefined, 'bold'); doc.setFontSize(9);
             doc.text(`Subtotal (inc. charges):`, x, y);
-            doc.text(`$${grandTotal.toFixed(2)} excl.`, totalColX + 8, y, { align: 'right' });
-            doc.setFontSize(7.5); doc.text(`$${totalWithGST.toFixed(2)} incl.`, totalColX + 8, y+4, { align: 'right' }); doc.setFontSize(9);
+            doc.text(`$${grandTotal.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
             y += 7;
             doc.setFont(undefined, 'normal'); doc.setFontSize(8);
             doc.text(`GST (${(gstRate*100).toFixed(0)}%):`, x, y);
