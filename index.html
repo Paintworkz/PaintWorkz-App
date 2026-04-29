@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.79'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.80'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -333,8 +333,8 @@
             display: flex;
             align-items: center;
             box-sizing: border-box;
-            flex: 1;
-            max-width: 55vw;
+            flex: 0 1 auto;
+            max-width: 40vw;
             overflow: hidden;
         }
         .logo-text { font-weight:900; font-size:56px; color:#d4af37; text-shadow:0 2px 4px rgba(0,0,0,0.5); letter-spacing:1px; }
@@ -2130,9 +2130,12 @@ const firebaseConfig = {
 <header id="mainHeader" style="display:none;">
     <div class="icon-btn" onclick="openGlobalSearch()" title="Search jobs, clients, phone numbers...">🔍</div>
     <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; flex:1;">
-        <div class="logo-box" id="headerLogoBox" style="display:flex; align-items:center; justify-content:center; transition:all 0.3s ease;">
-            <img id="headerLogoImg" src="" style="height:100%; max-width:95%; display:none; object-fit:contain;" alt="Company Logo">
-            <span class="logo-text" id="headerLogoText" style="font-size:20px; font-weight:900; color:#d4af37; text-shadow:0 2px 4px rgba(0,0,0,0.5); letter-spacing:1px;">PaintWorkz</span>
+        <div style="display:flex; align-items:center; gap:4px;">
+            <div class="logo-box" id="headerLogoBox" style="display:flex; align-items:center; justify-content:center; transition:all 0.3s ease;">
+                <img id="headerLogoImg" src="" style="height:100%; max-width:95%; display:none; object-fit:contain;" alt="Company Logo">
+                <span class="logo-text" id="headerLogoText" style="font-size:20px; font-weight:900; color:#d4af37; text-shadow:0 2px 4px rgba(0,0,0,0.5); letter-spacing:1px;">PaintWorkz</span>
+            </div>
+            <button id="removeLogoBtn" onclick="removeCompanyLogo()" title="Remove logo" style="display:none; background:#ff3b30; border:none; color:#fff; font-size:10px; font-weight:900; padding:3px 6px; border-radius:4px; cursor:pointer; flex-shrink:0;">✕</button>
         </div>
         <div id="planBadge" style="display:none; font-size:8px; font-weight:900; letter-spacing:1.5px; padding:1px 7px; border-radius:8px; margin-top:2px; background:linear-gradient(90deg,#d4af37,#f5d87a); color:#000; text-transform:uppercase;"></div>
     </div>
@@ -7577,21 +7580,23 @@ const firebaseConfig = {
         const headerLogo = localStorage.getItem('headerLogo');
         const logoImg = document.getElementById('headerLogoImg');
         const logoText = document.getElementById('headerLogoText');
+        const _removeBtn = document.getElementById('removeLogoBtn');
         
         if (headerLogo && logoImg) {
             try {
                 logoImg.src = headerLogo;
                 logoImg.style.display = 'block';
                 if (logoText) logoText.style.display = 'none';
-                console.log('    Header logo loaded');
+                if (_removeBtn) _removeBtn.style.display = 'block';
             } catch(e) {
-                console.warn('Error loading header logo:', e);
                 if (logoText) logoText.style.display = 'block';
                 if (logoImg) logoImg.style.display = 'none';
+                if (_removeBtn) _removeBtn.style.display = 'none';
             }
         } else {
             if (logoText) logoText.style.display = 'block';
             if (logoImg) logoImg.style.display = 'none';
+            if (_removeBtn) _removeBtn.style.display = 'none';
         }
     }
     
@@ -10206,7 +10211,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.79';
+        const _ver = window.CURRENT_VERSION || 'v1.16.80';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
@@ -11880,7 +11885,29 @@ const firebaseConfig = {
         }
     }
 
-        function changeQty(index, delta) { 
+    
+    function removeCompanyLogo() {
+        localStorage.removeItem('headerLogo');
+        localStorage.removeItem('companyLogo');
+        window.currentHeaderLogo = null;
+        window.currentCompanyLogo = null;
+        const logoImg = document.getElementById('headerLogoImg');
+        const logoText = document.getElementById('headerLogoText');
+        const removeBtn = document.getElementById('removeLogoBtn');
+        if (logoImg) { logoImg.src = ''; logoImg.style.display = 'none'; }
+        if (logoText) logoText.style.display = 'block';
+        if (removeBtn) removeBtn.style.display = 'none';
+        // Also clear from Firestore if possible
+        if (window.currentUser && window.firebaseDb && window.setDoc && window.doc) {
+            const uid = window.staffModeOwnerUid || window.currentUser.uid;
+            window.setDoc(window.doc(window.firebaseDb, 'users', uid, 'config', 'companySettings'),
+                { headerLogo: null, companyLogo: null }, { merge: true }).catch(() => {});
+        }
+        notify('✅ Logo removed');
+    }
+    window.removeCompanyLogo = removeCompanyLogo;
+
+    function changeQty(index, delta) { 
         try {
             if (index < 0 || index >= items.length) {
                 console.error('Invalid item index:', index);
