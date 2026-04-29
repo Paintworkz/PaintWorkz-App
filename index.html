@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.80'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.82'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -7577,7 +7577,14 @@ const firebaseConfig = {
     }
     
     function loadHeaderLogo() {
-        const headerLogo = localStorage.getItem('headerLogo');
+        // Ensure in-memory vars match localStorage (critical for PDF generation)
+        if (localStorage.getItem('headerLogo') && !window.currentHeaderLogo) {
+            window.currentHeaderLogo = localStorage.getItem('headerLogo');
+        }
+        if (localStorage.getItem('companyLogo') && !window.currentCompanyLogo) {
+            window.currentCompanyLogo = localStorage.getItem('companyLogo');
+        }
+        const headerLogo = window.currentHeaderLogo || localStorage.getItem('headerLogo');
         const logoImg = document.getElementById('headerLogoImg');
         const logoText = document.getElementById('headerLogoText');
         const _removeBtn = document.getElementById('removeLogoBtn');
@@ -10211,7 +10218,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.80';
+        const _ver = window.CURRENT_VERSION || 'v1.16.82';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
@@ -11897,13 +11904,17 @@ const firebaseConfig = {
         if (logoImg) { logoImg.src = ''; logoImg.style.display = 'none'; }
         if (logoText) logoText.style.display = 'block';
         if (removeBtn) removeBtn.style.display = 'none';
-        // Also clear from Firestore if possible
-        if (window.currentUser && window.firebaseDb && window.setDoc && window.doc) {
+        // Delete from the correct Firestore logos doc
+        if (window.currentUser && window.firebaseDb && window.deleteDoc && window.doc) {
             const uid = window.staffModeOwnerUid || window.currentUser.uid;
-            window.setDoc(window.doc(window.firebaseDb, 'users', uid, 'config', 'companySettings'),
-                { headerLogo: null, companyLogo: null }, { merge: true }).catch(() => {});
+            sessionStorage.setItem('pw_logo_removed', '1');
+            window.deleteDoc(window.doc(window.firebaseDb, 'users', uid, 'appData', 'logos'))
+                .then(() => notify('✅ Logo removed'))
+                .catch(() => notify('✅ Logo removed from device'));
+        } else {
+            sessionStorage.setItem('pw_logo_removed', '1');
+            notify('✅ Logo removed');
         }
-        notify('✅ Logo removed');
     }
     window.removeCompanyLogo = removeCompanyLogo;
 
@@ -25048,12 +25059,13 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                 const logosSnap = await window.getDoc(logosRef);
                 if (logosSnap.exists()) {
                     const ld = logosSnap.data();
-                    if (ld.companyLogo) {
+                    // Only load if not explicitly removed this session
+                    if (ld.companyLogo && !sessionStorage.getItem('pw_logo_removed')) {
                         localStorage.setItem('companyLogo', ld.companyLogo);
                         window.currentCompanyLogo = ld.companyLogo;
                         console.log('       Company logo loaded from Firestore');
                     }
-                    if (ld.headerLogo) {
+                    if (ld.headerLogo && !sessionStorage.getItem('pw_logo_removed')) {
                         localStorage.setItem('headerLogo', ld.headerLogo);
                         window.currentHeaderLogo = ld.headerLogo;
                         console.log('       Header logo loaded from Firestore');
