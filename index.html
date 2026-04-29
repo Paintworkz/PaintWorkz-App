@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.84'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.86'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -7511,21 +7511,44 @@ const firebaseConfig = {
                 }
             };
             localStorage.setItem('masterMatrix', JSON.stringify(demoMatrix));
+            masterMatrix = demoMatrix;
             // Also update profiles to match the demo matrix
             const demoProfilesList = ['Plain (101)','Shaker (401)','Bevelled Edge (201)','Shaker 45 (402)','Arch Profile (301)','Demi Round (302)'];
             localStorage.setItem('doorProfiles', JSON.stringify(demoProfilesList));
             profiles = demoProfilesList;
+            // Push demo matrix to Firestore so it doesn't get overwritten on next load
+            if (window.currentUser && window.firebaseDb && window.setDoc && window.doc) {
+                try {
+                    const uid = window.currentUser.uid;
+                    window.setDoc(window.doc(window.firebaseDb,'users',uid,'config','doorProfiles'),
+                        { doorProfiles: demoProfilesList, masterMatrix: demoMatrix, lastModified: new Date().toISOString(), syncVersion: Date.now() },
+                        { merge: false }).catch(()=>{});
+                } catch(e) {}
+            }
         }
 
         // --- Demo CTS Matrix ---
+        // Format: { 'Tier X': { code: ['Profile Name', price_thk1, price_thk2, price_thk3] } }
         if (!localStorage.getItem('ctsMatrix') || localStorage.getItem('ctsMatrix') === '{}') {
             const demoCts = {
-                'Plain': { tier: 'Tier 1', prices: { '16': 150, '18': 155, '33': 180 } },
-                'Shaker': { tier: 'Tier 1', prices: { '16': 165, '18': 170, '33': 195 } },
-                'Bevelled Edge': { tier: 'Tier 2', prices: { '16': 180, '18': 185, '33': 210 } },
-                'Shaker 45': { tier: 'Tier 2', prices: { '16': 185, '18': 190, '33': 215 } }
+                'Tier 1': {
+                    '101': ['Plain', 150, 155, 180],
+                    '401': ['Shaker', 165, 170, 195]
+                },
+                'Tier 2': {
+                    '1': ['Bevelled Edge', 180, 185, 210],
+                    '2': ['Shaker 45', 185, 190, 215]
+                },
+                'Tier 3': {
+                    '1': ['Arch Profile', 210, 215, 245],
+                    '2': ['Demi Round', 215, 220, 250]
+                }
             };
             localStorage.setItem('ctsMatrix', JSON.stringify(demoCts));
+            // Ensure thicknesses are seeded too
+            if (!localStorage.getItem('ctsThicknesses')) {
+                localStorage.setItem('ctsThicknesses', JSON.stringify([16, 18, 33]));
+            }
         }
 
         // Mark fully seeded — AFTER all blocks run
@@ -10269,7 +10292,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.84';
+        const _ver = window.CURRENT_VERSION || 'v1.16.86';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
@@ -11922,6 +11945,17 @@ const firebaseConfig = {
                 await window.deleteDoc(d.ref).catch(()=>{});
             }
         } catch(e) {}
+        // Push demo masterMatrix to Firestore so tier selector works on next login
+        try {
+            const demoMatrix = {
+                'Tier 1': {'101':['Plain',125,135,145,130,110],'401':['Shaker',145,155,165,150,130]},
+                'Tier 2': {'201':['Bevelled Edge',160,170,180,165,145],'402':['Shaker 45',165,175,185,170,150]},
+                'Tier 3': {'301':['Arch Profile',195,210,225,200,180],'302':['Demi Round',200,215,230,205,185]}
+            };
+            const demoProfiles = ['Plain (101)','Shaker (401)','Bevelled Edge (201)','Shaker 45 (402)','Arch Profile (301)','Demi Round (302)'];
+            await window.setDoc(window.doc(window.firebaseDb,'users',uid,'config','doorProfiles'),
+                { doorProfiles: demoProfiles, masterMatrix: demoMatrix, lastModified: new Date().toISOString(), syncVersion: 0 }, { merge: false });
+        } catch(e) { console.warn('Matrix push error:', e.message); }
         // Clear ALL localStorage
         localStorage.clear();
         // Clear ALL session flags
