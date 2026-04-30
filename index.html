@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.93'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.94'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -10303,7 +10303,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.93';
+        const _ver = window.CURRENT_VERSION || 'v1.16.94';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
@@ -14902,48 +14902,71 @@ const firebaseConfig = {
                 doc.setFont(undefined, 'normal');
                 doc.setTextColor(200, 30, 30);
 
-                // ── SMART SIZE SELECTION ──────────────────────────────────────
-                // Pick the confirmed formula size closest to the actual litres needed
-                let _formulaSize = 1;
-                let _formulaWhiteBase = formula ? (formula.whiteBase || formula.baseTinters || []) : [];
-                let _formulaColourants = formula ? (formula.colourants || []) : [];
-                let _sizeNote = '';
+                // ── SMART SIZE SELECTION WITH BATCH SPLITTING ────────────────
+                // Always round UP to next confirmed size. For large jobs, split into batches.
+                // e.g. 6.8L = 4L batch + 3L batch (not 3.4L scaled from 3L)
+                const _CR2 = JSON.parse(localStorage.getItem('pwCoverageRates') || '{}');
+                const _finLower = (paintFinish || '').toLowerCase();
+                const _covRate = _finLower==='matt'?(parseFloat(_CR2.matt)||5):_finLower==='gloss'?(parseFloat(_CR2.gloss)||5):(parseFloat(_CR2.satin)||5);
+                const _litresNeeded = formula ? (colorSQM / _covRate) : 1;
+                const confirmed = formula ? new Set(formula.confirmedSizes || [1]) : new Set([1]);
+                const _sizes = [4,3,2,1]; // priority: biggest first
 
-                if (formula && formula.sizes) {
-                    // Calculate litres needed for this colour
-                    const _CR2 = JSON.parse(localStorage.getItem('pwCoverageRates') || '{}');
-                    const _finLower = (paintFinish || '').toLowerCase();
-                    const _covRate = _finLower==='matt'?(parseFloat(_CR2.matt)||5):_finLower==='gloss'?(parseFloat(_CR2.gloss)||5):(parseFloat(_CR2.satin)||5);
-                    const _litresNeeded = colorSQM / _covRate;
-
-                    // Determine target size bracket
-                    let _targetSize;
-                    if (_litresNeeded < 1.5) _targetSize = 1;
-                    else if (_litresNeeded < 2.5) _targetSize = 2;
-                    else if (_litresNeeded < 3.5) _targetSize = 3;
-                    else _targetSize = 4;
-
-                    // Find best confirmed size — prefer exact match, then nearest confirmed
-                    const confirmed = new Set(formula.confirmedSizes || [1]);
-                    if (confirmed.has(_targetSize)) {
-                        _formulaSize = _targetSize;
-                    } else {
-                        // Find nearest confirmed size
-                        const confirmedArr = Array.from(confirmed).sort((a,b) => Math.abs(a-_targetSize)-Math.abs(b-_targetSize));
-                        _formulaSize = confirmedArr[0] || 1;
-                        _sizeNote = ` (${_targetSize}L needed — ${_formulaSize}L formula used, ${_formulaSize !== _targetSize ? 'confirm '+_targetSize+'L for accuracy' : ''})`;
+                // Build list of batches needed to cover _litresNeeded
+                function _getBatches(litres) {
+                    const batches = [];
+                    let remaining = litres;
+                    // Always round up: if remaining > 0, pick smallest confirmed size that covers it
+                    while (remaining > 0.05) {
+                        // Find smallest confirmed size >= remaining (round up)
+                        const sortedAsc = [1,2,3,4].filter(s => confirmed.has(s)).sort((a,b) => a-b);
+                        let picked = null;
+                        for (const s of sortedAsc) {
+                            if (s >= remaining) { picked = s; break; }
+                        }
+                        // If nothing big enough, use the largest confirmed size
+                        if (!picked) {
+                            const sortedDesc = [4,3,2,1].filter(s => confirmed.has(s));
+                            picked = sortedDesc[0] || 4;
+                        }
+                        batches.push(picked);
+                        remaining -= picked;
                     }
-
-                    const sizeData = formula.sizes[_formulaSize];
-                    if (sizeData) {
-                        _formulaWhiteBase = sizeData.baseTinters || [];
-                        _formulaColourants = sizeData.colourants || [];
-                    }
+                    return batches;
                 }
 
-                doc.text(`(Weights for ${_formulaSize} Litre of Paint${_sizeNote})`, 20, y);
+                const _batches = _getBatches(_litresNeeded);
+                const _totalBatchL = _batches.reduce((a,b)=>a+b, 0);
+
+                // Generate one mixing card page per batch
+                const _pageStart = y; // save y for subtitle
+                doc.text(`${_litresNeeded.toFixed(1)}L needed — mixing ${_batches.map((b,i)=>'Batch '+(i+1)+': '+b+'L').join(' + ')}`, 20, y);
                 // ─────────────────────────────────────────────────────────────
                 doc.setTextColor(0, 0, 0);
+                y += 8;
+
+                // We'll print the first batch inline, additional batches on new pages
+                const _batchesToPrint = _batches.length > 0 ? _batches : [1];
+                let _formulaWhiteBase = formula ? (formula.whiteBase || formula.baseTinters || []) : [];
+                let _formulaColourants = formula ? (formula.colourants || []) : [];
+                let _formulaSize = _batchesToPrint[0];
+
+                // Load first batch formula data
+                if (formula && formula.sizes && formula.sizes[_formulaSize]) {
+                    _formulaWhiteBase = formula.sizes[_formulaSize].baseTinters || [];
+                    _formulaColourants = formula.sizes[_formulaSize].colourants || [];
+                } else if (formula) {
+                    // Scale from 1L if not confirmed
+                    const base1L = formula.sizes && formula.sizes[1] ? formula.sizes[1] : { baseTinters: formula.whiteBase || formula.baseTinters || [], colourants: formula.colourants || [] };
+                    _formulaWhiteBase = base1L.baseTinters.map(b => ({...b, grams: +((parseFloat(b.grams)||0)*_formulaSize).toFixed(2)}));
+                    _formulaColourants = base1L.colourants.map(c => ({...c, amount: +((parseFloat(c.amount||c.grams)||0)*_formulaSize).toFixed(2)}));
+                }
+
+                const _batchLabel = _batchesToPrint.length > 1 ? `Batch 1 of ${_batchesToPrint.length}: ${_formulaSize}L (${_litresNeeded.toFixed(1)}L needed total)` : `(Weights for ${_formulaSize} Litre of Paint)`;
+
+                doc.setFontSize(10); doc.setFont(undefined,'normal'); doc.setTextColor(200,30,30);
+                doc.text(_batchLabel, 20, y);
+                doc.setTextColor(0,0,0);
                 y += 8;
                 
                 doc.setFontSize(11);  // INCREASED from 9
@@ -15214,6 +15237,65 @@ const firebaseConfig = {
                 doc.setFontSize(6.5); doc.setFont('helvetica','normal'); doc.setTextColor(170,170,170);
                 doc.text('Created by paintworkzpro.com.au', doc.internal.pageSize.getWidth()-10, doc.internal.pageSize.getHeight()-4, {align:'right'});
                 doc.setTextColor(0,0,0); doc.setFont('helvetica','normal'); doc.setFontSize(9);
+
+                // ── EXTRA BATCH PAGES ─────────────────────────────────────────
+                // Print one additional mixing card page per extra batch needed
+                for (let _bi = 1; _bi < _batchesToPrint.length; _bi++) {
+                    const _bSize = _batchesToPrint[_bi];
+                    let _bBase = [], _bTinters = [];
+                    if (formula && formula.sizes && formula.sizes[_bSize]) {
+                        _bBase = formula.sizes[_bSize].baseTinters || [];
+                        _bTinters = formula.sizes[_bSize].colourants || [];
+                    } else if (formula) {
+                        const b1 = formula.sizes && formula.sizes[1] ? formula.sizes[1] : { baseTinters: formula.whiteBase || formula.baseTinters || [], colourants: formula.colourants || [] };
+                        _bBase = b1.baseTinters.map(b => ({...b, grams: +((parseFloat(b.grams)||0)*_bSize).toFixed(2)}));
+                        _bTinters = b1.colourants.map(c => ({...c, amount: +((parseFloat(c.amount||c.grams)||0)*_bSize).toFixed(2)}));
+                    }
+                    doc.addPage();
+                    let _by = 15;
+                    if (headerLogo) { try { doc.addImage(headerLogo, 'PNG', 145, 5, 50, 20); } catch(e) {} }
+                    doc.setFontSize(28); doc.setFont(undefined,'bold'); doc.setTextColor(0,0,0);
+                    doc.text('MIXING CARD', 20, _by); _by += 12;
+                    doc.setFontSize(18); doc.setFont(undefined,'bold');
+                    doc.setFillColor(255,255,255); doc.setDrawColor(200,200,200); doc.setLineWidth(1);
+                    doc.rect(20, _by, 170, 24, 'FD');
+                    doc.text(`${paintBrand} | ${color.toUpperCase()} | ${paintFinish}`, 25, _by+16); _by += 32;
+                    doc.setFontSize(10); doc.setFont(undefined,'normal'); doc.setTextColor(200,30,30);
+                    doc.text(`Batch ${_bi+1} of ${_batchesToPrint.length}: ${_bSize}L (${_litresNeeded.toFixed(1)}L needed total — mix ${_batchesToPrint.join('L + ')}L)`, 20, _by);
+                    doc.setTextColor(0,0,0); _by += 8;
+                    doc.setDrawColor(170,132,30); doc.setLineWidth(1.5); doc.line(20, _by, 190, _by); _by += 8;
+                    doc.setFontSize(13); doc.setFont(undefined,'bold');
+                    doc.text(supplierSectionHdr, 20, _by); _by += 5;
+                    doc.setFontSize(10); doc.setFont(undefined,'normal'); doc.setTextColor(200,30,30);
+                    doc.text(`(Weights for ${_bSize} Litre of Paint)`, 20, _by);
+                    doc.setTextColor(0,0,0); _by += 8;
+                    const _bBoxH = pageHeight - _by - 30;
+                    doc.setDrawColor(0,0,0); doc.setLineWidth(0.5);
+                    doc.rect(20, _by, 170, _bBoxH);
+                    let _bY = _by + 10;
+                    doc.setFontSize(12); doc.setFont(undefined,'bold');
+                    doc.text('Base:', 25, _bY); doc.text('RUNNING TOTAL', 140, _bY); _bY += 7;
+                    doc.setFont(undefined,'normal'); doc.setFontSize(11);
+                    let _bRT = 0;
+                    (_bBase.length > 0 ? _bBase : [{code:'_____________',grams:0},{code:'_____________',grams:0}]).forEach(b => {
+                        const g = parseFloat(b.grams)||0; _bRT += g;
+                        doc.text(`${b.code}: ${g > 0 ? g.toFixed(2)+'g' : '_____________ g'}`, 30, _bY);
+                        doc.text(g > 0 ? _bRT.toFixed(2)+'g' : '_________ g', 140, _bY); _bY += 5;
+                    });
+                    _bY += 5;
+                    doc.setFontSize(11); doc.setFont(undefined,'bold');
+                    doc.text('Tinters / Colourants:', 25, _bY); doc.text('RUNNING TOTAL', 140, _bY); _bY += 7;
+                    doc.setFont(undefined,'normal');
+                    (_bTinters.length > 0 ? _bTinters : Array(5).fill({code:'_____________',amount:0})).forEach(t => {
+                        const g = parseFloat(t.amount||t.grams)||0; _bRT += g;
+                        doc.text(`${t.code}: ${g > 0 ? g.toFixed(2)+'g' : '_____________ g'}`, 30, _bY);
+                        doc.text(g > 0 ? _bRT.toFixed(2)+'g' : '_________ g', 140, _bY); _bY += 5;
+                    });
+                    doc.setFontSize(6.5); doc.setFont('helvetica','normal'); doc.setTextColor(170,170,170);
+                    doc.text('Created by paintworkzpro.com.au', doc.internal.pageSize.getWidth()-10, pageHeight-4, {align:'right'});
+                    doc.setTextColor(0,0,0);
+                }
+                // ─────────────────────────────────────────────────────────────
                 
                 // ===== SECOND PAGE - SCALED FORMULA FOR JOB REQUIREMENT =====
                 // Add new page for scaled recipe
