@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.95'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.97'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -587,8 +587,9 @@
         body.app-store-build .paddle-btn { display:none !important; }
 
         /* ── Help Tooltips ───────────────────────────────────────── */
-        .pw-help { display:none; width:16px; height:16px; background:#2196f3; color:#fff; border-radius:50%; font-size:9px; font-weight:900; align-items:center; justify-content:center; cursor:help; flex-shrink:0; position:relative; vertical-align:middle; margin-left:4px; user-select:none; }
-        body.tooltips-on .pw-help, html.tooltips-on .pw-help { display:inline-flex; }
+        .pw-help { display:inline-flex; width:16px; height:16px; background:#2196f3; color:#fff; border-radius:50%; font-size:9px; font-weight:900; align-items:center; justify-content:center; cursor:help; flex-shrink:0; position:relative; vertical-align:middle; margin-left:4px; user-select:none; }
+        body.tooltips-off .pw-help { display:none; }
+        html.tooltips-off .pw-help { display:none; }
         .pw-help-tip { display:none; }
         /* Portalled tooltip rendered by JS into body — never clipped by overflow */
         #pw-tip-portal { display:none; position:fixed; background:#1c1c1e; color:#fff; font-size:11px; font-weight:400; line-height:1.5; padding:8px 12px; border-radius:8px; width:220px; z-index:999999; pointer-events:none; box-shadow:0 4px 16px rgba(0,0,0,0.4); border:1px solid #d4af37; }
@@ -1349,27 +1350,14 @@ function getTooltipKey() {
 }
 
 function setTooltipsEnabled(on) {
-    console.log('🔧 setTooltipsEnabled called with:', on);
     const enabled = !!on;
     localStorage.setItem(getTooltipKey(), enabled ? '1' : '0');
     localStorage.setItem('pw_tooltips', enabled ? '1' : '0');
-    
-    if (enabled) {
-        document.body.classList.add('tooltips-on');
-        document.documentElement.classList.add('tooltips-on');
-    } else {
-        document.body.classList.remove('tooltips-on');
-        document.documentElement.classList.remove('tooltips-on');
-    }
-    
+    // Icons show by default; tooltips-off hides them
+    document.body.classList.toggle('tooltips-off', !enabled);
+    document.documentElement.classList.toggle('tooltips-off', !enabled);
     const cb = document.getElementById('tooltipToggle');
-    if (cb) {
-        cb.checked = enabled;
-        console.log('   Checkbox set to:', enabled);
-    }
-    console.log('   Tooltips are now:', enabled ? 'ENABLED (? icons visible)' : 'DISABLED (? icons hidden)');
-    console.log('   body.classList:', document.body.classList.toString());
-    console.log('   html.classList:', document.documentElement.classList.toString());
+    if (cb) cb.checked = enabled;
 }
 
 function initTooltips() {
@@ -1377,12 +1365,11 @@ function initTooltips() {
     var stored = localStorage.getItem(key);
     if (stored === null) stored = localStorage.getItem('pw_tooltips');
     var on = stored === null ? true : stored === '1';
-    document.body.classList.toggle('tooltips-on', on);
-    document.documentElement.classList.toggle('tooltips-on', on);
+    // Icons show by default; add tooltips-off to hide them
+    document.body.classList.toggle('tooltips-off', !on);
+    document.documentElement.classList.toggle('tooltips-off', !on);
     const cb = document.getElementById('tooltipToggle');
-    if (cb) {
-        cb.checked = on;
-    }
+    if (cb) { cb.checked = on; }
 }
 
 // Make globally available
@@ -1836,8 +1823,8 @@ const firebaseConfig = {
     // Default ON unless explicitly turned off
     var _anyOff = _allKeys.some(function(k){ return k.startsWith('pw_tooltips_') && localStorage.getItem(k) === '0'; });
     var _globalOff = localStorage.getItem('pw_tooltips') === '0';
-    if (!_anyOff && !_globalOff && (_tooltipStored === null || _tooltipStored === '1')) {
-        document.documentElement.classList.add('tooltips-on');
+    if (_anyOff || _globalOff || _tooltipStored === '0') {
+        document.documentElement.classList.add('tooltips-off');
     }
 })();
 
@@ -10304,7 +10291,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.95';
+        const _ver = window.CURRENT_VERSION || 'v1.16.97';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
@@ -26534,8 +26521,8 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
     }
 
     function showTip(badge) {
-        var isOn = document.body.classList.contains('tooltips-on') || document.documentElement.classList.contains('tooltips-on');
-        if (!isOn) return;
+        var isOff = document.body.classList.contains('tooltips-off') || document.documentElement.classList.contains('tooltips-off');
+        if (isOff) return;
         var tipEl = badge.querySelector('.pw-help-tip');
         if (!tipEl) return;
         var p = getPortal();
