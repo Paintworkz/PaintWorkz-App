@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.105'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.106'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -10315,7 +10315,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.105';
+        const _ver = window.CURRENT_VERSION || 'v1.16.106';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
@@ -23318,26 +23318,38 @@ if ('serviceWorker' in navigator && _swAllowed) {
     // Paint Brands Management
     function getPaintBrands() {
         const saved = localStorage.getItem('paintBrands');
-        // Default brands for Australia
         const defaultBrands = ['Wattyl', 'Dulux', 'Taubmans', 'Haymes', 'British Paints', 'Evic'];
-        
+        let localBrands = defaultBrands;
         if (saved) {
             try {
                 const parsed = JSON.parse(saved);
-                // If it's an array with at least 1 item, use it
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                    console.log('    Paint brands loaded from localStorage:', parsed);
-                    return parsed;
-                }
-            } catch(e) {
-                console.warn('       Could not parse paintBrands from localStorage, using defaults');
-            }
+                if (Array.isArray(parsed) && parsed.length > 0) localBrands = parsed;
+            } catch(e) {}
         }
-        
-        // If nothing saved or error, use and save defaults
-        console.log('    Using default paint brands (first time):', defaultBrands);
-        savePaintBrands(defaultBrands);
-        return defaultBrands;
+        // Always fetch from Firestore in background and merge — Firestore wins for new brands
+        if (window.currentUser && window.firebaseDb && window.doc && window.getDoc) {
+            try {
+                const ref = window.doc(window.firebaseDb, 'users', window.staffModeOwnerUid || window.currentUser.uid, 'appData', 'paintBrands');
+                window.getDoc(ref).then(snap => {
+                    if (snap.exists()) {
+                        const remote = snap.data();
+                        const remoteBrands = Array.isArray(remote.brands) ? remote.brands : [];
+                        if (remoteBrands.length > 0) {
+                            // Merge: keep all local + any from Firestore not already in local
+                            const current = JSON.parse(localStorage.getItem('paintBrands') || '[]');
+                            const merged = [...new Set([...remoteBrands, ...current])];
+                            if (merged.length !== current.length || !merged.every(b => current.includes(b))) {
+                                localStorage.setItem('paintBrands', JSON.stringify(merged));
+                                if (typeof populatePaintBrandsDropdown === 'function') populatePaintBrandsDropdown();
+                                console.log('Paint brands updated from Firestore:', merged);
+                            }
+                        }
+                    }
+                }).catch(() => {});
+            } catch(e) {}
+        }
+        console.log('    Paint brands loaded from localStorage:', localBrands);
+        return localBrands;
     }
     
     function savePaintBrands(brands) {
