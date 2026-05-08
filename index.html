@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.106'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.107'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -172,6 +172,7 @@
 }
 </script>
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="PaintWorkz Pro">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎨</text></svg>">
@@ -10315,7 +10316,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.106';
+        const _ver = window.CURRENT_VERSION || 'v1.16.107';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
@@ -23318,7 +23319,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
     // Paint Brands Management
     function getPaintBrands() {
         const saved = localStorage.getItem('paintBrands');
-        const defaultBrands = ['Wattyl', 'Dulux', 'Taubmans', 'Haymes', 'British Paints', 'Evic'];
+        const defaultBrands = ['Wattyl', 'Dulux', 'Taubmans', 'Haymes', 'British Paints', 'Evic', 'Laminex', 'Polytec'];
         let localBrands = defaultBrands;
         if (saved) {
             try {
@@ -25983,17 +25984,22 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                         if (keys.length > 0) brands = keys;
                     }
                 }
+                const _allDefaults = ['Wattyl','Dulux','Taubmans','Haymes','British Paints','Evic','Laminex','Polytec'];
                 if (brands && brands.length > 0) {
-                    localStorage.setItem('paintBrands', JSON.stringify(brands));
+                    // Merge Firestore brands with defaults — never lose any brand
+                    const merged = [...new Set([...brands, ..._allDefaults])];
+                    localStorage.setItem('paintBrands', JSON.stringify(merged));
+                    // Push merged back to Firestore if it gained new brands
+                    if (merged.length > brands.length && !window.staffModeOwnerUid && window.setDoc) {
+                        window.setDoc(_pbRef, { brands: merged, lastUpdated: new Date().toISOString() }, { merge: false }).catch(e => {});
+                    }
                     if (typeof populatePaintBrandsDropdown === 'function') populatePaintBrandsDropdown();
                 } else if (!window.staffModeOwnerUid && window.setDoc) {
-                    // Push local brands to create the doc
-                    try {
-                        const lsBrands = JSON.parse(localStorage.getItem('paintBrands') || '[]');
-                        if (Array.isArray(lsBrands) && lsBrands.length > 0) {
-                            window.setDoc(_pbRef, { brands: lsBrands, lastUpdated: new Date().toISOString() }, { merge: false }).catch(e => {});
-                        }
-                    } catch(e) {}
+                    // No Firestore doc — push defaults
+                    const lsBrands = [...new Set([..._allDefaults, ...JSON.parse(localStorage.getItem('paintBrands') || '[]')])];
+                    localStorage.setItem('paintBrands', JSON.stringify(lsBrands));
+                    window.setDoc(_pbRef, { brands: lsBrands, lastUpdated: new Date().toISOString() }, { merge: false }).catch(e => {});
+                    if (typeof populatePaintBrandsDropdown === 'function') populatePaintBrandsDropdown();
                 }
             }).catch(e => {});
         } catch(e) {}
