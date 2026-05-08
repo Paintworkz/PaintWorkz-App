@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.107'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.108'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -2214,7 +2214,7 @@ const firebaseConfig = {
                         <label>Color Name <span class="pw-help">?<span class="pw-help-tip">The paint colour name — e.g. Lexicon, Vivid White, Hog Bristle. Type it to pull up matching formula from your database.</span></span></label>
                         <div style="display:flex; gap:4px; align-items:stretch;">
                             <input type="text" id="p-color" placeholder="e.g. Lexicon" style="height:35px; font-size:12px; flex:1;" autocomplete="off" spellcheck="false" lang="en-AU" oninput="openPaintFormulaSearch()" onblur="checkBulkColourChange()">
-                            <button onclick="checkBulkColourChange()" style="background:#2196f3; color:#fff; border:none; padding:0 12px; border-radius:4px; font-size:11px; font-weight:900; cursor:pointer; white-space:nowrap; height:35px; align-self:stretch; box-sizing:border-box;" title="Apply colour + code to all parts">↻ UPDATE ALL</button>
+                            <button onclick="checkBulkColourChange()" style="background:#2196f3; color:#fff; border:none; padding:0 8px; border-radius:4px; font-size:10px; font-weight:900; cursor:pointer; white-space:nowrap; height:35px; align-self:stretch; box-sizing:border-box; min-width:32px;" title="Apply colour + code to all parts">↻</button>
                         </div>
                     </div>
                 </div>
@@ -10316,7 +10316,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.107';
+        const _ver = window.CURRENT_VERSION || 'v1.16.108';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
@@ -20616,7 +20616,9 @@ if ('serviceWorker' in navigator && _swAllowed) {
         if (window.batchCapturing === true) {
             try {
                 // Load the PDF data and render each page to canvas, then store as image
-                const pdfBytes = atob(pdfDataUri.split(',')[1]);
+                const _b64part = pdfDataUri.includes(',') ? pdfDataUri.split(',')[1] : pdfDataUri;
+                if (!_b64part) throw new Error('Invalid PDF data URI');
+                const pdfBytes = atob(_b64part);
                 const uint8 = new Uint8Array(pdfBytes.length);
                 for (let i = 0; i < pdfBytes.length; i++) uint8[i] = pdfBytes.charCodeAt(i);
                 const blob = new Blob([uint8], { type: 'application/pdf' });
@@ -20691,7 +20693,9 @@ if ('serviceWorker' in navigator && _swAllowed) {
                         if (pdfDataUri.startsWith('blob:')) {
                             blobUrl = pdfDataUri; // already a blob URL
                         } else {
-                            const pdfBytes = atob(pdfDataUri.split(',')[1]);
+                            const _b64part = pdfDataUri.includes(',') ? pdfDataUri.split(',')[1] : pdfDataUri;
+                if (!_b64part) throw new Error('Invalid PDF data URI');
+                const pdfBytes = atob(_b64part);
                             const uint8 = new Uint8Array(pdfBytes.length);
                             for (let i = 0; i < pdfBytes.length; i++) uint8[i] = pdfBytes.charCodeAt(i);
                             const blob = new Blob([uint8], { type: 'application/pdf' });
@@ -25383,6 +25387,16 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                     } catch(e) {}
                 }
                 if (typeof loadStockSettings === 'function') loadStockSettings();
+                // Final dedup by jobNum to catch Firestore duplicate docs
+                const _dedupMap = new Map();
+                jobs.forEach(j => {
+                    const _k = String(j.jobNum) + '|' + (j.client||'') + '|' + (j.dateReceived||'');
+                    if (!_dedupMap.has(_k) || (j.lastModified > (_dedupMap.get(_k).lastModified||''))) {
+                        _dedupMap.set(_k, j);
+                    }
+                });
+                jobs = Array.from(_dedupMap.values());
+                localStorage.setItem('jobHistory', JSON.stringify(jobs));
                 if (typeof renderHistory === 'function') renderHistory();
                 if (typeof renderScheduleCalendar === 'function') renderScheduleCalendar();
                 if (typeof renderAdminGanttChart === 'function') renderAdminGanttChart();
