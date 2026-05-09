@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.110'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.111'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -10341,7 +10341,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.110';
+        const _ver = window.CURRENT_VERSION || 'v1.16.111';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
@@ -18672,10 +18672,9 @@ const firebaseConfig = {
     }
 
     function kpiCard(icon, label, value, color) {
-        return `<div style="background:linear-gradient(135deg,${color}15,${color}05); border:2px solid ${color}30; border-radius:10px; padding:14px; text-align:center;">
-            <div style="font-size:26px; margin-bottom:4px;">${icon}</div>
-            <div style="font-size:22px; font-weight:900; color:${color};">${value}</div>
-            <div style="font-size:10px; font-weight:700; color:#666; text-transform:uppercase; margin-top:2px;">${label}</div>
+        return `<div style="background:linear-gradient(135deg,${color}15,${color}05); border:2px solid ${color}30; border-radius:10px; padding:10px 6px; text-align:center; overflow:hidden; min-width:0;">
+            <div style="font-size:9px; font-weight:700; color:#666; text-transform:uppercase; margin-bottom:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${label}</div>
+            <div style="font-size:16px; font-weight:900; color:${color}; word-break:break-all; line-height:1.2;">${value}</div>
         </div>`;
     }
 
@@ -18683,29 +18682,31 @@ const firebaseConfig = {
         const area = document.getElementById('reportsPrintArea');
         if (!area) { notify('Run a report first'); return; }
 
-        // Convert all canvas elements to <img> for printing (canvas doesn't clone)
-        let printHtml = area.innerHTML;
+        // Capture canvas images BEFORE cloning (canvas.toDataURL fails after clone)
+        const canvasImages = {};
         area.querySelectorAll('canvas').forEach(canvas => {
-            try {
-                const dataUrl = canvas.toDataURL('image/png');
-                const imgTag = `<img src="${dataUrl}" style="width:100%;height:auto;" id="${canvas.id}">`;
-                printHtml = printHtml.replace(
-                    new RegExp(`<canvas[^>]*id=["']${canvas.id}["'][^>]*></canvas>`),
-                    imgTag
-                );
-            } catch(e) {}
+            try { canvasImages[canvas.id] = canvas.toDataURL('image/png'); } catch(e) {}
         });
 
-        // Remove cards where "Include in print" checkbox is unchecked
-        const parser = new DOMParser();
-        const doc2 = parser.parseFromString('<div>' + printHtml + '</div>', 'text/html');
-        doc2.querySelectorAll('.report-card').forEach(card => {
+        // Clone, filter unchecked sections, replace canvas with img
+        const clone = area.cloneNode(true);
+        clone.querySelectorAll('.report-card').forEach(card => {
             const cb = card.querySelector('.rpt-include-cb');
-            if (cb && !cb.checked) card.remove();
+            if (cb && !cb.checked) { card.remove(); }
         });
-        // Remove the checkboxes themselves from print output
-        doc2.querySelectorAll('.rpt-include-label').forEach(el => el.remove());
-        printHtml = doc2.body.firstChild.innerHTML;
+        clone.querySelectorAll('.rpt-include-label').forEach(el => el.remove());
+        clone.querySelectorAll('canvas').forEach(canvas => {
+            if (canvasImages[canvas.id]) {
+                const img = document.createElement('img');
+                img.src = canvasImages[canvas.id];
+                img.style.cssText = 'width:100%;height:auto;';
+                canvas.parentNode.replaceChild(img, canvas);
+            }
+        });
+        // Job breakdown always starts new page
+        const jobBreakdown = clone.querySelector('[data-section="jobs"]');
+        if (jobBreakdown) jobBreakdown.classList.add('page-break-before');
+        let printHtml = clone.innerHTML;
         const w = window.open('', '_blank');
         const fromStr = document.getElementById('reportDateFrom').value;
         const toStr = document.getElementById('reportDateTo').value;
@@ -18713,7 +18714,7 @@ const firebaseConfig = {
             + '<style>'
             + 'body { font-family: -apple-system, sans-serif; padding: 20px; color: #111; }'
             + '.report-card { background:#fff; border-radius:8px; padding:14px; border:1px solid #ccc; margin-bottom:14px; }'
-            + '.report-card-title { font-size:12px; font-weight:900; color:#333; margin-bottom:10px; text-transform:uppercase; }'
+            + '.report-card-title { font-size:11px; font-weight:900; color:#333; margin-bottom:8px; text-transform:uppercase; display:flex; justify-content:space-between; }' + '.page-break-before { page-break-before:always; break-before:page; margin-top:0 !important; }'
             + 'table { width:100%; border-collapse:collapse; font-size:11px; }'
             + 'th { background:#2196f3; color:#fff; padding:6px 8px; text-align:left; }'
             + 'td { padding:5px 8px; border-bottom:1px solid #eee; }'
