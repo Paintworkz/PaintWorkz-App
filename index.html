@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.113'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.114'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -3720,6 +3720,17 @@ const firebaseConfig = {
                                 <label style="font-size:9px; font-weight:900; color:#999; text-transform:uppercase; display:block; margin-bottom:3px;">👤 Filter by Client</label>
                                 <select id="rClientFilter" style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:5px; font-size:11px; font-weight:700; color:#333; background:#fff;" >
                                     <option value="">— All Clients —</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="font-size:9px; font-weight:900; color:#999; text-transform:uppercase; display:block; margin-bottom:3px;">📐 Min Job SQM</label>
+                                <select id="rMinSqmFilter" style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:5px; font-size:11px; font-weight:700; color:#333; background:#fff;">
+                                    <option value="0">— All Sizes —</option>
+                                    <option value="10">10m² +</option>
+                                    <option value="20">20m² +</option>
+                                    <option value="30">30m² +</option>
+                                    <option value="50">50m² +</option>
+                                    <option value="100">100m² +</option>
                                 </select>
                             </div>
                             <div style="display:flex; gap:5px;">
@@ -10342,7 +10353,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.113';
+        const _ver = window.CURRENT_VERSION || 'v1.16.114';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
@@ -10833,6 +10844,9 @@ const firebaseConfig = {
         
         // Render admin alerts when viewing admin tab
         if (t === 'admin') {
+            // Debounce: ignore rapid repeat clicks within 600ms
+            if (window._adminTabLastClick && Date.now() - window._adminTabLastClick < 600) return;
+            window._adminTabLastClick = Date.now();
             renderAdminAlerts();
         }
         
@@ -17280,12 +17294,17 @@ const firebaseConfig = {
         // Filter jobs in range + status + client
         populateClientFilter();
         const _clientFilter = (document.getElementById('rClientFilter')?.value || '').trim();
+        const _minSqm = parseFloat(document.getElementById('rMinSqmFilter')?.value || 0);
         const jobs = history.filter(j => {
             const d = parseReportDate(j.dateReceived) || new Date(j.timestamp || 0);
             if (d < fromDate || d > toDate) return false;
             if (_reportStatusFilter === 'active' && j.completed) return false;
             if (_reportStatusFilter === 'completed' && !j.completed) return false;
             if (_clientFilter && (j.client || '') !== _clientFilter) return false;
+            if (_minSqm > 0) {
+                const jobSqm = (j.items || []).reduce((s, it) => s + (parseFloat(it.sqm) || 0), 0);
+                if (jobSqm < _minSqm) return false;
+            }
             return true;
         });
 
@@ -17497,6 +17516,17 @@ const firebaseConfig = {
         const _hasAnyCost = Object.values(getBaseCosts()).some(v => v > 0);
         const _paintCostNote = (!_hasAnyCost) ? '<div style="font-size:9px;color:#e57373;margin-top:4px;">⚠ Set $/L in Admin → Paint Stock Settings</div>' : (Object.keys(baseCodeLitres).length === 0 && _hasAnyCost) ? '<div style="font-size:9px;color:#ff9800;margin-top:4px;">⚠ Add paint formulas to Database → Paint for cost analysis</div>' : '';
 
+        // Avg days to complete
+        const _completedJobs = jobs.filter(j => j.completed && j.completedDate && j.dateReceived);
+        const _avgDays = _completedJobs.length > 0 ? Math.round(
+            _completedJobs.reduce((s, j) => {
+                const start = parseReportDate(j.dateReceived) || new Date(j.timestamp || 0);
+                const end = new Date(j.completedDate);
+                return s + Math.max(0, (end - start) / 86400000);
+            }, 0) / _completedJobs.length
+        ) : null;
+        const _avgDaysKpi = _avgDays !== null ? _avgDays + 'd' : 'N/A';
+
         const html = `
         <div id="reportsPrintArea">
         <div style="text-align:right; font-size:10px; font-weight:900; color:#2196f3; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">${statusLabel}</div>
@@ -17504,11 +17534,12 @@ const firebaseConfig = {
         <!-- KPI cards - up to 8 across -->
         <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(100px,1fr)); gap:10px; margin-bottom:18px;">
             ${kpiCard('       ', 'Jobs', jobs.length, '#2196f3')}
-            ${kpiCard('    ', 'Total SQM', totalSqm.toFixed(1) + 'm  ', '#4caf50')}
+            ${kpiCard('    ', 'Total SQM', totalSqm.toFixed(1) + 'm²', '#4caf50')}
             ${kpiCard('    ', 'Parts', totalParts, '#ff9800')}
             ${kpiCard('    ', 'Colours', Object.keys(colourCount).length, '#9c27b0')}
-            ${kpiCard('    ', 'Undercoat SQM', undercoatSqm + 'm  ', '#795548')}
+            ${kpiCard('    ', 'Undercoat SQM', undercoatSqm + 'm²', '#795548')}
             ${kpiCard('    ', 'Est. Revenue', _fmtKpi(_totalEstVal), '#1565c0')}
+            ${kpiCard('⏱', 'Avg Days/Job', _avgDaysKpi, '#00838f')}
             ${totalCtsRevenue > 0 ? kpiCard('✂️', 'CTS Revenue', _fmtKpi(totalCtsRevenue), '#2c3e50') : ''}
             ${_totalPaintCost > 0 ? kpiCard('    ', 'Paint Cost', _fmtKpi(_totalPaintCost), '#e53935') : ''}
             ${(_totalEstVal > 0 && _totalPaintCost > 0) ? kpiCard('    ', 'Gross Margin', _fmtKpi(_grossProfit), _grossProfit >= 0 ? '#2e7d32' : '#c62828') : ''}
@@ -18062,11 +18093,11 @@ const firebaseConfig = {
                     return `<div style="background:${cellBg}; border:1px solid ${color}60; border-left:3px solid ${color}; border-radius:6px; padding:7px 10px; display:flex; align-items:center; gap:8px;">
                         <div style="flex:1; min-width:0;">
                             <div style="font-size:9px; font-weight:900; color:${color}; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${stockLabels[k]}</div>
-                            <div style="font-size:10px; color:${mutedTxt}; margin-top:2px;">Need: <strong style="color:${cellTxt};">${needed}L</strong> &nbsp;<span style="font-weight:900; color:${color};">${remaining >= 0 ? '+' : ''}${remaining.toFixed(1)}L</span></div>
+                            <div style="font-size:10px; color:${mutedTxt}; margin-top:2px;">Need: <strong style="color:${cellTxt};">${Math.round(needed*10)/10}L</strong> <span style="font-weight:900; color:${color};">${remaining >= 0 ? '+' : ''}${remaining.toFixed(1)}L</span></div>
                         </div>
                         <div style="display:flex; align-items:center; gap:3px; flex-shrink:0;">
-                            <input type="number" inputmode="decimal" data-stock-key="${k}" value="${onHand}" min="0" step="0.5"
-                                style="width:90px; padding:4px 6px; border:1px solid ${color}60; border-radius:4px; font-size:13px; font-weight:900; text-align:center; background:${_sdm ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.8)'}; color:${cellTxt};">
+                            <input type="number" inputmode="decimal" data-stock-key="${k}" value="${Math.round(onHand*10)/10}" min="0" step="0.5"
+                                style="width:72px; padding:3px 4px; border:1px solid ${color}60; border-radius:4px; font-size:12px; font-weight:900; text-align:center; background:${_sdm ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.8)'}; color:${cellTxt};">
                             <span style="font-size:9px; color:${mutedTxt};">L</span>
                         </div>
                     </div>`;
@@ -18691,6 +18722,7 @@ const firebaseConfig = {
         finishChart: { label: 'Jobs by Finish / Client Charts', on: true },
         profit: { label: 'Profit & Value Charts', on: true },
         cts: { label: 'CTS Revenue', on: true },
+        avgdays: { label: 'Avg Days to Complete', on: true },
         jobs: { label: 'Job Breakdown Table', on: true },
     };
 
