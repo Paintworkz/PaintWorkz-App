@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.116'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.117'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -10377,7 +10377,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.116';
+        const _ver = window.CURRENT_VERSION || 'v1.16.117';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
@@ -26344,6 +26344,43 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
 
                         var _ps=JSON.parse(localStorage.getItem('jobHistory')||'[]');
                         jobs.forEach(function(cj){var lj=_ps.find(function(j){return j.id===cj.id||(j.jobNum===cj.jobNum&&j.client===cj.client);});if(lj&&Array.isArray(lj.photos)&&lj.photos.length>0)cj.photos=lj.photos;});
+
+                        // ── ORPHAN JOB DETECTION ────────────────────────────────────
+                        // Find local jobs that are NOT in the cloud snapshot
+                        // These are jobs that saved to localStorage but not to Firestore
+                        const _cloudIds = new Set(jobs.map(j => j.id).filter(Boolean));
+                        const _cloudJobNums = new Set(jobs.map(j => String(j.jobNum)));
+                        const _orphans = _ps.filter(function(lj) {
+                            if (!lj.jobNum) return false;
+                            if (lj.id && _cloudIds.has(lj.id)) return false; // in cloud by ID
+                            if (_cloudJobNums.has(String(lj.jobNum))) return false; // in cloud by num
+                            if (lj.id && lj.id.startsWith('demo-')) return false; // demo job
+                            const savedAt = lj.timestamp ? new Date(lj.timestamp).getTime() : 0;
+                            if (Date.now() - savedAt > 7 * 24 * 60 * 60 * 1000) return false; // older than 7 days
+                            return true;
+                        });
+                        if (_orphans.length > 0 && !window._orphanPromptShown) {
+                            window._orphanPromptShown = true;
+                            setTimeout(function() {
+                                const _names = _orphans.map(j => 'Job #' + j.jobNum + (j.jobName ? ' — ' + j.jobName : '') + (j.client ? ' (' + j.client + ')' : '')).join('\n');
+                                if (confirm('⚠️ ' + _orphans.length + ' local job(s) not found in cloud:\n\n' + _names + '\n\nPush to cloud now?')) {
+                                    const _uid = getTargetUid();
+                                    _orphans.forEach(function(oj) {
+                                        if (!oj.id) oj.id = 'job_' + oj.jobNum + '_' + Date.now();
+                                        oj.userId = _uid;
+                                        oj.lastModified = new Date().toISOString();
+                                        const _ref = window.doc(window.firebaseDb, 'users', _uid, 'jobs', oj.id);
+                                        window.setDoc(_ref, oj, {merge:false}).then(function() {
+                                            console.log('✅ Recovered orphan job:', oj.jobNum);
+                                        }).catch(function(e) {
+                                            console.error('❌ Failed to recover job:', oj.jobNum, e);
+                                        });
+                                    });
+                                    notify('✅ Pushing ' + _orphans.length + ' job(s) to cloud...');
+                                }
+                            }, 2000);
+                        }
+                        // ────────────────────────────────────────────────────────────
 
                         // GUARD: Only block snapshot if user is ACTIVELY entering parts
                         const _msSinceSave = window._lastLocalSaveTime ? Date.now() - window._lastLocalSaveTime : 99999;
