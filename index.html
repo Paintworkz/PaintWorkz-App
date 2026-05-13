@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.115'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.116'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -3897,7 +3897,31 @@ const firebaseConfig = {
 
     // Get target UID for Firestore operations (owner UID if staff mode, current user otherwise)
     function getTargetUid() {
-        return window.staffModeOwnerUid || (window.currentUser ? window.currentUser.uid : null);
+        // If this is a staff account, ALWAYS use the owner's UID
+        // If staffModeOwnerUid is missing (e.g. page refresh), fall back to stored value
+        if (window.isStaffAccount && !window.staffModeOwnerUid) {
+            // Try to recover from localStorage cache
+            const cached = localStorage.getItem('pw_staff_owner_uid');
+            if (cached) {
+                window.staffModeOwnerUid = cached;
+                console.warn('⚠️ Recovered staffModeOwnerUid from cache:', cached);
+            }
+        }
+        const uid = window.staffModeOwnerUid || (window.currentUser ? window.currentUser.uid : null);
+        return uid;
+    }
+
+    // Guard: is the current save going to the right UID?
+    function _assertCorrectSaveUid(context) {
+        if (!window.isStaffAccount) return true; // owner account, always fine
+        if (!window.staffModeOwnerUid) {
+            const cached = localStorage.getItem('pw_staff_owner_uid');
+            if (cached) { window.staffModeOwnerUid = cached; return true; }
+            console.error(`🚨 ${context}: Staff account has no ownerUid! Job will save to wrong path.`);
+            notify('⚠️ Sync issue — please refresh the page before saving');
+            return false;
+        }
+        return true;
     }
 
     //        PLAN SYSTEM                                                                                                                                                                               
@@ -8010,8 +8034,8 @@ const firebaseConfig = {
     }
     
     function saveJobToHistory() {
-        console.log('     SAVING JOB - Items count: ' + items.length);
-        console.log('  Items being saved:', items.map(i => ({ desc: i.desc, sqm: i.sqm, qty: i.qty })));
+        // GUARD: Staff accounts must always save to owner's UID
+        if (!_assertCorrectSaveUid('saveJobToHistory')) return;
         
         // === SAFETY CHECK: Prevent overwriting a job that had parts with empty items ===
         // This catches the race condition where parts haven't loaded yet
@@ -10353,7 +10377,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.115';
+        const _ver = window.CURRENT_VERSION || 'v1.16.116';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
@@ -25094,6 +25118,8 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                         });
                         window.staffModeOwnerUid = userData.parentUid;
                         window.isStaffAccount = true;
+                        // Cache for recovery if page refreshes mid-session
+                        localStorage.setItem('pw_staff_owner_uid', userData.parentUid);
                         activateStaffMode();
                         // Kill any existing realtime sync (it may have started on wrong uid)
                         if (window.realtimeSyncUnsubscribe) {
