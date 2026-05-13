@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.124'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.126'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1719,7 +1719,7 @@ const firebaseConfig = {
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.124'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.126'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -2812,244 +2812,7 @@ const firebaseConfig = {
 
 </style>
 
-<script>
-//                                                                                                                                                                                                       
-// PaintWorkz IndexedDB     unlimited job storage
-// Replaces localStorage 5MB cap. Falls back gracefully if unavailable.
-//                                                                                                                                                                                                       
-const pwDB = (() => {
-    const DB_NAME = 'PaintWorkzDB';
-    const DB_VERSION = 1;
-    const STORE = 'jobs';
-    let _db = null;
 
-    function open() {
-        return new Promise((resolve, reject) => {
-            if (_db) { resolve(_db); return; }
-            const req = indexedDB.open(DB_NAME, DB_VERSION);
-            req.onupgradeneeded = e => {
-                const db = e.target.result;
-                if (!db.objectStoreNames.contains(STORE)) {
-                    const store = db.createObjectStore(STORE, { keyPath: 'jobNum' });
-                    store.createIndex('by_date', 'dateReceived', { unique: false });
-                    store.createIndex('by_client', 'client', { unique: false });
-                    store.createIndex('by_timestamp', 'timestamp', { unique: false });
-                }
-            };
-            req.onsuccess = e => { _db = e.target.result; resolve(_db); };
-            req.onerror = e => { console.warn('IndexedDB open failed:', e); reject(e); };
-        });
-    }
-
-    async function saveJob(job) {
-        try {
-            const db = await open();
-            return new Promise((resolve, reject) => {
-                const tx = db.transaction(STORE, 'readwrite');
-                tx.objectStore(STORE).put(job);
-                tx.oncomplete = () => resolve(true);
-                tx.onerror = e => reject(e);
-            });
-        } catch(e) { console.warn('pwDB.saveJob failed:', e); return false; }
-    }
-
-    async function getAllJobs() {
-        try {
-            const db = await open();
-            return new Promise((resolve, reject) => {
-                const req = db.transaction(STORE, 'readonly').objectStore(STORE).getAll();
-                req.onsuccess = () => resolve(req.result || []);
-                req.onerror = e => reject(e);
-            });
-        } catch(e) {
-            console.warn('pwDB.getAllJobs failed, falling back to localStorage:', e);
-            return JSON.parse(localStorage.getItem('jobHistory') || '[]');
-        }
-    }
-
-    async function deleteJob(jobNum) {
-        try {
-            const db = await open();
-            return new Promise((resolve, reject) => {
-                const tx = db.transaction(STORE, 'readwrite');
-                tx.objectStore(STORE).delete(jobNum);
-                tx.oncomplete = () => resolve(true);
-                tx.onerror = e => reject(e);
-            });
-        } catch(e) { console.warn('pwDB.deleteJob failed:', e); return false; }
-    }
-
-    async function getCount() {
-        try {
-            const db = await open();
-            return new Promise((resolve) => {
-                const req = db.transaction(STORE, 'readonly').objectStore(STORE).count();
-                req.onsuccess = () => resolve(req.result);
-                req.onerror = () => resolve(0);
-            });
-        } catch(e) { return 0; }
-    }
-
-    // Migrate existing localStorage jobs into IndexedDB on first run
-    async function migrateFromLocalStorage() {
-        try {
-            const count = await getCount();
-            if (count > 0) return; // already migrated
-            const existing = JSON.parse(localStorage.getItem('jobHistory') || '[]');
-            if (existing.length === 0) return;
-            const db = await open();
-            const tx = db.transaction(STORE, 'readwrite');
-            const store = tx.objectStore(STORE);
-            existing.forEach(job => { if (job.jobNum) store.put(job); });
-            await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
-            console.log(` Migrated ${existing.length} jobs from localStorage to IndexedDB`);
-        } catch(e) { console.warn('Migration failed:', e); }
-    }
-
-    // Run migration on load
-    migrateFromLocalStorage();
-
-    return { saveJob, getAllJobs, deleteJob, getCount };
-})();
-
-// PaintWorkz Photo IndexedDB - handles large photo storage
-// Photos are too large for localStorage (quota issues), use IndexedDB instead
-const photoDB = (() => {
-    const DB_NAME = 'PaintWorkzPhotoDB';
-    const DB_VERSION = 1;
-    const STORE = 'photos';
-    let _db = null;
-
-    function open() {
-        return new Promise((resolve, reject) => {
-            if (_db) { resolve(_db); return; }
-            const req = indexedDB.open(DB_NAME, DB_VERSION);
-            req.onupgradeneeded = e => {
-                const db = e.target.result;
-                if (!db.objectStoreNames.contains(STORE)) {
-                    const store = db.createObjectStore(STORE, { keyPath: 'jobNum' });
-                    store.createIndex('by_timestamp', 'timestamp', { unique: false });
-                }
-            };
-            req.onsuccess = e => { _db = e.target.result; resolve(_db); };
-            req.onerror = e => { console.warn('PhotoDB open failed:', e); reject(e); };
-        });
-    }
-
-    async function savePhotos(jobNum, photosArray) {
-        try {
-            const db = await open();
-            return new Promise((resolve, reject) => {
-                const tx = db.transaction(STORE, 'readwrite');
-                tx.objectStore(STORE).put({ 
-                    jobNum: jobNum, 
-                    photos: photosArray,
-                    timestamp: new Date().toISOString()
-                });
-                tx.oncomplete = () => {
-                    console.log('%c💾 SAVED TO IndexedDB', 'background:#34c759;color:#fff;font-weight:900;padding:4px;', 'Job#:', jobNum, 'Photos:', photosArray.length);
-                    resolve(true);
-                };
-                tx.onerror = e => reject(e);
-            });
-        } catch(e) { 
-            console.error('%c❌ IndexedDB SAVE ERROR', 'background:#ff3b30;color:#fff;font-weight:900;padding:4px;', e.message);
-            return false; 
-        }
-    }
-
-    async function getPhotos(jobNum) {
-        try {
-            const db = await open();
-            return new Promise((resolve, reject) => {
-                const req = db.transaction(STORE, 'readonly').objectStore(STORE).get(jobNum);
-                req.onsuccess = () => {
-                    const result = req.result;
-                    if (result && result.photos) {
-                        console.log('%c✅ LOADED FROM IndexedDB', 'background:#34c759;color:#fff;font-weight:900;padding:4px;', 'Job#:', jobNum, 'Photos:', result.photos.length);
-                        resolve(result.photos);
-                    } else {
-                        console.log('%c❌ NO PHOTOS IN IndexedDB', 'background:#ff3b30;color:#fff;font-weight:900;padding:4px;', 'Job#:', jobNum);
-                        resolve([]);
-                    }
-                };
-                req.onerror = e => reject(e);
-            });
-        } catch(e) {
-            console.error('%c❌ IndexedDB LOAD ERROR', 'background:#ff3b30;color:#fff;font-weight:900;padding:4px;', e.message);
-            return [];
-        }
-    }
-
-    async function deletePhotos(jobNum) {
-        try {
-            const db = await open();
-            return new Promise((resolve, reject) => {
-                const tx = db.transaction(STORE, 'readwrite');
-                tx.objectStore(STORE).delete(jobNum);
-                tx.oncomplete = () => resolve(true);
-                tx.onerror = e => reject(e);
-            });
-        } catch(e) { 
-            console.warn('PhotoDB delete failed:', e); 
-            return false; 
-        }
-    }
-
-    return { open, savePhotos, getPhotos, deletePhotos };
-})();
-
-//                                                                                                                                                                                                       
-// Safe localStorage wrapper     handles QuotaExceededError gracefully
-//                                                                                                                                                                                                       
-const safeStorage = {
-    set(key, value) {
-        try {
-            localStorage.setItem(key, value);
-            return true;
-        } catch(e) {
-            if (e.name === 'QuotaExceededError' || e.code === 22) {
-                console.error('localStorage quota exceeded for key:', key);
-                // Try to free space by clearing old backups first
-                const lowPriority = ['jobHistory_backup_', 'companyLogo', 'headerLogo'];
-                let freed = false;
-                for (const lp of lowPriority) {
-                    const keys = Object.keys(localStorage).filter(k => k.startsWith(lp));
-                    if (keys.length) {
-                        keys.forEach(k => localStorage.removeItem(k));
-                        freed = true;
-                        break;
-                    }
-                }
-                if (freed) {
-                    try { localStorage.setItem(key, value); return true; } catch(e2) {}
-                }
-                // Show user-facing warning
-                if (typeof notify === 'function') {
-                    notify('       Storage nearly full. Please export a backup to free space.', 6000);
-                }
-                return false;
-            }
-            throw e;
-        }
-    },
-    get(key, fallback = null) {
-        try { const v = localStorage.getItem(key); return v !== null ? v : fallback; }
-        catch(e) { return fallback; }
-    },
-    remove(key) {
-        try { localStorage.removeItem(key); return true; }
-        catch(e) { return false; }
-    },
-    getJSON(key, fallback = null) {
-        try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
-        catch(e) { return fallback; }
-    },
-    setJSON(key, obj) {
-        return this.set(key, JSON.stringify(obj));
-    }
-};
-</script>
 
 <script>
 // Global error handler
@@ -12079,7 +11842,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.124';
+        const _ver = window.CURRENT_VERSION || 'v1.16.126';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
@@ -20556,4 +20319,133 @@ const firebaseConfig = {
         }, 300);
     }
 
->
+
+    var _rptSections = {
+        kpi: { label: 'KPI Summary', on: true },
+        monthly: { label: 'Monthly SQM Chart', on: true },
+        finish: { label: 'By Finish', on: true },
+        colours: { label: 'Top Colours', on: true },
+        colourChart: { label: 'Colour / Profile Charts', on: true },
+        paint: { label: 'Paint Used / Stock', on: true },
+        clients: { label: 'SQM by Client', on: true },
+        finishChart: { label: 'Jobs by Finish / Client Charts', on: true },
+        profit: { label: 'Profit & Value Charts', on: true },
+        cts: { label: 'CTS Revenue', on: true },
+        avgdays: { label: 'Avg Days to Complete', on: true },
+        jobs: { label: 'Job Breakdown Table', on: true },
+    };
+
+    function showReportSectionPicker() {
+        let existing = document.getElementById('rptSectionPickerModal');
+        if (existing) { existing.remove(); return; }
+        const modal = document.createElement('div');
+        modal.id = 'rptSectionPickerModal';
+        modal.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--modal-bg,#fff);color:var(--text-primary,#333);border-radius:12px;padding:20px;z-index:99999;width:280px;box-shadow:0 8px 40px rgba(0,0,0,0.4);border:1px solid #d4af37;';
+        let rows = '<div style="font-weight:900;font-size:13px;margin-bottom:12px;">⚙️ Sections to Print</div>';
+        Object.entries(_rptSections).forEach(([key, sec]) => {
+            rows += `<label style="display:flex;align-items:center;gap:8px;padding:5px 0;cursor:pointer;font-size:12px;border-bottom:1px solid #eee;">
+                <input type="checkbox" data-rpt-key="${key}" ${sec.on ? 'checked' : ''} style="cursor:pointer;width:16px;height:16px;">
+                ${sec.label}</label>`;
+        });
+        rows += `<div style="display:flex;gap:8px;margin-top:14px;">
+            <button onclick="document.getElementById('rptSectionPickerModal').remove()" style="flex:1;padding:8px;background:#4caf50;color:#fff;border:none;border-radius:6px;font-weight:900;cursor:pointer;">✓ Done</button>
+            <button onclick="Object.keys(_rptSections).forEach(k=>_rptSections[k].on=true);document.getElementById('rptSectionPickerModal').remove();" style="padding:8px 10px;background:#eee;border:none;border-radius:6px;font-weight:900;cursor:pointer;font-size:10px;">All ✓</button>
+        </div>`;
+        modal.innerHTML = rows;
+        modal.querySelectorAll('input[data-rpt-key]').forEach(cb => {
+            cb.addEventListener('change', () => { _rptSections[cb.dataset.rptKey].on = cb.checked; });
+        });
+        document.body.appendChild(modal);
+    }
+
+function maybeStartTour() {
+    if (!window.currentUser) return;
+    const uid = window.currentUser.uid;
+    if (localStorage.getItem('pw_tour_done_' + uid)) return;
+    if (sessionStorage.getItem('pw_tour_attempted_' + uid)) return;
+    sessionStorage.setItem('pw_tour_attempted_' + uid, '1');
+    const history = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+    const realJobs = history.filter(j => !j.id || !j.id.startsWith('demo-'));
+    if (realJobs.length > 0) {
+        localStorage.setItem('pw_tour_done_' + uid, '1');
+        return;
+    }
+    setTimeout(startTour, 1500);
+}
+window.maybeStartTour = maybeStartTour;
+
+var _tourStep = 0;
+var _tourActive = false;
+var _tourAutoTimer = null;
+
+function _tourClearTimer() {
+    if (_tourAutoTimer) { clearTimeout(_tourAutoTimer); _tourAutoTimer = null; }
+}
+
+function startTour() {
+    _tourClearTimer();
+    _tourStep = 0;
+    _tourActive = true;
+    const ov = document.getElementById('tourOverlay');
+    const sp = document.getElementById('tourSpotlight');
+    const tc = document.getElementById('tourCard');
+    if (!ov || !tc) { console.warn('Tour elements missing'); return; }
+    ov.style.display = 'block';
+    if (sp) sp.style.display = 'block';
+    tc.style.display = 'block';
+    _doTourStep(0);
+}
+
+function _doTourStep(idx) {
+    _tourClearTimer();
+    if (idx >= TOUR_STEPS.length) { endTour(); return; }
+    const step = TOUR_STEPS[idx];
+    const card = document.getElementById('tourCard');
+    if (!card) return;
+    const stepEl = card.querySelector('.t-step');
+    const titleEl = card.querySelector('.t-title');
+    const bodyEl = card.querySelector('.t-body');
+    const prevBtn = document.getElementById('tourPrevBtn');
+    const nextBtn = document.getElementById('tourNextBtn');
+    const skipBtn = document.getElementById('tourSkipBtn');
+    if (stepEl) stepEl.textContent = `Step ${idx+1} of ${TOUR_STEPS.length}`;
+    if (titleEl) titleEl.textContent = step.title || '';
+    if (bodyEl) bodyEl.textContent = step.body || '';
+    if (prevBtn) prevBtn.style.display = idx === 0 ? 'none' : 'block';
+    if (step.tab && typeof tab === 'function') tab(step.tab);
+    _tourStep = idx;
+    _tourStartBar(6000);
+    _tourAutoTimer = setTimeout(() => _doTourStep(idx + 1), 6000);
+}
+
+function _tourStartBar(ms) {
+    const fill = document.getElementById('tourAutoFill');
+    if (!fill) return;
+    fill.style.transition = 'none';
+    fill.style.width = '0%';
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+        fill.style.transition = 'width ' + ms + 'ms linear';
+        fill.style.width = '100%';
+    }));
+}
+
+function endTour() {
+    _tourClearTimer();
+    _tourActive = false;
+    const overlay = document.getElementById('tourOverlay');
+    const spotlight = document.getElementById('tourSpotlight');
+    const card = document.getElementById('tourCard');
+    if (overlay) overlay.style.display = 'none';
+    if (spotlight) spotlight.style.display = 'none';
+    if (card) { card.style.display = 'none'; }
+    _tourStep = 0;
+    if (window.currentUser) {
+        localStorage.setItem('pw_tour_done_' + window.currentUser.uid, '1');
+    }
+}
+
+window.startTour = startTour;
+window.endTour = endTour;
+</script>
+</body>
+</html>
