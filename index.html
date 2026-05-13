@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.117'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.118'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1802,9 +1802,19 @@ const firebaseConfig = {
                         }
                     }, syncDelay);
                 }
-                // Tour autoplay — fires after data has loaded (3s gives Firebase time to sync demo jobs)
+                // Tour autoplay — only for brand new accounts with no real jobs
+                // Mark as done immediately for accounts with jobs to prevent lag
                 setTimeout(() => {
-                    if (typeof maybeStartTour === 'function') maybeStartTour();
+                    if (window.currentUser) {
+                        const _tourKey = 'pw_tour_done_' + window.currentUser.uid;
+                        const _hist = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+                        const _realJobs = _hist.filter(j => !j.id || !j.id.startsWith('demo-'));
+                        if (_realJobs.length > 0) {
+                            localStorage.setItem(_tourKey, '1'); // has real jobs, never show tour
+                        } else {
+                            if (typeof maybeStartTour === 'function') maybeStartTour();
+                        }
+                    }
                 }, 3000);
             } else {
                 if (window.realtimeSyncUnsubscribe) {
@@ -10377,7 +10387,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.117';
+        const _ver = window.CURRENT_VERSION || 'v1.16.118';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
@@ -27086,11 +27096,19 @@ function _tourStartBar(ms) {
 function maybeStartTour() {
     if (!window.currentUser) return;
     const uid = window.currentUser.uid;
-    if (localStorage.getItem('pw_tour_done_' + uid)) return; // already done
+    // Never auto-start if already done
+    if (localStorage.getItem('pw_tour_done_' + uid)) return;
+    // Never auto-start if already tried this session (prevents re-firing on token refresh)
+    if (sessionStorage.getItem('pw_tour_attempted_' + uid)) return;
+    sessionStorage.setItem('pw_tour_attempted_' + uid, '1');
     // Only auto-start for new users (no real jobs)
     const history = JSON.parse(localStorage.getItem('jobHistory') || '[]');
     const realJobs = history.filter(j => !j.id || !j.id.startsWith('demo-'));
-    if (realJobs.length > 0) return; // has real jobs, don't force tour
+    if (realJobs.length > 0) {
+        // Has real jobs - mark done so we never try again
+        localStorage.setItem('pw_tour_done_' + uid, '1');
+        return;
+    }
     // Small delay so UI is ready
     setTimeout(startTour, 1500);
 }
@@ -27222,6 +27240,10 @@ function endTour() {
     if (spotlight) spotlight.style.display = 'none';
     if (card) { card.style.display = 'none'; }
     _tourStep = 0;
+    // Mark tour complete so it never auto-starts again
+    if (window.currentUser) {
+        localStorage.setItem('pw_tour_done_' + window.currentUser.uid, '1');
+    }
 }
 
 window.startTour = startTour;
