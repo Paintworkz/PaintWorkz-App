@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.125'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.126'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1718,7 +1718,7 @@ const firebaseConfig = {
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.125'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.126'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -11702,7 +11702,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.125';
+        const _ver = window.CURRENT_VERSION || 'v1.16.126';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
@@ -12149,29 +12149,15 @@ const firebaseConfig = {
         // Refresh paint formula list when database tab opened (fixes iOS not showing formulas)
         if (t === 'db') {
             setTimeout(() => {
-                // Re-sync from Firebase if available, else re-render from current paintDatabase
-                if (typeof loadPaintFormulasFromFirebase === 'function') {
-                    loadPaintFormulasFromFirebase();
-                } else {
-                    renderPaintFormulaList();
-                }
-                // Populate paint brand dropdown with current brands
-                populatePaintBrandsDropdown();
+                // Just re-render from memory - Firestore sync happens at login
+                try { renderPaintFormulaList(); } catch(e) {}
+                try { populatePaintBrandsDropdown(); } catch(e) {}
             }, 150);
         }
 
         // Force-pull from Firebase when opening history or schedule tabs
         // This guarantees cross-device completed/phase status is always current
-        if (t === 'history' || t === 'schedule') {
-            if (window.currentUser && typeof loadAllDataFromFirebase === 'function' && !isJobViewMode) {
-                // Debounce - only fire if not already loading
-                if (!window._loadingDataFromFirebase) {
-                    setTimeout(() => {
-                        try { loadAllDataFromFirebase(); } catch(e) {}
-                    }, 200);
-                }
-            }
-        }
+        // onSnapshot handles real-time sync - no need to force reload on tab switch
         
         // Show/hide version display - only in admin tab
         const versionDisplay = document.getElementById('footerVersionDisplay');
@@ -21387,7 +21373,6 @@ if ('serviceWorker' in navigator && _swAllowed) {
             if (tab === 'general') {
                 updateVersionDisplay();
                 renderAdminAlerts();
-                renderAdminGanttChart();
                 loadCoverageRates();
                 loadStockSettings();
                 // Load additional charges from Firestore if available
@@ -27691,7 +27676,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                         if (_msSinceSave < 15000 && _hasActiveItems) {
                             try { if (typeof renderHistory === 'function') renderHistory(); } catch(e) {}
                             try { if (typeof renderScheduleCalendar === 'function') renderScheduleCalendar(); } catch(e) {}
-                            try { if (typeof renderAdminGanttChart === 'function') renderAdminGanttChart(); } catch(e) {}
+                            // gantt renders only when schedule tab is active
                             return;
                         }
                         if (_hasActiveItems) {
