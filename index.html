@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.127'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.128'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1718,7 +1718,7 @@ const firebaseConfig = {
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.127'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.128'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -3537,7 +3537,8 @@ const firebaseConfig = {
                         <label>Color Name <span class="pw-help">?<span class="pw-help-tip">The paint colour name — e.g. Lexicon, Vivid White, Hog Bristle. Type it to pull up matching formula from your database.</span></span></label>
                         <div style="display:flex; gap:4px; align-items:stretch;">
                             <input type="text" id="p-color" placeholder="e.g. Lexicon" style="height:35px; font-size:12px; flex:1;" autocomplete="off" spellcheck="false" lang="en-AU" oninput="openPaintFormulaSearch()" onblur="checkBulkColourChange()">
-                            <button onclick="checkBulkColourChange()" style="background:#2196f3; color:#fff; border:none; padding:0 8px; border-radius:4px; font-size:10px; font-weight:900; cursor:pointer; white-space:nowrap; height:35px; align-self:stretch; box-sizing:border-box; min-width:32px;" title="Apply colour + code to all parts">↻</button>
+                            <button onclick="checkBulkColourChange()" style="background:#2196f3; color:#fff; border:none; padding:0 8px; border-radius:4px; font-size:10px; font-weight:900; cursor:pointer; white-space:nowrap; height:35px; align-self:stretch; box-sizing:border-box; min-width:32px;" title="Apply to ALL parts">↻</button>
+                            <button onclick="applyColourToSelected()" style="background:#9c27b0; color:#fff; border:none; padding:0 8px; border-radius:4px; font-size:10px; font-weight:900; cursor:pointer; white-space:nowrap; height:35px; align-self:stretch; box-sizing:border-box; min-width:32px;" title="Apply colour to ticked parts only">✓</button>
                         </div>
                     </div>
                 </div>
@@ -6809,6 +6810,28 @@ const firebaseConfig = {
     let selectedFormula = null;
     let previousJobColour = ''; // Track previous colour for bulk replacement
 
+    function applyColourToSelected() {
+        const newColour = (document.getElementById('p-color')?.value || '').trim().toUpperCase();
+        const newCode = (document.getElementById('p-code')?.value || '').trim().toUpperCase();
+        const newFinish = (document.getElementById('p-finish')?.value || '').trim();
+        const newBrand = (document.getElementById('p-brand')?.value || '').trim();
+        if (!newColour) { notify('Enter a colour first'); return; }
+        const checked = document.querySelectorAll('.part-colour-cb:checked');
+        if (checked.length === 0) { notify('Tick the parts you want to change first'); return; }
+        checked.forEach(cb => {
+            const idx = parseInt(cb.dataset.idx);
+            if (items[idx]) {
+                items[idx].color = newColour;
+                if (newBrand) items[idx].brand = newBrand;
+                if (newCode) items[idx].code = newCode;
+                if (newFinish) items[idx].finish = newFinish;
+            }
+        });
+        notify(`✅ Updated ${checked.length} selected part${checked.length > 1 ? 's' : ''}`);
+        render();
+        saveData();
+    }
+
     function checkBulkColourChange() {
         const newColour = (document.getElementById('p-color')?.value || '').trim().toUpperCase();
         const newColourUpper = newColour;
@@ -7618,11 +7641,21 @@ const firebaseConfig = {
             <input type="text" placeholder="e.g. ITE303" value="${code}" style="padding:5px; border:1px solid #ddd; border-radius:4px; font-size:11px; font-family:monospace; box-sizing:border-box; width:100%;">
             <input type="number" inputmode="decimal" placeholder="g" step="0.01" value="${grams}" style="padding:5px; border:1px solid #ddd; border-radius:4px; font-size:11px; text-align:right; box-sizing:border-box; width:100%;">
             <input type="text" placeholder="Alt code" value="${altCode}" style="padding:5px; border:1px solid #90caf9; border-radius:4px; font-size:11px; font-family:monospace; background:#f0f7ff; box-sizing:border-box; width:100%;">
-            <input type="number" inputmode="decimal" placeholder="L" step="0.5" value="${altThreshold}" style="padding:5px; border:1px solid #90caf9; border-radius:4px; font-size:11px; text-align:right; background:#f0f7ff; box-sizing:border-box; width:100%;">
+            <input type="number" inputmode="decimal" placeholder="L" step="0.5" value="${altThreshold}" style="padding:5px; border:1px solid #90caf9; border-radius:4px; font-size:11px; text-align:right; background:#f0f7ff; box-sizing:border-box; width:100%;" oninput="syncAltThreshold(this)" title="Typing here fills all rows with same litre amount">
             <input type="number" inputmode="decimal" placeholder="g" step="0.01" value="${altGrams}" style="padding:5px; border:1px solid #90caf9; border-radius:4px; font-size:11px; text-align:right; background:#f0f7ff; box-sizing:border-box; width:100%;" title="Grams to use with alt code">
             <button type="button" onclick="this.closest('[data-tinter-idx]').remove()" style="padding:0; width:28px; height:28px; border:none; background:#ff3b30; color:#fff; border-radius:4px; font-size:14px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center;">X</button>
         `;
         container.appendChild(row);
+    }
+
+    function syncAltThreshold(input) {
+        const val = input.value;
+        const container = document.getElementById('tintersRows');
+        if (!container) return;
+        container.querySelectorAll('[data-tinter-idx]').forEach(row => {
+            const threshInput = row.querySelectorAll('input')[3]; // 4th input is alt threshold
+            if (threshInput && threshInput !== input) threshInput.value = val;
+        });
     }
 
     function syncTinterRowsToTextarea() {
@@ -7674,7 +7707,7 @@ const firebaseConfig = {
             <input type="text" placeholder="e.g. ITE303" value="${code}" style="padding:5px; border:1px solid #ddd; border-radius:4px; font-size:11px; font-family:monospace; box-sizing:border-box; width:100%;">
             <input type="number" inputmode="decimal" placeholder="g" step="0.01" value="${grams}" style="padding:5px; border:1px solid #ddd; border-radius:4px; font-size:11px; text-align:right; box-sizing:border-box; width:100%;">
             <input type="text" placeholder="Alt code" value="${altCode}" style="padding:5px; border:1px solid #90caf9; border-radius:4px; font-size:11px; font-family:monospace; background:#f0f7ff; box-sizing:border-box; width:100%;">
-            <input type="number" inputmode="decimal" placeholder="L" step="0.5" value="${altThreshold}" style="padding:5px; border:1px solid #90caf9; border-radius:4px; font-size:11px; text-align:right; background:#f0f7ff; box-sizing:border-box; width:100%;">
+            <input type="number" inputmode="decimal" placeholder="L" step="0.5" value="${altThreshold}" style="padding:5px; border:1px solid #90caf9; border-radius:4px; font-size:11px; text-align:right; background:#f0f7ff; box-sizing:border-box; width:100%;" oninput="syncAltThreshold(this)" title="Typing here fills all rows with same litre amount">
             <input type="number" inputmode="decimal" placeholder="g" step="0.01" value="${altGrams}" style="padding:5px; border:1px solid #90caf9; border-radius:4px; font-size:11px; text-align:right; background:#f0f7ff; box-sizing:border-box; width:100%;" title="Grams to use with alt code">
             <button type="button" onclick="this.closest('[data-edit-tinter-row]').remove()" style="padding:0; width:28px; height:28px; border:none; background:#ff3b30; color:#fff; border-radius:4px; font-size:14px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center;">X</button>
         `;
@@ -7723,7 +7756,7 @@ const firebaseConfig = {
             <input type="text" placeholder="e.g. XB6930" value="${code}" style="padding:5px; border:1px solid #ddd; border-radius:4px; font-size:11px; font-family:monospace; box-sizing:border-box; width:100%;">
             <input type="number" inputmode="decimal" placeholder="g" step="0.01" value="${grams}" style="padding:5px; border:1px solid #ddd; border-radius:4px; font-size:11px; text-align:right; box-sizing:border-box; width:100%;">
             <input type="text" placeholder="Alt code" value="${altCode}" style="padding:5px; border:1px solid #90caf9; border-radius:4px; font-size:11px; font-family:monospace; background:#f0f7ff; box-sizing:border-box; width:100%;">
-            <input type="number" inputmode="decimal" placeholder="L" step="0.5" value="${altThreshold}" style="padding:5px; border:1px solid #90caf9; border-radius:4px; font-size:11px; text-align:right; background:#f0f7ff; box-sizing:border-box; width:100%;">
+            <input type="number" inputmode="decimal" placeholder="L" step="0.5" value="${altThreshold}" style="padding:5px; border:1px solid #90caf9; border-radius:4px; font-size:11px; text-align:right; background:#f0f7ff; box-sizing:border-box; width:100%;" oninput="syncAltThreshold(this)" title="Typing here fills all rows with same litre amount">
             <input type="number" inputmode="decimal" placeholder="g" step="0.01" value="${altGrams}" style="padding:5px; border:1px solid #90caf9; border-radius:4px; font-size:11px; text-align:right; background:#f0f7ff; box-sizing:border-box; width:100%;" title="Grams to use with alt code">
             <button type="button" onclick="this.closest('[data-edit-base-row]').remove()" style="padding:0; width:28px; height:28px; border:none; background:#ff3b30; color:#fff; border-radius:4px; font-size:14px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center;">X</button>
         `;
@@ -7772,7 +7805,7 @@ const firebaseConfig = {
             <input type="text" placeholder="e.g. XB6930" value="${code}" style="padding:5px; border:1px solid #ddd; border-radius:4px; font-size:11px; font-family:monospace; box-sizing:border-box; width:100%;">
             <input type="number" inputmode="decimal" placeholder="g" step="0.01" value="${grams}" style="padding:5px; border:1px solid #ddd; border-radius:4px; font-size:11px; text-align:right; box-sizing:border-box; width:100%;">
             <input type="text" placeholder="Alt code" value="${altCode}" style="padding:5px; border:1px solid #90caf9; border-radius:4px; font-size:11px; font-family:monospace; background:#f0f7ff; box-sizing:border-box; width:100%;">
-            <input type="number" inputmode="decimal" placeholder="L" step="0.5" value="${altThreshold}" style="padding:5px; border:1px solid #90caf9; border-radius:4px; font-size:11px; text-align:right; background:#f0f7ff; box-sizing:border-box; width:100%;">
+            <input type="number" inputmode="decimal" placeholder="L" step="0.5" value="${altThreshold}" style="padding:5px; border:1px solid #90caf9; border-radius:4px; font-size:11px; text-align:right; background:#f0f7ff; box-sizing:border-box; width:100%;" oninput="syncAltThreshold(this)" title="Typing here fills all rows with same litre amount">
             <input type="number" inputmode="decimal" placeholder="g" step="0.01" value="${altGrams}" style="padding:5px; border:1px solid #90caf9; border-radius:4px; font-size:11px; text-align:right; background:#f0f7ff; box-sizing:border-box; width:100%;" title="Grams when alt code triggers">
             <button type="button" onclick="this.closest('[data-base-code-row]').remove()" style="padding:0; width:28px; height:28px; border:none; background:#ff3b30; color:#fff; border-radius:4px; font-size:14px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center;">X</button>
         `;
@@ -11702,7 +11735,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.127';
+        const _ver = window.CURRENT_VERSION || 'v1.16.128';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
@@ -21701,8 +21734,8 @@ if ('serviceWorker' in navigator && _swAllowed) {
     }
     
     function applyFormButtonColors() {
-        // Apply saved form button colours (from Admin > Colours > Form Button Colours)
-        // These are stored per-button in localStorage as form-{id}_color
+        const isDark = document.body.getAttribute('data-theme') === 'dark' ||
+            (!document.body.getAttribute('data-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
         const map = [
             { id: 'form-paint-order',  def: '#e8f5e9' },
             { id: 'form-estimate',     def: '#ede7f6' },
@@ -21720,8 +21753,16 @@ if ('serviceWorker' in navigator && _swAllowed) {
             if (!btn) return;
             const saved = localStorage.getItem(id + '_color');
             const color = (saved && /^#[0-9A-Fa-f]{6}$/.test(saved)) ? saved : def;
-            btn.style.background = color;
-            btn.style.borderColor = color;
+            if (isDark) {
+                // In dark mode: use colour as a subtle border accent, dark card background
+                btn.style.background = '#2c2c2e';
+                btn.style.borderColor = color;
+                btn.style.borderWidth = '2px';
+            } else {
+                btn.style.background = color;
+                btn.style.borderColor = color;
+                btn.style.borderWidth = '';
+            }
         });
     }
 
