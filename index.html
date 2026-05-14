@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.126'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.127'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1718,7 +1718,7 @@ const firebaseConfig = {
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.126'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.127'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -11702,7 +11702,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.126';
+        const _ver = window.CURRENT_VERSION || 'v1.16.127';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
@@ -26823,7 +26823,16 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                 if (stockSnap.exists()) {
                     const sd = stockSnap.data();
                     if (sd.levels && Object.keys(sd.levels).length > 0) {
-                        localStorage.setItem('pwStockLevels', JSON.stringify(sd.levels));
+                        // Merge: never overwrite local with zeros from Firestore
+                        const _local = JSON.parse(localStorage.getItem('pwStockLevels') || '{}');
+                        const _merged = {};
+                        const _allKeys = new Set([...Object.keys(sd.levels), ...Object.keys(_local)]);
+                        _allKeys.forEach(k => {
+                            const fv = parseFloat(sd.levels[k] || 0);
+                            const lv = parseFloat(_local[k] || 0);
+                            _merged[k] = Math.max(fv, lv); // take the higher value
+                        });
+                        localStorage.setItem('pwStockLevels', JSON.stringify(_merged));
                         console.log('       Stock levels loaded from Firebase');
                     }
                 }
@@ -27432,8 +27441,13 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             const snap = await window.getDoc(ref);
             if (snap.exists()) {
                 const data = snap.data();
-                if (data.levels) {
-                    localStorage.setItem('pwStockLevels', JSON.stringify(data.levels));
+                if (data.levels && Object.keys(data.levels).length > 0) {
+                    // Merge: never let Firestore zeros overwrite good local values
+                    const _loc = JSON.parse(localStorage.getItem('pwStockLevels') || '{}');
+                    const _mrg = {};
+                    const _ks = new Set([...Object.keys(data.levels), ...Object.keys(_loc)]);
+                    _ks.forEach(k => { _mrg[k] = Math.max(parseFloat(data.levels[k]||0), parseFloat(_loc[k]||0)); });
+                    localStorage.setItem('pwStockLevels', JSON.stringify(_mrg));
                     console.log('✅ Stock levels loaded from Firestore');
                 }
             }
