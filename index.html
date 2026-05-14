@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.121'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.122'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1751,7 +1751,7 @@ const firebaseConfig = {
                             if (window.loadAllDataFromFirebase) {
                                 try { window.loadAllDataFromFirebase(); } catch(e) { console.error('loadAllDataFromFirebase error:', e); }
                                 // Load paint brands and timeline early in parallel
-                                setTimeout(() => { if (typeof window.loadPaintBrandsEarly === 'function') window.loadPaintBrandsEarly(); }, 600);
+                                setTimeout(() => { try { _syncBrandsFromFirestoreOnce(); } catch(e) {} }, 600);
                                 setTimeout(() => { if (typeof loadDefaultTimelineFromFirebase === 'function') loadDefaultTimelineFromFirebase(); }, 800);
                                 // Load stock with retry — phone Safari needs extra time for Firebase init
                                 (function() {
@@ -1781,7 +1781,7 @@ const firebaseConfig = {
                         if (window.loadAllDataFromFirebase) {
                             try { window.loadAllDataFromFirebase(); } catch(e) { console.error('loadAllDataFromFirebase error:', e); }
                             // Load paint brands and timeline early in parallel
-                            setTimeout(() => { if (typeof window.loadPaintBrandsEarly === 'function') window.loadPaintBrandsEarly(); }, 600);
+                            setTimeout(() => { try { _syncBrandsFromFirestoreOnce(); } catch(e) {} }, 600);
                             setTimeout(() => { if (typeof loadDefaultTimelineFromFirebase === 'function') loadDefaultTimelineFromFirebase(); }, 800);
                         } else if (attempts > 0) {
                             setTimeout(() => tryLoad(attempts - 1), 400);
@@ -10389,7 +10389,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.121';
+        const _ver = window.CURRENT_VERSION || 'v1.16.122';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
@@ -23527,30 +23527,30 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 if (Array.isArray(parsed) && parsed.length > 0) localBrands = parsed;
             } catch(e) {}
         }
-        // Always fetch from Firestore in background and merge — Firestore wins for new brands
-        if (window.currentUser && window.firebaseDb && window.doc && window.getDoc) {
-            try {
-                const ref = window.doc(window.firebaseDb, 'users', window.staffModeOwnerUid || window.currentUser.uid, 'appData', 'paintBrands');
-                window.getDoc(ref).then(snap => {
-                    if (snap.exists()) {
-                        const remote = snap.data();
-                        const remoteBrands = Array.isArray(remote.brands) ? remote.brands : [];
-                        if (remoteBrands.length > 0) {
-                            // Merge: keep all local + any from Firestore not already in local
-                            const current = JSON.parse(localStorage.getItem('paintBrands') || '[]');
-                            const merged = [...new Set([...remoteBrands, ...current])];
-                            if (merged.length !== current.length || !merged.every(b => current.includes(b))) {
-                                localStorage.setItem('paintBrands', JSON.stringify(merged));
-                                if (typeof populatePaintBrandsDropdown === 'function') populatePaintBrandsDropdown();
-                                console.log('Paint brands updated from Firestore:', merged);
-                            }
-                        }
-                    }
-                }).catch(() => {});
-            } catch(e) {}
-        }
-        console.log('    Paint brands loaded from localStorage:', localBrands);
         return localBrands;
+    }
+
+    // Sync brands from Firestore ONCE per session only
+    function _syncBrandsFromFirestoreOnce() {
+        if (window._brandsSyncedThisSession) return;
+        window._brandsSyncedThisSession = true;
+        if (!window.currentUser || !window.firebaseDb || !window.doc || !window.getDoc) return;
+        try {
+            const ref = window.doc(window.firebaseDb, 'users', window.staffModeOwnerUid || window.currentUser.uid, 'appData', 'paintBrands');
+            window.getDoc(ref).then(snap => {
+                if (snap.exists()) {
+                    const remote = snap.data();
+                    const remoteBrands = Array.isArray(remote.brands) ? remote.brands : [];
+                    if (remoteBrands.length > 0) {
+                        const current = JSON.parse(localStorage.getItem('paintBrands') || '[]');
+                        const defaults = ['Wattyl','Dulux','Taubmans','Haymes','British Paints','Evic','Laminex','Polytec'];
+                        const merged = [...new Set([...defaults, ...remoteBrands, ...current])];
+                        localStorage.setItem('paintBrands', JSON.stringify(merged));
+                        if (typeof populatePaintBrandsDropdown === 'function') populatePaintBrandsDropdown();
+                    }
+                }
+            }).catch(() => {});
+        } catch(e) {}
     }
     
     function savePaintBrands(brands) {
@@ -26218,7 +26218,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                 _lastVisibilityLoad = now;
                 console.log('     App visible     syncing from Firebase...');
                 try { loadAllDataFromFirebase(); } catch(e) {}
-                if (typeof window.loadPaintBrandsEarly === 'function') setTimeout(window.loadPaintBrandsEarly, 300);
+                setTimeout(() => { try { _syncBrandsFromFirestoreOnce(); } catch(e) {} }, 300);
             }
         }
     });
@@ -26409,29 +26409,20 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                         // Debounce UI renders — max once per 2s to prevent lag with multiple users
                         if (window._snapRenderTimer) clearTimeout(window._snapRenderTimer);
                         window._snapRenderTimer = setTimeout(() => {
-                            // Don't render if user is actively interacting with a form element
-                            // This prevents dropdowns/inputs being disrupted mid-interaction
                             const active = document.activeElement;
-                            const measureInputIds = ['p-finish','p-brand','prof-select','p-color','p-code','jN','jNm','dRec','desc','cli'];
-                            if (active && (active.tagName === 'SELECT' || active.tagName === 'INPUT') && 
-                                measureInputIds.some(id => active.id === id)) {
-                                // User is in a form field — delay render another 3s
+                            const busyIds = ['p-finish','p-brand','prof-select','p-color','p-code','jN','jNm','dRec','desc','cli'];
+                            if (active && (active.tagName === 'SELECT' || active.tagName === 'INPUT') &&
+                                busyIds.some(id => active.id === id)) {
                                 window._snapRenderTimer = setTimeout(() => {
                                     try { if (typeof renderHistory === 'function') renderHistory(); } catch(e) {}
-                                    if (hasChanges) {
-                                        try { if (typeof renderScheduleCalendar === 'function') renderScheduleCalendar(); } catch(e) {}
-                                        try { if (typeof renderAdminGanttChart === 'function') renderAdminGanttChart(); } catch(e) {}
-                                    }
-                                }, 3000);
+                                }, 4000);
                                 return;
                             }
                             try { if (typeof renderHistory === 'function') renderHistory(); } catch(e) {}
                             if (hasChanges) {
                                 try { if (typeof renderScheduleCalendar === 'function') renderScheduleCalendar(); } catch(e) {}
-                                try { if (typeof renderAdminGanttChart === 'function') renderAdminGanttChart(); } catch(e) {}
-                                try { if (typeof renderJobTasks === 'function') renderJobTasks(); } catch(e) {}
                             }
-                        }, 2000);
+                        }, 3000);
                     } catch(e) { console.error('Snapshot handler error:', e); }
                 },
                 error => {
