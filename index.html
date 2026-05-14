@@ -27,7 +27,1698 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.122'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.124'; // global so all scripts can access it
+    const CURRENT_VERSION = window.CURRENT_VERSION;
+    const VERSION_KEY = 'paintworkz_version';
+
+    // Auto-update ALL version display elements as soon as DOM is ready
+    // This means CURRENT_VERSION is the ONLY place you ever need to change the version
+    function _applyVersionToDOM() {
+        const ids = ['loginVersionText','adminVersionDisplay','versionDisplay'];
+        ids.forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el) el.textContent = CURRENT_VERSION;
+        });
+        var dateEl = document.getElementById('versionDate') || document.getElementById('adminVersionDate');
+        if (dateEl) dateEl.textContent = ' | Updated ' + new Date().toLocaleDateString('en-AU', {day:'numeric',month:'short',year:'numeric'});
+    }
+    // Multiple timing approaches to guarantee it fires
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', _applyVersionToDOM);
+    } else {
+        _applyVersionToDOM();
+    }
+    // Fallback: also run after short delay in case DOMContentLoaded already fired
+    setTimeout(_applyVersionToDOM, 100);
+    setTimeout(_applyVersionToDOM, 500);
+    
+    const storedVersion = localStorage.getItem(VERSION_KEY);
+    
+    if (storedVersion !== CURRENT_VERSION) {
+        console.log(`VERSION CHANGE: ${storedVersion || 'NONE'} -> ${CURRENT_VERSION}`);
+        // Just update the version key — never wipe user data on version change
+        // All user data is in Firestore anyway and reloads from there on login
+        localStorage.setItem(VERSION_KEY, CURRENT_VERSION);
+        // Unregister stale service worker only
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(regs => {
+                regs.forEach(reg => reg.unregister());
+            }).catch(() => {});
+        }
+    }
+})();
+</script>
+<!--
+╔════════════════════════════════════════════════════════════════╗
+║                       PAINTWORKZ PRO                            ║
+║                    REVISION TRACKING                            ║
+╠════════════════════════════════════════════════════════════════╣
+    ║ [Version history removed from production build] ║
+║ 1. ✓ FIX: Client name edit syncs to all jobs referencing it REMOVED: Corrupted base64 logo (caused jsPDF failure)      ║
+║ 2. ✓ FIX: Qty resets to 1 after add, cursor focuses on length REBUILT: 5 PDF functions (Estimate, Quote, Invoice, Mixing, Supply)            ║
+║ 3. ✓ FIX: Color popup centered on screen, proper z-index ADDED: genPDF() main export function  ║
+║ 4. ✓ ADD: Panel list filters (type/color/config/ss/ds/se) TESTED: All functions now functional ║ 4. ✓ ADD: Panel list filters (type/color/config/ss/ds/se) IMPROVED: Console logs non-critical errors error-safe        ║
+║ 5. ✓ VERIFIED: Job auto-increment +manual override working VERIFIED: JavaScript syntax passes validation   ║
+╚════════════════════════════════════════════════════════════════╝
+-->
+<!DOCTYPE html>
+<!--
+  ╔══════════════════════════════════════════════════════════════════╗
+  ║  PERFORMANCE NOTE                                                ║
+  ║  This file is ~871KB uncompressed. When served via GitHub Pages  ║
+  ║  or any gzip-enabled server, transfer size is ~200KB.           ║
+  ║  After first load, the service worker (sw.js) caches the app    ║
+  ║  locally — subsequent loads are near-instant and work offline.  ║
+  ║  For further optimisation: run index.html through terser/vite.  ║
+  ╚══════════════════════════════════════════════════════════════════╝
+-->
+
+<html lang="en-AU">
+<head>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#d4af37">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "PaintWorkz Pro",
+  "url": "https://paintworkzpro.com.au",
+  "applicationCategory": "BusinessApplication",
+  "applicationSubCategory": "Trade Management Software",
+  "operatingSystem": "Web, iOS, Android, Windows",
+  "browserRequirements": "Requires a modern web browser with JavaScript enabled",
+  "description": "PaintWorkz Pro is job management and quoting software built specifically for 2Pac spray painters and cabinet finishing workshops. Automates SQM measuring, door profile pricing, paint formula lookup via Evic/ExpressTint integration, shop label printing, mixing card generation, staff scheduling and business reporting.",
+  "abstract": "From measure sheet to professional PDF estimate in minutes. Purpose-built for Australian 2Pac painters.",
+  "keywords": "2Pac painting software, cabinet painting quoting app, spray painter job management, paint mixing card software, Evic ExpressTint integration, cabinetry quoting Australia, painting business software Australia",
+  "inLanguage": "en-AU",
+  "countriesSupported": "AU",
+  "softwareVersion": "1.10",
+  "offers": [
+    {
+      "@type": "Offer",
+      "name": "Solo Plan",
+      "price": "29",
+      "priceCurrency": "AUD",
+      "billingIncrement": "P1M",
+      "description": "Single user — job management, quoting, PDF generation, scheduling"
+    },
+    {
+      "@type": "Offer",
+      "name": "Pro Plan",
+      "price": "79",
+      "priceCurrency": "AUD",
+      "billingIncrement": "P1M",
+      "description": "Full access — staff accounts, reports, CTS pricing, mixing cards, Evic integration, coverage rates"
+    }
+  ],
+  "areaServed": {
+    "@type": "Country",
+    "name": "Australia"
+  },
+  "audience": {
+    "@type": "Audience",
+    "audienceType": "2Pac spray painters, cabinet finishing workshops, joinery businesses"
+  },
+  "author": {
+    "@type": "Organization",
+    "name": "PaintWorkz Pro",
+    "url": "https://paintworkzpro.com.au",
+    "contactPoint": {
+      "@type": "ContactPoint",
+      "email": "ckbedford@outlook.com",
+      "contactType": "customer support"
+    }
+  },
+  "featureList": [
+    "Automated SQM calculation for doors, panels and drawers",
+    "SS, DS and SE paint mode pricing",
+    "Custom door profile price matrix",
+    "Professional estimate, quote and invoice PDF generation",
+    "Shop label printing with QR codes",
+    "Paint mixing card generation with litre quantities",
+    "Evic ExpressTint formula database integration",
+    "Cut To Size (CTS) board supply pricing",
+    "Staff accounts with job visibility",
+    "Job scheduling and Gantt chart",
+    "Business reports — revenue, SQM, paint usage",
+    "Cloud sync via Firebase",
+    "Works on iPhone, Android, tablet and desktop"
+  ],
+  "aggregateRating": {
+    "@type": "AggregateRating",
+    "ratingValue": "5",
+    "reviewCount": "1"
+  }
+}
+</script>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="PaintWorkz Pro">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎨</text></svg>">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+    <title>Cabinetry Quoting &amp; 2-Pac Paint Pricing App | PaintWorkz Pro</title>
+    <meta name="description" content="The only quoting tool built by finishers for finishers. Automate Sharknose/J-Mould pricing, 2-pac mixing cards, and cabinet dockets.">
+    <meta name="keywords" content="2pac quoting, cabinet painting, spray finishing, j-mould pricing, sharknose, mixing card, paint docket, cabinetry estimating, 2pac app, painting estimator, cabinet painter app, joinery quoting, trade app australia">
+    <meta name="author" content="Colin Bedford - PaintWorkz PTY LTD">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="application-name" content="PaintWorkz Pro">
+
+    <!-- Open Graph — Facebook, LinkedIn sharing -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Cabinetry Quoting &amp; 2-Pac Paint Pricing App | PaintWorkz Pro">
+    <meta property="og:description" content="The only quoting tool built by finishers for finishers. Automate Sharknose/J-Mould pricing, 2-pac mixing cards, and cabinet dockets.">
+    <meta property="og:url" content="https://app.paintworkzpro.com">
+    <meta property="og:site_name" content="PaintWorkz Pro">
+    <meta property="og:locale" content="en_AU">
+    <!-- og:image: add og-image.png to website root to enable -->
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+
+    <!-- Twitter/X Card -->
+    <meta name="twitter:card" content="app">
+    <meta name="twitter:title" content="Cabinetry Quoting &amp; 2-Pac Paint Pricing App | PaintWorkz Pro">
+    <meta name="twitter:description" content="The only quoting tool built by finishers for finishers. Automate Sharknose/J-Mould pricing, 2-pac mixing cards, and cabinet dockets.">
+    <!-- twitter:image: add og-image.png to website root to enable -->
+    <meta name="twitter:app:name:iphone" content="PaintWorkz Pro">
+    <meta name="twitter:app:name:ipad" content="PaintWorkz Pro">
+
+    <!-- apple-touch-icon: add icon-180.png to website root to enable -->
+
+    <!-- Canonical -->
+    <link rel="canonical" href="https://app.paintworkzpro.com">
+
+    <!-- Geo targeting — Australian trade app -->
+    <meta name="geo.region" content="AU">
+    <meta name="ICBM" content="-25.2744, 133.7751">
+
+    <!-- Schema.org structured data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "PaintWorkz Pro",
+      "operatingSystem": "iOS, Android, Web",
+      "applicationCategory": "BusinessApplication",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "AUD",
+        "description": "Free plan available. Solo from $49/mo, Pro from $99/mo."
+      },
+      "description": "The only quoting tool built by finishers for finishers. Automate Sharknose/J-Mould pricing, 2-pac mixing cards, and cabinet dockets.",
+      "url": "https://app.paintworkzpro.com",
+      "author": {
+        "@type": "Organization",
+        "name": "PaintWorkz PTY LTD",
+        "url": "https://paintworkzpro.com"
+      },
+      "aggregateRating": {
+        "@type": "AggregateRating",
+        "ratingValue": "5",
+        "ratingCount": "1"
+      }
+    }
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js" defer></script>
+    <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
+    <style>
+        :root {
+            --gold: linear-gradient(145deg, #d4af37, #f9f1b0, #aa841e);
+            --rainbow: linear-gradient(90deg, #ff3b30, #ff9500, #ffcc00, #4cd964, #5ac8fa, #007aff, #5856d6);
+            --gs: #d4af37;
+            --panel-clr: #34c759; --door-clr: #ff9500; --drawer-clr: #2196f3; --custom-clr: #af52de;
+            --bg: #f2f2f7;
+            --primary-dark: #212121;
+            --accent-dark: #333333;
+            --text-light: #666666;
+            --btn-estimate: #2196f3;
+            --btn-supply: #2196f3;
+            --btn-mixing: #2196f3;
+            --btn-invoice: #2196f3;
+            --btn-quote: #2196f3;
+            --btn-cover: #ff9800;
+            --btn-label: #e91e63;
+        }
+        
+        /* Scrollbar styling for Chrome/Safari */
+        #clientsList::-webkit-scrollbar {
+            width: 12px;
+        }
+        #clientsList::-webkit-scrollbar-track {
+            background: #f0f0f0;
+            border-radius: 6px;
+        }
+        #clientsList::-webkit-scrollbar-thumb {
+            background: #2196f3;
+            border-radius: 6px;
+        }
+        #clientsList::-webkit-scrollbar-thumb:hover {
+            background: #1976d2;
+        }
+        
+        body { margin:0; font-family:-apple-system, system-ui, sans-serif; background:var(--bg); padding-bottom:140px; padding-top:0; -webkit-tap-highlight-color:transparent; overflow-x:hidden; }
+        /* Hide the page-level scrollbar — SPA uses internal scroll areas */
+        body::-webkit-scrollbar { display: none; }
+        body { -ms-overflow-style: none; scrollbar-width: none; } .nav-tabs { overflow: hidden !important; }
+        
+        #globalNotificationsBanner { padding-top: env(safe-area-inset-top); }
+        
+        /* ===== HEADER - iOS safe area aware ===== */
+        :root {
+            --safe-top: env(safe-area-inset-top, 0px);
+            --header-h: 64px;
+            --nav-h: 48px;
+            --dev-banner-h: 0px;
+            /* header is fixed (not sticky) — only nav needs clearing */
+            --top-total: calc(var(--nav-h) + 8px);
+        }
+        
+        /* Push everything down by banner height */
+        /* nav/body offsets account for dev banner (0px in prod, 24px in dev) */
+        .nav-tabs { top: calc(var(--dev-banner-h) + var(--header-h) + var(--safe-top)) !important; }
+        body { padding-top: calc(var(--dev-banner-h) + var(--header-h) + var(--safe-top)) !important; }
+        .sub-nav { top: calc(var(--dev-banner-h) + var(--header-h) + var(--safe-top) + var(--nav-h)) !important; }
+        body { padding-top: calc(var(--dev-banner-h) + var(--header-h) + var(--safe-top)) !important; }
+        #staffModeBanner { top: calc(var(--dev-banner-h) + var(--header-h) + var(--safe-top)) !important; }
+        body.staff-mode .nav-tabs { top: calc(var(--dev-banner-h) + var(--header-h) + var(--safe-top) + 28px) !important; }
+        body.staff-mode { padding-top: calc(var(--dev-banner-h) + var(--header-h) + var(--safe-top) + 28px) !important; }
+        body.staff-mode .sub-nav { top: calc(var(--dev-banner-h) + var(--header-h) + var(--safe-top) + var(--nav-h) + 28px) !important; }
+        header {
+            background: var(--rainbow);
+            padding: env(safe-area-inset-top, 0px) 15px 0 15px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 4px solid #aa841e;
+            position: fixed;
+            top: var(--dev-banner-h);
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            height: calc(var(--header-h) + var(--safe-top));
+            box-sizing: border-box;
+        }
+        /* Push body content below the fixed header — handled by dev-banner-aware rule above */
+        .logo-box {
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+            padding: 4px 14px;
+            border-radius: 12px;
+            border: 2px solid #d4af37;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            height: 50px;
+            display: flex;
+            align-items: center;
+            box-sizing: border-box;
+            flex: 0 1 auto;
+            max-width: 40vw;
+            overflow: hidden;
+        }
+        .logo-text { font-weight:900; font-size:56px; color:#d4af37; text-shadow:0 2px 4px rgba(0,0,0,0.5); letter-spacing:1px; }
+        .icon-btn { font-size: 28px; padding: 0 10px; cursor: pointer; flex-shrink: 0; }
+
+        .nav-tabs {
+            display: flex;
+            background: #000;
+            position: fixed;
+            top: calc(var(--dev-banner-h) + var(--header-h) + var(--safe-top));
+            left: 0 !important;
+            right: 0 !important;
+            z-index: 999;
+            overflow: hidden;
+            border-bottom: 1px solid #333;
+            height: var(--nav-h);
+            box-sizing: border-box;
+            margin: 0 !important;
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+            padding-left: env(safe-area-inset-left, 0px) !important;
+            padding-right: env(safe-area-inset-right, 0px) !important;
+        }
+        .nav-btn { flex:1; min-width:0; padding:0; height:var(--nav-h); line-height:var(--nav-h); color:#888; text-align:center; font-weight:900; font-size:10px; text-transform:uppercase; border:none; background:0 0; cursor:pointer; transition:all 0.2s; pointer-events:auto; z-index:100; position:relative; }
+        .nav-btn.active { color:#fff; border-bottom:4px solid var(--gs); background:#111; }
+        
+        /* ===== MOBILE RESPONSIVE DESIGN ===== */
+        @media (max-width: 768px) {
+            .container { padding: 10px; max-width: 100%; }
+            input, select { height:40px; font-size:14px; }
+            label { font-size:9px; }
+            .bubble-row { flex-direction: column; gap:8px; }
+            .bubble-row > div { flex:1 !important; }
+            .edge-row { gap: 5px; }
+            .edge-box, .cam-btn { font-size:12px; padding:10px; flex:1; }
+            .add-main-btn { padding:12px; font-size:13px; }
+            .p-card { padding:8px; font-size:9px; min-width:70px; }
+            #pDr, #pP, #pC, #pDo { min-width:60px; }
+            button { padding:10px; font-size:12px; }
+            .icon-btn { font-size:20px; }
+            input[type="number"] { font-size:16px; }
+        }
+        
+        @media (max-width: 480px) {
+            :root { --header-h: 60px; }
+            .logo-text { font-size:16px; }
+            .nav-btn { min-width:55px; font-size:9px; }
+            .container { padding:8px; }
+            .bubble-unit input { font-size:14px; }
+            .fm-row { gap:8px; }
+            .fm-opt { padding:8px; font-size:10px; }
+            #liveSq { font-size:36px; }
+            .edge-row { gap:3px; }
+            .edge-box { padding:8px; font-size:10px; min-width:30px; }
+            .cam-btn { min-width:35px; padding:8px; }
+            input, select { height:36px; font-size:13px; padding:0 8px; margin-bottom:6px; }
+            .add-main-btn { width:100%; padding:10px; }
+            .p-card { min-width:50px; padding:6px; }
+            .card { padding:12px; margin-bottom:10px; }
+        }
+        
+        /* Tablet optimizations */
+        @media (min-width: 768px) and (max-width: 1024px) {
+            .container { padding: 12px; }
+            .bubble-row { flex-direction: row; }
+        }
+
+        .sub-nav { display: flex; gap: 5px; margin-bottom: 15px; background: #e5e5ea; padding: 4px; border-radius: 10px; }
+        .sub-btn { flex: 1; padding: 5px 6px; border: none; border-radius: 7px; font-weight: 800; font-size: 10px; color: #666; background: transparent; cursor:pointer; transition:all 0.2s; }
+        .sub-btn.active { background: #fff; color: #000; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+
+        .container { padding: 15px; max-width: 600px; margin: auto; }
+        /* Wider layout on desktop */
+        @media (min-width: 1024px) {
+            .container { max-width: 900px; }
+        }
+        /* Pricing matrix table responsive */
+        #admin-pricing-matrix { overflow-x: auto; }
+        #admin-pricing-matrix table { min-width: 680px; }
+        .view-section { display:none !important; padding-top: var(--top-total); padding-bottom: 80px; } .view-section.active { display:block !important; }
+        #admin.view-section { padding-top: 0 !important; padding-bottom: 0 !important; }
+        #admin.view-section.active { display:flex !important; }
+        /* Hide scrollbar on admin card — scrolling still works */
+        #admin > .card::-webkit-scrollbar { display: none; width: 0; }
+        .card { background:var(--modal-bg,#fff); border-radius:12px; padding:15px; margin-bottom:12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); position:relative; overflow:visible; }
+
+        label { font-size: 10px; font-weight: 900; color: #666; text-transform: uppercase; margin-bottom: 2px; display: block; }
+        input, select { width:100%; height:45px; border-radius:8px; border:1px solid #ccc; padding:0 10px; font-size:16px; box-sizing:border-box; background:#fff; margin-bottom: 8px; font-weight: 600; }
+        
+        .db-list { height: calc(100vh - var(--dev-banner-h, 0px) - var(--header-h) - var(--safe-top) - var(--nav-h) - 160px); min-height: 200px; overflow-y: auto; background: #f9f9f9; border: 1px solid #eee; border-radius: 8px; -webkit-overflow-scrolling: touch; }
+        .db-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #eee; font-size: 14px; font-weight: 600; }
+        .db-del { color: red; font-weight: 900; padding: 5px; cursor:pointer; }
+        .add-row { display: flex; gap: 8px; margin-bottom: 10px; }
+        .btn-small { background: #000; color: var(--gs); border: none; border-radius: 8px; font-weight: 900; width: 60px; height:45px; cursor:pointer; transition:all 0.2s; }
+        .btn-small:hover { background: #222; }
+
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .form-card { background: #f2f2f7; padding: 15px; border-radius: 12px; text-align: center; border: 1px solid #ddd; cursor: pointer; transition:all 0.2s; }
+        .form-card:active { transform: scale(0.98); background: #e5e5ea; }
+        .form-card h4 { margin: 0 0 5px; font-size: 14px; color: #333; }
+        .form-card p { margin: 0; font-size: 10px; color: #888; font-weight: 600; }
+
+        .bubble-row { display: flex; gap: 6px; margin: 8px 0; }
+        .fm-row { display:flex; background:#eee; border-radius:8px; padding:4px; margin-bottom:10px; height: 50px; align-items: center; box-sizing: border-box; }
+        .fm-opt { flex:1; text-align:center; height: 42px; line-height: 42px; font-weight:900; font-size:12px; border-radius:6px; color:#999; cursor:pointer; transition:all 0.2s; touch-action:manipulation; -webkit-tap-highlight-color:transparent; user-select:none; }
+        .fm-opt.active { background:#fff; color:#000; box-shadow:0 2px 4px rgba(0,0,0,0.1); }
+        
+        .bubble-unit { flex: 1; background: #fff; border: 1px solid #ccc; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 50px; box-sizing: border-box; }
+        .bubble-unit input { border: none; background: transparent; text-align: center; font-size: 18px; font-weight: 900; height: 25px; margin:0; padding:0; width: 100%; }
+
+        #prof-select { height: 50px !important; margin: 0; width: 100%; font-size: 13px; text-overflow: ellipsis; }
+        .part-drag-handle { cursor: grab; padding: 0 3px; color: #ccc; font-size: 13px; display: flex; align-items: center; user-select: none; flex-shrink: 0; opacity: 0.5; touch-action: none; }
+        .part-label:hover .part-drag-handle { opacity: 1; }
+        .part-drag-handle:active { cursor: grabbing; }
+        .part-label.drag-over { border-top: 3px solid #2196f3 !important; opacity: 0.85; }
+        .part-label.dragging { opacity: 0.4; }
+
+        .p-card { flex:1; background:#fff; border:2px solid #ddd; border-radius:8px; padding:8px 2px; text-align:center; font-weight:900; font-size:9px; color:#444; display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer; transition:all 0.2s; touch-action:manipulation; -webkit-tap-highlight-color:transparent; font-family:inherit; -webkit-appearance:none; appearance:none; outline:none; user-select:none; -webkit-user-select:none; }
+        .p-card.active { border-color:var(--gs); background:#fff9e6; color:#000; }
+        .p-card svg { width:22px; height:22px; stroke: currentColor; fill:none; stroke-width:2; }
+        #pP.active { background:var(--panel-clr); color:#fff; border-color:var(--panel-clr); }
+        #pD.active { background:var(--door-clr); color:#fff; border-color:var(--door-clr); }
+        #pDr.active { background:var(--drawer-clr); color:#fff; border-color:var(--drawer-clr); }
+        #pC.active { background:var(--custom-clr); color:#fff; border-color:var(--custom-clr); }
+
+        .edge-row { display:flex; justify-content:space-between; align-items:center; margin:15px 0; gap:6px; }
+        .edge-box { flex:1; height:45px; border-radius:8px; border:2px solid #ddd; background:#fff; display:flex; align-items:center; justify-content:center; font-weight:900; color:#999; font-size:14px; user-select:none; cursor:pointer; transition:all 0.2s; touch-action:manipulation; -webkit-tap-highlight-color:transparent; position:relative; z-index:10; pointer-events:auto; }
+        .edge-box.active { background:#34c759; border-color:#28a745; color:#fff; }
+        .edge-box.mode-sel.active { background:#333; border-color:var(--gs); color:var(--gs); }
+        .edge-box.touch-active { transform: scale(0.95); opacity: 0.8; }
+
+        .cam-btn { font-size: 38px; cursor: pointer; padding: 0 10px; }
+        .add-main-btn { width:100%; background:var(--gold); border:none; padding:20px; border-radius:40px; font-weight:900; font-size:20px; box-shadow:0 4px 15px rgba(212, 175, 55, 0.4); margin-top:10px; cursor:pointer; transition:all 0.2s; }
+        .add-main-btn:active { transform: scale(0.98); }
+
+        .part-label { display: flex; align-items: center; gap: 6px; padding: 8px 6px; background: #fff; border-radius: 10px; margin-bottom: 6px; border: 1px solid #eee; position:relative; }
+        .pl-qty { background: #000; color: var(--gs); min-width: 34px; height: 34px; border-radius: 6px; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:14px; }
+        .pl-center { flex:1; min-width:0; overflow:hidden; }
+        .pl-dims { font-size: 14px; font-weight: 900; color: #000; line-height:1.2; white-space:nowrap; }
+        .pl-brand { font-size:10px; font-weight:700; color:#666; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:1px; }
+        .edge-pill { display:inline-block; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 900; color: #fff; margin-right: 3px; }
+        .pl-right { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-width: 52px; padding: 0 4px; }
+        .pl-mode { width: 36px; height: 36px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 12px; border: 2px solid; }
+        .pl-sqm { font-size: 11px; font-weight: 900; text-align: center; color: #333; }
+        .del-btn { color: #ff3b30; font-size: 24px; border: none; background: none; cursor:pointer; transition:all 0.2s; padding: 4px 6px; }
+        .del-btn:active { transform: scale(1.2); }
+
+        .qty-controls { display:flex; flex-direction:column; align-items:center; gap:2px; min-width:38px; }
+        .qty-btn { border:none; background:#eee; width:100%; border-radius:4px; font-weight:900; font-size:14px; cursor:pointer; transition:all 0.2s; padding:0; height:24px; }
+        .qty-btn:active { background:#ddd; }
+
+        .sticky-footer { background: #000; position: fixed; bottom: 0; left: 0; right: 0; height: 80px; border-top: 3px solid var(--gs); color: #fff; display: flex; justify-content: space-around; align-items: center; z-index: 2000; }
+        .footer-item { text-align:center; }
+        .footer-val { font-size:20px; font-weight:900; color:var(--gs); }
+        .footer-label { font-size:9px; color:#aaa; }
+        
+        #toast { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); background: #222; color: #fff; padding: 12px 25px; border-radius: 30px; font-weight: 900; z-index: 3000; display: none; border: 1px solid var(--gs); animation: slideUp 0.3s ease-out; }
+        @keyframes slideUp { from { opacity:0; transform: translateX(-50%) translateY(20px); } to { opacity:1; transform: translateX(-50%) translateY(0); } }
+        @keyframes sirenFlash { 0%,100% { background:#ff3b30; box-shadow:0 0 18px #ff3b3088; } 50% { background:#ff9500; box-shadow:0 0 18px #ff950088; } }
+        @keyframes sirenSpin { 0% { transform:rotate(-15deg); } 50% { transform:rotate(15deg); } 100% { transform:rotate(-15deg); } }
+        .siren-banner { animation: sirenFlash 0.6s ease-in-out infinite !important; }
+        .siren-icon { display:inline-block; animation: sirenSpin 0.6s ease-in-out infinite; font-size:24px; }
+
+        .pl-meta { font-size:10px; font-weight:700; color:#666; margin-top:2px; }
+
+        /* COMPLETE JOB STAMP */
+        .job-complete-stamp {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-45deg);
+            font-size: 24px;
+            font-weight: 900;
+            color: #34c759;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            pointer-events: none;
+            text-shadow: 1px 1px 2px rgba(52, 199, 89, 0.2);
+            z-index: 50;
+            border: 1.5px solid #34c759;
+            padding: 2px 12px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.85);
+            white-space: nowrap;
+            line-height: 1;
+        }
+        
+        /* ===== STICKY ADMIN LAYOUT ===== */
+        #admin {
+            flex-direction: column;
+            height: calc(100vh - 200px);
+            gap: 0;
+        }
+        
+        .admin-header-section {
+            position: sticky;
+            top: 0;
+            background: #fff;
+            border-bottom: 2px solid #ddd;
+            padding: 15px;
+            z-index: 1000;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            flex-shrink: 0;
+        }
+        
+        .admin-content-section {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+            padding-bottom: 200px;
+        }
+        
+        .admin-footer-section {
+            position: sticky;
+            bottom: 0;
+            background: #f5f5f5;
+            border-top: 2px solid #ddd;
+            padding: 15px;
+            z-index: 1000;
+            max-height: 180px;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+        
+        .admin-tab-content {
+            display: none !important;
+        }
+        
+        .admin-tab-content.active {
+            display: block !important;
+            width: 100% !important;
+            min-height: auto !important;
+        }
+    
+        /* ── PaintWorkz utility classes (auto-generated, do not edit inline) ── */
+        .pw-card-stat { text-align:center; padding:12px 8px; min-height:100px; box-sizing:border-box; }
+        .pw-card-stat .pw-num { font-size:24px; font-weight:900; line-height:1.1; }
+        .pw-card-stat .pw-unit { font-size:11px; margin-top:2px; }
+        .pw-card-stat .pw-label { font-size:9px; font-weight:900; text-transform:uppercase; margin-bottom:4px; }
+        .pw-card-stat .pw-sub { font-size:9px; color:#777; margin-top:4px; }
+        .pw-btn-primary { border:none; border-radius:8px; font-weight:900; cursor:pointer; background:#d4af37; color:#000; }
+        .pw-btn-secondary { border:none; border-radius:8px; font-weight:900; cursor:pointer; background:#eee; color:#333; }
+        .pw-section-label { font-size:9px; font-weight:900; color:#888; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px; padding:2px 2px; }
+        .pw-fullwidth { width:100%; box-sizing:border-box; }
+        #onboardingWizard .ob-btn { width:100%; border:none; padding:14px; border-radius:10px; font-weight:900; font-size:15px; cursor:pointer; }
+
+        /* ── App Store build — hide all Paddle/pricing elements ─── */
+        body.app-store-build .upgrade-btn,
+        body.app-store-build #freePlanBanner,
+        body.app-store-build .paddle-btn { display:none !important; }
+
+        /* ── Help Tooltips ───────────────────────────────────────── */
+        .pw-help { display:inline-flex; width:16px; height:16px; background:#2196f3; color:#fff; border-radius:50%; font-size:9px; font-weight:900; align-items:center; justify-content:center; cursor:help; flex-shrink:0; position:relative; vertical-align:middle; margin-left:4px; user-select:none; }
+        body.tooltips-off .pw-help { display:none; }
+        html.tooltips-off .pw-help { display:none; }
+        /* Tooltip: pure CSS hover — no JS dependency */
+        .pw-help-tip {
+            display: none;
+            position: fixed;
+            background: #1c1c1e;
+            color: #fff;
+            font-size: 11px;
+            font-weight: 400;
+            line-height: 1.5;
+            padding: 8px 12px;
+            border-radius: 8px;
+            width: 220px;
+            z-index: 999999;
+            pointer-events: none;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+            border: 1px solid #d4af37;
+            white-space: normal;
+        }
+        .pw-help-tip::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 6px solid transparent;
+            border-top-color: #1c1c1e;
+        }
+        /* pw-help-tip shown via JS portal only — CSS hover removed to avoid duplicates */
+        /* JS portal tooltip — positioned by JS, works above all layers */
+        #pw-tip-portal { display:none; position:fixed; background:#1c1c1e; color:#fff; font-size:13px; line-height:1.5; padding:12px 16px; border-radius:10px; width:260px; z-index:9999999; pointer-events:none; box-shadow:0 6px 24px rgba(0,0,0,0.5); border:1.5px solid #d4af37; }
+
+        /* ── Guided Tour ─────────────────────────────────────── */
+        #tourOverlay {
+            position:fixed; inset:0; z-index:99990; pointer-events:none;
+        }
+        #tourSpotlight {
+            position:fixed; z-index:99991; border-radius:12px;
+            box-shadow: 0 0 0 9999px rgba(0,0,0,0.72);
+            transition: all 0.35s cubic-bezier(.4,0,.2,1);
+            pointer-events:none;
+        }
+        #tourCard {
+            position:fixed; z-index:99992; background:#1c1c1e;
+            border:2px solid #d4af37; border-radius:16px;
+            padding:20px; width:min(320px, 90vw);
+            box-shadow:0 8px 32px rgba(0,0,0,0.6);
+            transition: all 0.35s cubic-bezier(.4,0,.2,1);
+            font-family:-apple-system,sans-serif;
+        }
+        #tourCard .t-step  { font-size:10px; font-weight:900; color:#d4af37; letter-spacing:1.5px; margin-bottom:8px; }
+        #tourCard .t-title { font-size:16px; font-weight:900; color:#fff; margin-bottom:8px; }
+        #tourCard .t-body  { font-size:12px; color:#ccc; line-height:1.6; margin-bottom:16px; }
+        #tourCard .t-btns  { display:flex; gap:8px; }
+        #tourCard .t-skip  { flex:0 0 auto; background:none; border:1px solid #444; color:#888; padding:8px 14px; border-radius:8px; font-size:11px; font-weight:900; cursor:pointer; }
+        #tourCard .t-next  { flex:1; background:#d4af37; border:none; color:#000; padding:10px; border-radius:8px; font-size:13px; font-weight:900; cursor:pointer; }
+        #tourProgress { display:flex; gap:6px; margin-bottom:14px; }
+        #tourProgress span { flex:1; height:3px; border-radius:2px; background:#333; transition:background 0.3s; }
+        #tourProgress span.done { background:#d4af37; }
+
+        .job-name-text { color: #000; }
+        @media (prefers-color-scheme: dark) { body:not([data-theme="light"]) .job-name-text { color: #f2f2f7 !important; } }
+        body[data-theme="dark"] .job-name-text { color: #f2f2f7 !important; }
+
+        /* ===== DARK MODE — follows device setting (or manual override) ===== */
+        @media (prefers-color-scheme: dark) {
+            body:not([data-theme="light"]) {
+                --bg: #1c1c1e;
+                background: #1c1c1e !important;
+                color: #f2f2f7;
+            }
+        }
+        body[data-theme="dark"] {
+            --bg: #1c1c1e;
+            background: #1c1c1e !important;
+            color: #f2f2f7;
+            /* Modal CSS variables used by dynamically created modals */
+            --modal-bg: #2c2c2e;
+            --modal-text: #f2f2f7;
+            /* General surface variables */
+            --card-bg: #2c2c2e;
+            --surface-bg: #232325;
+            --border-col: #48484a;
+        }
+        @media (prefers-color-scheme: dark) {
+            body:not([data-theme="light"]) {
+                --modal-bg: #2c2c2e;
+                --modal-text: #f2f2f7;
+                --card-bg: #2c2c2e;
+                --surface-bg: #232325;
+                --border-col: #48484a;
+            }
+        }
+
+        /* ── Global: soften hardcoded white inline backgrounds in admin/modal areas ── */
+        body[data-theme="dark"] .scrollable-card div[style*="background:#fff"],
+        body[data-theme="dark"] .scrollable-card div[style*="background: #fff"],
+        body[data-theme="dark"] .scrollable-card div[style*="background:white"] { background:#2c2c2e !important; color:#f2f2f7 !important; }
+        body[data-theme="dark"] .scrollable-card div[style*="background:#f9f9f9"],
+        body[data-theme="dark"] .scrollable-card div[style*="background:#f8f9ff"],
+        body[data-theme="dark"] .scrollable-card div[style*="background:#fafafa"] { background:#232325 !important; }
+        body[data-theme="dark"] .scrollable-card p[style*="color:#333"],
+        body[data-theme="dark"] .scrollable-card p[style*="color:#555"],
+        body[data-theme="dark"] .scrollable-card p[style*="color:#666"],
+        body[data-theme="dark"] .scrollable-card span[style*="color:#333"],
+        body[data-theme="dark"] .scrollable-card span[style*="color:#555"],
+        body[data-theme="dark"] .scrollable-card span[style*="color:#666"] { color:#adadb8 !important; }
+        @media (prefers-color-scheme: dark) {
+            body:not([data-theme="light"]) .scrollable-card div[style*="background:#fff"],
+            body:not([data-theme="light"]) .scrollable-card div[style*="background: #fff"],
+            body:not([data-theme="light"]) .scrollable-card div[style*="background:white"] { background:#2c2c2e !important; color:#f2f2f7 !important; }
+            body:not([data-theme="light"]) .scrollable-card div[style*="background:#f9f9f9"],
+            body:not([data-theme="light"]) .scrollable-card div[style*="background:#f8f9ff"],
+            body:not([data-theme="light"]) .scrollable-card div[style*="background:#fafafa"] { background:#232325 !important; }
+            body:not([data-theme="light"]) .scrollable-card p[style*="color:#333"],
+            body:not([data-theme="light"]) .scrollable-card p[style*="color:#555"],
+            body:not([data-theme="light"]) .scrollable-card p[style*="color:#666"],
+            body:not([data-theme="light"]) .scrollable-card span[style*="color:#333"],
+            body:not([data-theme="light"]) .scrollable-card span[style*="color:#555"],
+            body:not([data-theme="light"]) .scrollable-card span[style*="color:#666"] { color:#adadb8 !important; }
+        }
+
+        /* Card surfaces */
+        @media (prefers-color-scheme: dark) { body:not([data-theme="light"]) .card { background:#2c2c2e !important; box-shadow:0 2px 8px rgba(0,0,0,0.4) !important; } }
+        body[data-theme="dark"] .card { background:#2c2c2e !important; box-shadow:0 2px 8px rgba(0,0,0,0.4) !important; }
+
+        /* Inputs & selects */
+        @media (prefers-color-scheme: dark) { body:not([data-theme="light"]) input:not([type="color"]):not([type="checkbox"]):not([type="file"]), body:not([data-theme="light"]) select, body:not([data-theme="light"]) textarea { background:#3a3a3c !important; color:#f2f2f7 !important; border-color:#48484a !important; } }
+        body[data-theme="dark"] input:not([type="color"]):not([type="checkbox"]):not([type="file"]), body[data-theme="dark"] select, body[data-theme="dark"] textarea { background:#3a3a3c !important; color:#f2f2f7 !important; border-color:#48484a !important; }
+
+        /* Labels */
+        @media (prefers-color-scheme: dark) { body:not([data-theme="light"]) label { color:#ebebf5cc !important; } }
+        body[data-theme="dark"] label { color:#ebebf5cc !important; }
+
+        /* Nav tabs */
+        @media (prefers-color-scheme: dark) { body:not([data-theme="light"]) .nav-tabs { background:#111827 !important; } body:not([data-theme="light"]) .nav-btn { color:#666 !important; } body:not([data-theme="light"]) .nav-btn.active { background:#1c1c1e !important; color:#fff !important; } }
+        body[data-theme="dark"] .nav-tabs { background:#111827 !important; }
+        body[data-theme="dark"] .nav-btn.active { background:#1c1c1e !important; }
+
+        /* Sub nav */
+        @media (prefers-color-scheme: dark) { body:not([data-theme="light"]) .sub-nav { background:#3a3a3c !important; } body:not([data-theme="light"]) .sub-btn.active { background:#48484a !important; color:#fff !important; } body:not([data-theme="light"]) .sub-btn { color:#aaa !important; } }
+        body[data-theme="dark"] .sub-nav { background:#3a3a3c !important; }
+        body[data-theme="dark"] .sub-btn.active { background:#48484a !important; color:#fff !important; }
+
+        /* Form cards */
+        @media (prefers-color-scheme: dark) { body:not([data-theme="light"]) .form-card { background:#2c2c2e !important; border-color:#48484a !important; } body:not([data-theme="light"]) .form-card h4 { color:#f2f2f7 !important; } body:not([data-theme="light"]) .form-card p { color:#999 !important; } }
+        body[data-theme="dark"] .form-card { background:#2c2c2e !important; border-color:#48484a !important; }
+        body[data-theme="dark"] .form-card h4 { color:#f2f2f7 !important; }
+
+        /* DB list */
+        @media (prefers-color-scheme: dark) { body:not([data-theme="light"]) .db-list { background:#2c2c2e !important; border-color:#48484a !important; } body:not([data-theme="light"]) .db-item { border-color:#48484a !important; color:#f2f2f7 !important; } }
+        body[data-theme="dark"] .db-list { background:#2c2c2e !important; border-color:#48484a !important; }
+        body[data-theme="dark"] .db-item { border-color:#48484a !important; color:#f2f2f7 !important; }
+
+        /* Part labels */
+        @media (prefers-color-scheme: dark) { body:not([data-theme="light"]) .part-label { background:#2c2c2e !important; border-color:#48484a !important; } body:not([data-theme="light"]) .pl-dims { color:#f2f2f7 !important; } body:not([data-theme="light"]) .pl-meta { color:#aaa !important; } }
+        body[data-theme="dark"] .part-label { background:#2c2c2e !important; border-color:#48484a !important; }
+        /* Desktop: wider layout with more breathing room */
+        @media (min-width: 700px) {
+            .part-label { gap: 14px; padding: 12px 14px; }
+            .pl-dims { font-size: 18px; }
+            .pl-right { min-width: 70px; padding: 0 10px; gap: 6px; border-left: none; }
+            .pl-mode { width: 44px; height: 44px; font-size: 14px; }
+            .pl-sqm { font-size: 13px; }
+            .pl-brand { font-size: 11px; }
+            .edit-btn-text { display: inline !important; }
+            .edit-btn-icon { display: none !important; }
+            .qty-controls { min-width: 50px; }
+            .qty-btn { height: 30px; font-size: 16px; }
+            .pl-qty { min-width: 42px; height: 42px; font-size: 16px; }
+            .part-drag-handle { font-size: 16px; padding: 0 8px; }
+        }
+        body[data-theme="dark"] .pl-sqm { color:#f2f2f7 !important; }
+        @media (prefers-color-scheme: dark) { body:not([data-theme="light"]) .pl-sqm { color:#f2f2f7 !important; } }
+        body[data-theme="dark"] .pl-dims { color:#f2f2f7 !important; }
+
+        /* Edge boxes */
+        @media (prefers-color-scheme: dark) { body:not([data-theme="light"]) .edge-box { background:#2c2c2e !important; border-color:#48484a !important; color:#aaa !important; } }
+        body[data-theme="dark"] .edge-box { background:#2c2c2e !important; border-color:#48484a !important; color:#aaa !important; }
+
+        /* P-cards */
+        @media (prefers-color-scheme: dark) { body:not([data-theme="light"]) .p-card { background:#2c2c2e !important; border-color:#48484a !important; color:#aaa !important; } body:not([data-theme="light"]) .p-card.active { background:#3a2e00 !important; border-color:var(--gs) !important; color:#f2f2f7 !important; } body:not([data-theme="light"]) .edge-box.active { background:#34c759 !important; border-color:#28a745 !important; color:#fff !important; } body:not([data-theme="light"]) .edge-box.mode-sel.active { background:#444 !important; border-color:var(--gs) !important; color:var(--gs) !important; } body:not([data-theme="light"]) .fm-opt.active { background:#48484a !important; color:#fff !important; } }
+        body[data-theme="dark"] .p-card { background:#2c2c2e !important; border-color:#48484a !important; color:#aaa !important; } body[data-theme="dark"] .p-card.active { background:#3a2e00 !important; border-color:var(--gs) !important; color:#f2f2f7 !important; } body[data-theme="dark"] .edge-box.active { background:#34c759 !important; border-color:#28a745 !important; color:#fff !important; } body[data-theme="dark"] .edge-box.mode-sel.active { background:#444 !important; border-color:var(--gs) !important; color:var(--gs) !important; } body[data-theme="dark"] .fm-opt.active { background:#48484a !important; color:#fff !important; }
+
+        /* FM row (finish selector) */
+        @media (prefers-color-scheme: dark) { body:not([data-theme="light"]) .fm-row { background:#3a3a3c !important; } body:not([data-theme="light"]) .fm-opt.active { background:#48484a !important; color:#fff !important; } }
+        body[data-theme="dark"] .fm-row { background:#3a3a3c !important; }
+        body[data-theme="dark"] .fm-opt.active { background:#48484a !important; color:#fff !important; }
+
+        /* Bubble units */
+        @media (prefers-color-scheme: dark) { body:not([data-theme="light"]) .bubble-unit { background:#3a3a3c !important; border-color:#48484a !important; } }
+        body[data-theme="dark"] .bubble-unit { background:#3a3a3c !important; border-color:#48484a !important; }
+
+        /* Admin */
+        @media (prefers-color-scheme: dark) { body:not([data-theme="light"]) .admin-header-section { background:#2c2c2e !important; border-color:#48484a !important; } body:not([data-theme="light"]) .admin-footer-section { background:#1c1c1e !important; border-color:#48484a !important; } }
+        body[data-theme="dark"] .admin-header-section { background:#2c2c2e !important; border-color:#48484a !important; }
+        body[data-theme="dark"] .admin-footer-section { background:#1c1c1e !important; border-color:#48484a !important; }
+
+        /* Login screen */
+        @media (prefers-color-scheme: dark) { body:not([data-theme="light"]) #loginScreen { background:linear-gradient(135deg,#1a1400,#3a2e00) !important; } body:not([data-theme="light"]) #loginScreen > div { background:#2c2c2e !important; } body:not([data-theme="light"]) #loginScreen h1 { color:#d4af37 !important; } body:not([data-theme="light"]) #loginScreen p { color:#aaa !important; } }
+        body[data-theme="dark"] #loginScreen { background:linear-gradient(135deg,#1a1400,#3a2e00) !important; }
+        body[data-theme="dark"] #loginScreen > div { background:#2c2c2e !important; }
+
+        /* Modals */
+        @media (prefers-color-scheme: dark) { body:not([data-theme="light"]) #forgotPasswordModal > div, body:not([data-theme="light"]) #paintFormulaModal > div > div, body:not([data-theme="light"]) #chargesModal > div { background:#2c2c2e !important; color:#f2f2f7 !important; } }
+        body[data-theme="dark"] #forgotPasswordModal > div { background:#2c2c2e !important; color:#f2f2f7 !important; }
+
+        /* ── Dark mode: Charges modal — full coverage including dynamic colour surcharge blocks ── */
+        body[data-theme="dark"] #chargesModal > div { background:#1c1c1e !important; color:#f2f2f7 !important; }
+        body[data-theme="dark"] #chargesModal label,
+        body[data-theme="dark"] #chargesModal h2,
+        body[data-theme="dark"] #chargesModal span,
+        body[data-theme="dark"] #chargesModal p { color:#f2f2f7 !important; }
+        body[data-theme="dark"] #chargesModal select,
+        body[data-theme="dark"] #chargesModal input[type="number"],
+        body[data-theme="dark"] #chargesModal input[type="text"] { background:#2c2c2e !important; color:#f2f2f7 !important; border-color:#48484a !important; }
+        body[data-theme="dark"] #chargesModal div[style*="border-bottom"] { border-color:#48484a !important; }
+        body[data-theme="dark"] #chargesModal #colourSurchargesContainer { background:#1c1c1e !important; border-color:#48484a !important; }
+        body[data-theme="dark"] #chargesModal #colourSurchargesContainer div[style*="background:#f9f9f9"],
+        body[data-theme="dark"] #chargesModal #colourSurchargesContainer div[style*="background: #f9f9f9"] { background:#2c2c2e !important; border-color:#48484a !important; }
+        body[data-theme="dark"] #chargesModal #colourSurchargesContainer div[style*="color:#000"],
+        body[data-theme="dark"] #chargesModal #colourSurchargesContainer div[style*="color:#333"] { color:#f2f2f7 !important; }
+        @media (prefers-color-scheme: dark) {
+            body:not([data-theme="light"]) #chargesModal > div { background:#1c1c1e !important; color:#f2f2f7 !important; }
+            body:not([data-theme="light"]) #chargesModal label,
+            body:not([data-theme="light"]) #chargesModal h2,
+            body:not([data-theme="light"]) #chargesModal span,
+            body:not([data-theme="light"]) #chargesModal p { color:#f2f2f7 !important; }
+            body:not([data-theme="light"]) #chargesModal select,
+            body:not([data-theme="light"]) #chargesModal input[type="number"],
+            body:not([data-theme="light"]) #chargesModal input[type="text"] { background:#2c2c2e !important; color:#f2f2f7 !important; border-color:#48484a !important; }
+            body:not([data-theme="light"]) #chargesModal #colourSurchargesContainer { background:#1c1c1e !important; border-color:#48484a !important; }
+            body:not([data-theme="light"]) #chargesModal #colourSurchargesContainer div[style*="background:#f9f9f9"],
+            body:not([data-theme="light"]) #chargesModal #colourSurchargesContainer div[style*="background: #f9f9f9"] { background:#2c2c2e !important; border-color:#48484a !important; }
+            body:not([data-theme="light"]) #chargesModal #colourSurchargesContainer div[style*="color:#000"],
+            body:not([data-theme="light"]) #chargesModal #colourSurchargesContainer div[style*="color:#333"] { color:#f2f2f7 !important; }
+            body:not([data-theme="light"]) #chargesModal div[style*="background:#fff"] { background:#2c2c2e !important; }
+        }
+
+        /* ── Dark mode: Reports date filter ── */
+        body[data-theme="dark"] #admin-tab-reports-content > div[style*="background:#f8f9ff"],
+        body[data-theme="dark"] #admin-tab-reports-content > div[style*="background: #f8f9ff"] { background:#1c2a3a !important; border-color:#2196f3 !important; }
+        body[data-theme="dark"] #admin-tab-reports-content label { color:#90caf9 !important; }
+        body[data-theme="dark"] #admin-tab-reports-content input[type="date"] { background:#2c2c2e !important; color:#f2f2f7 !important; border-color:#48484a !important; }
+        body[data-theme="dark"] #admin-tab-reports-content select { background:#2c2c2e !important; color:#f2f2f7 !important; border-color:#48484a !important; }
+        body[data-theme="dark"] #admin-tab-reports-content button[style*="background:#fff"] { background:#2c2c2e !important; color:#f2f2f7 !important; border-color:#48484a !important; }
+        body[data-theme="dark"] #admin-tab-reports-content button[style*="background:#e3f2fd"] { background:#1a2a3a !important; color:#90caf9 !important; }
+        body[data-theme="dark"] #admin-tab-reports-content p[style*="color:#333"] { color:#f2f2f7 !important; }
+        @media (prefers-color-scheme: dark) {
+            body:not([data-theme="light"]) #admin-tab-reports-content > div[style*="background:#f8f9ff"] { background:#1c2a3a !important; border-color:#2196f3 !important; }
+            body:not([data-theme="light"]) #admin-tab-reports-content label { color:#90caf9 !important; }
+            body:not([data-theme="light"]) #admin-tab-reports-content input[type="date"] { background:#2c2c2e !important; color:#f2f2f7 !important; border-color:#48484a !important; }
+            body:not([data-theme="light"]) #admin-tab-reports-content select { background:#2c2c2e !important; color:#f2f2f7 !important; border-color:#48484a !important; }
+            body:not([data-theme="light"]) #admin-tab-reports-content button[style*="background:#fff"] { background:#2c2c2e !important; color:#f2f2f7 !important; border-color:#48484a !important; }
+            body:not([data-theme="light"]) #admin-tab-reports-content button[style*="background:#e3f2fd"] { background:#1a2a3a !important; color:#90caf9 !important; }
+        }
+        body[data-theme="dark"] .report-card { background:#2c2c2e !important; border-color:#48484a !important; color:#f2f2f7 !important; }
+        body[data-theme="dark"] .report-card-title { color:#f2f2f7 !important; }
+        body[data-theme="dark"] .report-card canvas { filter: invert(0); }
+        body[data-theme="dark"] #reportsOutput .report-card div,
+        body[data-theme="dark"] #reportsOutput .report-card p,
+        body[data-theme="dark"] #reportsOutput .report-card span:not([style*="color:"]) { color:#f2f2f7 !important; }
+        body[data-theme="dark"] #reportsOutput div[style*="color:#555"],
+        body[data-theme="dark"] #reportsOutput div[style*="color:#666"],
+        body[data-theme="dark"] #reportsOutput div[style*="color:#777"],
+        body[data-theme="dark"] #reportsOutput div[style*="color:#888"],
+        body[data-theme="dark"] #reportsOutput div[style*="color:#999"] { color:#adadb8 !important; }
+        @media (prefers-color-scheme: dark) {
+            body:not([data-theme="light"]) .report-card { background:#2c2c2e !important; border-color:#48484a !important; color:#f2f2f7 !important; }
+            body:not([data-theme="light"]) .report-card-title { color:#f2f2f7 !important; }
+            body:not([data-theme="light"]) #reportsOutput .report-card div,
+            body:not([data-theme="light"]) #reportsOutput .report-card p,
+            body:not([data-theme="light"]) #reportsOutput .report-card span:not([style*="color:"]) { color:#f2f2f7 !important; }
+            body:not([data-theme="light"]) #reportsOutput div[style*="color:#555"],
+            body:not([data-theme="light"]) #reportsOutput div[style*="color:#666"],
+            body:not([data-theme="light"]) #reportsOutput div[style*="color:#777"],
+            body:not([data-theme="light"]) #reportsOutput div[style*="color:#888"],
+            body:not([data-theme="light"]) #reportsOutput div[style*="color:#999"] { color:#adadb8 !important; }
+        }
+
+        /* ── Dark mode: Timeline modal ── */
+        body[data-theme="dark"] #timelineModal > div { background:#1c1c1e !important; color:#f2f2f7 !important; }
+        body[data-theme="dark"] #timelineModal h3,
+        body[data-theme="dark"] #timelineModal p { color:#f2f2f7 !important; }
+        body[data-theme="dark"] #timelineModal label { color:#adadb8 !important; }
+        body[data-theme="dark"] #timelineModal input[type="number"] { background:#2c2c2e !important; color:#f2f2f7 !important; border-color:#48484a !important; }
+        body[data-theme="dark"] #timelineModal div[style*="background:#f0f8f0"],
+        body[data-theme="dark"] #timelineModal div[style*="background:#e8f5e9"] { background:#1a2a1a !important; border-color:#388e3c !important; color:#81c784 !important; }
+        body[data-theme="dark"] #timelineModal div[style*="background:#f0f8f0"] *,
+        body[data-theme="dark"] #timelineModal div[style*="background:#e8f5e9"] * { color:#81c784 !important; }
+        @media (prefers-color-scheme: dark) {
+            body:not([data-theme="light"]) #timelineModal > div { background:#1c1c1e !important; color:#f2f2f7 !important; }
+            body:not([data-theme="light"]) #timelineModal h3,
+            body:not([data-theme="light"]) #timelineModal p { color:#f2f2f7 !important; }
+            body:not([data-theme="light"]) #timelineModal label { color:#adadb8 !important; }
+            body:not([data-theme="light"]) #timelineModal input[type="number"] { background:#2c2c2e !important; color:#f2f2f7 !important; border-color:#48484a !important; }
+            body:not([data-theme="light"]) #timelineModal div[style*="background:#f0f8f0"],
+            body:not([data-theme="light"]) #timelineModal div[style*="background:#e8f5e9"] { background:#1a2a1a !important; border-color:#388e3c !important; color:#81c784 !important; }
+            body:not([data-theme="light"]) #timelineModal div[style*="background:#f0f8f0"] *,
+            body:not([data-theme="light"]) #timelineModal div[style*="background:#e8f5e9"] * { color:#81c784 !important; }
+        }
+
+        /* ── Dark mode: Gantt chart header rows ── */
+        #ganttMonthRow, #ganttDateRow { background:#fff; }
+        body[data-theme="dark"] #ganttMonthRow,
+        body[data-theme="dark"] #ganttDateRow { background:#1c1c1e !important; border-color:#48484a !important; }
+        body[data-theme="dark"] #ganttMonthRow > div,
+        body[data-theme="dark"] #ganttDateRow > div { background:#2c2c2e !important; color:#adadb8 !important; border-color:#48484a !important; }
+        body[data-theme="dark"] #ganttChart div[style*="background:#f9f9f9"] { background:#2c2c2e !important; }
+        body[data-theme="dark"] #ganttChart div[style*="background:#f0f0f0"] { background:#2a2a2a !important; }
+        body[data-theme="dark"] #ganttChart div[style*="color:#666"] { color:#adadb8 !important; }
+        body[data-theme="dark"] #ganttChart div[style*="color:#999"] { color:#666 !important; }
+        body[data-theme="dark"] #ganttChart div[style*="color:#000"] { color:#f2f2f7 !important; }
+        @media (prefers-color-scheme: dark) {
+            body:not([data-theme="light"]) #ganttMonthRow,
+            body:not([data-theme="light"]) #ganttDateRow { background:#1c1c1e !important; border-color:#48484a !important; }
+            body:not([data-theme="light"]) #ganttMonthRow > div,
+            body:not([data-theme="light"]) #ganttDateRow > div { background:#2c2c2e !important; color:#adadb8 !important; border-color:#48484a !important; }
+            body:not([data-theme="light"]) #ganttChart div[style*="background:#f9f9f9"] { background:#2c2c2e !important; }
+            body:not([data-theme="light"]) #ganttChart div[style*="background:#f0f0f0"] { background:#2a2a2a !important; }
+            body:not([data-theme="light"]) #ganttChart div[style*="color:#666"] { color:#adadb8 !important; }
+            body:not([data-theme="light"]) #ganttChart div[style*="color:#000"] { color:#f2f2f7 !important; }
+        }
+        body[data-theme="dark"] #reportsOutput table tr[style*="background:#fff"],
+        body[data-theme="dark"] #reportsOutput table tr[style*="background:#f9f9f9"] { background:#2c2c2e !important; color:#f2f2f7 !important; }
+        body[data-theme="dark"] #reportsOutput table tr[style*="background:#e3f2fd"] { background:#1a2a3a !important; color:#f2f2f7 !important; }
+        body[data-theme="dark"] #reportsOutput td,
+        body[data-theme="dark"] #reportsOutput th { color:#f2f2f7 !important; border-color:#48484a !important; }
+        body[data-theme="dark"] #reportsOutput { color:#f2f2f7; }
+
+        /* ── Dark mode: Paint used table — full coverage ── */
+        body[data-theme="dark"] #reportsOutput table { background:#1c1c1e !important; border-color:#48484a !important; }
+        body[data-theme="dark"] #reportsOutput table thead tr { background:#2c2c2e !important; }
+        body[data-theme="dark"] #reportsOutput table thead th { background:#2c2c2e !important; color:#adadb8 !important; border-color:#48484a !important; }
+        body[data-theme="dark"] #reportsOutput table tbody tr { border-color:#3a3a3c !important; }
+        body[data-theme="dark"] #reportsOutput table tbody tr[style*="background:#e8f5e9"] { background:#0a2a0a !important; }
+        body[data-theme="dark"] #reportsOutput table tbody tr[style*="background:#fafafa"] { background:#232325 !important; }
+        body[data-theme="dark"] #reportsOutput table tbody tr[style*="background:var(--card-bg,#fff8e1)"] { background:#2a1f00 !important; }
+        body[data-theme="dark"] #reportsOutput table tbody tr[style*="background:#e3f2fd"] { background:#0a1a2a !important; }
+        body[data-theme="dark"] #reportsOutput table tbody tr[style*="background:#e8eaf6"] { background:#0f0f2a !important; }
+        body[data-theme="dark"] #reportsOutput table tbody tr[style*="background:#f9fbe7"] { background:#1a1f00 !important; }
+        body[data-theme="dark"] #reportsOutput table td[style*="color:#888"],
+        body[data-theme="dark"] #reportsOutput table td[style*="color:#999"] { color:#6e6e73 !important; }
+        /* Paint used section header */
+        body[data-theme="dark"] #reportsOutput div[style*="color:#555"][style*="text-transform:uppercase"] { color:#adadb8 !important; }
+        body[data-theme="dark"] #reportsOutput div[style*="border-bottom:1px solid #ddd"] { border-color:#48484a !important; }
+        /* Stock on hand panel in reports */
+        body[data-theme="dark"] #stocktakeGrid > div[style*="background:#f9fbe7"],
+        body[data-theme="dark"] #stocktakeGrid > div[style*="background:var(--card-bg,#fff8e1)"],
+        body[data-theme="dark"] #stocktakeGrid > div[style*="background:#ffebee"] { color:#f2f2f7 !important; }
+        body[data-theme="dark"] #stocktakeGrid input { background:rgba(60,60,65,0.8) !important; color:#f2f2f7 !important; border-color:#48484a !important; }
+        @media (prefers-color-scheme: dark) {
+            body:not([data-theme="light"]) #reportsOutput table { background:#1c1c1e !important; }
+            body:not([data-theme="light"]) #reportsOutput table thead tr,
+            body:not([data-theme="light"]) #reportsOutput table thead th { background:#2c2c2e !important; color:#adadb8 !important; border-color:#48484a !important; }
+            body:not([data-theme="light"]) #reportsOutput table tbody tr { border-color:#3a3a3c !important; }
+            body:not([data-theme="light"]) #reportsOutput table tbody tr[style*="background:#e8f5e9"] { background:#0a2a0a !important; }
+            body:not([data-theme="light"]) #reportsOutput table tbody tr[style*="background:#fafafa"] { background:#232325 !important; }
+            body:not([data-theme="light"]) #reportsOutput table tbody tr[style*="background:var(--card-bg,#fff8e1)"] { background:#2a1f00 !important; }
+            body:not([data-theme="light"]) #reportsOutput table td[style*="color:#888"],
+            body:not([data-theme="light"]) #reportsOutput table td[style*="color:#999"] { color:#6e6e73 !important; }
+            body:not([data-theme="light"]) #stocktakeGrid input { background:rgba(60,60,65,0.8) !important; color:#f2f2f7 !important; border-color:#48484a !important; }
+        }
+
+        /* ── Dark mode: Clients list — data-theme="dark" only ── */
+        /* Client list rows — theme-aware via CSS classes */
+        .client-list-row { background:#fff; }
+        .client-list-name { color:#333; }
+        body[data-theme="dark"] .client-list-row { background:#2c2c2e !important; border-color:#48484a !important; }
+        body[data-theme="dark"] .client-list-name { color:#f2f2f7 !important; }
+        @media (prefers-color-scheme: dark) { body:not([data-theme="light"]) .client-list-row { background:#2c2c2e !important; border-color:#48484a !important; } }
+        @media (prefers-color-scheme: dark) { body:not([data-theme="light"]) .client-list-name { color:#f2f2f7 !important; } }
+        body[data-theme="dark"] #clientsList > div { background:#2c2c2e !important; border-color:#48484a !important; }
+        body[data-theme="dark"] #clientsList div { color:#f2f2f7 !important; }
+        body[data-theme="dark"] #clientsList { --text:#f2f2f7; --bg:#2c2c2e; }
+        @media (prefers-color-scheme: dark) { body:not([data-theme="light"]) #clientsList div { color:#f2f2f7 !important; } }
+        @media (prefers-color-scheme: dark) { body:not([data-theme="light"]) #clientsList > div { background:#2c2c2e !important; border-color:#48484a !important; } }
+        /* Wrapper container background fix */
+        body[data-theme="dark"] #admin-tab-clients-content div[style*="background:#fff"] { background:#2c2c2e !important; border-color:#48484a !important; }
+
+        /* ── Dark mode: PDF preview modal ── */
+        body[data-theme="dark"] #pdfPreviewModal > div { background:#1c1c1e !important; }
+        body[data-theme="dark"] #pdfPreviewModal > div > div[style*="background:#f9f9f9"] { background:#2c2c2e !important; border-color:#48484a !important; }
+        body[data-theme="dark"] #pdfPreviewModal h3 { color:#f2f2f7 !important; }
+        body[data-theme="dark"] #pdfPreviewModal button[style*="background:#e0e0e0"] { background:#3a3a3c !important; color:#f2f2f7 !important; }
+        @media (prefers-color-scheme: dark) {
+            body:not([data-theme="light"]) #pdfPreviewModal > div { background:#1c1c1e !important; }
+            body:not([data-theme="light"]) #pdfPreviewModal > div > div[style*="background:#f9f9f9"] { background:#2c2c2e !important; }
+            body:not([data-theme="light"]) #pdfPreviewModal h3 { color:#f2f2f7 !important; }
+        }
+
+        /* ── Dark mode: Admin content sections ── */
+        body[data-theme="dark"] #admin-tab-pricing-content div[style*="background:#fff"],
+        body[data-theme="dark"] #admin-tab-general-content div[style*="background:#fff"] { background:#2c2c2e !important; color:#f2f2f7 !important; }
+        body[data-theme="dark"] #admin-tab-pricing-content div[style*="background:#f9f9f9"],
+        body[data-theme="dark"] #admin-tab-general-content div[style*="background:#f9f9f9"],
+        body[data-theme="dark"] #admin-tab-general-content div[style*="background:#f5f5f5"] { background:#232325 !important; }
+        body[data-theme="dark"] #admin-tab-general-content p[style*="color:#333"],
+        body[data-theme="dark"] #admin-tab-general-content p[style*="color:#555"],
+        body[data-theme="dark"] #admin-tab-general-content p[style*="color:#666"],
+        body[data-theme="dark"] #admin-tab-general-content span[style*="color:#333"],
+        body[data-theme="dark"] #admin-tab-general-content span[style*="color:#666"] { color:#adadb8 !important; }
+        @media (prefers-color-scheme: dark) {
+            body:not([data-theme="light"]) #admin-tab-pricing-content div[style*="background:#fff"],
+            body:not([data-theme="light"]) #admin-tab-general-content div[style*="background:#fff"] { background:#2c2c2e !important; color:#f2f2f7 !important; }
+            body:not([data-theme="light"]) #admin-tab-pricing-content div[style*="background:#f9f9f9"],
+            body:not([data-theme="light"]) #admin-tab-general-content div[style*="background:#f9f9f9"],
+            body:not([data-theme="light"]) #admin-tab-general-content div[style*="background:#f5f5f5"] { background:#232325 !important; }
+        }
+        /* Global notifications dark mode */
+        body[data-theme="dark"] { --notif-text: #1a1a1a; }
+        @media (prefers-color-scheme: dark) { body:not([data-theme="light"]) { --notif-text: #1a1a1a; } }
+
+        /* History job cards - white bg inline styled divs */
+        @media (prefers-color-scheme: dark) { body:not([data-theme="light"]) #history-list > div { background:#2c2c2e !important; border-color:#48484a !important; color:#f2f2f7 !important; } }
+        body[data-theme="dark"] #history-list > div { background:#2c2c2e !important; border-color:#48484a !important; }
+
+        /* HR dividers */
+        @media (prefers-color-scheme: dark) { body:not([data-theme="light"]) hr { border-color:#48484a !important; } }
+        body[data-theme="dark"] hr { border-color:#48484a !important; }
+
+        /* Generic white bg divs inside cards (catches most admin inline styles) */
+        @media (prefers-color-scheme: dark) { body:not([data-theme="light"]) .card div[style*="background:#fff"], body:not([data-theme="light"]) .card div[style*="background: #fff"], body:not([data-theme="light"]) .card div[style*="background:#f9f9f9"], body:not([data-theme="light"]) .card div[style*="background:#f5f5f5"], body:not([data-theme="light"]) .card div[style*="background:#f0f0f0"] { background:#3a3a3c !important; } }
+        body[data-theme="dark"] .card div[style*="background:#fff"], body[data-theme="dark"] .card div[style*="background: #fff"], body[data-theme="dark"] .card div[style*="background:#f9f9f9"], body[data-theme="dark"] .card div[style*="background:#f5f5f5"], body[data-theme="dark"] .card div[style*="background:#f0f0f0"] { background:#3a3a3c !important; }
+
+        /* Qty buttons */
+        @media (prefers-color-scheme: dark) { body:not([data-theme="light"]) .qty-btn { background:#3a3a3c !important; color:#f2f2f7 !important; } }
+        body[data-theme="dark"] .qty-btn { background:#3a3a3c !important; color:#f2f2f7 !important; }
+
+        /* ===== DARK MODE ADDITIONS — history cards, price matrix, gantt ===== */
+
+        /* History job cards - job name hardcoded color:#000 */
+        @media (prefers-color-scheme: dark) {
+            body:not([data-theme="light"]) #history-list .card { background:#2c2c2e !important; }
+            body:not([data-theme="light"]) #history-list .card div[style*="color:#000"],
+            body:not([data-theme="light"]) #history-list .card div[style*="color: #000"] { color:#f2f2f7 !important; }
+            body:not([data-theme="light"]) #history-list .card div[style*="color:#666"] { color:#aaa !important; }
+            body:not([data-theme="light"]) #history-list .card div[style*="border-top:1px solid #eee"],
+            body:not([data-theme="light"]) #history-list .card div[style*="border-bottom:1px solid #eee"] { border-color:#48484a !important; }
+            body:not([data-theme="light"]) #history-list .card button[style*="background:#f0f0f0"] { background:#3a3a3c !important; color:#f2f2f7 !important; }
+            /* Completed job green tint — tone it down in dark */
+            body:not([data-theme="light"]) #history-list .card[style*="background:#f0fff4"] { background:#1a2e1a !important; }
+        }
+        body[data-theme="dark"] #history-list .card { background:#2c2c2e !important; }
+        body[data-theme="dark"] #history-list .card div[style*="color:#000"],
+        body[data-theme="dark"] #history-list .card div[style*="color: #000"] { color:#f2f2f7 !important; }
+        body[data-theme="dark"] #history-list .card div[style*="color:#666"] { color:#aaa !important; }
+        body[data-theme="dark"] #history-list .card button[style*="background:#f0f0f0"] { background:#3a3a3c !important; color:#f2f2f7 !important; }
+        body[data-theme="dark"] #history-list .card[style*="background:#f0fff4"] { background:#1a2e1a !important; }
+
+        /* Price matrix table */
+        @media (prefers-color-scheme: dark) {
+            body:not([data-theme="light"]) #admin-pricing-matrix table { background:#2c2c2e !important; color:#f2f2f7 !important; }
+            body:not([data-theme="light"]) #admin-pricing-matrix tr { background:#2c2c2e !important; }
+            body:not([data-theme="light"]) #admin-pricing-matrix tr td { background:#2c2c2e !important; color:#f2f2f7 !important; }
+            body:not([data-theme="light"]) #admin-pricing-matrix tr[style*="background:#eee"] { background:#3a3a3c !important; }
+            body:not([data-theme="light"]) #admin-pricing-matrix tr[style*="background:#eee"] td { background:#3a3a3c !important; color:#f2f2f7 !important; }
+            body:not([data-theme="light"]) #admin-pricing-matrix td[style*="background:#e3f2fd"] { background:#1a2a3a !important; }
+            body:not([data-theme="light"]) #admin-pricing-matrix tr[style*="background:#fff3cd"] { background:#2a2000 !important; }
+            body:not([data-theme="light"]) #admin-pricing-matrix tr[style*="background:#fff3cd"] td { background:#2a2000 !important; color:#f2f2f7 !important; }
+            body:not([data-theme="light"]) #admin-pricing-matrix tr[style*="background:#ffe0b2"] { background:#2a1800 !important; }
+            body:not([data-theme="light"]) #admin-pricing-matrix tr[style*="background:#ffe0b2"] td { background:#2a1800 !important; color:#f2f2f7 !important; }
+            body:not([data-theme="light"]) #admin-pricing-matrix tr[style*="background:#fffaf0"] { background:#2c2c2e !important; }
+            body:not([data-theme="light"]) #admin-pricing-matrix div[style*="color:#999"] { color:#888 !important; }
+            /* Pricing inputs — mid-grey bg, white text, visible border */
+            body:not([data-theme="light"]) #admin-pricing-matrix input[type="number"] { background:#3a3a3c !important; color:#f2f2f7 !important; border-color:#555 !important; }
+        }
+        body[data-theme="dark"] #admin-pricing-matrix table { background:#2c2c2e !important; color:#f2f2f7 !important; }
+        body[data-theme="dark"] #admin-pricing-matrix tr { background:#2c2c2e !important; }
+        body[data-theme="dark"] #admin-pricing-matrix tr td { background:#2c2c2e !important; color:#f2f2f7 !important; }
+        body[data-theme="dark"] #admin-pricing-matrix tr[style*="background:#eee"] { background:#3a3a3c !important; }
+        body[data-theme="dark"] #admin-pricing-matrix tr[style*="background:#eee"] td { background:#3a3a3c !important; color:#f2f2f7 !important; }
+        body[data-theme="dark"] #admin-pricing-matrix td[style*="background:#e3f2fd"] { background:#1a2a3a !important; }
+        body[data-theme="dark"] #admin-pricing-matrix tr[style*="background:#fff3cd"] { background:#2a2000 !important; }
+        body[data-theme="dark"] #admin-pricing-matrix tr[style*="background:#fff3cd"] td { background:#2a2000 !important; color:#f2f2f7 !important; }
+        body[data-theme="dark"] #admin-pricing-matrix tr[style*="background:#ffe0b2"] { background:#2a1800 !important; }
+        body[data-theme="dark"] #admin-pricing-matrix tr[style*="background:#ffe0b2"] td { background:#2a1800 !important; color:#f2f2f7 !important; }
+
+        /* CTS matrix dark mode */
+        @media (prefers-color-scheme: dark) { body:not([data-theme="light"]) #admin-cts-matrix table, body:not([data-theme="light"]) #admin-cts-matrix td, body:not([data-theme="light"]) #admin-cts-matrix th, body:not([data-theme="light"]) #admin-cts-matrix tr { background:#2c2c2e !important; color:#f2f2f7 !important; border-color:#48484a !important; } body:not([data-theme="light"]) #admin-cts-matrix input { background:#3a3a3c !important; color:#f2f2f7 !important; } }
+        body[data-theme="dark"] #admin-cts-matrix table, body[data-theme="dark"] #admin-cts-matrix td, body[data-theme="dark"] #admin-cts-matrix th, body[data-theme="dark"] #admin-cts-matrix tr { background:#2c2c2e !important; color:#f2f2f7 !important; border-color:#48484a !important; }
+        body[data-theme="dark"] #admin-cts-matrix input { background:#3a3a3c !important; color:#f2f2f7 !important; }
+
+        /* CTS checkbox label dark mode */
+        @media (prefers-color-scheme: dark) { body:not([data-theme="light"]) #ctsCheckLabel { background:#2c2c2e !important; color:#f2f2f7 !important; border-color:#48484a !important; } body:not([data-theme="light"]) #editCtsLabel { background:#2c2c2e !important; color:#f2f2f7 !important; border-color:#48484a !important; } }
+        body[data-theme="dark"] #ctsCheckLabel { background:#2c2c2e !important; color:#f2f2f7 !important; border-color:#48484a !important; }
+        body[data-theme="dark"] #editCtsLabel { background:#2c2c2e !important; color:#f2f2f7 !important; border-color:#48484a !important; }
+        body[data-theme="dark"] #admin-pricing-matrix tr[style*="background:#fffaf0"] { background:#2c2c2e !important; }
+        body[data-theme="dark"] #admin-pricing-matrix input[type="number"] { background:#3a3a3c !important; color:#f2f2f7 !important; border-color:#555 !important; }
+
+
+        /* Gantt/schedule wrapper */
+        @media (prefers-color-scheme: dark) {
+            body:not([data-theme="light"]) #ganttWrapper { background:#1c1c1e !important; }
+            body:not([data-theme="light"]) #ganttChart div[style*="background:#fff"],
+            body:not([data-theme="light"]) #ganttChart div[style*="background: #fff"] { background:#2c2c2e !important; color:#f2f2f7 !important; }
+            body:not([data-theme="light"]) #ganttChart div[style*="color:#333"],
+            body:not([data-theme="light"]) #ganttChart div[style*="color: #333"] { color:#f2f2f7 !important; }
+        }
+        body[data-theme="dark"] #ganttWrapper { background:#1c1c1e !important; }
+
+        /* Paint formula list */
+        @media (prefers-color-scheme: dark) {
+            body:not([data-theme="light"]) #paintFormulaList div[style*="border-bottom:1px solid #eee"] { border-color:#48484a !important; color:#f2f2f7 !important; }
+            body:not([data-theme="light"]) #paintFormulaList div[style*="color:#666"] { color:#aaa !important; }
+            body:not([data-theme="light"]) #paintFormulaList div[style*="color:#2196f3"] { color:#64b5f6 !important; }
+        }
+        body[data-theme="dark"] #paintFormulaList div { color:#f2f2f7 !important; border-color:#48484a !important; }
+        body[data-theme="dark"] #paintFormulaList div[style*="color:#2196f3"] { color:#64b5f6 !important; }
+
+        /* Admin general settings — inline white/light bg sections */
+        @media (prefers-color-scheme: dark) {
+            body:not([data-theme="light"]) #admin-tab-general-content { background:#1c1c1e; }
+            body:not([data-theme="light"]) #admin-tab-general-content div[style*="background:var(--card-bg,#fff8e1)"] { background:#2a2000 !important; }
+            body:not([data-theme="light"]) #admin-tab-general-content div[style*="background:#f0f0f0"] { background:#3a3a3c !important; }
+            body:not([data-theme="light"]) #admin-tab-general-content h4 { color:#f2f2f7 !important; }
+            body:not([data-theme="light"]) #admin-tab-general-content p { color:#aaa !important; }
+            body:not([data-theme="light"]) #admin-tab-general-content label { color:#ccc !important; }
+            body:not([data-theme="light"]) #admin-tab-general-content strong { color:#f2f2f7 !important; }
+            body:not([data-theme="light"]) #admin-tab-general-content > div { color:#f2f2f7; }
+        }
+        body[data-theme="dark"] #admin-tab-general-content { background:#1c1c1e; }
+        body[data-theme="dark"] #admin-tab-general-content div[style*="background:var(--card-bg,#fff8e1)"] { background:#2a2000 !important; }
+        body[data-theme="dark"] #admin-tab-general-content h4 { color:#f2f2f7 !important; }
+        body[data-theme="dark"] #admin-tab-general-content p { color:#aaa !important; }
+        body[data-theme="dark"] #admin-tab-general-content label { color:#ccc !important; }
+        body[data-theme="dark"] #admin-tab-general-content > div { color:#f2f2f7; }
+
+</style>
+
+<script>
+//                                                                                                                                                                                                       
+// PaintWorkz IndexedDB     unlimited job storage
+// Replaces localStorage 5MB cap. Falls back gracefully if unavailable.
+//                                                                                                                                                                                                       
+const pwDB = (() => {
+    const DB_NAME = 'PaintWorkzDB';
+    const DB_VERSION = 1;
+    const STORE = 'jobs';
+    let _db = null;
+
+    function open() {
+        return new Promise((resolve, reject) => {
+            if (_db) { resolve(_db); return; }
+            const req = indexedDB.open(DB_NAME, DB_VERSION);
+            req.onupgradeneeded = e => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains(STORE)) {
+                    const store = db.createObjectStore(STORE, { keyPath: 'jobNum' });
+                    store.createIndex('by_date', 'dateReceived', { unique: false });
+                    store.createIndex('by_client', 'client', { unique: false });
+                    store.createIndex('by_timestamp', 'timestamp', { unique: false });
+                }
+            };
+            req.onsuccess = e => { _db = e.target.result; resolve(_db); };
+            req.onerror = e => { console.warn('IndexedDB open failed:', e); reject(e); };
+        });
+    }
+
+    async function saveJob(job) {
+        try {
+            const db = await open();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(STORE, 'readwrite');
+                tx.objectStore(STORE).put(job);
+                tx.oncomplete = () => resolve(true);
+                tx.onerror = e => reject(e);
+            });
+        } catch(e) { console.warn('pwDB.saveJob failed:', e); return false; }
+    }
+
+    async function getAllJobs() {
+        try {
+            const db = await open();
+            return new Promise((resolve, reject) => {
+                const req = db.transaction(STORE, 'readonly').objectStore(STORE).getAll();
+                req.onsuccess = () => resolve(req.result || []);
+                req.onerror = e => reject(e);
+            });
+        } catch(e) {
+            console.warn('pwDB.getAllJobs failed, falling back to localStorage:', e);
+            return JSON.parse(localStorage.getItem('jobHistory') || '[]');
+        }
+    }
+
+    async function deleteJob(jobNum) {
+        try {
+            const db = await open();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(STORE, 'readwrite');
+                tx.objectStore(STORE).delete(jobNum);
+                tx.oncomplete = () => resolve(true);
+                tx.onerror = e => reject(e);
+            });
+        } catch(e) { console.warn('pwDB.deleteJob failed:', e); return false; }
+    }
+
+    async function getCount() {
+        try {
+            const db = await open();
+            return new Promise((resolve) => {
+                const req = db.transaction(STORE, 'readonly').objectStore(STORE).count();
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => resolve(0);
+            });
+        } catch(e) { return 0; }
+    }
+
+    // Migrate existing localStorage jobs into IndexedDB on first run
+    async function migrateFromLocalStorage() {
+        try {
+            const count = await getCount();
+            if (count > 0) return; // already migrated
+            const existing = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+            if (existing.length === 0) return;
+            const db = await open();
+            const tx = db.transaction(STORE, 'readwrite');
+            const store = tx.objectStore(STORE);
+            existing.forEach(job => { if (job.jobNum) store.put(job); });
+            await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
+            console.log(` Migrated ${existing.length} jobs from localStorage to IndexedDB`);
+        } catch(e) { console.warn('Migration failed:', e); }
+    }
+
+    // Run migration on load
+    migrateFromLocalStorage();
+
+    return { saveJob, getAllJobs, deleteJob, getCount };
+})();
+
+// PaintWorkz Photo IndexedDB - handles large photo storage
+// Photos are too large for localStorage (quota issues), use IndexedDB instead
+const photoDB = (() => {
+    const DB_NAME = 'PaintWorkzPhotoDB';
+    const DB_VERSION = 1;
+    const STORE = 'photos';
+    let _db = null;
+
+    function open() {
+        return new Promise((resolve, reject) => {
+            if (_db) { resolve(_db); return; }
+            const req = indexedDB.open(DB_NAME, DB_VERSION);
+            req.onupgradeneeded = e => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains(STORE)) {
+                    const store = db.createObjectStore(STORE, { keyPath: 'jobNum' });
+                    store.createIndex('by_timestamp', 'timestamp', { unique: false });
+                }
+            };
+            req.onsuccess = e => { _db = e.target.result; resolve(_db); };
+            req.onerror = e => { console.warn('PhotoDB open failed:', e); reject(e); };
+        });
+    }
+
+    async function savePhotos(jobNum, photosArray) {
+        try {
+            const db = await open();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(STORE, 'readwrite');
+                tx.objectStore(STORE).put({ 
+                    jobNum: jobNum, 
+                    photos: photosArray,
+                    timestamp: new Date().toISOString()
+                });
+                tx.oncomplete = () => {
+                    console.log('%c💾 SAVED TO IndexedDB', 'background:#34c759;color:#fff;font-weight:900;padding:4px;', 'Job#:', jobNum, 'Photos:', photosArray.length);
+                    resolve(true);
+                };
+                tx.onerror = e => reject(e);
+            });
+        } catch(e) { 
+            console.error('%c❌ IndexedDB SAVE ERROR', 'background:#ff3b30;color:#fff;font-weight:900;padding:4px;', e.message);
+            return false; 
+        }
+    }
+
+    async function getPhotos(jobNum) {
+        try {
+            const db = await open();
+            return new Promise((resolve, reject) => {
+                const req = db.transaction(STORE, 'readonly').objectStore(STORE).get(jobNum);
+                req.onsuccess = () => {
+                    const result = req.result;
+                    if (result && result.photos) {
+                        console.log('%c✅ LOADED FROM IndexedDB', 'background:#34c759;color:#fff;font-weight:900;padding:4px;', 'Job#:', jobNum, 'Photos:', result.photos.length);
+                        resolve(result.photos);
+                    } else {
+                        console.log('%c❌ NO PHOTOS IN IndexedDB', 'background:#ff3b30;color:#fff;font-weight:900;padding:4px;', 'Job#:', jobNum);
+                        resolve([]);
+                    }
+                };
+                req.onerror = e => reject(e);
+            });
+        } catch(e) {
+            console.error('%c❌ IndexedDB LOAD ERROR', 'background:#ff3b30;color:#fff;font-weight:900;padding:4px;', e.message);
+            return [];
+        }
+    }
+
+    async function deletePhotos(jobNum) {
+        try {
+            const db = await open();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(STORE, 'readwrite');
+                tx.objectStore(STORE).delete(jobNum);
+                tx.oncomplete = () => resolve(true);
+                tx.onerror = e => reject(e);
+            });
+        } catch(e) { 
+            console.warn('PhotoDB delete failed:', e); 
+            return false; 
+        }
+    }
+
+    return { open, savePhotos, getPhotos, deletePhotos };
+})();
+
+//                                                                                                                                                                                                       
+// Safe localStorage wrapper     handles QuotaExceededError gracefully
+//                                                                                                                                                                                                       
+const safeStorage = {
+    set(key, value) {
+        try {
+            localStorage.setItem(key, value);
+            return true;
+        } catch(e) {
+            if (e.name === 'QuotaExceededError' || e.code === 22) {
+                console.error('localStorage quota exceeded for key:', key);
+                // Try to free space by clearing old backups first
+                const lowPriority = ['jobHistory_backup_', 'companyLogo', 'headerLogo'];
+                let freed = false;
+                for (const lp of lowPriority) {
+                    const keys = Object.keys(localStorage).filter(k => k.startsWith(lp));
+                    if (keys.length) {
+                        keys.forEach(k => localStorage.removeItem(k));
+                        freed = true;
+                        break;
+                    }
+                }
+                if (freed) {
+                    try { localStorage.setItem(key, value); return true; } catch(e2) {}
+                }
+                // Show user-facing warning
+                if (typeof notify === 'function') {
+                    notify('       Storage nearly full. Please export a backup to free space.', 6000);
+                }
+                return false;
+            }
+            throw e;
+        }
+    },
+    get(key, fallback = null) {
+        try { const v = localStorage.getItem(key); return v !== null ? v : fallback; }
+        catch(e) { return fallback; }
+    },
+    remove(key) {
+        try { localStorage.removeItem(key); return true; }
+        catch(e) { return false; }
+    },
+    getJSON(key, fallback = null) {
+        try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
+        catch(e) { return fallback; }
+    },
+    setJSON(key, obj) {
+        return this.set(key, JSON.stringify(obj));
+    }
+};
+</script>
+
+<script>
+// Global error handler
+window.addEventListener('error', function(e) {
+    console.error('App error:', e.message, 'at', e.filename, ':', e.lineno);
+});
+window.addEventListener('unhandledrejection', function(e) {
+    console.error('Unhandled rejection:', e.reason);
+});
+
+// CRITICAL: Define tooltip functions EARLY so checkbox can call them
+function getTooltipKey() {
+    var uid = window.currentUser ? window.currentUser.uid : null;
+    return uid ? 'pw_tooltips_' + uid : 'pw_tooltips';
+}
+
+function setTooltipsEnabled(on) {
+    const enabled = !!on;
+    localStorage.setItem(getTooltipKey(), enabled ? '1' : '0');
+    localStorage.setItem('pw_tooltips', enabled ? '1' : '0');
+    // Icons show by default; tooltips-off hides them
+    document.body.classList.toggle('tooltips-off', !enabled);
+    document.documentElement.classList.toggle('tooltips-off', !enabled);
+    const cb = document.getElementById('tooltipToggle');
+    if (cb) cb.checked = enabled;
+}
+
+function initTooltips() {
+    var key = getTooltipKey();
+    var stored = localStorage.getItem(key);
+    if (stored === null) stored = localStorage.getItem('pw_tooltips');
+    var on = stored === null ? true : stored === '1';
+    // Icons show by default; add tooltips-off to hide them
+    document.body.classList.toggle('tooltips-off', !on);
+    document.documentElement.classList.toggle('tooltips-off', !on);
+    const cb = document.getElementById('tooltipToggle');
+    if (cb) { cb.checked = on; }
+}
+
+// Make globally available
+window.setTooltipsEnabled = setTooltipsEnabled;
+window.initTooltips = initTooltips;
+window.getTooltipKey = getTooltipKey;
+</script>
+</head>
+<body>
+<!-- COPYRIGHT NOTICE -->
+<div id="copyrightBanner" style="display:none;">
+    ⚖️ PaintWorkz Pro © 2026 Colin Bedford | Unauthorized use prohibited
+</div>
+
+    <!-- PDF Preview Modal -->
+    <div id="pdfPreviewModal" onclick="if(event.target===this)closePDFPreview();" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:99999; justify-content:center; align-items:center; padding:0; margin:0;">
+        <div style="background:var(--modal-bg,#fff); border-radius:8px; width:95vw; height:95vh; max-width:1400px; display:flex; flex-direction:column; box-shadow:0 20px 60px rgba(0,0,0,0.6); margin:0; padding:0; overflow:hidden; color:var(--modal-text,inherit);">
+            <!-- Header -->
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:14px 20px; border-bottom:2px solid #ddd; background:#f9f9f9; flex-shrink:0;">
+                <h3 id="pdfPreviewTitle" style="margin:0; color:#333; font-size:16px;">📄 PDF Preview</h3>
+                <button onclick="closePDFPreview()" style="border:none; background:#ff3b30; color:#fff; font-size:18px; font-weight:900; cursor:pointer; line-height:1; padding:6px 14px; border-radius:6px; position:relative; z-index:10;">✕ CLOSE</button>
+            </div>
+            
+            <!-- Loading Indicator -->
+            <div id="pdfLoadingSpinner" style="display:none; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); text-align:center; z-index:100000; background:#fff; padding:40px; border-radius:8px; box-shadow:0 4px 20px rgba(0,0,0,0.2);">
+                <div style="width:60px; height:60px; border:4px solid #f3f3f3; border-top:4px solid #d4af37; border-radius:50%; animation:spin 1s linear infinite;"></div>
+                <p style="margin-top:15px; margin-bottom:0; color:#666; font-weight:bold;">Loading PDF...</p>
+            </div>
+            
+            <!-- Preview Container — fills all available space -->
+            <div id="pdfPreviewContainer" style="flex:1; overflow:hidden; background:#525659; display:flex; flex-direction:column; margin:0; position:relative; min-height:0;">
+                <div id="pdfPageContainer" style="width:100%; display:flex; flex-direction:column; align-items:center; gap:12px; padding:10px; overflow:auto; height:100%;"></div>
+                <iframe id="pdfPreviewIframe" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; border:none;"></iframe>
+            </div>
+            
+            <!-- Footer Buttons — z-index above iframe so always clickable -->
+            <div style="display:flex; gap:10px; padding:14px 20px; border-top:2px solid #ddd; background:#f9f9f9; flex-shrink:0; flex-wrap:wrap; position:relative; z-index:10;">
+                <button onclick="closePDFPreview()" style="flex:1; min-width:70px; border:none; background:#e0e0e0; color:#333; padding:12px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:13px;">← BACK</button>
+                <button onclick="openPDFFullScreen()" style="flex:1; min-width:70px; border:none; background:#ff9500; color:#fff; padding:12px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:13px;">🔍 FULL SCREEN</button>
+                <button onclick="printCurrentPDF()" style="flex:1.5; min-width:70px; border:none; background:#2196f3; color:#fff; padding:12px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:13px;">🖨️ PRINT</button>
+                <button id="downloadPDFBtn" onclick="downloadCurrentPDF()" style="flex:1; min-width:70px; border:none; background:#d4af37; color:#000; padding:12px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:13px;">↓ SAVE</button>
+                <button id="sharePDFBtn" onclick="sharePDF()" style="flex:1; min-width:70px; border:none; background:#4caf50; color:#fff; padding:12px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:13px;">✉️ SEND</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- CHARGES MODAL - Appears before PDF generation -->
+    <div id="chargesModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:99998; justify-content:center; align-items:center; padding:16px; box-sizing:border-box;">
+        <div style="background:var(--modal-bg,#fff); border-radius:12px; width:100%; max-width:560px; padding:16px; box-shadow:0 10px 40px rgba(0,0,0,0.3); overflow-y:auto; max-height:calc(100dvh - 80px); display:flex; flex-direction:column; color:var(--modal-text,inherit);">
+            <h2 style="margin:0 0 12px 0; color:#333; font-size:13px; font-weight:bold;">Additional Charges</h2>
+            
+            <!-- Paint Colour Surcharges - Dynamic per colour -->
+            <div id="colourSurchargesContainer" style="margin-bottom:10px; padding-bottom:10px; border-bottom:1px solid #ddd; max-height:280px; overflow-y:auto; flex-shrink:0;">
+                <p style="color:#999; font-size:10px; margin:0;">Loading colours...</p>
+            </div>
+            
+            <!-- Delivery + Freight on one row — equal width -->
+            <div style="display:flex; gap:8px; margin-bottom:8px; padding-bottom:8px; border-bottom:1px solid #eee; flex-shrink:0;">
+                <div style="flex:1;">
+                    <label style="display:block; font-weight:900; color:#555; margin-bottom:3px; font-size:9px; text-transform:uppercase; letter-spacing:0.5px;">📦 Delivery Region</label>
+                    <select id="deliveryRegionSelect" style="width:100%; padding:7px 6px; border:1px solid #ddd; border-radius:6px; font-size:11px; background:#fff; cursor:pointer;">
+                        <option value="0">None</option>
+                        <option value="90">Warrnambool ($90)</option>
+                        <option value="110">Geelong ($110)</option>
+                        <option value="110">Mt Gambier ($110)</option>
+                        <option value="250">Adelaide ($250)</option>
+                        <option value="110">Horsham ($110)</option>
+                        <option value="160">Ballarat ($160)</option>
+                    </select>
+                </div>
+                <div style="flex:1;">
+                    <label style="display:block; font-weight:900; color:#555; margin-bottom:3px; font-size:9px; text-transform:uppercase; letter-spacing:0.5px;">🚚 Freight ($)</label>
+                    <input type="number" inputmode="decimal" id="freightChargeInput" value="0" min="0" step="5" placeholder="0" style="width:100%; padding:7px 6px; border:1px solid #ddd; border-radius:6px; font-size:13px; box-sizing:border-box; font-weight:700;">
+                </div>
+            </div>
+
+            <!-- Other Charges — multiple rows -->
+            <div style="margin-bottom:8px; padding-bottom:8px; border-bottom:1px solid #eee; flex-shrink:0;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                    <label style="font-weight:900; color:#555; font-size:9px; text-transform:uppercase; letter-spacing:0.5px;">➕ Other Charges</label>
+                    <button type="button" onclick="addOtherChargeRow()" style="border:none; background:#2196f3; color:#fff; border-radius:4px; padding:3px 8px; font-size:9px; font-weight:900; cursor:pointer;">+ ADD ROW</button>
+                </div>
+                <div id="otherChargesRows">
+                    <div class="other-charge-row" style="display:flex; gap:6px; margin-bottom:4px;">
+                        <input type="text" class="otherChargeDesc" placeholder="e.g. Rush job" style="flex:2; padding:7px 8px; border:1px solid #ddd; border-radius:6px; font-size:11px; box-sizing:border-box;">
+                        <input type="number" inputmode="decimal" class="otherChargeAmount" value="0" min="0" step="5" placeholder="$0" style="flex:1; padding:7px 6px; border:1px solid #ddd; border-radius:6px; font-size:13px; font-weight:700; box-sizing:border-box;">
+                        <button type="button" onclick="removeOtherChargeRow(this)" style="border:none; background:#ff3b30; color:#fff; border-radius:4px; padding:0 8px; font-size:12px; cursor:pointer; flex-shrink:0;">✕</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Summary — compact horizontal strip -->
+            <div style="background:#1a1a2e; border-radius:8px; padding:10px 14px; margin-bottom:10px; flex-shrink:0;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:6px; gap:6px; flex-wrap:wrap;">
+                    <span style="font-size:9px; color:#aaa;">Colour <strong style="color:#fff;">$<span id="summaryColourCharge">0.00</span></strong></span>
+                    <span style="font-size:9px; color:#aaa;">Delivery <strong style="color:#fff;">$<span id="summaryDeliveryCharge">0.00</span></strong></span>
+                    <span style="font-size:9px; color:#aaa;">Freight <strong style="color:#fff;">$<span id="summaryFreightCharge">0.00</span></strong></span>
+                    <span style="font-size:9px; color:#aaa;">Other <strong style="color:#fff;">$<span id="summaryOtherCharge">0.00</span></strong></span>
+                    <span style="font-size:9px; color:#aaa;">GST <strong style="color:#fff;">$<span id="summaryGST">0.00</span></strong></span>
+                </div>
+                <div style="border-top:1px solid #333; padding-top:8px; display:flex; justify-content:space-between; align-items:baseline;">
+                    <span style="font-size:10px; color:#aaa; font-weight:700;">SUBTOTAL</span>
+                    <span style="font-size:11px; color:#ccc; font-weight:700;">$<span id="summarySubtotalPlusCharges">0.00</span></span>
+                    <span style="font-size:13px; color:#d4af37; font-weight:900; letter-spacing:0.5px;">TOTAL&nbsp;&nbsp;$<span id="summaryTotalCharge">0.00</span></span>
+                </div>
+            </div>
+            
+            <!-- Charges History (inside modal) -->
+            <div id="modalChargesHistory" style="display:none; margin-top:8px; padding:8px 10px; background:#1e1600; border:1px solid #d4af37; border-radius:6px; flex-shrink:0;">
+                <div style="font-size:9px; color:#d4af37; font-weight:900; margin-bottom:5px; letter-spacing:0.5px;">PREVIOUS CHARGES ON THIS JOB</div>
+                <div id="modalChargesHistoryRows" style="font-size:10px; color:#f5d87a; line-height:1.6;"></div>
+            </div>
+
+            <!-- Buttons -->
+            <div style="display:flex; gap:6px; flex-shrink:0;">
+                <button onclick="closeChargesModal()" style="flex:1; border:none; background:#e0e0e0; color:#333; padding:6px; border-radius:4px; font-weight:bold; cursor:pointer; font-size:9px;">CANCEL</button>
+                <button id="applyChargesBtn" onclick="applyChargesAndGenerate()" style="flex:1; border:none; background:#4caf50; color:#fff; padding:6px; border-radius:4px; font-weight:bold; cursor:pointer; font-size:9px;">APPLY & GEN</button>
+            </div>
+        </div>
+    </div>
+    
+    <style>
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        /* ── Dark mode: Measure tab / Database tab content areas ── */
+        body[data-theme="dark"] #measure div[style*="background:#fff"],
+        body[data-theme="dark"] #measure div[style*="background: #fff"] { background:#2c2c2e !important; color:#f2f2f7 !important; }
+        body[data-theme="dark"] #measure div[style*="background:#f9f9f9"],
+        body[data-theme="dark"] #measure div[style*="background:#f5f5f5"] { background:#232325 !important; }
+        body[data-theme="dark"] #measure p[style*="color:#555"],
+        body[data-theme="dark"] #measure p[style*="color:#333"],
+        body[data-theme="dark"] #measure span[style*="color:#555"] { color:#adadb8 !important; }
+        body[data-theme="dark"] #database div[style*="background:#fff"] { background:#2c2c2e !important; color:#f2f2f7 !important; }
+        body[data-theme="dark"] #database div[style*="background:#f9f9f9"],
+        body[data-theme="dark"] #database div[style*="background:#f5f5f5"] { background:#232325 !important; }
+        @media (prefers-color-scheme: dark) {
+            body:not([data-theme="light"]) #measure div[style*="background:#fff"] { background:#2c2c2e !important; color:#f2f2f7 !important; }
+            body:not([data-theme="light"]) #measure div[style*="background:#f9f9f9"],
+            body:not([data-theme="light"]) #measure div[style*="background:#f5f5f5"] { background:#232325 !important; }
+            body:not([data-theme="light"]) #database div[style*="background:#fff"] { background:#2c2c2e !important; color:#f2f2f7 !important; }
+            body:not([data-theme="light"]) #database div[style*="background:#f9f9f9"],
+            body:not([data-theme="light"]) #database div[style*="background:#f5f5f5"] { background:#232325 !important; }
+        }
+
+        /* ── Dark mode: Notifications panel ── */
+        body[data-theme="dark"] #globalNotifications div[style*="background:#fff"] { background:#2c2c2e !important; color:#f2f2f7 !important; }
+        body[data-theme="dark"] #globalNotifications div[style*="background:#f5f5f5"] { background:#232325 !important; }
+        @media (prefers-color-scheme: dark) {
+            body:not([data-theme="light"]) #globalNotifications div[style*="background:#fff"] { background:#2c2c2e !important; color:#f2f2f7 !important; }
+            body:not([data-theme="light"]) #globalNotifications div[style*="background:#f5f5f5"] { background:#232325 !important; }
+        }
+
+        /* ── Dark mode: History tab ── */
+        body[data-theme="dark"] #history div[style*="background:#fff"] { background:#2c2c2e !important; }
+        body[data-theme="dark"] #history div[style*="background:#f9f9f9"],
+        body[data-theme="dark"] #history div[style*="background:#f5f5f5"] { background:#232325 !important; }
+        @media (prefers-color-scheme: dark) {
+            body:not([data-theme="light"]) #history div[style*="background:#fff"] { background:#2c2c2e !important; }
+            body:not([data-theme="light"]) #history div[style*="background:#f9f9f9"] { background:#232325 !important; }
+        }
+
+        /* ── Dark mode: warning/info boxes — keep colour tints but darken ── */
+        body[data-theme="dark"] div[style*="background:#fff3e0"],
+        body[data-theme="dark"] div[style*="background:#fff3cd"],
+        body[data-theme="dark"] div[style*="background:#fff8f8"] { background:#2a1f00 !important; border-color:#664400 !important; }
+        body[data-theme="dark"] div[style*="background:#e8f5e9"],
+        body[data-theme="dark"] div[style*="background:#f0fff0"] { background:#0a1f0a !important; border-color:#1b5e20 !important; }
+        body[data-theme="dark"] div[style*="background:#e3f2fd"],
+        body[data-theme="dark"] div[style*="background:#f0f8ff"] { background:#0a1a2a !important; border-color:#1565c0 !important; }
+        @media (prefers-color-scheme: dark) {
+            body:not([data-theme="light"]) div[style*="background:#fff3e0"],
+            body:not([data-theme="light"]) div[style*="background:#fff3cd"] { background:#2a1f00 !important; border-color:#664400 !important; }
+            body:not([data-theme="light"]) div[style*="background:#e8f5e9"] { background:#0a1f0a !important; border-color:#1b5e20 !important; }
+            body:not([data-theme="light"]) div[style*="background:#e3f2fd"] { background:#0a1a2a !important; border-color:#1565c0 !important; }
+        }
+
+        /* ── Dark mode: code elements ── */
+        body[data-theme="dark"] code[style*="background:#f5f5f5"],
+        body[data-theme="dark"] code[style*="background:#fff"] { background:#3a3a3c !important; color:#f2f2f7 !important; }
+        @media (prefers-color-scheme: dark) {
+            body:not([data-theme="light"]) code[style*="background:#f5f5f5"],
+            body:not([data-theme="light"]) code[style*="background:#fff"] { background:#3a3a3c !important; color:#f2f2f7 !important; }
+        }
+    </style>
+    <!-- Firebase SDK - Modern Modular Approach -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, reauthenticateWithCredential, EmailAuthProvider, sendPasswordResetEmail, confirmPasswordReset, verifyPasswordResetCode } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, addDoc, getDoc, onSnapshot, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
+        
+        // ─────────────────────────────────────────────────────────────────
+// FIREBASE API KEY SECURITY
+// Firebase client keys are designed to be public — they do NOT grant
+// admin access. Security is enforced by:
+//   1. Firebase Security Rules (Firestore/Storage)
+//   2. Domain restrictions set in Google Cloud Console:
+//      console.cloud.google.com → APIs → Credentials → restrict key
+//      to: paintworkz.github.io and localhost
+//   3. Firebase App Check (attestation layer, initialized below)
+// DO NOT add admin SDK keys here — those must stay server-side only.
+// ─────────────────────────────────────────────────────────────────
+const firebaseConfig = {
+            apiKey: "AIzaSyBdcKqXf_EsOjWdSMvDr4jcnumhgFutlxk",
+            authDomain: "paintworkz-42bc0.firebaseapp.com",
+            projectId: "paintworkz-42bc0",
+            storageBucket: "paintworkz-42bc0.firebasestorage.app",
+            messagingSenderId: "298786193879",
+            appId: "1:298786193879:web:8fd63ca63c109f8cd14b92"
+        };
+        
+        let app, auth, db;
+        try {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+            const _storage = getStorage(app);
+            window.firebaseStorage = _storage;
+            window.storageRef = ref;
+            window.uploadString = uploadString;
+            window.getDownloadURL = getDownloadURL;
+            window.deleteObject = deleteObject;
+            // Session persistence: stays logged in within the same tab/window
+            try {
+                const { setPersistence, browserSessionPersistence } = await import('https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js');
+                await setPersistence(auth, browserSessionPersistence);
+            } catch(pe) {}
+            console.log('✓ Firebase initialized successfully');
+        } catch(fbError) {
+            // Suppress Firebase hosting environment check - app works fine with explicit config
+            if (!fbError.message?.includes('app/no-options')) {
+                console.log('ℹ️ Firebase note (non-critical):', fbError.message);
+            }
+            // Firebase will still work with explicit config - this error is from hosting environment check
+        }
+        
+        // Export to window for global access - with proper function wrappers
+        window.firebaseDb = db;
+        window.firebaseAuth = auth;
+        
+        // Export Firestore functions as window methods
+        window.doc = doc;
+        window.setDoc = setDoc;
+        window.collection = collection;
+        window.addDoc = addDoc;
+        window.getDoc = getDoc;
+        window.deleteDoc = deleteDoc;
+        window.onSnapshot = onSnapshot;
+        window.getDocs = getDocs;
+        
+        // Auth functions
+        window.createUserWithEmailAndPassword = (email, password) => createUserWithEmailAndPassword(auth, email, password);
+        window.signInWithEmailAndPassword = (email, password) => signInWithEmailAndPassword(auth, email, password);
+        window.signOut = (authInstance) => signOut(authInstance || auth);
+        window.signOut = () => signOut(auth);
+        window.sendPasswordResetEmail = (email) => sendPasswordResetEmail(auth, email, {
+            url: 'https://app.paintworkzpro.com/'
+        });
+        window.confirmPasswordReset = (oobCode, newPassword) => confirmPasswordReset(auth, oobCode, newPassword);
+        window.verifyPasswordResetCode = (oobCode) => verifyPasswordResetCode(auth, oobCode);
+        window.reauthenticateWithCredential = reauthenticateWithCredential;
+        window.EmailAuthProvider = EmailAuthProvider;
+        
+        window.currentUser = null;
+        window.realtimeSyncActive = false; // Guard against multiple listeners
+        window.realtimeSyncUnsubscribe = null; // Store unsubscribe function
+        
+        // Set up auth listener
+        onAuthStateChanged(auth, user => {
+            window.currentUser = user;
+            if (user) {
+                // Check for explicit login flag (sessionStorage = same tab only)
+                const explicitLogin = sessionStorage.getItem('pw_explicit_login') || localStorage.getItem('pw_explicit_login');
+                if (!explicitLogin) {
+                    sessionStorage.setItem('pw_forced_signout', '1');
+                    window.signOut(auth).catch(() => {});
+                    return;
+                }
+                // Cancel any pending logout timer
+                if (window._authNullTimer) { clearTimeout(window._authNullTimer); window._authNullTimer = null; }
+
+                // DATA ISOLATION: non-owner accounts get clean slate on every fresh login
+                const lastUid = localStorage.getItem('pw_last_uid');
+                const isOwnerLogin = (user.email === 'ckbedford@outlook.com');
+                const _freshSession = !sessionStorage.getItem('pw_session_active_' + user.uid);
+                if (!isOwnerLogin && (lastUid !== user.uid || _freshSession)) {
+                    console.log('Non-owner login — wiping localStorage for clean slate:', user.email);
+                    // Surgical wipe: only remove account data keys, NEVER touch stock levels
+                    ['doorProfiles','masterMatrix','paintFormulas','paintBrands',
+                     'companySettings','jobHistory','clientDatabase','additionalCharges',
+                     'defaultTimeline','adminSettings','pwCompletedJobs',
+                     'headerLogo','companyLogo','ctsMatrix','ctsThicknesses'
+                    ].forEach(k => { try { localStorage.removeItem(k); } catch(e) {} });
+                    console.log('✅ Clean slate for account:', user.email);<!-- 
+╔════════════════════════════════════════════════════════════════╗
+║                                                                ║
+║  ⚖️  OWNERSHIP NOTICE - HARDLOCKED                             ║
+║                                                                ║
+║  SOFTWARE OWNED BY: COLIN BEDFORD                             ║
+║  COPYRIGHT: © 2026 Colin Bedford                              ║
+║  PROPERTY: Personal Intellectual Property                     ║
+║                                                                ║
+║  NOT OWNED BY: PAINTWORKZ PTY LTD                             ║
+║  NOT PART OF BUSINESS ASSETS OR VALUATION                     ║
+║                                                                ║
+║  UNAUTHORIZED USE, COPYING, OR CLAIMING OWNERSHIP IS          ║
+║  STRICTLY PROHIBITED AND MAY RESULT IN LEGAL ACTION.          ║
+║                                                                ║
+║  This notice is embedded in the source code and will remain   ║
+║  in all versions of this software.                            ║
+║                                                                ║
+╚════════════════════════════════════════════════════════════════╝
+-->
+<!--- 
+╔════════════════════════════════════════════════════════════════╗
+║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
+║  Version: v1.16.10 | Updated: 2026-03-25                       ║
+║  If version doesn't match, browser cache is cleared           ║
+╚════════════════════════════════════════════════════════════════╝
+--->
+<script>
+(function() {
+    window.CURRENT_VERSION = 'v1.16.124'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -3823,7 +5514,7 @@ const firebaseConfig = {
     <div class="icon-btn" onclick="logout()" title="Logout" style="color:#ff3b30; font-size:24px; cursor:pointer; margin-right:15px;">🚪</div>
 </div>
 
-<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+<script>
     //        PADDLE INIT                                                                                                                                                                               
     //        App Store detection                                                                                                                                                       
     // Hide Paddle checkout on iOS App Store build (no IAP allowed)
@@ -10389,7 +12080,7 @@ const firebaseConfig = {
 
     function updateVersionDisplay() {
         // Use the top-level CURRENT_VERSION constant — no separate hardcoded version here
-        const _ver = window.CURRENT_VERSION || 'v1.16.122';
+        const _ver = window.CURRENT_VERSION || 'v1.16.124';
         const CURRENT_DATE = '2026-04-21';
 
         const els = ['adminVersionDisplay','versionDisplay','loginVersionText'];
@@ -25587,10 +27278,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                 if (typeof loadStockSettings === 'function') loadStockSettings();
                 if (typeof renderHistory === 'function') renderHistory();
                 if (typeof renderScheduleCalendar === 'function') renderScheduleCalendar();
-                if (typeof renderAdminGanttChart === 'function') renderAdminGanttChart();
-                if (typeof renderGlobalNotifications === 'function') renderGlobalNotifications();
                 if (typeof updateNotificationBadge === 'function') updateNotificationBadge();
-                if (typeof renderStaffAccountsList === 'function') renderStaffAccountsList(); // Load staff accounts in admin
                 console.log('    UI refreshed after Firebase data load');
             }, 200);
         } catch(e) {}
