@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.139'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.140'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1744,7 +1744,7 @@ const firebaseConfig = {
 */
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.139'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.140'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -10112,6 +10112,24 @@ const firebaseConfig = {
             localStorage.setItem('jobHistory', JSON.stringify(history));
             console.log(`✅ Auto-archived ${archivedCount} old completed jobs`);
             notify(`📦 Archived ${archivedCount} old jobs`);
+            
+            // Sync to Firestore so archives persist
+            if (window.currentUser && window.firebaseDb) {
+                try {
+                    const syncUid = window.staffModeOwnerUid || window.currentUser.uid;
+                    history.forEach(job => {
+                        if (job.archived && job.id) {
+                            const jobDocRef = window.doc(window.firebaseDb, 'users', syncUid, 'jobs', job.id);
+                            window.setDoc(jobDocRef, { archived: true }, { merge: true }).catch(e => {
+                                console.error('Failed to sync archive status for job', job.id, e);
+                            });
+                        }
+                    });
+                    console.log('📤 Archive status synced to Firestore');
+                } catch(e) {
+                    console.error('Firestore sync error:', e);
+                }
+            }
         } else {
             console.log('ℹ️ No jobs to archive');
         }
