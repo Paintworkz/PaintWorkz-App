@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.151'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.152'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1741,7 +1741,7 @@ const firebaseConfig = {
 */
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.151'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.152'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -12456,6 +12456,26 @@ const firebaseConfig = {
         // Render charges history panel when forms tab opens
         if (t === 'forms') {
             setTimeout(function(){ try { renderChargesHistoryPanel(); } catch(e){} }, 100);
+            // FORCE colored backgrounds in dark mode (CSS not working)
+            setTimeout(() => {
+                const isDark = document.body.getAttribute('data-theme') === 'dark' || 
+                              (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches && 
+                               document.body.getAttribute('data-theme') !== 'light');
+                if (isDark) {
+                    const cards = {
+                        'form-paint-order': 'rgba(76, 175, 80, 0.15)',
+                        'form-label': 'rgba(233, 30, 99, 0.15)',
+                        'form-cover': 'rgba(255, 152, 0, 0.15)',
+                        'form-a3schedule': 'rgba(76, 175, 80, 0.15)',
+                        'form-batch': 'rgba(156, 39, 176, 0.15)'
+                    };
+                    Object.keys(cards).forEach(id => {
+                        const el = document.getElementById(id);
+                        if (el) el.style.background = cards[id];
+                    });
+                    console.log('✅ Form backgrounds forced (JS override)');
+                }
+            }, 150);
         }
         
         // Refresh paint formula list when database tab opened (fixes iOS not showing formulas)
@@ -25944,6 +25964,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
 
     // ===== ADDITIONAL CHARGES FUNCTIONS =====
     function saveAdditionalCharges() {
+        console.log('💾 SAVING CHARGES...');
         // Read delivery regions from dynamic list
         // If list is empty/collapsed, preserve existing saved regions
         const deliveryRegions = {};
@@ -25972,16 +25993,32 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             lastSavedAt: new Date().toISOString() // Track when saved locally
         };
         
+        console.log('📋 Saving charges:', {
+            clearFlat: charges.clearFlatRate,
+            standard: charges.colourMultipliers.Standard * 100 + '%',
+            light: charges.colourMultipliers.Light * 100 + '%',
+            dark: charges.colourMultipliers.Dark * 100 + '%',
+            extraTint: charges.colourMultipliers['Extra Tint'] * 100 + '%',
+            undercoat: charges.colourMultipliers.Undercoat * 100 + '%',
+            colourMatch: charges.colourMatchFlatRate,
+            timestamp: charges.lastSavedAt
+        });
+        
         localStorage.setItem('additionalCharges', JSON.stringify(charges));
+        console.log('✅ Saved to localStorage');
 
         // Sync to Firestore so it persists across devices
         if (window.currentUser && window.firebaseDb && window.doc && window.setDoc) {
             try {
                 const ref = window.doc(window.firebaseDb, 'users', window.staffModeOwnerUid || window.currentUser.uid, 'appData', 'additionalCharges');
                 window.setDoc(ref, { ...charges, lastUpdated: new Date().toISOString() }, { merge: false })
-                    .then(() => console.log('Additional charges synced to Firestore'))
-                    .catch(e => console.warn('Additional charges Firestore sync failed:', e));
-            } catch(e) {}
+                    .then(() => console.log('✅ Synced to Firestore'))
+                    .catch(e => console.warn('❌ Firestore sync failed:', e));
+            } catch(e) {
+                console.warn('❌ Firestore sync error:', e);
+            }
+        } else {
+            console.warn('⚠️ Firestore not available - only saved locally');
         }
 
         // Update delivery dropdown in charges modal
