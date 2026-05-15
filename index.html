@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.137'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.138'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1744,7 +1744,7 @@ const firebaseConfig = {
 */
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.137'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.138'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -10042,6 +10042,7 @@ const firebaseConfig = {
     function autoArchiveOldJobs() {
         let history = JSON.parse(localStorage.getItem('jobHistory')) || [];
         let modified = false;
+        let archivedCount = 0;
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
         
@@ -10050,21 +10051,44 @@ const firebaseConfig = {
             
             // Check if job was completed 30+ days ago
             let completedDate = null;
+            
+            // Try to get completion date from various fields
             if (job.completedDate) {
                 completedDate = new Date(job.completedDate);
             } else if (job.dateCompleted) {
-                completedDate = new Date(job.dateCompleted);
+                // Parse DD/MM/YY format
+                const parts = job.dateCompleted.split('/');
+                if (parts.length === 3) {
+                    const day = parseInt(parts[0]);
+                    const month = parseInt(parts[1]) - 1;
+                    const year = parseInt(parts[2].length === 2 ? '20' + parts[2] : parts[2]);
+                    completedDate = new Date(year, month, day);
+                }
+            } else if (job.lastModified) {
+                // Use lastModified as fallback
+                completedDate = new Date(job.lastModified);
             }
             
-            if (completedDate && completedDate < thirtyDaysAgo) {
+            // If still no date, assume it's old and should be archived
+            if (!completedDate) {
                 job.archived = true;
                 modified = true;
+                archivedCount++;
+                console.log(`📦 Archiving job #${job.jobNum} (no completion date)`);
+            } else if (completedDate < thirtyDaysAgo) {
+                job.archived = true;
+                modified = true;
+                archivedCount++;
+                console.log(`📦 Archiving job #${job.jobNum} (completed ${completedDate.toLocaleDateString()})`);
             }
         });
         
         if (modified) {
             localStorage.setItem('jobHistory', JSON.stringify(history));
-            console.log('✅ Auto-archived old completed jobs');
+            console.log(`✅ Auto-archived ${archivedCount} old completed jobs`);
+            notify(`📦 Archived ${archivedCount} old jobs`);
+        } else {
+            console.log('ℹ️ No jobs to archive');
         }
     }
     
