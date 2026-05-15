@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.133'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.135'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1744,7 +1744,7 @@ const firebaseConfig = {
 */
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.133'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.135'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -10032,7 +10032,18 @@ const firebaseConfig = {
         }
     }
 
+    // Debounced version to prevent multiple rapid calls
+    let renderHistoryTimer = null;
     function renderHistory() {
+        if (renderHistoryTimer) {
+            clearTimeout(renderHistoryTimer);
+        }
+        renderHistoryTimer = setTimeout(() => {
+            renderHistoryNow();
+        }, 200);
+    }
+    
+    function renderHistoryNow() {
         const historyList = document.getElementById('history-list');
         if (!historyList) return;
         
@@ -27799,8 +27810,9 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                 window.doc(window.firebaseDb, 'users', syncUid), 'jobs'
             );
             window.realtimeSyncActive = true;
-            window.realtimeSyncUnsubscribe = window.onSnapshot(jobsCollectionRef,
-                snapshot => {
+            
+            // PERFORMANCE: Define processSnapshot function first
+            function processSnapshot(snapshot) {
                     try {
                         // Skip snapshots that have pending local writes — wait for server confirmation
                         // This prevents the "flicker" where a pending write briefly shows stale data
@@ -27846,11 +27858,19 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                                 console.log('⏳ Preserving in-flight local job:', localJob.jobNum);
                             }
                         });
+                        // PERFORMANCE: Build a Map for O(1) lookups instead of O(n) .find() on each job
+                        const localMap = new Map();
+                        local.forEach(j => {
+                            if (j.id) localMap.set(`id:${j.id}`, j);
+                            if (j.jobNum && j.client) {
+                                localMap.set(`job:${j.jobNum}:${(j.client || '').toLowerCase()}`, j);
+                            }
+                        });
+                        
                         jobs.forEach(cloudJob => {
-                            const localMatch = local.find(j =>
-                                (j.id && j.id === cloudJob.id) ||
-                                (j.jobNum === cloudJob.jobNum && (j.client || '').toLowerCase() === (cloudJob.client || '').toLowerCase())
-                            );
+                            // O(1) lookup instead of O(n) .find()
+                            const localMatch = localMap.get(`id:${cloudJob.id}`) ||
+                                              localMap.get(`job:${cloudJob.jobNum}:${(cloudJob.client || '').toLowerCase()}`);
                             if (localMatch && localMatch.completed && !cloudJob.completed) {
                                 cloudJob.completed = true;
                                 cloudJob.completedDate = localMatch.completedDate || cloudJob.completedDate;
@@ -27979,6 +27999,26 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                             }
                         }, 3000);
                     } catch(e) { console.error('Snapshot handler error:', e); }
+            } // end processSnapshot
+            
+            // PERFORMANCE: Debounce snapshot processing to prevent rapid-fire updates
+            let snapshotProcessTimer = null;
+            let pendingSnapshot = null;
+            
+            window.realtimeSyncUnsubscribe = window.onSnapshot(jobsCollectionRef,
+                snapshot => {
+                    // Store the snapshot and debounce processing
+                    pendingSnapshot = snapshot;
+                    
+                    if (snapshotProcessTimer) {
+                        clearTimeout(snapshotProcessTimer);
+                    }
+                    
+                    snapshotProcessTimer = setTimeout(() => {
+                        if (!pendingSnapshot) return;
+                        processSnapshot(pendingSnapshot);
+                        pendingSnapshot = null;
+                    }, 300); // Process after 300ms of no updates
                 },
                 error => {
                     console.error('Realtime sync error:', error);
