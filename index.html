@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.136'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.137'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1744,7 +1744,7 @@ const firebaseConfig = {
 */
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.136'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.137'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -4038,6 +4038,7 @@ const firebaseConfig = {
                 <button onclick="filterHistory('all')" id="filter-all" style="background:#d4af37; color:#000; border:none; padding:8px 14px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">ALL</button>
                 <button onclick="filterHistory('active')" id="filter-active" style="background:#f0f0f0; color:#666; border:none; padding:8px 14px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">ACTIVE</button>
                 <button onclick="filterHistory('completed')" id="filter-completed" style="background:#f0f0f0; color:#666; border:none; padding:8px 14px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">COMPLETED</button>
+                <button onclick="filterHistory('archives')" id="filter-archives" style="background:#f0f0f0; color:#666; border:none; padding:8px 14px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">ARCHIVES</button>
                 <select id="historySortSelect" onchange="renderHistory()" style="margin-left:auto; padding:7px 10px; border:1px solid #ddd; border-radius:6px; font-size:11px; font-weight:900; background:#fff; cursor:pointer;">
                     <option value="date_desc">📅 Newest First</option>
                     <option value="date_asc">📅 Oldest First</option>
@@ -9388,6 +9389,11 @@ const firebaseConfig = {
             }
             
             console.log('    App initialized - measure sheet cleared, clients loaded');
+            
+            // Auto-archive old completed jobs
+            try {
+                if (typeof autoArchiveOldJobs === 'function') autoArchiveOldJobs();
+            } catch(e) { console.error('Auto-archive error:', e); }
 
             // iOS touch fix - bind touchend directly to p-cards and fm-opts
             // iOS Safari sometimes ignores onclick on non-anchor/button elements
@@ -10032,6 +10038,36 @@ const firebaseConfig = {
         }
     }
 
+    // Auto-archive jobs completed 30+ days ago
+    function autoArchiveOldJobs() {
+        let history = JSON.parse(localStorage.getItem('jobHistory')) || [];
+        let modified = false;
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        
+        history.forEach(job => {
+            if (!job.completed || job.archived) return;
+            
+            // Check if job was completed 30+ days ago
+            let completedDate = null;
+            if (job.completedDate) {
+                completedDate = new Date(job.completedDate);
+            } else if (job.dateCompleted) {
+                completedDate = new Date(job.dateCompleted);
+            }
+            
+            if (completedDate && completedDate < thirtyDaysAgo) {
+                job.archived = true;
+                modified = true;
+            }
+        });
+        
+        if (modified) {
+            localStorage.setItem('jobHistory', JSON.stringify(history));
+            console.log('✅ Auto-archived old completed jobs');
+        }
+    }
+    
     // Debounced version to prevent multiple rapid calls
     let renderHistoryTimer = null;
     function renderHistory() {
@@ -10076,11 +10112,16 @@ const firebaseConfig = {
             return !isDeleted;
         });
         
-        // SECOND: Apply active/completed filter
+        // SECOND: Apply active/completed/archives filter
         if (historyFilter === 'active') {
-            filteredHistory = filteredHistory.filter(j => !j.completed);
+            filteredHistory = filteredHistory.filter(j => !j.completed && !j.archived);
         } else if (historyFilter === 'completed') {
-            filteredHistory = filteredHistory.filter(j => j.completed === true);
+            filteredHistory = filteredHistory.filter(j => j.completed === true && !j.archived);
+        } else if (historyFilter === 'archives') {
+            filteredHistory = filteredHistory.filter(j => j.archived === true);
+        } else if (historyFilter === 'all') {
+            // Show all except archived (unless specifically viewing archives)
+            filteredHistory = filteredHistory.filter(j => !j.archived);
         }
 
         // THIRD: Apply search term
@@ -10208,6 +10249,9 @@ const firebaseConfig = {
         
         document.getElementById('filter-completed').style.background = filter === 'completed' ? '#34c759' : '#f0f0f0';
         document.getElementById('filter-completed').style.color = filter === 'completed' ? '#fff' : '#666';
+        
+        document.getElementById('filter-archives').style.background = filter === 'archives' ? '#8e8e93' : '#f0f0f0';
+        document.getElementById('filter-archives').style.color = filter === 'archives' ? '#fff' : '#666';
         
         renderHistory();
     }
@@ -20717,7 +20761,8 @@ if ('serviceWorker' in navigator && _swAllowed) {
             
         
         // Sort by received date - newest first
-        let history = fullHistory.filter(job => !job.completed).sort((a, b) => {
+        // PERFORMANCE: Exclude archived jobs to reduce rendering load
+        let history = fullHistory.filter(job => !job.completed && !job.archived).sort((a, b) => {
             let dateA = new Date();
             let dateB = new Date();
             
