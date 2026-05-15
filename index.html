@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.153'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.154'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1741,7 +1741,7 @@ const firebaseConfig = {
 */
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.153'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.154'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -6115,32 +6115,6 @@ const firebaseConfig = {
         initializeApiKeysForm();  // Load API keys from storage
         initializeTimelineSettings();  // Load Gantt chart timeline settings
         initializeAdditionalChargesForm();  // Load additional charges settings
-        // Check Firestore for newer charges data
-        if (window.currentUser && window.firebaseDb) {
-            setTimeout(() => {
-                try {
-                    const _acRef = window.doc(window.firebaseDb, 'users', window.staffModeOwnerUid || window.currentUser.uid, 'appData', 'additionalCharges');
-                    window.getDoc(_acRef).then(snap => {
-                        if (snap.exists()) {
-                            const remote = snap.data();
-                            const remoteTime = remote.lastUpdated || '1970-01-01';
-                            const localData = JSON.parse(localStorage.getItem('additionalCharges') || '{}');
-                            const localTime = localData.lastSavedAt || '1970-01-01';
-                            
-                            if (remoteTime > localTime) {
-                                console.log('📥 Loading charges from Firestore (newer than local)');
-                                delete remote.lastUpdated;
-                                remote.lastSavedAt = remoteTime;
-                                localStorage.setItem('additionalCharges', JSON.stringify(remote));
-                                initializeAdditionalChargesForm(); // Reload form with Firestore data
-                            } else {
-                                console.log('⏭️ Local charges are newer - keeping them');
-                            }
-                        }
-                    }).catch(e => console.warn('Charges Firestore check failed:', e));
-                } catch(e) {}
-            }, 1000); // Wait for Firestore to be ready
-        }
       } catch (error) {
       }
     }
@@ -27396,6 +27370,33 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                 if (typeof updateNotificationBadge === 'function') updateNotificationBadge();
                 if (typeof renderStaffAccountsList === 'function') renderStaffAccountsList();
                 console.log('    UI refreshed after Firebase data load');
+                
+                // Check if Firestore has newer charges data than localStorage
+                setTimeout(() => {
+                    try {
+                        const _acRef = window.doc(window.firebaseDb, 'users', window.staffModeOwnerUid || window.currentUser.uid, 'appData', 'additionalCharges');
+                        window.getDoc(_acRef).then(snap => {
+                            if (snap.exists()) {
+                                const remote = snap.data();
+                                const remoteTime = remote.lastUpdated || '1970-01-01';
+                                const localData = JSON.parse(localStorage.getItem('additionalCharges') || '{}');
+                                const localTime = localData.lastSavedAt || '1970-01-01';
+                                
+                                if (remoteTime > localTime) {
+                                    console.log('📥 Loading charges from Firestore (newer than local)');
+                                    delete remote.lastUpdated;
+                                    remote.lastSavedAt = remoteTime;
+                                    localStorage.setItem('additionalCharges', JSON.stringify(remote));
+                                    if (typeof initializeAdditionalChargesForm === 'function') initializeAdditionalChargesForm();
+                                } else {
+                                    console.log('⏭️ Local charges are newer - keeping them');
+                                }
+                            }
+                        }).catch(e => console.warn('Charges timestamp check failed:', e));
+                    } catch(e) {
+                        console.warn('Charges check error:', e);
+                    }
+                }, 500);
             }, 200);
         } catch(e) {}
         
