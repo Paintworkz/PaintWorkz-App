@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.168'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.169'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1741,7 +1741,7 @@ const firebaseConfig = {
 */
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.168'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.169'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -4530,6 +4530,41 @@ const firebaseConfig = {
                     <button onclick="saveAdditionalCharges()" style="margin-top:15px; border:none; background:#34c759; color:#fff; padding:12px 20px; border-radius:6px; font-weight:900; font-size:12px; cursor:pointer; width:100%;">💾 SAVE ALL CHARGES</button>
                 </div>
                 
+                
+                <!-- Batch Print Settings -->
+                <div class="admin-section" style="margin-top:20px;">
+                    <div style="display:flex; align-items:center; gap:8px; cursor:pointer;" onclick="toggleSection('batch-print-container', this.querySelector('button'))">
+                        <button class="toggle-btn">−</button>
+                        <h3 style="margin:0; color:#d4af37; font-size:13px; font-weight:900; letter-spacing:0.5px;">📄 JOB COMPLETION BATCH PRINT</h3>
+                        <span class="pw-help" data-tooltip="Choose which forms are automatically included when completing a job">ⓘ</span>
+                    </div>
+                    <div id="batch-print-container" class="section-content" style="margin-top:15px;">
+                        <p style="color:#999; font-size:11px; margin:0 0 15px 0;">Select which forms to include in the batch PDF when marking a job as complete.</p>
+                        
+                        <div style="display:flex; flex-direction:column; gap:12px;">
+                            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                                <input type="checkbox" id="batchIncludeCoverSheet" checked style="cursor:pointer;">
+                                <span style="font-size:12px; font-weight:600;">Cover Sheet</span>
+                                <span style="color:#999; font-size:11px;">(Job summary with finish date)</span>
+                            </label>
+                            
+                            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                                <input type="checkbox" id="batchIncludeSupplyDocket" checked style="cursor:pointer;">
+                                <span style="font-size:12px; font-weight:600;">Supply Docket</span>
+                                <span style="color:#999; font-size:11px;">(Parts list for client)</span>
+                            </label>
+                            
+                            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                                <input type="checkbox" id="batchIncludeShopLabel" checked style="cursor:pointer;">
+                                <span style="font-size:12px; font-weight:600;">Shop Label</span>
+                                <span style="color:#999; font-size:11px;">(Paint shop trolley label)</span>
+                            </label>
+                        </div>
+                        
+                        <button onclick="saveBatchPrintSettings()" style="margin-top:15px; border:none; background:#34c759; color:#fff; padding:10px 16px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">💾 SAVE BATCH PRINT SETTINGS</button>
+                    </div>
+                </div>
+                
                 <!-- Delivery Regions -->
                 <div style="margin-bottom:20px; padding:15px; background:#f5f5f5; border-radius:6px;">
                     <h5 style="margin:0 0 10px 0; font-weight:bold; font-size:12px;">Delivery/Pickup Regions ($)</h5>
@@ -6115,6 +6150,7 @@ const firebaseConfig = {
         initializeApiKeysForm();  // Load API keys from storage
         initializeTimelineSettings();  // Load Gantt chart timeline settings
         initializeAdditionalChargesForm();  // Load additional charges settings
+        initializeBatchPrintForm();  // Load batch print settings
       } catch (error) {
       }
     }
@@ -10938,9 +10974,17 @@ const firebaseConfig = {
 
         const run = async () => {
             try {
-                await new Promise(r => { setTimeout(() => { try { genCoverSheet(); } catch(e){} setTimeout(r, 400); }, 0); });
-                await new Promise(r => { setTimeout(() => { try { genSupplyDocket(); } catch(e){} setTimeout(r, 400); }, 0); });
-                await new Promise(r => { setTimeout(() => { try { genShopLabel(); } catch(e){} setTimeout(r, 400); }, 0); });
+                const settings = loadBatchPrintSettings();
+                
+                if (settings.includeCoverSheet) {
+                    await new Promise(r => { setTimeout(() => { try { genCoverSheet(); } catch(e){} setTimeout(r, 400); }, 0); });
+                }
+                if (settings.includeSupplyDocket) {
+                    await new Promise(r => { setTimeout(() => { try { genSupplyDocket(); } catch(e){} setTimeout(r, 400); }, 0); });
+                }
+                if (settings.includeShopLabel) {
+                    await new Promise(r => { setTimeout(() => { try { genShopLabel(); } catch(e){} setTimeout(r, 400); }, 0); });
+                }
             } finally {
                 window.batchCapturing = false;
                 restore();
@@ -21714,6 +21758,10 @@ if ('serviceWorker' in navigator && _swAllowed) {
             if (typeof renderStaffAccountsList === 'function') {
                 setTimeout(renderStaffAccountsList, 100);
             }
+            // Initialize batch print settings
+            if (typeof initializeBatchPrintForm === 'function') {
+                setTimeout(initializeBatchPrintForm, 100);
+            }
         }
         
         
@@ -21844,6 +21892,21 @@ if ('serviceWorker' in navigator && _swAllowed) {
                         }).catch(e => {});
                     } catch(e) {}
                 }
+                
+                // Load batch print settings from Firestore
+                if (window.currentUser && window.firebaseDb && window.doc && window.getDoc) {
+                    try {
+                        const bpsRef = window.doc(window.firebaseDb, 'users', window.staffModeOwnerUid || window.currentUser.uid, 'appData', 'batchPrintSettings');
+                        window.getDoc(bpsRef).then(snap => {
+                            if (snap.exists()) {
+                                const remote = snap.data();
+                                localStorage.setItem('batchPrintSettings', JSON.stringify(remote));
+                                try { if (typeof initializeBatchPrintForm === 'function') initializeBatchPrintForm(); } catch(e) {}
+                            }
+                        }).catch(e => {});
+                    } catch(e) {}
+                }
+                
                 // Render delivery regions
                 try {
                     const charges = loadAdditionalCharges();
@@ -26144,6 +26207,58 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             deliveryRegions: (saved.deliveryRegions && Object.keys(saved.deliveryRegions).length > 0) ? saved.deliveryRegions : defaults.deliveryRegions,
             gstRate: saved.gstRate !== undefined ? saved.gstRate : defaults.gstRate
         };
+    }
+    
+    // ===== BATCH PRINT SETTINGS FUNCTIONS =====
+    function saveBatchPrintSettings() {
+        const settings = {
+            includeCoverSheet: document.getElementById('batchIncludeCoverSheet')?.checked ?? true,
+            includeSupplyDocket: document.getElementById('batchIncludeSupplyDocket')?.checked ?? true,
+            includeShopLabel: document.getElementById('batchIncludeShopLabel')?.checked ?? true
+        };
+        
+        localStorage.setItem('batchPrintSettings', JSON.stringify(settings));
+        console.log('📄 Batch print settings saved:', settings);
+        
+        // Sync to Firestore
+        if (window.currentUser && window.firebaseDb && window.doc && window.setDoc) {
+            try {
+                const ref = window.doc(window.firebaseDb, 'users', window.staffModeOwnerUid || window.currentUser.uid, 'appData', 'batchPrintSettings');
+                window.setDoc(ref, settings, { merge: false })
+                    .then(() => console.log('✅ Batch print settings synced to Firestore'))
+                    .catch(e => console.warn('❌ Batch print Firestore sync failed:', e));
+            } catch(e) {
+                console.warn('❌ Batch print Firestore sync error:', e);
+            }
+        }
+        
+        showGlobalNotification(' Batch Print Settings Saved', '#e8f5e9', '#34c759');
+    }
+    
+    function loadBatchPrintSettings() {
+        const defaults = {
+            includeCoverSheet: true,
+            includeSupplyDocket: true,
+            includeShopLabel: true
+        };
+        
+        const saved = JSON.parse(localStorage.getItem('batchPrintSettings') || '{}');
+        return { ...defaults, ...saved };
+    }
+    
+    function initializeBatchPrintForm() {
+        const settings = loadBatchPrintSettings();
+        
+        try {
+            if (document.getElementById('batchIncludeCoverSheet')) 
+                document.getElementById('batchIncludeCoverSheet').checked = settings.includeCoverSheet;
+            if (document.getElementById('batchIncludeSupplyDocket')) 
+                document.getElementById('batchIncludeSupplyDocket').checked = settings.includeSupplyDocket;
+            if (document.getElementById('batchIncludeShopLabel')) 
+                document.getElementById('batchIncludeShopLabel').checked = settings.includeShopLabel;
+        } catch(e) {
+            console.error('Error initializing batch print form:', e);
+        }
     }
     
     function initializeAdditionalChargesForm() {
