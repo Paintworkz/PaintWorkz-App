@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.163'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.164'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1741,7 +1741,7 @@ const firebaseConfig = {
 */
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.163'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.164'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -10871,8 +10871,20 @@ const firebaseConfig = {
     }
 
     function generateBatchPDFs(job) {
-        if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) return;
-        if (!job || !job.items || job.items.length === 0) return;
+        console.log('📄 generateBatchPDFs called with:', {
+            jobNum: job?.jobNum,
+            client: job?.client,
+            itemCount: job?.items?.length,
+            hasItems: !!job?.items
+        });
+        if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) {
+            console.warn('❌ jsPDF not loaded');
+            return;
+        }
+        if (!job || !job.items || job.items.length === 0) {
+            console.warn('❌ No items in job for batch PDF generation');
+            return;
+        }
 
         // Temporarily populate ALL DOM fields and global state so PDF generators work correctly
         const fields = {
@@ -22573,7 +22585,14 @@ if ('serviceWorker' in navigator && _swAllowed) {
             try {
                 // Load the PDF data and render each page to canvas, then store as image
                 const _b64part = pdfDataUri.includes(',') ? pdfDataUri.split(',')[1] : pdfDataUri;
-                if (!_b64part) throw new Error('Invalid PDF data URI');
+                if (!_b64part) {
+                    console.error('❌ Batch capture: Empty PDF data URI');
+                    throw new Error('Invalid PDF data URI - no base64 data');
+                }
+                if (_b64part.length < 100) {
+                    console.error('❌ Batch capture: PDF data too short:', _b64part.substring(0, 50));
+                    throw new Error('Invalid PDF data URI - data too short');
+                }
                 const pdfBytes = atob(_b64part);
                 const uint8 = new Uint8Array(pdfBytes.length);
                 for (let i = 0; i < pdfBytes.length; i++) uint8[i] = pdfBytes.charCodeAt(i);
