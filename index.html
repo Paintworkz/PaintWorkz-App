@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.183'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.184'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1741,7 +1741,7 @@ const firebaseConfig = {
 */
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.183'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.184'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -9851,6 +9851,9 @@ const firebaseConfig = {
                     history[existingIdx] = jobData;
                     notify('    Job Updated (duplicate prevented)'); flashSaved('Job Updated');
                     addAdminAlert('JOB_UPDATED', ` JOB UPDATED #${jobData.jobNum} - ${jobData.client}`, {jobNum: jobData.jobNum, client: jobData.client, totalParts: jobData.totalParts, editedBy: currentUserName});
+                    
+                    // Log save activity
+                    checkAndLogJobAccess(jobData.jobNum, 'save');
                 } else {
                     return;
                 }
@@ -9878,6 +9881,9 @@ const firebaseConfig = {
                 currentEditingJobIndex = 0; // Point to the just-saved job so re-saves update it
                 notify('    Job Saved'); flashSaved('Job Saved');
                 addAdminAlert('JOB_SAVED', ` NEW JOB SAVED #${jobData.jobNum} - ${jobData.client}`, {jobNum: jobData.jobNum, client: jobData.client, totalParts: jobData.totalParts, createdBy: currentUserName});
+                
+                // Log save activity
+                checkAndLogJobAccess(jobData.jobNum, 'save');
             }
         }
         
@@ -10564,6 +10570,18 @@ const firebaseConfig = {
         
         console.log('     LOADING JOB FROM HISTORY - Index:', index);
         console.log('  Job object items count:', job.items ? job.items.length : 'NO ITEMS PROPERTY');
+        
+        // Check for concurrent editing
+        checkAndLogJobAccess(job.jobNum, 'load').then(warning => {
+            if (warning) {
+                // Show non-blocking warning
+                const banner = document.createElement('div');
+                banner.style.cssText = 'position:fixed;top:100px;left:50%;transform:translateX(-50%);background:#ff9800;color:#fff;padding:15px 25px;border-radius:8px;font-weight:700;z-index:99999;box-shadow:0 4px 12px rgba(0,0,0,0.3);';
+                banner.innerHTML = `⚠️ ${warning}`;
+                document.body.appendChild(banner);
+                setTimeout(() => banner.remove(), 8000);
+            }
+        });
         
         currentEditingJobIndex = index; // Track this job for overwrite
         isJobViewMode = true; // Set view mode
@@ -13142,6 +13160,52 @@ const firebaseConfig = {
         }
     }
 
+    // ===================================================
+    //  CONCURRENT EDIT DETECTION & ACTIVITY LOGGING
+    // ===================================================
+    
+    async function checkAndLogJobAccess(jobNum, action = 'load') {
+        if (!window.firebaseDb || !window.currentUser) return null;
+        
+        try {
+            const targetUid = window.staffModeOwnerUid || window.currentUser.uid;
+            const userName = window.isStaffAccount ? 
+                (window.staffUserName || window.currentUser.email.split('@')[0]) : 
+                'Owner';
+            
+            const activityRef = window.doc(window.firebaseDb, 'users', targetUid, 'jobActivity', String(jobNum));
+            
+            // Check existing activity
+            const snap = await window.getDoc(activityRef);
+            let warning = null;
+            
+            if (snap.exists()) {
+                const data = snap.data();
+                const lastAccess = data.timestamp ? new Date(data.timestamp) : null;
+                const timeSince = lastAccess ? (Date.now() - lastAccess.getTime()) / 1000 / 60 : 999;
+                
+                // Warn if someone else opened it within last 5 minutes
+                if (data.user && data.user !== userName && timeSince < 5) {
+                    warning = `${data.user} opened this job ${Math.floor(timeSince)} min ago`;
+                }
+            }
+            
+            // Log this access
+            await window.setDoc(activityRef, {
+                user: userName,
+                action: action,
+                timestamp: new Date().toISOString(),
+                email: window.currentUser.email
+            }, { merge: false });
+            
+            return warning;
+            
+        } catch(e) {
+            console.warn('Activity logging error:', e);
+            return null;
+        }
+    }
+    
     async function loadPhotosFromFirebase(jobNum) {
         if (!window.currentUser || !window.firebaseDb || !window.getDocs || !window.collection) return [];
         if (!jobNum || jobNum === '_pending') return [];
@@ -26734,9 +26798,13 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             const job = history[timelineEditMode];
             if (job) {
                 job.timeline = timeline;
+                // Recalculate scheduled finish date with new timeline
+                if (job.dateReceived) {
+                    job.scheduledFinish = getScheduledFinishDate(job.dateReceived, timeline);
+                }
                 history[timelineEditMode] = job;
                 safeStorage.setJSON('jobHistory', history);
-                notify('    Job Timeline Updated');
+                notify('✅ Job Timeline Updated');
             }
         }
         
