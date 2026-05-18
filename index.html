@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.186'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.187'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1741,7 +1741,7 @@ const firebaseConfig = {
 */
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.186'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.187'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -9947,7 +9947,7 @@ const firebaseConfig = {
                 _jfc.userId = window.staffModeOwnerUid || window.currentUser.uid; _jfc.lastModified=new Date().toISOString();
                 try{if(typeof Blob!=='undefined'&&new Blob([JSON.stringify(_jfc)]).size>850000){_jfc.items=(_jfc.items||[]).map(function(it){return{h:it.h,w:it.w,qty:it.qty,desc:it.desc,prof:it.prof,fm:it.fm,mode:it.mode,e:it.e,type:it.type,thk:it.thk,brand:it.brand,color:it.color,finish:it.finish,sqm:it.sqm,cts:it.cts};});}}catch(se){}
                 var _jref=window.doc(window.firebaseDb,'users',window.staffModeOwnerUid||window.currentUser.uid,'jobs',jobData.id);
-                window.setDoc(_jref,_jfc,{merge:false}).then(function(){console.log('Job pushed to Firestore:',jobData.jobNum);try{lastSyncTime=0;lastSyncedData='';if(typeof syncJobsToFirebase==='function')syncJobsToFirebase();}catch(_se){}}).catch(function(e){console.error('Direct job push failed:',e);});
+                window.setDoc(_jref,_jfc,{merge:false}).then(function(){console.log('Job pushed to Firestore:',jobData.jobNum);if(window.debouncedFirebaseSync)window.debouncedFirebaseSync();}).catch(function(e){console.error('Direct job push failed:',e);});
             }catch(_dpe){console.error('Direct push error:',_dpe);}
         }
         // Deduct paint from stocktake when job is saved
@@ -10933,8 +10933,11 @@ const firebaseConfig = {
                 delete complJob.photos;
                 window.setDoc(jobDocRef, complJob, { merge: false }).then(function() {
                     console.log('Job completion pushed directly to Firestore:', jobId);
-                    // Now also run full sync to catch any other changes
-                    try { lastSyncTime = 0; lastSyncedData = ''; if (window.syncJobsToFirebase) window.syncJobsToFirebase(); } catch(e) {}
+                    // Track this change so snapshot doesn't overwrite it
+                    window._lastCompletedToggleTime = Date.now();
+                    window._lastCompletedToggleJobId = jobId;
+                    // Now also run debounced sync to catch any other changes
+                    if (window.debouncedFirebaseSync) window.debouncedFirebaseSync();
                 }).catch(function(e) { console.error('Direct completion sync error:', e); });
             } catch(e) { console.error('Firebase completion error:', e); }
         }
@@ -10994,9 +10997,13 @@ const firebaseConfig = {
             notify('     Job reopened - now active again');
             showGlobalNotification(` JOB REOPENED #${job.jobNum}\n${job.client} - ${job.totalParts} parts`, '#fff3cd', '#ff9800');
             
-            // Sync to Firebase     force immediate push
-            if (window.syncJobsToFirebase) {
-                try { lastSyncTime = 0; lastSyncedData = ''; window.syncJobsToFirebase(); } catch(e) { console.error('Firebase sync error:', e); }
+            // Track this change with timestamp so snapshot doesn't overwrite it
+            window._lastCompletedToggleTime = Date.now();
+            window._lastCompletedToggleJobId = job.id || String(job.jobNum);
+            
+            // Sync to Firebase with debouncing
+            if (window.debouncedFirebaseSync) {
+                window.debouncedFirebaseSync();
             }
             
             notify('     Job reopened - now active again');
@@ -21937,9 +21944,13 @@ if ('serviceWorker' in navigator && _swAllowed) {
         history[jobIdx] = job;
         safeStorage.setJSON('jobHistory', history);
         
-        // Sync to Firebase immediately     bypass rate limiter
-        if (window.syncJobsToFirebase) {
-            try { lastSyncTime = 0; lastSyncedData = ''; window.syncJobsToFirebase(); } catch(e) { console.error('Firebase sync error:', e); }
+        // Track this change so snapshot doesn't overwrite it
+        window._lastCompletedToggleTime = Date.now();
+        window._lastCompletedToggleJobId = job.id || String(job.jobNum);
+        
+        // Sync to Firebase with debouncing
+        if (window.debouncedFirebaseSync) {
+            window.debouncedFirebaseSync();
         }
         
         // Generate PDFs and alert admins
@@ -26786,6 +26797,11 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
             const job = history[timelineEditMode];
             if (job) {
+                // Ensure job has stable ID to prevent duplicate creation
+                if (!job.id && job.jobNum) {
+                    job.id = String(job.jobNum);
+                }
+                
                 job.timeline = timeline;
                 // Recalculate scheduled finish date with new timeline
                 if (job.dateReceived) {
@@ -27414,10 +27430,19 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
     function saveJobToFirebase(jobData) {
         if (!window.currentUser) return;
         
-        const jobId = jobData.id || Date.now().toString();
+        // CRITICAL: Use jobNum as stable ID to prevent duplicate creation
+        // If job has no id but has jobNum, use jobNum as the document ID
+        const jobId = jobData.id || String(jobData.jobNum) || Date.now().toString();
+        
+        // If jobData didn't have an id, update it with the stable ID
+        if (!jobData.id && jobData.jobNum) {
+            jobData.id = String(jobData.jobNum);
+        }
+        
         const jobRef = window.doc(window.firebaseDb, 'users', window.staffModeOwnerUid||window.currentUser.uid, 'jobs', jobId);
         window.setDoc(jobRef, {
             ...jobData,
+            id: jobId,  // Ensure id is always saved
             lastModified: new Date().toISOString(),
             userId: window.staffModeOwnerUid||window.currentUser.uid
         }, { merge: true }).then(() => {
@@ -28672,7 +28697,21 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                             // O(1) lookup instead of O(n) .find()
                             const localMatch = localMap.get(`id:${cloudJob.id}`) ||
                                               localMap.get(`job:${cloudJob.jobNum}:${(cloudJob.client || '').toLowerCase()}`);
-                            if (localMatch && localMatch.completed && !cloudJob.completed) {
+                            
+                            // BIDIRECTIONAL completed status protection
+                            // Protect recently toggled jobs (within last 5 seconds)
+                            const jobId = cloudJob.id || String(cloudJob.jobNum);
+                            const recentlyToggled = window._lastCompletedToggleTime && 
+                                                  (Date.now() - window._lastCompletedToggleTime < 5000) &&
+                                                  window._lastCompletedToggleJobId === jobId;
+                            
+                            if (localMatch && recentlyToggled) {
+                                // THIS device just toggled complete status - local wins completely
+                                cloudJob.completed = localMatch.completed;
+                                cloudJob.completedDate = localMatch.completedDate;
+                                cloudJob.dateCompleted = localMatch.dateCompleted;
+                            } else if (localMatch && localMatch.completed && !cloudJob.completed) {
+                                // Old logic: protect completed=true from being overwritten
                                 cloudJob.completed = true;
                                 cloudJob.completedDate = localMatch.completedDate || cloudJob.completedDate;
                                 cloudJob.dateCompleted = localMatch.dateCompleted || cloudJob.dateCompleted;
@@ -28868,6 +28907,28 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
     const SYNC_DEBOUNCE_MS = 3000; // Minimum 2 seconds between syncs
     
     // Helper function to sync all jobs to Firebase
+    // GLOBAL debounced sync wrapper - prevents rapid-fire writes
+    window.debouncedFirebaseSync = (function() {
+        let _syncTimer = null;
+        return function(immediate = false) {
+            if (!window.firebaseReady || !window.currentUser) return;
+            
+            if (immediate) {
+                // Clear any pending sync and run now
+                if (_syncTimer) clearTimeout(_syncTimer);
+                _syncTimer = null;
+                syncJobsToFirebase();
+            } else {
+                // Debounce: wait 2 seconds after last call
+                if (_syncTimer) clearTimeout(_syncTimer);
+                _syncTimer = setTimeout(() => {
+                    _syncTimer = null;
+                    syncJobsToFirebase();
+                }, 2000);
+            }
+        };
+    })();
+
     function syncJobsToFirebase() {
         // Guard: Wait for Firebase to be ready and user to be logged in
         if (!window.firebaseReady || !window.currentUser || !window.firebaseDb || !window.doc || !window.setDoc) {
@@ -28988,13 +29049,9 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         // Whenever jobHistory is updated, sync to Firebase
         // BUT skip if this write is coming FROM the cloud snapshot (avoid upload loop)
         if (key === 'jobHistory' && window.currentUser && !window._syncingFromCloud) {
-            // Retry sync if Firebase isn't quite ready yet
-            if (!window.firebaseReady) {
-                setTimeout(() => {
-                    if (window.currentUser) syncJobsToFirebase();
-                }, 500);
-            } else {
-                syncJobsToFirebase();
+            // Use debounced sync to batch rapid saves
+            if (window.debouncedFirebaseSync) {
+                window.debouncedFirebaseSync();
             }
         }
     };
