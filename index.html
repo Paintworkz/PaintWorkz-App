@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.182'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.183'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1741,7 +1741,7 @@ const firebaseConfig = {
 */
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.182'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.183'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -10405,7 +10405,7 @@ const firebaseConfig = {
                         <div style="font-size:11px; color:#666; font-weight:700;">${job.client || 'No Client'}</div>
                         ${auditInfo}
                     </div>
-                    <div style="text-align:center;">
+                    <div style="justify-self:center; text-align:center; padding:0; margin:0;">
                         ${isComplete && job.completedDate ? `
                             <div style="font-size:10px; color:#34c759; font-weight:700; letter-spacing:0.5px; white-space:nowrap;">✓ COMPLETED</div>
                             <div style="font-size:13px; color:#34c759; font-weight:900; white-space:nowrap;">${new Date(job.completedDate).toLocaleDateString('en-AU', {day: '2-digit', month: '2-digit', year: 'numeric'})}</div>
@@ -20315,6 +20315,8 @@ const firebaseConfig = {
         }
         
         localStorage.setItem('pwStockLevels', JSON.stringify(levels));
+        const savedAt = new Date().toISOString();
+        localStorage.setItem('pwStockLevels_meta', JSON.stringify({savedAt}));
         notify('✅ Stock levels saved');
         
         // Debounce Firebase push - only push once after 500ms of no calls
@@ -20325,7 +20327,7 @@ const firebaseConfig = {
                 try {
                     const targetUid = window.staffModeOwnerUid || window.currentUser.uid;
                     const stockRef = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'stockLevels');
-                    window.setDoc(stockRef, { levels, savedAt: new Date().toISOString() }, { merge: false })
+                    window.setDoc(stockRef, { levels, savedAt }, { merge: false })
                         .then(() => console.log('✅ Stock levels pushed to Firebase'))
                         .catch(e => console.warn('Stock sync error:', e));
                 } catch(e) {}
@@ -27790,17 +27792,20 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                 if (stockSnap.exists()) {
                     const sd = stockSnap.data();
                     if (sd.levels && Object.keys(sd.levels).length > 0) {
-                        // Merge: never overwrite local with zeros from Firestore
-                        const _local = JSON.parse(localStorage.getItem('pwStockLevels') || '{}');
-                        const _merged = {};
-                        const _allKeys = new Set([...Object.keys(sd.levels), ...Object.keys(_local)]);
-                        _allKeys.forEach(k => {
-                            const fv = parseFloat(sd.levels[k] || 0);
-                            const lv = parseFloat(_local[k] || 0);
-                            _merged[k] = Math.max(fv, lv); // take the higher value
-                        });
-                        localStorage.setItem('pwStockLevels', JSON.stringify(_merged));
-                        console.log('       Stock levels loaded from Firebase');
+                        // Check if local or Firebase is newer based on savedAt timestamp
+                        const localStockData = JSON.parse(localStorage.getItem('pwStockLevels_meta') || '{}');
+                        const localTimestamp = localStockData.savedAt ? new Date(localStockData.savedAt).getTime() : 0;
+                        const firebaseTimestamp = sd.savedAt ? new Date(sd.savedAt).getTime() : 0;
+                        
+                        if (firebaseTimestamp > localTimestamp) {
+                            // Firebase is newer - use it
+                            localStorage.setItem('pwStockLevels', JSON.stringify(sd.levels));
+                            localStorage.setItem('pwStockLevels_meta', JSON.stringify({savedAt: sd.savedAt}));
+                            console.log('✅ Stock levels loaded from Firebase (newer)');
+                        } else {
+                            // Local is newer or same - keep local
+                            console.log('⏭️ Local stock levels are newer - keeping them');
+                        }
                     }
                 }
             } catch(e) { console.warn('Stock levels load error:', e.message); }
