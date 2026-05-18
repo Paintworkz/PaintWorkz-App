@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.187'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.188'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1741,7 +1741,7 @@ const firebaseConfig = {
 */
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.187'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.188'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -9974,14 +9974,10 @@ const firebaseConfig = {
             }
         }
         
-        // Sync to Firebase immediately
-        if (window.syncJobsToFirebase) {
-            try {
-                window.syncJobsToFirebase();
-                console.log('     Job saved and synced to Firebase');
-            } catch(e) {
-                console.error('Firebase sync error on save:', e);
-            }
+        // Sync to Firebase with debouncing
+        if (window.debouncedFirebaseSync) {
+            window.debouncedFirebaseSync();
+            console.log('     Job saved, will sync to Firebase (debounced)');
         }
         
         // CLEAR FIRST - before rendering
@@ -27430,19 +27426,29 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
     function saveJobToFirebase(jobData) {
         if (!window.currentUser) return;
         
-        // CRITICAL: Use jobNum as stable ID to prevent duplicate creation
-        // If job has no id but has jobNum, use jobNum as the document ID
-        const jobId = jobData.id || String(jobData.jobNum) || Date.now().toString();
+        // CRITICAL FIX: ALWAYS use jobNum as stable ID to prevent duplicates
+        // This overwrites any old timestamp-based IDs that might exist
+        const stableId = jobData.jobNum ? String(jobData.jobNum) : (jobData.id || Date.now().toString());
         
-        // If jobData didn't have an id, update it with the stable ID
-        if (!jobData.id && jobData.jobNum) {
-            jobData.id = String(jobData.jobNum);
+        // Update the job's ID to match the stable ID
+        jobData.id = stableId;
+        
+        // Also update in localStorage to keep everything in sync
+        try {
+            const history = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+            const jobIdx = history.findIndex(j => j.jobNum === jobData.jobNum || j.id === stableId);
+            if (jobIdx >= 0) {
+                history[jobIdx].id = stableId;
+                localStorage.setItem('jobHistory', JSON.stringify(history));
+            }
+        } catch(e) {
+            console.warn('Failed to update job ID in localStorage:', e);
         }
         
-        const jobRef = window.doc(window.firebaseDb, 'users', window.staffModeOwnerUid||window.currentUser.uid, 'jobs', jobId);
+        const jobRef = window.doc(window.firebaseDb, 'users', window.staffModeOwnerUid||window.currentUser.uid, 'jobs', stableId);
         window.setDoc(jobRef, {
             ...jobData,
-            id: jobId,  // Ensure id is always saved
+            id: stableId,  // Ensure stable ID is always saved
             lastModified: new Date().toISOString(),
             userId: window.staffModeOwnerUid||window.currentUser.uid
         }, { merge: true }).then(() => {
@@ -28958,7 +28964,14 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             
             jobHistory.forEach(job => {
                 try {
-                    const jobId = job.id || String(job.jobNum) || Date.now().toString();
+                    // CRITICAL FIX: ALWAYS prefer jobNum as stable ID
+                    const jobId = job.jobNum ? String(job.jobNum) : (job.id || Date.now().toString());
+                    
+                    // Update job's ID if it was using an old timestamp-based one
+                    if (job.id !== jobId) {
+                        job.id = jobId;
+                    }
+                    
                     const jobDoc = window.doc(window.firebaseDb, 'users', window.staffModeOwnerUid||window.currentUser.uid, 'jobs', jobId);
                     var jobForCloud={...job,id:jobId,lastModified:new Date().toISOString(),userId:window.staffModeOwnerUid||window.currentUser.uid};
                     delete jobForCloud.photos; // strip base64 photos
@@ -28975,6 +28988,11 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                     console.error('Error syncing individual job:', e);
                 }
             });
+            
+            // Save corrected IDs back to localStorage
+            window._syncingFromCloud = true;  // Prevent triggering another sync
+            localStorage.setItem('jobHistory', JSON.stringify(jobHistory));
+            window._syncingFromCloud = false;
             
             console.log('    Firebase sync complete');
         } catch (error) {
