@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.187'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.190'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1741,7 +1741,7 @@ const firebaseConfig = {
 */
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.187'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.190'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -9974,14 +9974,10 @@ const firebaseConfig = {
             }
         }
         
-        // Sync to Firebase immediately
-        if (window.syncJobsToFirebase) {
-            try {
-                window.syncJobsToFirebase();
-                console.log('     Job saved and synced to Firebase');
-            } catch(e) {
-                console.error('Firebase sync error on save:', e);
-            }
+        // Sync to Firebase with debouncing
+        if (window.debouncedFirebaseSync) {
+            window.debouncedFirebaseSync();
+            console.log('     Job saved, will sync to Firebase (debounced)');
         }
         
         // CLEAR FIRST - before rendering
@@ -28945,7 +28941,23 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         lastSyncTime = now;
         
         try {
-            const jobHistory = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+            let jobHistory = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+            
+            // Deduplicate by jobNum in memory (for this sync only, don't modify localStorage)
+            const seen = new Set();
+            const dedupedJobs = [];
+            for (let i = jobHistory.length - 1; i >= 0; i--) {  // Reverse to keep newest
+                const job = jobHistory[i];
+                if (job.jobNum && !seen.has(job.jobNum)) {
+                    seen.add(job.jobNum);
+                    dedupedJobs.unshift(job);  // Build in reverse order
+                }
+            }
+            if (dedupedJobs.length < jobHistory.length) {
+                console.log(`       Deduped ${jobHistory.length - dedupedJobs.length} duplicate jobs in memory for sync`);
+                jobHistory = dedupedJobs;  // Use deduplicated version for this sync only
+            }
+            
             const currentData = JSON.stringify(jobHistory);
             
             // Only sync if data actually changed
@@ -28958,7 +28970,8 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             
             jobHistory.forEach(job => {
                 try {
-                    const jobId = job.id || String(job.jobNum) || Date.now().toString();
+                    // Use jobNum as stable ID to prevent timestamp-based duplicates
+                    const jobId = job.jobNum ? String(job.jobNum) : (job.id || Date.now().toString());
                     const jobDoc = window.doc(window.firebaseDb, 'users', window.staffModeOwnerUid||window.currentUser.uid, 'jobs', jobId);
                     var jobForCloud={...job,id:jobId,lastModified:new Date().toISOString(),userId:window.staffModeOwnerUid||window.currentUser.uid};
                     delete jobForCloud.photos; // strip base64 photos
