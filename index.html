@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.185'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.186'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1741,7 +1741,7 @@ const firebaseConfig = {
 */
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.185'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.186'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -21878,24 +21878,27 @@ if ('serviceWorker' in navigator && _swAllowed) {
             // Stamp save time so onSnapshot doesn't overwrite this change
             window._lastLocalSaveTime = Date.now();
             
-            // Direct targeted Firestore push for just this job
-            if (window.currentUser && window.firebaseDb && window.doc && window.setDoc) {
-                try {
-                    // Use jobNum as stable Firestore doc ID (consistent with syncJobsToFirebase)
-                    if (!job.id) {
-                        job.id = String(job.jobNum);
-                        history[jobIdx] = job;
-                        safeStorage.setJSON('jobHistory', history);
-                    }
-                    const targetUid = window.staffModeOwnerUid || window.currentUser.uid;
-                    const jobRef = window.doc(window.firebaseDb, 'users', targetUid, 'jobs', job.id);
-                    const jobForCloud = { ...job, lastModified: new Date().toISOString(), userId: targetUid };
-                    delete jobForCloud.photos;
-                    window.setDoc(jobRef, jobForCloud, { merge: false })
-                        .then(() => console.log('Phase change pushed to Firestore:', phaseKey, isNowComplete))
-                        .catch(e => console.warn('Phase Firestore push failed:', e));
-                } catch(e) { console.warn('Phase push error:', e); }
-            }
+            // DEBOUNCED Firestore push - wait 2 seconds after last change
+            if (window._phaseChangeTimer) clearTimeout(window._phaseChangeTimer);
+            window._phaseChangeTimer = setTimeout(() => {
+                if (window.currentUser && window.firebaseDb && window.doc && window.setDoc) {
+                    try {
+                        // Use jobNum as stable Firestore doc ID (consistent with syncJobsToFirebase)
+                        if (!job.id) {
+                            job.id = String(job.jobNum);
+                            history[jobIdx] = job;
+                            safeStorage.setJSON('jobHistory', history);
+                        }
+                        const targetUid = window.staffModeOwnerUid || window.currentUser.uid;
+                        const jobRef = window.doc(window.firebaseDb, 'users', targetUid, 'jobs', job.id);
+                        const jobForCloud = { ...job, lastModified: new Date().toISOString(), userId: targetUid };
+                        delete jobForCloud.photos;
+                        window.setDoc(jobRef, jobForCloud, { merge: false })
+                            .then(() => console.log('Phase changes pushed to Firestore (debounced)'))
+                            .catch(e => console.warn('Phase Firestore push failed:', e));
+                    } catch(e) { console.warn('Phase push error:', e); }
+                }
+            }, 2000); // Wait 2 seconds after last click
             
             renderJobTasks();
             notify(isNowComplete ? `✅ ${phaseKey} done` : `↩️ ${phaseKey} reset`);
@@ -26790,6 +26793,12 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                 }
                 history[timelineEditMode] = job;
                 safeStorage.setJSON('jobHistory', history);
+                
+                // CRITICAL: Sync to Firebase immediately to prevent being overwritten
+                if (typeof saveJobToFirebase === 'function') {
+                    saveJobToFirebase(job);
+                }
+                
                 notify('✅ Job Timeline Updated');
             }
         }
