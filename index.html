@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.172'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.173'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1741,7 +1741,7 @@ const firebaseConfig = {
 */
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.172'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.173'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -3113,6 +3113,7 @@ const firebaseConfig = {
                                 // Load paint brands and timeline early in parallel
                                 setTimeout(() => { try { _syncBrandsFromFirestoreOnce(); } catch(e) {} }, 600);
                                 setTimeout(() => { if (typeof loadDefaultTimelineFromFirebase === 'function') loadDefaultTimelineFromFirebase(); }, 800);
+                                setTimeout(() => { if (typeof loadShopClosuresFromFirebase === 'function') loadShopClosuresFromFirebase(); }, 800);
                                 // Load stock with retry — phone Safari needs extra time for Firebase init
                                 (function() {
                                     var _stockAttempts = 0;
@@ -4707,6 +4708,47 @@ const firebaseConfig = {
                 </div>
                 
                 <hr class="staff-hidden" style="margin:30px 0; border:none; border-top:1px solid #ddd;">
+                
+                <!-- Shop Closures -->
+                <div class="staff-hidden" style="background:linear-gradient(135deg,#fce4ec,#fce4eccc); border:2px solid #c2185b; border-radius:12px; padding:12px 15px; margin-bottom:12px;">
+                    <div style="display:flex; align-items:center; gap:8px; cursor:pointer;" onclick="toggleSection('shop-closures-container', this.querySelector('button'))">
+                        <span style="font-size:20px;">🏖️</span>
+                        <div style="margin:0; font-weight:900; font-size:13px; color:#880e4f; letter-spacing:0.5px; flex:1;">SHOP CLOSURES / NON-WORKING DAYS <span class="pw-help">?<span class="pw-help-tip">Track holiday shutdowns and closures. These days are excluded from job duration calculations in reports, giving accurate turnaround times.</span></span></div>
+                        <button style="background:rgba(136,14,79,0.1); border:1px solid #880e4f; cursor:pointer; font-weight:900; font-size:18px; color:#880e4f; padding:4px 12px; border-radius:6px; min-width:32px;">+</button>
+                    </div>
+                </div>
+                <div id="shop-closures-container" class="staff-hidden" style="display:none;">
+                    <p style="font-size:11px; color:#999; margin:0 0 15px 0;">Add holiday periods, annual leave, or shop closures. Job duration metrics will automatically exclude these non-working days for accurate reporting.</p>
+                    
+                    <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:15px; margin-bottom:15px;">
+                        <div style="font-size:12px; font-weight:700; color:#fff; margin-bottom:12px;">➕ Add New Closure Period</div>
+                        <div style="display:grid; grid-template-columns:1fr 1fr 2fr auto; gap:10px; align-items:end;">
+                            <div>
+                                <label style="display:block; font-size:10px; color:#999; margin-bottom:4px; font-weight:700;">START DATE</label>
+                                <input type="date" id="closureStartDate" style="width:100%; padding:8px; border:1px solid #444; border-radius:4px; background:#2c2c2e; color:#fff; font-size:11px;">
+                            </div>
+                            <div>
+                                <label style="display:block; font-size:10px; color:#999; margin-bottom:4px; font-weight:700;">END DATE</label>
+                                <input type="date" id="closureEndDate" style="width:100%; padding:8px; border:1px solid #444; border-radius:4px; background:#2c2c2e; color:#fff; font-size:11px;">
+                            </div>
+                            <div>
+                                <label style="display:block; font-size:10px; color:#999; margin-bottom:4px; font-weight:700;">REASON / DESCRIPTION</label>
+                                <input type="text" id="closureReason" placeholder="e.g., Christmas Break 2025" style="width:100%; padding:8px; border:1px solid #444; border-radius:4px; background:#2c2c2e; color:#fff; font-size:11px;">
+                            </div>
+                            <button onclick="addShopClosure()" style="border:none; background:#34c759; color:#fff; padding:8px 16px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer; white-space:nowrap;">+ ADD</button>
+                        </div>
+                    </div>
+                    
+                    <div id="closures-list" style="display:flex; flex-direction:column; gap:8px; margin-bottom:15px;">
+                        <!-- Closures will be rendered here -->
+                    </div>
+                    
+                    <div style="background:rgba(255,152,0,0.1); border:1px solid rgba(255,152,0,0.3); border-radius:6px; padding:10px; font-size:10px; color:#ff9800;">
+                        <strong>💡 Tip:</strong> Add your annual Christmas closure, public holidays, or any extended leave periods. These will be automatically excluded from "Average Days to Complete" calculations in reports.
+                    </div>
+                </div>
+                
+                <hr class="staff-hidden" style="margin:30px 0; border:none; border-top:1px solid #ddd;">
                 <div class="staff-hidden" style="background:linear-gradient(135deg,#fff8e1,#fff8e1cc); border:2px solid #f9a825; border-radius:12px; padding:12px 15px; margin-bottom:12px;">
                     <div style="display:flex; align-items:center; gap:8px; cursor:pointer;" onclick="toggleAdminAlerts()">
                         <span style="font-size:20px;">🔔</span>
@@ -6223,6 +6265,7 @@ const firebaseConfig = {
         initializeTimelineSettings();  // Load Gantt chart timeline settings
         initializeAdditionalChargesForm();  // Load additional charges settings
         initializeBatchPrintForm();  // Load batch print settings
+        renderShopClosures();  // Load shop closures list
       } catch (error) {
       }
     }
@@ -19373,13 +19416,14 @@ const firebaseConfig = {
         const _hasAnyCost = Object.values(getBaseCosts()).some(v => v > 0);
         const _paintCostNote = (!_hasAnyCost) ? '<div style="font-size:9px;color:#e57373;margin-top:4px;">⚠ Set $/L in Admin → Paint Stock Settings</div>' : (Object.keys(baseCodeLitres).length === 0 && _hasAnyCost) ? '<div style="font-size:9px;color:#ff9800;margin-top:4px;">⚠ Add paint formulas to Database → Paint for cost analysis</div>' : '';
 
-        // Avg days to complete
+        // Avg days to complete (working days, excluding shop closures)
         const _completedJobs = jobs.filter(j => j.completed && j.completedDate && j.dateReceived);
         const _avgDays = _completedJobs.length > 0 ? Math.round(
             _completedJobs.reduce((s, j) => {
                 const start = parseReportDate(j.dateReceived) || new Date(j.timestamp || 0);
                 const end = new Date(j.completedDate);
-                return s + Math.max(0, (end - start) / 86400000);
+                const workingDays = calculateWorkingDays(start, end);
+                return s + workingDays;
             }, 0) / _completedJobs.length
         ) : null;
         const _avgDaysKpi = _avgDays !== null ? _avgDays + 'd' : 'N/A';
@@ -21851,6 +21895,10 @@ if ('serviceWorker' in navigator && _swAllowed) {
             // Initialize batch print settings
             if (typeof initializeBatchPrintForm === 'function') {
                 setTimeout(initializeBatchPrintForm, 100);
+            }
+            // Render shop closures list
+            if (typeof renderShopClosures === 'function') {
+                setTimeout(renderShopClosures, 100);
             }
         }
         
@@ -25373,6 +25421,147 @@ if ('serviceWorker' in navigator && _swAllowed) {
 
         showGlobalNotification('✅ GANTT CHART TIMELINE SAVED', '#e8f5e9', '#2196f3');
         console.log('✅ Timeline settings saved:', timeline);
+    }
+    
+    // ===== SHOP CLOSURES FUNCTIONS =====
+    function addShopClosure() {
+        const startDate = document.getElementById('closureStartDate')?.value;
+        const endDate = document.getElementById('closureEndDate')?.value;
+        const reason = document.getElementById('closureReason')?.value?.trim();
+        
+        if (!startDate || !endDate) {
+            showGlobalNotification('⚠️ Please enter start and end dates', '#fff3cd', '#ff9800');
+            return;
+        }
+        
+        if (new Date(startDate) > new Date(endDate)) {
+            showGlobalNotification('⚠️ End date must be after start date', '#ffebee', '#f44336');
+            return;
+        }
+        
+        const closures = getShopClosures();
+        closures.push({
+            id: 'closure-' + Date.now(),
+            startDate,
+            endDate,
+            reason: reason || 'Shop Closure',
+            created: new Date().toISOString()
+        });
+        
+        saveShopClosures(closures);
+        renderShopClosures();
+        
+        // Clear form
+        document.getElementById('closureStartDate').value = '';
+        document.getElementById('closureEndDate').value = '';
+        document.getElementById('closureReason').value = '';
+        
+        showGlobalNotification('🏖️ Shop Closure Added', '#e8f5e9', '#34c759');
+    }
+    
+    function removeShopClosure(id) {
+        if (!confirm('Remove this closure period?')) return;
+        
+        let closures = getShopClosures();
+        closures = closures.filter(c => c.id !== id);
+        saveShopClosures(closures);
+        renderShopClosures();
+        
+        showGlobalNotification('🗑️ Closure Removed', '#fff3cd', '#ff9800');
+    }
+    
+    function getShopClosures() {
+        return JSON.parse(localStorage.getItem('shopClosures') || '[]');
+    }
+    
+    function saveShopClosures(closures) {
+        localStorage.setItem('shopClosures', JSON.stringify(closures));
+        
+        // Sync to Firestore
+        if (window.currentUser && window.firebaseDb && window.doc && window.setDoc) {
+            try {
+                const ref = window.doc(window.firebaseDb, 'users', window.staffModeOwnerUid || window.currentUser.uid, 'appData', 'shopClosures');
+                window.setDoc(ref, { closures, lastUpdated: new Date().toISOString() }, { merge: false })
+                    .then(() => console.log('✅ Shop closures synced to Firestore'))
+                    .catch(e => console.warn('Shop closures Firestore sync failed:', e));
+            } catch(e) {}
+        }
+    }
+    
+    function renderShopClosures() {
+        const container = document.getElementById('closures-list');
+        if (!container) return;
+        
+        const closures = getShopClosures();
+        
+        if (closures.length === 0) {
+            container.innerHTML = '<div style="text-align:center; color:#999; font-size:11px; padding:20px;">No closure periods added yet</div>';
+            return;
+        }
+        
+        // Sort by start date (most recent first)
+        closures.sort((a, b) => new Date(b.startDate) - new Date(a.startDate));
+        
+        container.innerHTML = closures.map(closure => {
+            const start = new Date(closure.startDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
+            const end = new Date(closure.endDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
+            const days = Math.ceil((new Date(closure.endDate) - new Date(closure.startDate)) / (1000 * 60 * 60 * 24)) + 1;
+            
+            return `
+                <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:12px; display:flex; justify-content:space-between; align-items:center;">
+                    <div style="flex:1;">
+                        <div style="font-size:12px; font-weight:700; color:#fff; margin-bottom:4px;">${closure.reason}</div>
+                        <div style="font-size:10px; color:#999;">
+                            ${start} → ${end} <span style="color:#666;">•</span> <strong>${days} ${days === 1 ? 'day' : 'days'}</strong>
+                        </div>
+                    </div>
+                    <button onclick="removeShopClosure('${closure.id}')" style="border:none; background:#ff3b3015; color:#ff3b30; padding:6px 12px; border-radius:4px; font-weight:900; font-size:10px; cursor:pointer;">✕ REMOVE</button>
+                </div>
+            `;
+        }).join('');
+    }
+    
+    async function loadShopClosuresFromFirebase() {
+        if (!window.currentUser || !window.firebaseDb || !window.getDoc || !window.doc) return;
+        try {
+            const targetUid = window.staffModeOwnerUid || window.currentUser.uid;
+            const ref = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'shopClosures');
+            const snap = await window.getDoc(ref);
+            if (snap.exists()) {
+                const data = snap.data();
+                if (data.closures && Array.isArray(data.closures)) {
+                    localStorage.setItem('shopClosures', JSON.stringify(data.closures));
+                    renderShopClosures();
+                }
+            }
+        } catch(e) {}
+    }
+    
+    function calculateWorkingDays(startDate, endDate) {
+        // Returns number of working days between two dates, excluding shop closures
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        
+        if (start > end) return 0;
+        
+        const totalDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+        const closures = getShopClosures();
+        
+        let closureDays = 0;
+        closures.forEach(closure => {
+            const cStart = new Date(closure.startDate);
+            const cEnd = new Date(closure.endDate);
+            
+            // Check if closure overlaps with our date range
+            if (cStart <= end && cEnd >= start) {
+                const overlapStart = cStart > start ? cStart : start;
+                const overlapEnd = cEnd < end ? cEnd : end;
+                const overlap = Math.ceil((overlapEnd - overlapStart) / (1000 * 60 * 60 * 24)) + 1;
+                closureDays += overlap;
+            }
+        });
+        
+        return Math.max(0, totalDays - closureDays);
     }
     
     async function loadDefaultTimelineFromFirebase() {
