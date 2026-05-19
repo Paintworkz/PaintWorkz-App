@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.192'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.193'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1742,7 +1742,7 @@ const firebaseConfig = {
 */
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.192'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.193'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -10517,7 +10517,9 @@ const firebaseConfig = {
             return 0;
         });
         filteredHistory.forEach((job, idx) => {
-            // Find original index in full history
+            // Stable key: jobNum|dateReceived|client — immune to sort/filter reordering
+            const stableKey = String(job.jobNum) + '|' + (job.dateReceived||'') + '|' + (job.client||'').replace(/'/g,"&#39;");
+            // Legacy numeric index still needed for deleteJobFromHistory (uses splice)
             const originalIdx = history.indexOf(job);
             
             const jobDate = new Date(job.timestamp);
@@ -10568,7 +10570,7 @@ const firebaseConfig = {
                     </div>
                 </div>
                 <div style="display:flex; gap:8px; flex-wrap:wrap; position:relative; z-index:1;">
-                    <button onclick="loadJobFromHistory(${originalIdx})" style="flex:1; min-width:100px; border:none; background:#f0f0f0; padding:10px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">LOAD</button>
+                    <button onclick="loadJobFromHistory('${stableKey}')" style="flex:1; min-width:100px; border:none; background:#f0f0f0; padding:10px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">LOAD</button>
                     ${job.editHistory && job.editHistory.length > 0 ? `<button onclick="viewJobEditHistory(${originalIdx})" style="flex:1; min-width:100px; border:none; background:#007aff15; color:#007aff; padding:10px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">📝 HISTORY (${job.editHistory.length})</button>` : ''}
                     <button onclick="printShopLabelFromHistory(${originalIdx})" style="flex:1; min-width:80px; border:none; background:#e91e6315; color:#e91e63; padding:10px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">🏷️ LABEL</button>
                     ${!isComplete ? `<button onclick="completeJobById('${job.jobNum}', '${job.dateReceived}', '${job.client}')" style="flex:1; min-width:100px; border:none; background:var(--gold); color:#000; padding:10px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">COMPLETE JOB</button>` : `<button onclick="toggleJobCompleteById('${job.jobNum}', '${job.dateReceived}', '${job.client}')" style="flex:1; min-width:100px; border:none; background:#34c759; color:#fff; padding:10px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">✓ COMPLETED</button>`}
@@ -10689,9 +10691,21 @@ const firebaseConfig = {
 
     function loadJobFromHistory(index) {
         const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
-        const job = history[index];
+        // index may be a stable job key (jobNum|dateReceived|client) or a legacy numeric index
+        let job;
+        if (typeof index === 'string' && index.includes('|')) {
+            // Stable key lookup — immune to sort/filter reordering
+            const [_jn, _dr, _cl] = index.split('|');
+            job = history.find(j =>
+                String(j.jobNum) === _jn &&
+                (j.dateReceived || '') === _dr &&
+                (j.client || '') === _cl
+            );
+        } else {
+            job = history[index];
+        }
         
-        if (!job) return;
+        if (!job) { console.warn('loadJobFromHistory: job not found for key:', index); return; }
 
         // Loading/viewing a job is always allowed on any plan
         const viewOnly = !canCreateJobs();
