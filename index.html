@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.196'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.197'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1742,7 +1742,7 @@ const firebaseConfig = {
 */
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.196'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.197'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -9124,6 +9124,30 @@ const firebaseConfig = {
         };
         localStorage.setItem('currentJob', JSON.stringify(jobData));
 
+        // ── ROLLING PART BACKUP ───────────────────────────────────────────────
+        // Written separately from jobHistory — onSnapshot NEVER touches this key.
+        // Survives concurrent session overwrites. Used for recovery if parts disappear.
+        try {
+            const _jn = jobData.jobNum;
+            if (_jn && items.length > 0) {
+                const _partCount = items.reduce((s,i) => s + (parseInt(i.qty)||1), 0);
+                const _existing = JSON.parse(localStorage.getItem('pwPartBackup_' + _jn) || 'null');
+                // Only overwrite backup if current count is HIGHER than stored backup
+                if (!_existing || _partCount >= (_existing.partCount || 0)) {
+                    localStorage.setItem('pwPartBackup_' + _jn, JSON.stringify({
+                        jobNum: _jn,
+                        client: jobData.client,
+                        jobName: jobData.jobName,
+                        items: items,
+                        partCount: _partCount,
+                        lineCount: items.length,
+                        savedAt: new Date().toISOString()
+                    }));
+                }
+            }
+        } catch(e) {}
+        // ── END ROLLING PART BACKUP ───────────────────────────────────────────
+
         // Also silently update jobHistory so History tab always shows current part count
         try {
             const _jNum = jobData.jobNum;
@@ -9843,6 +9867,39 @@ const firebaseConfig = {
     function saveJobToHistory() {
         // GUARD: Staff accounts must always save to owner's UID
         if (!_assertCorrectSaveUid('saveJobToHistory')) return;
+
+        // ── PART COUNT GUARD ──────────────────────────────────────────────────
+        // Refuse to save if the current part count is drastically lower than the
+        // backup — catches the case where onSnapshot wiped items before save.
+        try {
+            const _guardJobNum = (document.getElementById('jN')?.value || '').trim();
+            if (_guardJobNum && items.length > 0) {
+                const _backup = JSON.parse(localStorage.getItem('pwPartBackup_' + _guardJobNum) || 'null');
+                const _currentCount = items.reduce((s,i) => s + (parseInt(i.qty)||1), 0);
+                if (_backup && _backup.partCount > 0 && _currentCount < _backup.partCount * 0.7) {
+                    const _restore = confirm(
+                        `⚠️ PART COUNT WARNING\n\n` +
+                        `You are about to save ${_currentCount} parts, but your backup has ${_backup.partCount} parts for this job.\n\n` +
+                        `This may mean parts were lost due to a sync issue.\n\n` +
+                        `Tap OK to RESTORE from backup (${_backup.partCount} parts)\n` +
+                        `Tap Cancel to save anyway with ${_currentCount} parts`
+                    );
+                    if (_restore) {
+                        items = _backup.items.map(it => ({
+                            ...it,
+                            e: Array.isArray(it.e) ? it.e : [it.e1||false,it.e2||false,it.e3||false,it.e4||false],
+                            mode: it.mode || 'SS', fm: it.fm || 'Flat',
+                            type: it.type || 'Door', qty: it.qty || 1,
+                            prof: it.prof || 'Plain (101)'
+                        }));
+                        try { render(); } catch(e) {}
+                        notify('✅ ' + _backup.partCount + ' parts restored from backup — check then save again');
+                        return; // Let user verify before saving
+                    }
+                }
+            }
+        } catch(e) {}
+        // ── END PART COUNT GUARD ──────────────────────────────────────────────
         
         // === SAFETY CHECK: Prevent overwriting a job that had parts with empty items ===
         // This catches the race condition where parts haven't loaded yet
@@ -10783,6 +10840,42 @@ const firebaseConfig = {
         document.getElementById('dRec').value = job.dateReceived || '';
         document.getElementById('jNm').value = job.jobName || '';
         document.getElementById('jN').value = job.jobNum || '';
+
+        // ── LOAD INTEGRITY CHECK ──────────────────────────────────────────────
+        // Show part count immediately on load. If backup has more parts, warn user.
+        try {
+            const _loadedParts = items.reduce((s,i) => s + (parseInt(i.qty)||1), 0);
+            const _backup = JSON.parse(localStorage.getItem('pwPartBackup_' + job.jobNum) || 'null');
+            if (_backup && _backup.partCount > _loadedParts * 1.1) {
+                // Backup has significantly more parts — warn immediately
+                setTimeout(() => {
+                    const _warn = document.createElement('div');
+                    _warn.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);background:#ff3b30;color:#fff;padding:14px 20px;border-radius:10px;font-weight:900;z-index:99999;box-shadow:0 4px 16px rgba(0,0,0,0.4);max-width:340px;text-align:center;';
+                    _warn.innerHTML = `⚠️ PART COUNT MISMATCH<br><span style="font-size:12px;font-weight:700;">Loaded: ${_loadedParts} parts (${items.length} lines)<br>Backup has: ${_backup.partCount} parts (${_backup.lineCount} lines)<br><br>Tap RESTORE BACKUP to recover missing parts</span><br><br><button onclick="window._restorePartBackup('${job.jobNum}');this.closest('div').remove();" style="background:#fff;color:#ff3b30;border:none;padding:8px 18px;border-radius:6px;font-weight:900;cursor:pointer;margin-right:8px;">RESTORE BACKUP</button><button onclick="this.closest('div').remove();" style="background:rgba(255,255,255,0.2);color:#fff;border:none;padding:8px 14px;border-radius:6px;font-weight:900;cursor:pointer;">Dismiss</button>`;
+                    document.body.appendChild(_warn);
+                }, 800);
+            } else {
+                notify('✅ Loaded ' + items.length + ' lines / ' + _loadedParts + ' parts');
+            }
+        } catch(e) {}
+
+        // Restore backup function — available globally for the warning button
+        window._restorePartBackup = function(jobNum) {
+            try {
+                const _backup = JSON.parse(localStorage.getItem('pwPartBackup_' + jobNum) || 'null');
+                if (!_backup || !_backup.items) { notify('❌ No backup found'); return; }
+                items = _backup.items.map(it => ({
+                    ...it,
+                    e: Array.isArray(it.e) ? it.e : [it.e1||false,it.e2||false,it.e3||false,it.e4||false],
+                    mode: it.mode || 'SS', fm: it.fm || 'Flat',
+                    type: it.type || 'Door', qty: it.qty || 1,
+                    prof: it.prof || 'Plain (101)'
+                }));
+                try { render(); } catch(e) {}
+                notify('✅ ' + _backup.partCount + ' parts restored from backup — review then save');
+            } catch(e) { notify('❌ Restore failed: ' + e.message); }
+        };
+        // ── END LOAD INTEGRITY CHECK ──────────────────────────────────────────
         // Photos stored in IndexedDB (larger quota than localStorage)
         console.log('%c🔄 LOADING JOB FROM HISTORY', 'background:#ff9500;color:#fff;font-weight:900;padding:4px;', 'Job#:', job.jobNum);
         jobPhotos=[];
