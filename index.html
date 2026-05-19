@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.191'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.192'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1608,7 +1608,7 @@ window.getTooltipKey = getTooltipKey;
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
         import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, reauthenticateWithCredential, EmailAuthProvider, sendPasswordResetEmail, confirmPasswordReset, verifyPasswordResetCode } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js";
-        import { getFirestore, collection, doc, setDoc, addDoc, getDoc, onSnapshot, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
+        import { getFirestore, collection, doc, setDoc, addDoc, getDoc, onSnapshot, getDocs, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
         
         // ─────────────────────────────────────────────────────────────────
 // FIREBASE API KEY SECURITY
@@ -1666,6 +1666,7 @@ const firebaseConfig = {
         window.addDoc = addDoc;
         window.getDoc = getDoc;
         window.deleteDoc = deleteDoc;
+        window.updateDoc = updateDoc;
         window.onSnapshot = onSnapshot;
         window.getDocs = getDocs;
         
@@ -1741,7 +1742,7 @@ const firebaseConfig = {
 */
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.191'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.192'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -2945,7 +2946,7 @@ const firebaseConfig = {
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
         import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, reauthenticateWithCredential, EmailAuthProvider, sendPasswordResetEmail, confirmPasswordReset, verifyPasswordResetCode } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js";
-        import { getFirestore, collection, doc, setDoc, addDoc, getDoc, onSnapshot, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
+        import { getFirestore, collection, doc, setDoc, addDoc, getDoc, onSnapshot, getDocs, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
         
         // ─────────────────────────────────────────────────────────────────
 // FIREBASE API KEY SECURITY
@@ -3003,6 +3004,7 @@ const firebaseConfig = {
         window.addDoc = addDoc;
         window.getDoc = getDoc;
         window.deleteDoc = deleteDoc;
+        window.updateDoc = updateDoc;
         window.onSnapshot = onSnapshot;
         window.getDocs = getDocs;
         
@@ -3061,6 +3063,8 @@ const firebaseConfig = {
                 }
                 // Mark this session as active so we don't re-wipe mid-session
                 sessionStorage.setItem('pw_session_active_' + user.uid, '1');
+                // SESSION GUARD: enforce single active session per login
+                setTimeout(function() { if (typeof initSessionGuard === 'function') initSessionGuard(user); }, 1200);
                 // Store last UID
                 localStorage.setItem('pw_last_uid', user.uid);
 
@@ -5040,6 +5044,19 @@ const firebaseConfig = {
                 </div>
 
 
+                <!-- ── OWNER LOGIN HISTORY (owner only) ─────────────────────── -->
+                <div id="ownerLoginHistoryPanel" style="display:none; margin-bottom:20px;">
+                    <hr style="margin:0 0 20px 0; border:none; border-top:2px solid #d4af37;">
+                    <h4 style="margin:0 0 4px 0; font-weight:900; font-size:13px; color:#d4af37;">🔐 Owner — Admin Login History</h4>
+                    <p style="font-size:11px; color:#666; margin-bottom:12px;">Every time the admin account signs in, it's logged here with device and timestamp.</p>
+                    <div style="background:#1c1c1e; border-radius:10px; overflow:hidden; max-height:320px; overflow-y:auto; margin-bottom:10px;">
+                        <div id="loginHistoryList" style="min-height:60px;">
+                            <p style="color:#aaa;font-size:12px;text-align:center;padding:16px;">Tap Refresh to load.</p>
+                        </div>
+                    </div>
+                    <button onclick="loadLoginHistory()" style="width:100%; background:#d4af37; border:none; padding:10px; border-radius:8px; font-weight:900; font-size:13px; cursor:pointer; color:#000;">🔄 Refresh Login History</button>
+                </div>
+
                 <!-- ── OWNER CODE GENERATOR (owner only) ────────────────────── -->
                 <div id="ownerPromoPanel" style="display:none; margin-bottom:20px;">
                     <hr style="margin:0 0 20px 0; border:none; border-top:2px solid #d4af37;">
@@ -5782,6 +5799,8 @@ const firebaseConfig = {
     function initPromoPanel() {
         const panel = document.getElementById('ownerPromoPanel');
         if (panel) panel.style.display = isOwner() ? 'block' : 'none';
+        const histPanel = document.getElementById('ownerLoginHistoryPanel');
+        if (histPanel) histPanel.style.display = isOwner() ? 'block' : 'none';
         if (isOwner()) loadPromoCodesList();
         checkActivePromo();
 
@@ -6060,6 +6079,9 @@ const firebaseConfig = {
     //        End onboarding                                                                                                                            
     function logout() {
         localStorage.removeItem('pw_explicit_login');
+        // SESSION GUARD cleanup
+        if (window._sessionGuardUnsubscribe) { try { window._sessionGuardUnsubscribe(); } catch(e) {} window._sessionGuardUnsubscribe = null; }
+        window._sessionId = null;
         // Unsubscribe realtime listener before signing out
         if (window.realtimeSyncUnsubscribe) {
             try { window.realtimeSyncUnsubscribe(); } catch(e) {}
@@ -6089,6 +6111,116 @@ const firebaseConfig = {
         window.appliedCharges = {};
         window.signOut().then(() => {});
     }
+
+    // ── SESSION GUARD ──────────────────────────────────────────────────────────
+    // Enforces single active session per account. If another device logs into
+    // the same account, the old session is immediately invalidated and forced out.
+    window._sessionId = null;
+    window._sessionGuardUnsubscribe = null;
+
+    function _generateSessionId() {
+        return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+    }
+
+    async function initSessionGuard(user) {
+        if (!window.firebaseDb || !window.doc || !window.setDoc || !window.onSnapshot) return;
+
+        const sessionId = _generateSessionId();
+        window._sessionId = sessionId;
+
+        const isAdmin = (user.email === 'ckbedford@outlook.com');
+        const sessionRef = window.doc(window.firebaseDb, 'users', user.uid, 'appData', 'activeSession');
+
+        const sessionData = {
+            sessionId,
+            loginTime: new Date().toISOString(),
+            email: user.email,
+            userAgent: navigator.userAgent.substring(0, 250),
+            device: /Mobile|iPad|iPhone|Android/.test(navigator.userAgent) ? 'mobile' : 'desktop'
+        };
+
+        try {
+            await window.setDoc(sessionRef, sessionData, { merge: false });
+        } catch(e) {
+            console.warn('Session guard write error:', e);
+            return;
+        }
+
+        // Write login audit for admin account only
+        if (isAdmin) {
+            try {
+                const auditRef = window.doc(window.firebaseDb, 'users', user.uid, 'loginHistory', sessionId);
+                await window.setDoc(auditRef, sessionData, { merge: false });
+            } catch(e) { console.warn('Login audit write error:', e); }
+        }
+
+        // Unsubscribe any stale listener
+        if (window._sessionGuardUnsubscribe) {
+            try { window._sessionGuardUnsubscribe(); } catch(e) {}
+            window._sessionGuardUnsubscribe = null;
+        }
+
+        // Listen — if sessionId in Firestore changes, another device logged in
+        window._sessionGuardUnsubscribe = window.onSnapshot(sessionRef, (snap) => {
+            if (!snap.exists()) return;
+            const remoteId = snap.data().sessionId;
+            if (remoteId && remoteId !== window._sessionId) {
+                console.warn('⚠️ Session invalidated — another device logged in as this account');
+                window._sessionId = null;
+                if (window._sessionGuardUnsubscribe) { try { window._sessionGuardUnsubscribe(); } catch(e) {} window._sessionGuardUnsubscribe = null; }
+
+                // Show full-screen warning
+                const overlay = document.createElement('div');
+                overlay.id = 'sessionKickedOverlay';
+                overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.88);z-index:999999;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;';
+                overlay.innerHTML = '<div style="background:#1c1c1e;border-radius:18px;padding:32px 28px;max-width:340px;width:100%;text-align:center;border:2px solid #d4af37;">' +
+                    '<div style="font-size:48px;margin-bottom:14px;">🔐</div>' +
+                    '<h3 style="margin:0 0 10px;color:#d4af37;font-size:18px;font-weight:900;">Signed Out</h3>' +
+                    '<p style="color:#ccc;font-size:14px;margin:0 0 24px;line-height:1.5;">This account was signed in on another device.<br>You\'ve been signed out for security.</p>' +
+                    '<button onclick="document.getElementById(\'sessionKickedOverlay\').remove();if(typeof logout===\'function\')logout();" ' +
+                    'style="background:#d4af37;border:none;padding:14px 28px;border-radius:10px;font-weight:900;font-size:15px;cursor:pointer;width:100%;color:#000;">OK — Back to Login</button>' +
+                    '</div>';
+                document.body.appendChild(overlay);
+                setTimeout(() => { try { logout(); } catch(e) {} }, 400);
+            }
+        }, (err) => {
+            console.warn('Session guard listener error:', err.code);
+        });
+    }
+
+    // ── LOGIN HISTORY (admin only) ─────────────────────────────────────────────
+    async function loadLoginHistory() {
+        const container = document.getElementById('loginHistoryList');
+        if (!container) return;
+        if (!isOwner() || !window.firebaseDb || !window.currentUser) {
+            container.innerHTML = '<p style="color:#999;font-size:12px;">Not available.</p>';
+            return;
+        }
+        container.innerHTML = '<p style="color:#aaa;font-size:12px;">Loading...</p>';
+        try {
+            const col = window.collection(window.firebaseDb, 'users', window.currentUser.uid, 'loginHistory');
+            const snap = await window.getDocs(col);
+            if (snap.empty) { container.innerHTML = '<p style="color:#aaa;font-size:12px;text-align:center;">No login history yet.</p>'; return; }
+            const entries = [];
+            snap.forEach(d => entries.push(d.data()));
+            entries.sort((a, b) => (b.loginTime || '').localeCompare(a.loginTime || ''));
+            const rows = entries.slice(0, 20).map(e => {
+                const dt = e.loginTime ? new Date(e.loginTime).toLocaleString('en-AU', { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : 'Unknown';
+                const dev = e.device === 'mobile' ? '📱' : '💻';
+                const ua = (e.userAgent || '').substring(0, 60) + ((e.userAgent||'').length > 60 ? '…' : '');
+                return '<div style="padding:10px 12px;border-bottom:1px solid #2c2c2e;display:flex;gap:10px;align-items:flex-start;">' +
+                    '<span style="font-size:22px;line-height:1;">' + dev + '</span>' +
+                    '<div style="flex:1;min-width:0;">' +
+                    '<div style="font-size:13px;font-weight:900;color:#f2f2f7;">' + dt + '</div>' +
+                    '<div style="font-size:10px;color:#888;margin-top:2px;word-break:break-all;">' + ua + '</div>' +
+                    '</div></div>';
+            }).join('');
+            container.innerHTML = rows || '<p style="color:#aaa;font-size:12px;text-align:center;">No records.</p>';
+        } catch(e) {
+            container.innerHTML = '<p style="color:#ff6b6b;font-size:12px;">Error loading history: ' + e.message + '</p>';
+        }
+    }
+    // ── END SESSION GUARD ──────────────────────────────────────────────────────
 
     function showForgotPassword() {
         const modal = document.getElementById('forgotPasswordModal');
@@ -20394,7 +20526,7 @@ const firebaseConfig = {
                 try {
                     const targetUid = window.staffModeOwnerUid || window.currentUser.uid;
                     const stockRef = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'stockLevels');
-                    window.setDoc(stockRef, { levels, savedAt }, { merge: false })
+                    window.setDoc(stockRef, { levels, savedAt }, { merge: true })
                         .then(() => console.log('✅ Stock levels pushed to Firebase'))
                         .catch(e => console.warn('Stock sync error:', e));
                 } catch(e) {}
@@ -28059,7 +28191,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             try {
                 const targetUid = window.staffModeOwnerUid || window.currentUser.uid;
                 const ref = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'stockLevels');
-                window.setDoc(ref, { levels, savedAt: new Date().toISOString() }, { merge: false })
+                window.setDoc(ref, { levels, savedAt: new Date().toISOString() }, { merge: true })
                     .catch(e => console.warn('Stock sync error:', e));
             } catch(e) {}
         }
