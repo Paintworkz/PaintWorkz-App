@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.203'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.204'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1688,35 +1688,8 @@ const firebaseConfig = {
         window.realtimeSyncUnsubscribe = null; // Store unsubscribe function
         
         // Set up auth listener
-        onAuthStateChanged(auth, user => {
-            window.currentUser = user;
-            if (user) {
-                // Check for explicit login flag (sessionStorage = same tab only)
-                const explicitLogin = sessionStorage.getItem('pw_explicit_login') || localStorage.getItem('pw_explicit_login');
-                if (!explicitLogin) {
-                    sessionStorage.setItem('pw_forced_signout', '1');
-                    window.signOut(auth).catch(() => {});
-                    return;
-                }
-                // Cancel any pending logout timer
-                if (window._authNullTimer) { clearTimeout(window._authNullTimer); window._authNullTimer = null; }
-
-                // DATA ISOLATION: non-owner accounts get clean slate on every fresh login
-                const lastUid = localStorage.getItem('pw_last_uid');
-                const isOwnerLogin = (user.email === 'ckbedford@outlook.com');
-                const _freshSession = !sessionStorage.getItem('pw_session_active_' + user.uid);
-                if (!isOwnerLogin && (lastUid !== user.uid || _freshSession)) {
-                    console.log('Non-owner login — wiping localStorage for clean slate:', user.email);
-                    // Surgical wipe: only remove account data keys, NEVER touch stock levels
-                    ['doorProfiles','masterMatrix','paintFormulas','paintBrands',
-                     'companySettings','jobHistory','clientDatabase','additionalCharges',
-                     'defaultTimeline','adminSettings','pwCompletedJobs',
-                     'headerLogo','companyLogo','ctsMatrix','ctsThicknesses'
-                    ].forEach(k => { try { localStorage.removeItem(k); } catch(e) {} });
-                    console.log('✅ Clean slate for account:', user.email);
-                }
-            }
-        });
+        // Auth state is handled entirely by the second Firebase module — no duplicate listener here
+        // (Having two onAuthStateChanged listeners causes double data loads, double writes, and lag)
         /* 
 ╔════════════════════════════════════════════════════════════════╗
 ║                                                                ║
@@ -1748,7 +1721,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.203'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.204'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -3070,7 +3043,19 @@ const firebaseConfig = {
                 // Mark this session as active so we don't re-wipe mid-session
                 sessionStorage.setItem('pw_session_active_' + user.uid, '1');
                 // SESSION GUARD: enforce single active session per login
-                setTimeout(function() { if (typeof window.initSessionGuard === 'function') window.initSessionGuard(user); }, 1200);
+                // Poll until main script has defined window.initSessionGuard (avoids race condition)
+                (function _waitForSessionGuard(attempts) {
+                    if (typeof window.initSessionGuard === 'function') {
+                        window.initSessionGuard(user);
+                    } else if (attempts > 0) {
+                        setTimeout(function() { _waitForSessionGuard(attempts - 1); }, 300);
+                    } else {
+                        console.warn('initSessionGuard never became available');
+                    }
+                })(15); // up to 15 × 300ms = 4.5 seconds
+                // Store UIDs for cross-account data sharing (shop closures, login history)
+                if (user.email === 'ckbedford@outlook.com') localStorage.setItem('pw_owner_uid', user.uid);
+                if (user.email === 'paint_workz@outlook.com') localStorage.setItem('pw_paintworkz_uid', user.uid);
                 // Store last UID
                 localStorage.setItem('pw_last_uid', user.uid);
 
@@ -25920,7 +25905,8 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 console.warn('shopClosures: Firebase not ready — saved locally only');
                 return;
             }
-            const targetUid = window.staffModeOwnerUid || window.currentUser.uid;
+            // Always save to owner UID so all accounts share the same closures data
+            const targetUid = localStorage.getItem('pw_owner_uid') || window.staffModeOwnerUid || window.currentUser.uid;
             const ref = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'shopClosures');
             window.setDoc(ref, { closures, lastUpdated: new Date().toISOString() }, { merge: true })
                 .then(() => console.log('✅ Shop closures saved to Firebase:', closures.length, 'entries'))
@@ -25970,7 +25956,8 @@ if ('serviceWorker' in navigator && _swAllowed) {
         if (!window.currentUser || !window.firebaseDb || !window.getDoc || !window.doc) return;
         try {
             // Always use owner UID — staff/secondary accounts must load from owner's data
-            const targetUid = window.staffModeOwnerUid || window.currentUser.uid;
+            // Always load from owner UID so all accounts see the same closures
+            const targetUid = localStorage.getItem('pw_owner_uid') || window.staffModeOwnerUid || window.currentUser.uid;
             const ref = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'shopClosures');
             const snap = await window.getDoc(ref);
             if (snap.exists()) {
