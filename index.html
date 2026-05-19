@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.202'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.203'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1748,7 +1748,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.202'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.203'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -3070,7 +3070,7 @@ const firebaseConfig = {
                 // Mark this session as active so we don't re-wipe mid-session
                 sessionStorage.setItem('pw_session_active_' + user.uid, '1');
                 // SESSION GUARD: enforce single active session per login
-                setTimeout(function() { if (typeof initSessionGuard === 'function') initSessionGuard(user); }, 1200);
+                setTimeout(function() { if (typeof window.initSessionGuard === 'function') window.initSessionGuard(user); }, 1200);
                 // Store last UID
                 localStorage.setItem('pw_last_uid', user.uid);
 
@@ -6153,14 +6153,20 @@ const firebaseConfig = {
         window._sessionId = sessionId;
 
         const isAdmin = (user.email === 'ckbedford@outlook.com');
+        const isPaintWorkz = (user.email === 'paint_workz@outlook.com');
+        const isKnownAccount = isAdmin || isPaintWorkz;
+
         const sessionRef = window.doc(window.firebaseDb, 'users', user.uid, 'appData', 'activeSession');
 
         const sessionData = {
             sessionId,
             loginTime: new Date().toISOString(),
             email: user.email,
+            displayName: user.displayName || user.email.split('@')[0],
             userAgent: navigator.userAgent.substring(0, 250),
-            device: /Mobile|iPad|iPhone|Android/.test(navigator.userAgent) ? 'mobile' : 'desktop'
+            device: /Mobile|iPad|iPhone|Android/.test(navigator.userAgent) ? 'mobile' : 'desktop',
+            isOwner: isAdmin,
+            isPaintWorkz
         };
 
         try {
@@ -6170,17 +6176,33 @@ const firebaseConfig = {
             return;
         }
 
-        // Write login audit for ALL accounts — stored under owner UID so Colin can see everyone
-        try {
-            // Always write to owner's loginHistory — owner UID is stored at login
-            const _ownerUid = window.currentUser?.uid || user.uid;
-            const auditRef = window.doc(window.firebaseDb, 'users', _ownerUid, 'loginHistory', sessionId);
-            await window.setDoc(auditRef, {
-                ...sessionData,
-                displayName: user.displayName || user.email.split('@')[0],
-                isOwner: isAdmin
-            }, { merge: false });
-        } catch(e) { console.warn('Login audit write error:', e); }
+        // Write login audit to EACH account's own loginHistory
+        // AND cross-write to the other known account so both can see all logins
+        const writeAudit = async (targetUid) => {
+            try {
+                const auditRef = window.doc(window.firebaseDb, 'users', targetUid, 'loginHistory', sessionId);
+                await window.setDoc(auditRef, sessionData, { merge: false });
+            } catch(e) { console.warn('Login audit write error to', targetUid, e.code); }
+        };
+
+        // Always write to own UID
+        await writeAudit(user.uid);
+
+        // Store own UID so other account can look it up
+        if (isAdmin) window._ownerUID = user.uid;
+        if (isPaintWorkz) window._paintWorkzUID = user.uid;
+
+        // Store known UIDs in localStorage for cross-account visibility
+        if (isAdmin) localStorage.setItem('pw_owner_uid', user.uid);
+        if (isPaintWorkz) localStorage.setItem('pw_paintworkz_uid', user.uid);
+
+        // Cross-write: if other account UID is known, write there too so both see all logins
+        const otherUid = isAdmin
+            ? localStorage.getItem('pw_paintworkz_uid')
+            : localStorage.getItem('pw_owner_uid');
+        if (otherUid && otherUid !== user.uid) {
+            await writeAudit(otherUid);
+        }
 
         // Unsubscribe any stale listener
         if (window._sessionGuardUnsubscribe) {
@@ -6216,56 +6238,73 @@ const firebaseConfig = {
         });
     }
 
-    // ── LOGIN HISTORY (all users, visible to owner) ────────────────────────────
+    // ── LOGIN HISTORY (all users, reads from own UID + known cross-account UIDs) ─
     async function loadLoginHistory() {
         const container = document.getElementById('loginHistoryList');
         if (!container) return;
         if (!window.firebaseDb || !window.currentUser) {
-            container.innerHTML = '<p style="color:#999;font-size:12px;">Not available.</p>';
+            container.innerHTML = '<p style="color:#999;font-size:12px;padding:12px;">Not connected.</p>';
             return;
         }
         container.innerHTML = '<p style="color:#aaa;font-size:12px;text-align:center;padding:16px;">Loading...</p>';
         try {
-            const col = window.collection(window.firebaseDb, 'users', window.currentUser.uid, 'loginHistory');
-            const snap = await window.getDocs(col);
-            if (snap.empty) {
-                container.innerHTML = '<p style="color:#aaa;font-size:12px;text-align:center;padding:16px;">No login history yet.<br><span style="font-size:10px;">Logins are recorded from v1.16.197 onward.</span></p>';
+            // Read from own UID + any cross-account UIDs stored from previous sessions
+            const uidsToRead = new Set([window.currentUser.uid]);
+            const ownerUid = localStorage.getItem('pw_owner_uid');
+            const paintWorkzUid = localStorage.getItem('pw_paintworkz_uid');
+            if (ownerUid) uidsToRead.add(ownerUid);
+            if (paintWorkzUid) uidsToRead.add(paintWorkzUid);
+
+            const entries = [];
+            for (const uid of uidsToRead) {
+                try {
+                    const col = window.collection(window.firebaseDb, 'users', uid, 'loginHistory');
+                    const snap = await window.getDocs(col);
+                    snap.forEach(d => {
+                        const data = d.data();
+                        if (!entries.find(e => e.sessionId === data.sessionId)) entries.push(data);
+                    });
+                } catch(readErr) { console.warn('loginHistory read uid', uid, readErr.code); }
+            }
+
+            if (entries.length === 0) {
+                container.innerHTML = '<p style="color:#aaa;font-size:12px;text-align:center;padding:16px;">No login history yet.<br><span style="font-size:10px;color:#636366;">Log out and back in on v1.16.203+ to create your first entry.</span></p>';
                 return;
             }
-            const entries = [];
-            snap.forEach(d => entries.push(d.data()));
+
             entries.sort((a, b) => (b.loginTime || '').localeCompare(a.loginTime || ''));
             const rows = entries.slice(0, 50).map(e => {
                 const dt = e.loginTime ? new Date(e.loginTime).toLocaleString('en-AU', {
-                    day:'numeric', month:'short', year:'numeric',
-                    hour:'2-digit', minute:'2-digit'
+                    day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'
                 }) : 'Unknown time';
                 const dev = e.device === 'mobile' ? '📱' : '💻';
-                const isOwnerBadge = e.isOwner ? '<span style="background:#d4af37;color:#000;font-size:9px;font-weight:900;padding:1px 5px;border-radius:3px;margin-left:5px;">ADMIN</span>' : '<span style="background:#2196f3;color:#fff;font-size:9px;font-weight:900;padding:1px 5px;border-radius:3px;margin-left:5px;">STAFF</span>';
-                const emailDisplay = e.email || 'Unknown';
-                const nameDisplay = e.displayName || emailDisplay.split('@')[0];
-                // Parse browser from userAgent
+                const badge = e.isOwner
+                    ? '<span style="background:#d4af37;color:#000;font-size:9px;font-weight:900;padding:1px 6px;border-radius:3px;margin-left:6px;">ADMIN</span>'
+                    : e.isPaintWorkz
+                    ? '<span style="background:#34c759;color:#000;font-size:9px;font-weight:900;padding:1px 6px;border-radius:3px;margin-left:6px;">PAINTWORKZ</span>'
+                    : '<span style="background:#2196f3;color:#fff;font-size:9px;font-weight:900;padding:1px 6px;border-radius:3px;margin-left:6px;">STAFF</span>';
                 const ua = e.userAgent || '';
                 let browser = 'Unknown';
-                if (ua.includes('Chrome')) browser = 'Chrome';
-                else if (ua.includes('Safari')) browser = 'Safari';
+                if (ua.includes('Chrome') && !ua.includes('Edg')) browser = 'Chrome';
+                else if (ua.includes('Safari') && !ua.includes('Chrome')) browser = 'Safari';
                 else if (ua.includes('Firefox')) browser = 'Firefox';
-                else if (ua.includes('Edge')) browser = 'Edge';
-                return `<div style="padding:10px 12px;border-bottom:1px solid #2c2c2e;display:flex;gap:10px;align-items:flex-start;">
-                    <span style="font-size:24px;line-height:1.2;">${dev}</span>
-                    <div style="flex:1;min-width:0;">
-                        <div style="font-size:13px;font-weight:900;color:#f2f2f7;">${nameDisplay}${isOwnerBadge}</div>
-                        <div style="font-size:11px;color:#aeaeb2;margin-top:1px;">${emailDisplay}</div>
-                        <div style="font-size:11px;color:#636366;margin-top:2px;">${dt} &bull; ${browser} &bull; ${e.device || 'desktop'}</div>
-                    </div>
-                </div>`;
+                else if (ua.includes('Edg')) browser = 'Edge';
+                return '<div style="padding:10px 12px;border-bottom:1px solid #2c2c2e;display:flex;gap:10px;align-items:flex-start;">' +
+                    '<span style="font-size:24px;line-height:1.3;">' + dev + '</span>' +
+                    '<div style="flex:1;min-width:0;">' +
+                    '<div style="font-size:13px;font-weight:900;color:#f2f2f7;">' + (e.email || 'Unknown') + badge + '</div>' +
+                    '<div style="font-size:11px;color:#636366;margin-top:3px;">' + dt + ' &bull; ' + browser + ' &bull; ' + (e.device || 'desktop') + '</div>' +
+                    '</div></div>';
             }).join('');
-            container.innerHTML = rows || '<p style="color:#aaa;font-size:12px;text-align:center;">No records.</p>';
+            container.innerHTML = rows;
         } catch(e) {
             container.innerHTML = '<p style="color:#ff6b6b;font-size:12px;padding:12px;">Error: ' + e.message + '</p>';
         }
     }
     // ── END SESSION GUARD ──────────────────────────────────────────────────────
+    // Expose on window so module scripts and HTML onclicks can call these
+    window.initSessionGuard = initSessionGuard;
+    window.loadLoginHistory = loadLoginHistory;
 
     function showForgotPassword() {
         const modal = document.getElementById('forgotPasswordModal');
