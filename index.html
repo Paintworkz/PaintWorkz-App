@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.193'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.194'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1742,7 +1742,7 @@ const firebaseConfig = {
 */
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.193'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.194'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -10517,8 +10517,9 @@ const firebaseConfig = {
             return 0;
         });
         filteredHistory.forEach((job, idx) => {
-            // Stable key: jobNum|dateReceived|client — immune to sort/filter reordering
-            const stableKey = String(job.jobNum) + '|' + (job.dateReceived||'') + '|' + (job.client||'').replace(/'/g,"&#39;");
+            // Stable key uses Firestore doc ID (clean alphanumeric) — immune to sort/reorder/special chars
+            // Falls back to encoded jobNum+dateReceived for jobs not yet synced to cloud
+            const stableKey = job.id ? ('id:' + job.id) : ('jn:' + encodeURIComponent(String(job.jobNum) + '|' + (job.dateReceived||'')));
             // Legacy numeric index still needed for deleteJobFromHistory (uses splice)
             const originalIdx = history.indexOf(job);
             
@@ -10691,20 +10692,25 @@ const firebaseConfig = {
 
     function loadJobFromHistory(index) {
         const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
-        // index may be a stable job key (jobNum|dateReceived|client) or a legacy numeric index
         let job;
-        if (typeof index === 'string' && index.includes('|')) {
-            // Stable key lookup — immune to sort/filter reordering
-            const [_jn, _dr, _cl] = index.split('|');
-            job = history.find(j =>
-                String(j.jobNum) === _jn &&
-                (j.dateReceived || '') === _dr &&
-                (j.client || '') === _cl
-            );
+        if (typeof index === 'string' && index.startsWith('id:')) {
+            // Firestore document ID — clean alphanumeric, most reliable
+            const docId = index.slice(3);
+            job = history.find(j => j.id === docId);
+        } else if (typeof index === 'string' && index.startsWith('jn:')) {
+            // Encoded jobNum|dateReceived fallback for jobs not yet synced
+            const decoded = decodeURIComponent(index.slice(3));
+            const pipeIdx = decoded.indexOf('|');
+            const _jn = decoded.slice(0, pipeIdx);
+            const _dr = decoded.slice(pipeIdx + 1);
+            job = history.find(j => String(j.jobNum) === _jn && (j.dateReceived||'') === _dr);
+            // If dateReceived didn't match (some old jobs may lack it), fall back to jobNum only
+            if (!job) job = history.find(j => String(j.jobNum) === _jn);
         } else {
-            job = history[index];
+            // Numeric index last resort (legacy — should not occur after v1.16.193)
+            job = history[Number(index)];
         }
-        
+
         if (!job) { console.warn('loadJobFromHistory: job not found for key:', index); return; }
 
         // Loading/viewing a job is always allowed on any plan
