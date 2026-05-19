@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.201'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.202'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1748,7 +1748,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.201'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.202'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -6442,7 +6442,7 @@ const firebaseConfig = {
         initializeTimelineSettings();  // Load Gantt chart timeline settings
         initializeAdditionalChargesForm();  // Load additional charges settings
         initializeBatchPrintForm();  // Load batch print settings
-        renderShopClosures();  // Load shop closures list
+        renderShopClosures();  // Load shop closures list (firebase will override in 800ms via loadShopClosuresFromFirebase)
       } catch (error) {
       }
     }
@@ -25875,14 +25875,22 @@ if ('serviceWorker' in navigator && _swAllowed) {
     function saveShopClosures(closures) {
         localStorage.setItem('shopClosures', JSON.stringify(closures));
         
-        // Sync to Firestore
-        if (window.currentUser && window.firebaseDb && window.doc && window.setDoc) {
-            try {
-                const ref = window.doc(window.firebaseDb, 'users', window.staffModeOwnerUid || window.currentUser.uid, 'appData', 'shopClosures');
-                window.setDoc(ref, { closures, lastUpdated: new Date().toISOString() }, { merge: true })
-                    .then(() => console.log('✅ Shop closures synced to Firestore'))
-                    .catch(e => { console.warn('Shop closures Firestore sync failed:', e); });
-            } catch(e) {}
+        // Sync to Firestore — always save to owner UID, retry if not ready yet
+        const _doFirebaseSave = () => {
+            if (!window.currentUser || !window.firebaseDb || !window.doc || !window.setDoc) {
+                console.warn('shopClosures: Firebase not ready — saved locally only');
+                return;
+            }
+            const targetUid = window.staffModeOwnerUid || window.currentUser.uid;
+            const ref = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'shopClosures');
+            window.setDoc(ref, { closures, lastUpdated: new Date().toISOString() }, { merge: true })
+                .then(() => console.log('✅ Shop closures saved to Firebase:', closures.length, 'entries'))
+                .catch(e => { console.warn('Shop closures Firebase save failed:', e); if (typeof notify === 'function') notify('⚠️ Closure saved locally — cloud sync failed'); });
+        };
+        if (!window.currentUser || !window.firebaseDb) {
+            setTimeout(_doFirebaseSave, 1500);
+        } else {
+            _doFirebaseSave();
         }
     }
     
@@ -25922,17 +25930,25 @@ if ('serviceWorker' in navigator && _swAllowed) {
     async function loadShopClosuresFromFirebase() {
         if (!window.currentUser || !window.firebaseDb || !window.getDoc || !window.doc) return;
         try {
+            // Always use owner UID — staff/secondary accounts must load from owner's data
             const targetUid = window.staffModeOwnerUid || window.currentUser.uid;
             const ref = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'shopClosures');
             const snap = await window.getDoc(ref);
             if (snap.exists()) {
                 const data = snap.data();
-                if (data.closures && Array.isArray(data.closures)) {
+                if (data.closures && Array.isArray(data.closures) && data.closures.length > 0) {
                     localStorage.setItem('shopClosures', JSON.stringify(data.closures));
                     renderShopClosures();
+                    console.log('✅ Shop closures loaded from Firebase:', data.closures.length, 'entries');
+                } else {
+                    console.log('ℹ️ No shop closures in Firebase yet');
                 }
+            } else {
+                console.log('ℹ️ shopClosures document does not exist in Firebase yet');
             }
-        } catch(e) {}
+        } catch(e) {
+            console.warn('loadShopClosuresFromFirebase error:', e);
+        }
     }
     
     function calculateWorkingDays(startDate, endDate) {
