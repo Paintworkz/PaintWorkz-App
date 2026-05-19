@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.204'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.205'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1721,7 +1721,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.204'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.205'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -6161,32 +6161,13 @@ const firebaseConfig = {
             return;
         }
 
-        // Write login audit to EACH account's own loginHistory
-        // AND cross-write to the other known account so both can see all logins
-        const writeAudit = async (targetUid) => {
-            try {
-                const auditRef = window.doc(window.firebaseDb, 'users', targetUid, 'loginHistory', sessionId);
-                await window.setDoc(auditRef, sessionData, { merge: false });
-            } catch(e) { console.warn('Login audit write error to', targetUid, e.code); }
-        };
-
-        // Always write to own UID
-        await writeAudit(user.uid);
-
-        // Store own UID so other account can look it up
-        if (isAdmin) window._ownerUID = user.uid;
-        if (isPaintWorkz) window._paintWorkzUID = user.uid;
-
-        // Store known UIDs in localStorage for cross-account visibility
-        if (isAdmin) localStorage.setItem('pw_owner_uid', user.uid);
-        if (isPaintWorkz) localStorage.setItem('pw_paintworkz_uid', user.uid);
-
-        // Cross-write: if other account UID is known, write there too so both see all logins
-        const otherUid = isAdmin
-            ? localStorage.getItem('pw_paintworkz_uid')
-            : localStorage.getItem('pw_owner_uid');
-        if (otherUid && otherUid !== user.uid) {
-            await writeAudit(otherUid);
+        // Write login audit to OWN UID only (cross-uid writes fail with Firestore permission denied)
+        try {
+            const auditRef = window.doc(window.firebaseDb, 'users', user.uid, 'loginHistory', sessionId);
+            await window.setDoc(auditRef, sessionData, { merge: false });
+            console.log('✅ Login recorded:', user.email, sessionData.device, new Date().toLocaleTimeString('en-AU'));
+        } catch(e) {
+            console.warn('Login audit write error:', e.code, e.message);
         }
 
         // Unsubscribe any stale listener
@@ -6233,23 +6214,17 @@ const firebaseConfig = {
         }
         container.innerHTML = '<p style="color:#aaa;font-size:12px;text-align:center;padding:16px;">Loading...</p>';
         try {
-            // Read from own UID + any cross-account UIDs stored from previous sessions
-            const uidsToRead = new Set([window.currentUser.uid]);
-            const ownerUid = localStorage.getItem('pw_owner_uid');
-            const paintWorkzUid = localStorage.getItem('pw_paintworkz_uid');
-            if (ownerUid) uidsToRead.add(ownerUid);
-            if (paintWorkzUid) uidsToRead.add(paintWorkzUid);
-
+            // Read from own UID only — cross-uid reads fail with Firestore permission denied
             const entries = [];
-            for (const uid of uidsToRead) {
-                try {
-                    const col = window.collection(window.firebaseDb, 'users', uid, 'loginHistory');
-                    const snap = await window.getDocs(col);
-                    snap.forEach(d => {
-                        const data = d.data();
-                        if (!entries.find(e => e.sessionId === data.sessionId)) entries.push(data);
-                    });
-                } catch(readErr) { console.warn('loginHistory read uid', uid, readErr.code); }
+            try {
+                const col = window.collection(window.firebaseDb, 'users', window.currentUser.uid, 'loginHistory');
+                const snap = await window.getDocs(col);
+                snap.forEach(d => entries.push(d.data()));
+                console.log('Login history loaded:', entries.length, 'entries for', window.currentUser.email);
+            } catch(readErr) {
+                console.warn('loginHistory read error:', readErr.code, readErr.message);
+                container.innerHTML = '<p style="color:#ff6b6b;font-size:12px;padding:12px;">Permission error: ' + readErr.code + '</p>';
+                return;
             }
 
             if (entries.length === 0) {
@@ -14784,15 +14759,20 @@ const firebaseConfig = {
             return;
         }
         
-        // Push to Firebase so ALL devices see it
+        // Push to Firebase so ALL devices see it — skip re-show on THIS device
         if (!skipFirebase && window.currentUser && window.firebaseDb && window.doc && window.setDoc) {
             try {
                 const notifRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'globalNotifications');
+                const notifId = Date.now();
                 const notifData = {
                     message, bgColor, borderColor,
                     timestamp: new Date().toISOString(),
-                    id: Date.now()
+                    id: notifId
                 };
+                // Track this ID so the onSnapshot listener knows NOT to re-show it on this device
+                if (!window._localNotifIds) window._localNotifIds = new Set();
+                window._localNotifIds.add(notifId);
+                setTimeout(() => { if (window._localNotifIds) window._localNotifIds.delete(notifId); }, 10000);
                 // Get existing, add new, keep last 20
                 window.getDoc(notifRef).then(snap => {
                     const existing = snap.exists() ? (snap.data().notifications || []) : [];
@@ -25905,8 +25885,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 console.warn('shopClosures: Firebase not ready — saved locally only');
                 return;
             }
-            // Always save to owner UID so all accounts share the same closures data
-            const targetUid = localStorage.getItem('pw_owner_uid') || window.staffModeOwnerUid || window.currentUser.uid;
+            const targetUid = window.staffModeOwnerUid || window.currentUser.uid;
             const ref = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'shopClosures');
             window.setDoc(ref, { closures, lastUpdated: new Date().toISOString() }, { merge: true })
                 .then(() => console.log('✅ Shop closures saved to Firebase:', closures.length, 'entries'))
@@ -25956,8 +25935,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
         if (!window.currentUser || !window.firebaseDb || !window.getDoc || !window.doc) return;
         try {
             // Always use owner UID — staff/secondary accounts must load from owner's data
-            // Always load from owner UID so all accounts see the same closures
-            const targetUid = localStorage.getItem('pw_owner_uid') || window.staffModeOwnerUid || window.currentUser.uid;
+            const targetUid = window.staffModeOwnerUid || window.currentUser.uid;
             const ref = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'shopClosures');
             const snap = await window.getDoc(ref);
             if (snap.exists()) {
@@ -29224,7 +29202,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                 }
             );
 
-            //        Cross-device global notifications                                                                   
+            //        Cross-device global notifications (skip ones this device just sent)
             let _lastNotifTs = new Date().toISOString();
             const _notifRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'globalNotifications');
             window.onSnapshot(_notifRef, snap => {
@@ -29233,6 +29211,8 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                 let gotNew = false;
                 notifs.forEach(n => {
                     if (n.timestamp > _lastNotifTs) {
+                        // Skip if this device originated it (prevents double-show)
+                        if (window._localNotifIds && window._localNotifIds.has(n.id)) return;
                         showGlobalNotification(n.message, n.bgColor, n.borderColor, true);
                         gotNew = true;
                     }
