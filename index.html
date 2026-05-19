@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.197'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.201'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1713,7 +1713,11 @@ const firebaseConfig = {
                      'defaultTimeline','adminSettings','pwCompletedJobs',
                      'headerLogo','companyLogo','ctsMatrix','ctsThicknesses'
                     ].forEach(k => { try { localStorage.removeItem(k); } catch(e) {} });
-                    console.log('✅ Clean slate for account:', user.email);/* 
+                    console.log('✅ Clean slate for account:', user.email);
+                }
+            }
+        });
+        /* 
 ╔════════════════════════════════════════════════════════════════╗
 ║                                                                ║
 ║  ⚖️  OWNERSHIP NOTICE - HARDLOCKED                             ║
@@ -1740,9 +1744,11 @@ const firebaseConfig = {
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 */
+    </script>
+<!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.197'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.201'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -4809,7 +4815,7 @@ const firebaseConfig = {
                     
                     <!-- Existing Staff Accounts List -->
                     <div style="font-size:11px; font-weight:900; color:#333; margin-bottom:6px;">EXISTING STAFF ACCOUNTS</div>
-                    <div id="staffAccountsList" style="background:#fff; border:1px solid #ddd; border-radius:6px; padding:8px; min-height:60px;">
+                    <div id="staffAccountsList" style="background:#1c1c1e; border:1px solid #3a3a3c; border-radius:6px; padding:4px; min-height:60px;">
                         <div style="text-align:center; color:#999; font-size:11px; padding:20px;">No staff accounts created yet</div>
                     </div>
                 </div>
@@ -5207,6 +5213,24 @@ const firebaseConfig = {
 
             <!-- Reports Tab -->
             <div id="admin-tab-reports-content" class="admin-tab-content staff-hidden" style="padding-top:12px; position:relative;">
+
+                <!-- ── LOGIN ACTIVITY LOG ────────────────────────────────────── -->
+                <div style="background:#1c1c1e; border-radius:12px; padding:16px; margin-bottom:16px; border:1px solid #3a3a3c;">
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+                        <div>
+                            <h4 style="margin:0 0 2px; font-weight:900; font-size:14px; color:#d4af37;">🔐 Login Activity</h4>
+                            <p style="font-size:11px; color:#636366; margin:0;">Who logged in, when, and on what device</p>
+                        </div>
+                        <button onclick="loadLoginHistory()" style="background:#d4af37; border:none; padding:8px 14px; border-radius:8px; font-weight:900; font-size:12px; cursor:pointer; color:#000; white-space:nowrap;">🔄 Refresh</button>
+                    </div>
+                    <div style="background:#000; border-radius:8px; overflow:hidden; max-height:380px; overflow-y:auto;">
+                        <div id="loginHistoryList">
+                            <p style="color:#aaa;font-size:12px;text-align:center;padding:20px;">Tap Refresh to load login history.</p>
+                        </div>
+                    </div>
+                </div>
+                <!-- ── END LOGIN ACTIVITY LOG ─────────────────────────────────── -->
+
                 <!-- PRO LOCK OVERLAY -->
                 <div id="reportsProLock" style="position:absolute; top:0; left:-15px; right:-15px; bottom:0; min-height:300px; z-index:50; background:rgba(0,0,0,0.82); border-radius:0; display:none; flex-direction:column; align-items:center; justify-content:center; padding:24px; text-align:center; backdrop-filter:blur(3px);">
                     <div style="font-size:42px; margin-bottom:8px;">🔒</div>
@@ -6146,13 +6170,17 @@ const firebaseConfig = {
             return;
         }
 
-        // Write login audit for admin account only
-        if (isAdmin) {
-            try {
-                const auditRef = window.doc(window.firebaseDb, 'users', user.uid, 'loginHistory', sessionId);
-                await window.setDoc(auditRef, sessionData, { merge: false });
-            } catch(e) { console.warn('Login audit write error:', e); }
-        }
+        // Write login audit for ALL accounts — stored under owner UID so Colin can see everyone
+        try {
+            // Always write to owner's loginHistory — owner UID is stored at login
+            const _ownerUid = window.currentUser?.uid || user.uid;
+            const auditRef = window.doc(window.firebaseDb, 'users', _ownerUid, 'loginHistory', sessionId);
+            await window.setDoc(auditRef, {
+                ...sessionData,
+                displayName: user.displayName || user.email.split('@')[0],
+                isOwner: isAdmin
+            }, { merge: false });
+        } catch(e) { console.warn('Login audit write error:', e); }
 
         // Unsubscribe any stale listener
         if (window._sessionGuardUnsubscribe) {
@@ -6188,36 +6216,53 @@ const firebaseConfig = {
         });
     }
 
-    // ── LOGIN HISTORY (admin only) ─────────────────────────────────────────────
+    // ── LOGIN HISTORY (all users, visible to owner) ────────────────────────────
     async function loadLoginHistory() {
         const container = document.getElementById('loginHistoryList');
         if (!container) return;
-        if (!isOwner() || !window.firebaseDb || !window.currentUser) {
+        if (!window.firebaseDb || !window.currentUser) {
             container.innerHTML = '<p style="color:#999;font-size:12px;">Not available.</p>';
             return;
         }
-        container.innerHTML = '<p style="color:#aaa;font-size:12px;">Loading...</p>';
+        container.innerHTML = '<p style="color:#aaa;font-size:12px;text-align:center;padding:16px;">Loading...</p>';
         try {
             const col = window.collection(window.firebaseDb, 'users', window.currentUser.uid, 'loginHistory');
             const snap = await window.getDocs(col);
-            if (snap.empty) { container.innerHTML = '<p style="color:#aaa;font-size:12px;text-align:center;">No login history yet.</p>'; return; }
+            if (snap.empty) {
+                container.innerHTML = '<p style="color:#aaa;font-size:12px;text-align:center;padding:16px;">No login history yet.<br><span style="font-size:10px;">Logins are recorded from v1.16.197 onward.</span></p>';
+                return;
+            }
             const entries = [];
             snap.forEach(d => entries.push(d.data()));
             entries.sort((a, b) => (b.loginTime || '').localeCompare(a.loginTime || ''));
-            const rows = entries.slice(0, 20).map(e => {
-                const dt = e.loginTime ? new Date(e.loginTime).toLocaleString('en-AU', { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : 'Unknown';
+            const rows = entries.slice(0, 50).map(e => {
+                const dt = e.loginTime ? new Date(e.loginTime).toLocaleString('en-AU', {
+                    day:'numeric', month:'short', year:'numeric',
+                    hour:'2-digit', minute:'2-digit'
+                }) : 'Unknown time';
                 const dev = e.device === 'mobile' ? '📱' : '💻';
-                const ua = (e.userAgent || '').substring(0, 60) + ((e.userAgent||'').length > 60 ? '…' : '');
-                return '<div style="padding:10px 12px;border-bottom:1px solid #2c2c2e;display:flex;gap:10px;align-items:flex-start;">' +
-                    '<span style="font-size:22px;line-height:1;">' + dev + '</span>' +
-                    '<div style="flex:1;min-width:0;">' +
-                    '<div style="font-size:13px;font-weight:900;color:#f2f2f7;">' + dt + '</div>' +
-                    '<div style="font-size:10px;color:#888;margin-top:2px;word-break:break-all;">' + ua + '</div>' +
-                    '</div></div>';
+                const isOwnerBadge = e.isOwner ? '<span style="background:#d4af37;color:#000;font-size:9px;font-weight:900;padding:1px 5px;border-radius:3px;margin-left:5px;">ADMIN</span>' : '<span style="background:#2196f3;color:#fff;font-size:9px;font-weight:900;padding:1px 5px;border-radius:3px;margin-left:5px;">STAFF</span>';
+                const emailDisplay = e.email || 'Unknown';
+                const nameDisplay = e.displayName || emailDisplay.split('@')[0];
+                // Parse browser from userAgent
+                const ua = e.userAgent || '';
+                let browser = 'Unknown';
+                if (ua.includes('Chrome')) browser = 'Chrome';
+                else if (ua.includes('Safari')) browser = 'Safari';
+                else if (ua.includes('Firefox')) browser = 'Firefox';
+                else if (ua.includes('Edge')) browser = 'Edge';
+                return `<div style="padding:10px 12px;border-bottom:1px solid #2c2c2e;display:flex;gap:10px;align-items:flex-start;">
+                    <span style="font-size:24px;line-height:1.2;">${dev}</span>
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-size:13px;font-weight:900;color:#f2f2f7;">${nameDisplay}${isOwnerBadge}</div>
+                        <div style="font-size:11px;color:#aeaeb2;margin-top:1px;">${emailDisplay}</div>
+                        <div style="font-size:11px;color:#636366;margin-top:2px;">${dt} &bull; ${browser} &bull; ${e.device || 'desktop'}</div>
+                    </div>
+                </div>`;
             }).join('');
             container.innerHTML = rows || '<p style="color:#aaa;font-size:12px;text-align:center;">No records.</p>';
         } catch(e) {
-            container.innerHTML = '<p style="color:#ff6b6b;font-size:12px;">Error loading history: ' + e.message + '</p>';
+            container.innerHTML = '<p style="color:#ff6b6b;font-size:12px;padding:12px;">Error: ' + e.message + '</p>';
         }
     }
     // ── END SESSION GUARD ──────────────────────────────────────────────────────
@@ -11807,19 +11852,19 @@ const firebaseConfig = {
             let html = '';
             snapshot.forEach(doc => {
                 const data = doc.data();
-                const pinDisplay = data.staffPin ? `PIN: ${data.staffPin}` : 'PIN not set';
-                html += `
-                    <div style="display:flex; align-items:center; justify-content:space-between; padding:8px; border-bottom:1px solid #eee;">
-                        <div>
-                            <div style="font-weight:900; font-size:12px; color:#333;">${data.name}</div>
-                            <div style="font-size:10px; color:#666;">${data.email} • ${pinDisplay}</div>
-                        </div>
-                        <div style="display:flex; gap:6px;">
-                            <button onclick="editStaffAccountPIN('${doc.id}', '${data.name}', '${data.email}', '${data.staffPin || ''}')" style="background:#007aff; color:#fff; border:none; padding:6px 12px; border-radius:4px; font-size:10px; font-weight:900; cursor:pointer;">EDIT PIN</button>
-                            <button onclick="deleteStaffAccount('${doc.id}')" style="background:#ff3b30; color:#fff; border:none; padding:6px 12px; border-radius:4px; font-size:10px; font-weight:900; cursor:pointer;">DELETE</button>
-                        </div>
-                    </div>
-                `;
+                const pinDisplay = data.staffPin ? 'PIN: ' + data.staffPin : 'PIN not set';
+                const safeName = (data.name || '').replace(/'/g, '&apos;');
+                const safeEmail = (data.email || '').replace(/'/g, '&apos;');
+                const safePin = (data.staffPin || '').replace(/'/g, '&apos;');
+                html += '<div style="display:flex; align-items:center; justify-content:space-between; padding:10px 8px; border-bottom:1px solid #2c2c2e;">' +
+                    '<div>' +
+                    '<div style="font-weight:900; font-size:13px; color:#f2f2f7;">' + (data.name || '') + '</div>' +
+                    '<div style="font-size:11px; color:#aeaeb2; margin-top:2px;">' + (data.email || '') + ' &bull; ' + pinDisplay + '</div>' +
+                    '</div>' +
+                    '<div style="display:flex; gap:6px;">' +
+                    '<button onclick="editStaffAccountPIN(\'' + doc.id + '\', \'' + safeName + '\', \'' + safeEmail + '\', \'' + safePin + '\')" style="background:#007aff; color:#fff; border:none; padding:6px 12px; border-radius:4px; font-size:10px; font-weight:900; cursor:pointer;">EDIT PIN</button>' +
+                    '<button onclick="deleteStaffAccount(\'' + doc.id + '\')" style="background:#ff3b30; color:#fff; border:none; padding:6px 12px; border-radius:4px; font-size:10px; font-weight:900; cursor:pointer;">DELETE</button>' +
+                    '</div></div>';
             });
 
             container.innerHTML = html;
@@ -22432,6 +22477,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 checkForNewUnallocatedDoors();
             } else if (tab === 'reports') {
                 initReportsTab();
+                setTimeout(loadLoginHistory, 300); // Auto-load login activity
             }
         }, 50);
     }
@@ -25833,9 +25879,9 @@ if ('serviceWorker' in navigator && _swAllowed) {
         if (window.currentUser && window.firebaseDb && window.doc && window.setDoc) {
             try {
                 const ref = window.doc(window.firebaseDb, 'users', window.staffModeOwnerUid || window.currentUser.uid, 'appData', 'shopClosures');
-                window.setDoc(ref, { closures, lastUpdated: new Date().toISOString() }, { merge: false })
+                window.setDoc(ref, { closures, lastUpdated: new Date().toISOString() }, { merge: true })
                     .then(() => console.log('✅ Shop closures synced to Firestore'))
-                    .catch(e => console.warn('Shop closures Firestore sync failed:', e));
+                    .catch(e => { console.warn('Shop closures Firestore sync failed:', e); });
             } catch(e) {}
         }
     }
