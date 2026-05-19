@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.194'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.196'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1742,7 +1742,7 @@ const firebaseConfig = {
 */
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.194'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.196'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -9127,15 +9127,16 @@ const firebaseConfig = {
         // Also silently update jobHistory so History tab always shows current part count
         try {
             const _jNum = jobData.jobNum;
-            if (_jNum && currentEditingJobIndex !== null) {
+            if (_jNum && (currentEditingJobId || currentEditingJobIndex !== null)) {
                 const _hist = JSON.parse(localStorage.getItem('jobHistory') || '[]');
-                // Verify the job at currentEditingJobIndex actually matches (safety check)
-                const _target = _hist[currentEditingJobIndex];
+                const _editIdx = _resolveEditIdx(_hist);
+                // Verify the job at resolved index actually matches (safety check)
+                const _target = _editIdx >= 0 ? _hist[_editIdx] : null;
                 if (_target && String(_target.jobNum) === String(_jNum)) {
-                    _hist[currentEditingJobIndex].items = items;
-                    _hist[currentEditingJobIndex].totalParts = String(items.reduce((s,i) => s + (parseInt(i.qty)||1), 0));
-                    _hist[currentEditingJobIndex].totalSqm = document.getElementById('tA')?.innerText || _hist[currentEditingJobIndex].totalSqm;
-                    _hist[currentEditingJobIndex].colors = Array.from(new Set(items.map(i => i.color).filter(c => c && c.trim()))).join(', ') || _hist[currentEditingJobIndex].color;
+                    _hist[_editIdx].items = items;
+                    _hist[_editIdx].totalParts = String(items.reduce((s,i) => s + (parseInt(i.qty)||1), 0));
+                    _hist[_editIdx].totalSqm = document.getElementById('tA')?.innerText || _hist[_editIdx].totalSqm;
+                    _hist[_editIdx].colors = Array.from(new Set(items.map(i => i.color).filter(c => c && c.trim()))).join(', ') || _hist[_editIdx].color;
                     localStorage.setItem('jobHistory', JSON.stringify(_hist));
                 }
             }
@@ -9633,7 +9634,7 @@ const firebaseConfig = {
             
             // Reset job mode flags
             isJobViewMode = false;
-            currentEditingJobIndex = null;
+            currentEditingJobIndex = null; currentEditingJobId = null;
             jobDataBeforeLoad = null;
             // Clear any stale charge memory
             window._lastChargesSnapshot = null;
@@ -9845,8 +9846,9 @@ const firebaseConfig = {
         
         // === SAFETY CHECK: Prevent overwriting a job that had parts with empty items ===
         // This catches the race condition where parts haven't loaded yet
-        if (items.length === 0 && currentEditingJobIndex !== null) {
-            const _existingJob = (JSON.parse(localStorage.getItem('jobHistory') || '[]'))[currentEditingJobIndex];
+        if (items.length === 0 && (currentEditingJobId || currentEditingJobIndex !== null)) {
+            const _hist = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+            const _existingJob = _hist[_resolveEditIdx(_hist)];
             const _existingParts = _existingJob?.totalParts || (_existingJob?.items?.length) || 0;
             if (parseInt(_existingParts) > 0) {
                 alert(`⚠️ WARNING: This job has ${_existingParts} parts on record but none are showing on the measure sheet.\n\nThis usually means the parts haven't finished loading yet.\n\nPlease wait a moment and try again — DO NOT save now or you will lose the parts.`);
@@ -9910,9 +9912,18 @@ const firebaseConfig = {
         let history = JSON.parse(localStorage.getItem('jobHistory')) || [];
         
         // Check if we're overwriting an existing job
-        if (currentEditingJobIndex !== null) {
+        if (currentEditingJobId || currentEditingJobIndex !== null) {
+            // CRITICAL: Resolve index FRESH from current localStorage — immune to onSnapshot reordering
+            const _editIdx = _resolveEditIdx(history);
+            const existingJob = _editIdx >= 0 ? history[_editIdx] : null;
+            // Safety: if resolved job's jobNum doesn't match what's on screen, treat as new job
+            if (!existingJob || String(existingJob.jobNum) !== String(jobData.jobNum)) {
+                console.warn('⚠️ Save: resolved job mismatch — treating as new job to prevent overwrite corruption', { resolved: existingJob?.jobNum, screen: jobData.jobNum });
+                currentEditingJobId = null;
+                currentEditingJobIndex = null;
+                // Fall through to new-job path below
+            } else {
             // Preserve the stable ID from existing job so Firebase doc key stays consistent
-            const existingJob = history[currentEditingJobIndex];
             jobData.id = existingJob?.id || `job_${jobData.jobNum}_${Date.now()}`;
             if (!confirm(`Save changes to Job #${jobData.jobNum} — ${jobData.client}?\n\nOK = Save & update\nCancel = Go back without saving`)) {
                 return; // User chose not to save
@@ -9940,11 +9951,13 @@ const firebaseConfig = {
                     sqm: jobData.totalSqm
                 });
                 
-                history[currentEditingJobIndex] = jobData;
-                currentEditingJobIndex = null; // Reset for next job
+                history[_editIdx] = jobData;
+                currentEditingJobIndex = null;
+                currentEditingJobId = jobData.id; // Keep ID so further saves still find it
                 notify('    Job Updated'); flashSaved('Job Updated');
                 addAdminAlert('JOB_UPDATED', ` JOB UPDATED #${jobData.jobNum} - ${jobData.client}`, {jobNum: jobData.jobNum, client: jobData.client, totalParts: jobData.totalParts, editedBy: currentUserName});
-            } else {
+            }
+        } else {
             // Add new job to history - CHECK FOR DUPLICATES FIRST
             // Match on jobNum + client only (dateReceived can be blank or differ between saves)
             const existingIdx = history.findIndex(j => 
@@ -10010,7 +10023,8 @@ const firebaseConfig = {
                 }];
                 
                 history.unshift(jobData);
-                currentEditingJobIndex = 0; // Point to the just-saved job so re-saves update it
+                currentEditingJobIndex = -1;
+                currentEditingJobId = jobData.id; // Point to the just-saved job so re-saves update it
                 notify('    Job Saved'); flashSaved('Job Saved');
                 addAdminAlert('JOB_SAVED', ` NEW JOB SAVED #${jobData.jobNum} - ${jobData.client}`, {jobNum: jobData.jobNum, client: jobData.client, totalParts: jobData.totalParts, createdBy: currentUserName});
                 
@@ -10192,7 +10206,7 @@ const firebaseConfig = {
         localStorage.removeItem('currentJob');
         
         // Reset editing index - form is now clear, any new parts belong to a NEW job
-        currentEditingJobIndex = null;
+        currentEditingJobIndex = null; currentEditingJobId = null;
         
         // Now render the empty form
         render();
@@ -10687,6 +10701,20 @@ const firebaseConfig = {
 
     // Track the current job being edited (if loaded from history)
     let currentEditingJobIndex = null;
+    let currentEditingJobId = null; // Stable ID-based tracker — immune to array reordering
+
+    // Resolve current editing job's actual index in a freshly-read history array
+    function _resolveEditIdx(history) {
+        if (currentEditingJobId) {
+            const idx = history.findIndex(j => j.id === currentEditingJobId);
+            if (idx !== -1) return idx;
+        }
+        // Fallback: numeric index (legacy, unreliable after onSnapshot — use only if no ID)
+        if (currentEditingJobIndex !== null && currentEditingJobIndex >= 0 && currentEditingJobIndex < history.length) {
+            return currentEditingJobIndex;
+        }
+        return -1;
+    }
     let isJobViewMode = false; // Track if viewing job without editing
     let jobDataBeforeLoad = null; // Store original data to detect changes
 
@@ -10731,7 +10759,8 @@ const firebaseConfig = {
             }
         });
         
-        currentEditingJobIndex = index; // Track this job for overwrite
+        currentEditingJobIndex = -1; // deprecated — use currentEditingJobId
+        currentEditingJobId = job.id || null; // Stable ID for save lookup
         isJobViewMode = true; // Set view mode
         window.currentLoadedJob = job; // Store for cover sheet / PDFs
         
@@ -10870,7 +10899,7 @@ const firebaseConfig = {
         
         // Reset view mode and clear editing
         isJobViewMode = false;
-        currentEditingJobIndex = null;
+        currentEditingJobIndex = null; currentEditingJobId = null;
         jobDataBeforeLoad = null;
         items = [];
         previousJobColour = ''; // Reset colour tracking
@@ -21138,14 +21167,14 @@ if ('serviceWorker' in navigator && _swAllowed) {
     }
     
     function startNewJob() {
-        currentEditingJobIndex = null; // Reset editing index when starting new job
+        currentEditingJobIndex = null; currentEditingJobId = null; // Reset editing index when starting new job
         clearAllData(); // This will also clear the form
     }
     
     function clearAllData() {
         if (confirm('Are you absolutely sure? This will delete all data and cannot be undone.')) {
             items = [];
-            currentEditingJobIndex = null;
+            currentEditingJobIndex = null; currentEditingJobId = null;
             jobPhotos = [];
             localStorage.removeItem('currentJob');
             document.getElementById('h').value = '';
