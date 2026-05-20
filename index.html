@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.220'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.221'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1721,7 +1721,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.220'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.221'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -17658,27 +17658,57 @@ const firebaseConfig = {
                     doc.addPage();
                     let _by = 15;
                     if (headerLogo) { try { doc.addImage(headerLogo, 'PNG', 145, 5, 50, 20); } catch(e) {} }
-                    doc.setFontSize(28); doc.setFont(undefined,'bold'); doc.setTextColor(0,0,0);
+
+                    // ── TITLE (same as page 1) ────────────────────────────────
+                    doc.setFontSize(28); doc.setFont(undefined,'bold'); doc.setTextColor(128,0,128);
                     doc.text('MIXING CARD', 20, _by); _by += 12;
-                    doc.setFontSize(18); doc.setFont(undefined,'bold');
+
+                    // ── PAINT INFO BOX ───────────────────────────────────────
+                    doc.setFontSize(18); doc.setFont(undefined,'bold'); doc.setTextColor(0,0,0);
                     doc.setFillColor(255,255,255); doc.setDrawColor(200,200,200); doc.setLineWidth(1);
                     doc.rect(20, _by, 170, 24, 'FD');
                     doc.text(`${paintBrand} | ${color.toUpperCase()} | ${paintFinish} | ${_bSize}L`, 25, _by+16); _by += 32;
-                    doc.setFontSize(10); doc.setFont(undefined,'normal'); doc.setTextColor(200,30,30);
-                    doc.text(`Batch ${_bi+1} of ${_batchesToPrint.length}: ${_bSize}L (${_litresNeeded.toFixed(1)}L needed total — mix ${_batchesToPrint.join('L + ')}L)`, 20, _by);
-                    doc.setTextColor(0,0,0); _by += 8;
-                    doc.setDrawColor(170,132,30); doc.setLineWidth(1.5); doc.line(20, _by, 190, _by); _by += 8;
-                    doc.setFontSize(13); doc.setFont(undefined,'bold');
+
+                    // ── JOB INFO GRID (same as page 1) ──────────────────────
+                    doc.setFontSize(12); doc.setFont(undefined,'bold'); doc.setTextColor(0,0,0);
+                    doc.text('Job Name', 20, _by); doc.text('Job #', 110, _by); _by += 5;
+                    doc.setFont(undefined,'normal');
+                    doc.text(jobName || jobNum, 20, _by); doc.text(String(jobNum), 110, _by); _by += 8;
+                    doc.setFont(undefined,'bold');
+                    doc.text('Client', 20, _by); doc.text('Date', 110, _by); _by += 5;
+                    doc.setFont(undefined,'normal');
+                    doc.text(client || '', 20, _by); doc.text(dateReceived || '', 110, _by); _by += 8;
+                    doc.setFont(undefined,'bold');
+                    doc.text('SQ Metres', 20, _by); doc.text('Parts', 65, _by); doc.text('Paint Required', 110, _by); _by += 5;
+                    doc.setFont(undefined,'normal'); doc.setTextColor(200,30,30);
+                    const _bColorSQM = colorSQM > 0 ? colorSQM : _colorSQMPreview;
+                    const _bPaintQty = (_bColorSQM / _covRate).toFixed(1);
+                    const _bColorParts = (_labelItems||window.pdfItemsToUse||items).filter(i=>(i.color||'').trim().toLowerCase()===color.toLowerCase()).reduce((s,i)=>s+(parseInt(i.qty)||1),0);
+                    doc.text(`${_bColorSQM.toFixed(2)} m`, 20, _by);
+                    doc.text(String(_bColorParts), 65, _by);
+                    doc.text(`${_bPaintQty} L  (${_coveragePreview} m²/L)`, 110, _by);
+                    doc.setTextColor(0,0,0); _by += 10;
+
+                    // ── GOLD DIVIDER ─────────────────────────────────────────
+                    doc.setDrawColor(170,132,30); doc.setLineWidth(1.5); doc.line(20, _by, 190, _by); _by += 6;
+
+                    // ── SECTION HEADER ───────────────────────────────────────
+                    doc.setFontSize(13); doc.setFont(undefined,'bold'); doc.setTextColor(0,0,0);
                     doc.text(supplierSectionHdr, 20, _by); _by += 5;
                     doc.setFontSize(10); doc.setFont(undefined,'normal'); doc.setTextColor(200,30,30);
-                    doc.text(`(Weights for ${_bSize} Litre of Paint)`, 20, _by);
-                    doc.setTextColor(0,0,0); _by += 8;
-                    const _bBoxH = pageHeight - _by - 30;
+                    doc.text(`${_bPaintQty}L needed — mixing Batch ${_bi+1}: ${_bSize}L`, 20, _by); _by += 4;
+                    doc.setFontSize(9);
+                    doc.text(`Batch ${_bi+1} of ${_batchesToPrint.length}: ${_bSize}L (${_litresNeeded.toFixed(1)}L needed total)`, 20, _by);
+                    doc.setTextColor(0,0,0); _by += 6;
+
+                    // ── FORMULA BOX ──────────────────────────────────────────
+                    const _bBoxH = pageHeight - _by - 20;
                     doc.setDrawColor(0,0,0); doc.setLineWidth(0.5);
                     doc.rect(20, _by, 170, _bBoxH);
-                    let _bY = _by + 10;
-                    // ── EVIC / formula header info (same as batch 1) ──────────
-                    doc.setFontSize(12); doc.setFont(undefined,'bold');
+                    let _bY = _by + 8;
+
+                    // EVIC details
+                    doc.setFontSize(12); doc.setFont(undefined,'bold'); doc.setTextColor(0,0,0);
                     if (formula) {
                         doc.text(`Evic Code: ${formula.evicCode || '_____________________________'}`, 25, _bY); _bY += 7;
                         doc.text(`Base Type: ${formula.baseType || '______________________________'}`, 25, _bY); _bY += 7;
@@ -17686,30 +17716,46 @@ const firebaseConfig = {
                         if (formula.version) { doc.text(`Version: ${formula.version}`, 25, _bY); _bY += 7; }
                         _bY += 3;
                     }
+
+                    // Base items
+                    doc.setFontSize(12); doc.setFont(undefined,'bold');
                     doc.text('Base:', 25, _bY); doc.text('RUNNING TOTAL', 140, _bY); _bY += 7;
                     doc.setFont(undefined,'normal'); doc.setFontSize(11);
                     let _bRT = 0;
-                    (_bBase.length > 0 ? _bBase : [{code:'_____________',grams:0},{code:'_____________',grams:0}]).forEach(b => {
-                        const g = parseFloat(b.grams)||0; _bRT += g;
-                        doc.text(`${b.code}: ${g > 0 ? g.toFixed(2)+'g' : '_____________ g'}`, 30, _bY);
-                        doc.text(g > 0 ? _bRT.toFixed(2)+'g' : '_________ g', 140, _bY); _bY += 5;
-                    });
-                    _bY += 5;
-                    doc.setFontSize(11); doc.setFont(undefined,'bold');
-                    doc.text('Tinters / Colourants:', 25, _bY); doc.text('RUNNING TOTAL', 140, _bY); _bY += 7;
-                    doc.setFont(undefined,'normal');
-                    // Continue running total from base (do NOT reset — running total is cumulative base + tinters)
-                    (_bTinters.length > 0 ? _bTinters : Array(5).fill({code:'_____________',amount:0})).forEach(t => {
-                        const g = parseFloat(t.amount||t.grams)||0; _bRT += g;
-                        doc.text(`${t.code}: ${g > 0 ? g.toFixed(2)+'g' : '_____________ g'}`, 30, _bY);
-                        doc.text(g > 0 ? _bRT.toFixed(2)+'g' : '_________ g', 140, _bY); _bY += 5;
-                    });
-                    // TOTAL WEIGHT line
+                    const _bBaseRows = Math.max(_bBase.length, 3);
+                    for (let _ri = 0; _ri < _bBaseRows; _ri++) {
+                        const b = _bBase[_ri];
+                        const g = b ? (parseFloat(b.grams)||0) : 0;
+                        if (g > 0) _bRT += g;
+                        const code = b ? (b.code||'') : `Item ${_ri+1}`;
+                        doc.text(g > 0 ? `${code}: ${g.toFixed(2)}g` : `${code}: _____________ g`, 30, _bY);
+                        doc.text(g > 0 ? `${_bRT.toFixed(2)}g` : '_________ g', 140, _bY); _bY += 5;
+                    }
+
+                    // Tinters
+                    _bY += 4;
+                    doc.setFontSize(12); doc.setFont(undefined,'bold');
+                    doc.text('TINTERS:', 25, _bY); doc.text('RUNNING TOTAL', 140, _bY); _bY += 7;
+                    doc.setFont(undefined,'normal'); doc.setFontSize(11);
+                    const _bTinterRows = Math.max(_bTinters.length, 4);
+                    for (let _ti = 0; _ti < _bTinterRows; _ti++) {
+                        const t = _bTinters[_ti];
+                        const g = t ? (parseFloat(t.amount||t.grams)||0) : 0;
+                        if (g > 0) _bRT += g;
+                        const code = t ? (t.code||'') : `Tint ${_ti+1}`;
+                        doc.text(g > 0 ? `${code}: ${g.toFixed(2)}g` : `${code}: _____________ g`, 30, _bY);
+                        doc.text(g > 0 ? `${_bRT.toFixed(2)}g` : '_________ g', 140, _bY); _bY += 5;
+                    }
+
+                    // Total weight — sum only this batch's components
+                    const _bActualTotal = [..._bBase, ..._bTinters].reduce((s,x)=>s+(parseFloat(x.grams||x.amount)||0), 0);
                     _bY += 4;
                     doc.setFontSize(12); doc.setFont(undefined,'bold'); doc.setTextColor(0,0,0);
-                    const _bTotalW = _bRT > 0 ? `TOTAL WEIGHT: ${_bRT.toFixed(2)} grams` : 'TOTAL WEIGHT: _______________ grams';
-                    doc.text(_bTotalW, 25, _bY);
-                    doc.setFontSize(6.5); doc.setFont('helvetica','normal'); doc.setTextColor(170,170,170);
+                    doc.text(_bActualTotal > 0 ? `TOTAL WEIGHT: ${_bActualTotal.toFixed(2)} grams` : 'TOTAL WEIGHT: _______________ grams', 25, _bY);
+
+                    // Footer (same as page 1)
+                    doc.setFontSize(7); doc.setFont('helvetica','normal'); doc.setTextColor(128,128,128);
+                    doc.text(`Generated: ${new Date().toLocaleDateString('en-AU')} | ${color} | Base: ${_bPaintQty}L | SQM: ${_bColorSQM.toFixed(2)}`, 20, pageHeight - 8);
                     doc.text('Created by paintworkzpro.com.au', doc.internal.pageSize.getWidth()-10, pageHeight-4, {align:'right'});
                     doc.setTextColor(0,0,0);
                 }
