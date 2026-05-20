@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.205'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.206'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1721,7 +1721,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.205'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.206'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -7364,6 +7364,24 @@ const firebaseConfig = {
             notify(`✅ Updated ${replacedCount} part${replacedCount > 1 ? 's' : ''} — colour, brand & formula applied`);
             render();
             saveData();
+
+            // CRITICAL: Write colour change to Firestore immediately so onSnapshot can't revert it
+            // Just updating currentJob in saveData() isn't enough — the cloud copy still has old colour
+            if (currentEditingJobId && window.firebaseDb && window.doc && window.updateDoc) {
+                const syncUid = window.staffModeOwnerUid || window.currentUser?.uid;
+                if (syncUid) {
+                    const jobRef = window.doc(window.firebaseDb, 'users', syncUid, 'jobs', currentEditingJobId);
+                    window.updateDoc(jobRef, {
+                        items: items,
+                        color: newColour,
+                        brand: newBrand || undefined,
+                        code: newCode || undefined,
+                        finish: newFinish || undefined,
+                        lastModified: new Date().toISOString()
+                    }).then(() => console.log('✅ Colour change synced to Firestore'))
+                    .catch(e => console.warn('Colour sync failed:', e));
+                }
+            }
         }
         
         // Update tracking for next change (always uppercase for comparison)
@@ -11304,27 +11322,40 @@ const firebaseConfig = {
         if (confirm(`Unmark Job #${job.jobNum} as complete?\n\nThis will reopen the job for re-work.`)) {
             job.completed = false;
             job.completedDate = null;
+            job.dateCompleted = null;
+            job.lastModified = new Date().toISOString();
             history[jobIdx] = job;
             safeStorage.setJSON('jobHistory', history);
-            
-            
+
             notify('     Job reopened - now active again');
             showGlobalNotification(` JOB REOPENED #${job.jobNum}\n${job.client} - ${job.totalParts} parts`, '#fff3cd', '#ff9800');
-            
-            // Track this change with timestamp so snapshot doesn't overwrite it
+
+            // Track this change so onSnapshot doesn't overwrite it
             window._lastCompletedToggleTime = Date.now();
             window._lastCompletedToggleJobId = job.id || String(job.jobNum);
-            
-            // Sync to Firebase with debouncing
-            if (window.debouncedFirebaseSync) {
+
+            // Write IMMEDIATELY to Firestore — don't wait for debounce (onSnapshot would re-complete it)
+            if (window.firebaseDb && window.doc && window.updateDoc && job.id) {
+                const syncUid = window.staffModeOwnerUid || window.currentUser?.uid;
+                if (syncUid) {
+                    const jobRef = window.doc(window.firebaseDb, 'users', syncUid, 'jobs', job.id);
+                    window.updateDoc(jobRef, {
+                        completed: false,
+                        completedDate: null,
+                        dateCompleted: null,
+                        lastModified: job.lastModified
+                    }).then(() => {
+                        console.log('✅ Job uncompleted in Firestore:', job.jobNum);
+                    }).catch(e => {
+                        console.warn('Firestore uncomplete failed:', e);
+                        // Fall back to full sync
+                        if (window.debouncedFirebaseSync) window.debouncedFirebaseSync();
+                    });
+                }
+            } else if (window.debouncedFirebaseSync) {
                 window.debouncedFirebaseSync();
             }
-            
-            notify('     Job reopened - now active again');
-            
-            // Show GLOBAL RED NOTIFICATION for reactivation
-            showGlobalReactivationAlert(job);
-            
+
             // Refresh the view
             renderHistory();
         }
@@ -18104,11 +18135,16 @@ const firebaseConfig = {
                 y += headerHeight + 10;
                 
                 // ===== JOB NUMBER - CENTERED AND LARGE =====
+                // For multi-colour jobs: first colour = "Job: 170", second = "Job: 170 A", third = "Job: 170 B" etc.
+                const colourSuffix = (colors.length > 1 && colorIndex > 0)
+                    ? ' ' + String.fromCharCode(64 + colorIndex)  // A=65, so index 1→A, 2→B, 3→C
+                    : '';
+                const jobNumDisplay = `Job: ${jobNum}${colourSuffix}`;
                 doc.setFontSize(56);
                 doc.setFont(undefined, 'bold');
                 doc.setTextColor(200, 30, 30);
-                const jobNumWidth = doc.getTextWidth(`Job: ${jobNum}`);
-                doc.text(`Job: ${jobNum}`, (pageWidth - jobNumWidth) / 2, y + 18);
+                const jobNumWidth = doc.getTextWidth(jobNumDisplay);
+                doc.text(jobNumDisplay, (pageWidth - jobNumWidth) / 2, y + 18);
                 y += 30;
                 
                 // Gold separator line
@@ -25885,7 +25921,8 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 console.warn('shopClosures: Firebase not ready — saved locally only');
                 return;
             }
-            const targetUid = window.staffModeOwnerUid || window.currentUser.uid;
+            // Always save to owner UID — all accounts share the same closures data
+            const targetUid = window.staffModeOwnerUid || (window.currentUser.email === 'ckbedford@outlook.com' ? window.currentUser.uid : 'DgTSkBLD86dIW3zPUmph60RQeE53');
             const ref = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'shopClosures');
             window.setDoc(ref, { closures, lastUpdated: new Date().toISOString() }, { merge: true })
                 .then(() => console.log('✅ Shop closures saved to Firebase:', closures.length, 'entries'))
@@ -25934,8 +25971,8 @@ if ('serviceWorker' in navigator && _swAllowed) {
     async function loadShopClosuresFromFirebase() {
         if (!window.currentUser || !window.firebaseDb || !window.getDoc || !window.doc) return;
         try {
-            // Always use owner UID — staff/secondary accounts must load from owner's data
-            const targetUid = window.staffModeOwnerUid || window.currentUser.uid;
+            // Always load from owner UID — all accounts share same closures
+            const targetUid = window.staffModeOwnerUid || (window.currentUser.email === 'ckbedford@outlook.com' ? window.currentUser.uid : 'DgTSkBLD86dIW3zPUmph60RQeE53');
             const ref = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'shopClosures');
             const snap = await window.getDoc(ref);
             if (snap.exists()) {
