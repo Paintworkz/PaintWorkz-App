@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.211'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.212'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1721,7 +1721,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.211'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.212'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -3139,6 +3139,7 @@ const firebaseConfig = {
                             // Load paint brands and timeline early in parallel
                             setTimeout(() => { try { _syncBrandsFromFirestoreOnce(); } catch(e) {} }, 600);
                             setTimeout(() => { if (typeof loadDefaultTimelineFromFirebase === 'function') loadDefaultTimelineFromFirebase(); }, 800);
+                            setTimeout(() => { if (typeof loadShopClosuresFromFirebase === 'function') loadShopClosuresFromFirebase(); }, 900);
                         } else if (attempts > 0) {
                             setTimeout(() => tryLoad(attempts - 1), 400);
                         } else {
@@ -6206,17 +6207,19 @@ const firebaseConfig = {
 
     // ── LOGIN HISTORY ──────────────────────────────────────────────────────────
     async function loadLoginHistory() {
-        const container = document.getElementById('loginHistoryList');
-        if (!container) return;
+        // Update ALL loginHistoryList containers (one in Settings, one in Reports tab)
+        const containers = Array.from(document.querySelectorAll('#loginHistoryList'));
+        if (containers.length === 0) return;
+        const container = containers[0]; // primary for checks
         if (!window.firebaseDb || !window.currentUser) {
-            container.innerHTML = '<p style="color:#ff6b6b;font-size:12px;padding:12px;">⚠️ Not connected — please log in first.</p>';
+            containers.forEach(c => c.innerHTML = '<p style="color:#ff6b6b;font-size:12px;padding:12px;">⚠️ Not connected — please log in first.</p>');
             return;
         }
         if (!window.collection || !window.getDocs) {
-            container.innerHTML = '<p style="color:#ff9800;font-size:12px;padding:12px;">⚠️ Firebase not fully loaded — wait 5 seconds and try again.</p>';
+            containers.forEach(c => c.innerHTML = '<p style="color:#ff9800;font-size:12px;padding:12px;">⚠️ Firebase not fully loaded — wait 5 seconds and try again.</p>');
             return;
         }
-        container.innerHTML = '<p style="color:#aaa;font-size:12px;text-align:center;padding:16px;">⏳ Loading...</p>';
+        containers.forEach(c => c.innerHTML = '<p style="color:#aaa;font-size:12px;text-align:center;padding:16px;">⏳ Loading...</p>');
         try {
             console.log('loadLoginHistory: uid=', window.currentUser.uid, 'email=', window.currentUser.email);
             const col = window.collection(window.firebaseDb, 'users', window.currentUser.uid, 'loginHistory');
@@ -6225,7 +6228,8 @@ const firebaseConfig = {
             const entries = [];
             snap.forEach(d => entries.push(d.data()));
             if (entries.length === 0) {
-                container.innerHTML = '<p style="color:#aaa;font-size:12px;text-align:center;padding:16px;">No login history yet.<br><span style="font-size:10px;color:#636366;">Log out and back in on v1.16.208+ to create the first entry.</span></p>';
+                const msg = '<p style="color:#aaa;font-size:12px;text-align:center;padding:16px;">No login history yet.<br><span style="font-size:10px;color:#636366;">Log out and back in on v1.16.208+ to create the first entry.</span></p>';
+                containers.forEach(c => c.innerHTML = msg);
                 return;
             }
             entries.sort((a, b) => (b.loginTime || '').localeCompare(a.loginTime || ''));
@@ -6244,10 +6248,12 @@ const firebaseConfig = {
                     '<div style="font-size:11px;color:#636366;margin-top:3px;">' + dt + ' &bull; ' + browser + ' &bull; ' + (e.device||'desktop') + '</div>' +
                     '</div></div>';
             }).join('');
-            container.innerHTML = rows + '<p style="font-size:10px;color:#636366;text-align:center;padding:8px;">' + entries.length + ' login records for ' + window.currentUser.email + '</p>';
+            const html = rows + '<p style="font-size:10px;color:#636366;text-align:center;padding:8px;">' + entries.length + ' login records for ' + window.currentUser.email + '</p>';
+            containers.forEach(c => c.innerHTML = html);
         } catch(e) {
             console.error('loginHistory error:', e);
-            container.innerHTML = '<p style="color:#ff6b6b;font-size:12px;padding:12px;">Error: ' + (e.code||e.message) + '</p>';
+            const errMsg = '<p style="color:#ff6b6b;font-size:12px;padding:12px;">Error: ' + (e.code||e.message) + '</p>';
+            containers.forEach(c => c.innerHTML = errMsg);
         }
     }
     // ── END SESSION GUARD ──────────────────────────────────────────────────────
