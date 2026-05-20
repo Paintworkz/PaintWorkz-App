@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.224'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.225'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1721,7 +1721,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.224'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.225'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -7607,7 +7607,9 @@ const firebaseConfig = {
         if (!f.sizes) f.sizes = {};
         // Also save 1L baseline if not stored yet
         if (!f.sizes[1]) f.sizes[1] = { baseTinters: f.baseTinters || f.whiteBase || [], colourants: f.colourants || [] };
-        f.sizes[size] = { baseTinters, colourants };
+        // Auto-calculate totalWeight from components
+        const _tw = baseTinters.reduce((s,b)=>s+(parseFloat(b.grams)||0),0) + colourants.reduce((s,c)=>s+(parseFloat(c.amount||c.grams)||0),0);
+        f.sizes[size] = { baseTinters, colourants, totalWeight: _tw > 0 ? _tw : undefined };
         const confirmed = new Set(f.confirmedSizes || [1]);
         confirmed.add(size);
         f.confirmedSizes = Array.from(confirmed).sort((a,b) => a-b);
@@ -8880,9 +8882,12 @@ const firebaseConfig = {
         // Save size-specific data
         const _savedSize = window._editCurrentSize || 1;
         if (!f.sizes) f.sizes = {};
+        // Auto-calculate totalWeight for this size from components
+        const _szTw = (f.whiteBase||f.baseTinters||[]).reduce((s,b)=>s+(parseFloat(b.grams)||0),0) + (f.colourants||[]).reduce((s,c)=>s+(parseFloat(c.amount||c.grams)||0),0);
         f.sizes[_savedSize] = {
             baseTinters: JSON.parse(JSON.stringify(f.whiteBase || f.baseTinters || [])),
-            colourants: JSON.parse(JSON.stringify(f.colourants || []))
+            colourants: JSON.parse(JSON.stringify(f.colourants || [])),
+            totalWeight: _szTw > 0 ? _szTw : undefined
         };
         if (_savedSize !== 1 && !f.sizes[1]) {
             f.sizes[1] = {
@@ -17545,33 +17550,20 @@ const firebaseConfig = {
                     doc.setFont(undefined, 'bold');
                     
                     let totalWeightValue = '_______________ grams';
-                    if (formula.totalWeight) {
-                        let twStr = String(formula.totalWeight).trim();
-                        let totalWeight = 0;
-                        
-                        console.log(` PAGE 2 TOTAL WEIGHT PROCESSING:`);
-                        
-                        twStr = twStr.replace(/\s/g, '').replace('g', '').replace('grams', '');
-                        
-                        if (twStr.includes(',') && twStr.includes('.')) {
-                            const lastCommaIdx = twStr.lastIndexOf(',');
-                            const lastPeriodIdx = twStr.lastIndexOf('.');
-                            if (lastCommaIdx > lastPeriodIdx) {
-                                totalWeight = parseFloat(twStr.replace(/\./g, '').replace(',', '.'));
-                            } else {
-                                totalWeight = parseFloat(twStr.replace(/,/g, ''));
-                            }
-                        } else if (twStr.includes(',')) {
-                            totalWeight = parseFloat(twStr.replace(',', '.'));
-                        } else if (twStr.includes('.')) {
-                            totalWeight = parseFloat(twStr);
-                        } else {
-                            totalWeight = parseFloat(twStr);
-                        }
-                        
+                    // First try stored totalWeight
+                    const _twSource = (formula.sizes && formula.sizes[_formulaSize] && formula.sizes[_formulaSize].totalWeight)
+                        ? formula.sizes[_formulaSize].totalWeight
+                        : formula.totalWeight;
+                    if (_twSource) {
+                        let twStr = String(_twSource).trim().replace(/\s/g, '').replace('grams', '').replace('g', '');
+                        const totalWeight = parseFloat(twStr.replace(/,/g, ''));
                         totalWeightValue = isNaN(totalWeight) ? '_______________ grams' : `${totalWeight.toFixed(2)} grams`;
                     } else {
-                        console.log(`   NO TOTAL WEIGHT IN FORMULA`);
+                        // Auto-calculate from formula components
+                        const _autoBase = (_formulaWhiteBase||[]).reduce((s,b)=>s+(parseFloat(b.grams)||0),0);
+                        const _autoTint = (_formulaColourants||[]).reduce((s,c)=>s+(parseFloat(c.amount||c.grams)||0),0);
+                        const _autoTw = _autoBase + _autoTint;
+                        if (_autoTw > 0) totalWeightValue = `${_autoTw.toFixed(2)} grams`;
                     }
                     
                     doc.text(`TOTAL WEIGHT: ${totalWeightValue}`, 25, boxY);
@@ -17747,19 +17739,20 @@ const firebaseConfig = {
                         doc.text(g > 0 ? `${_bRT.toFixed(2)}g` : '_________ g', 140, _bY); _bY += 5;
                     }
 
-                    // TOTAL WEIGHT — use stored value from formula if available (same logic as page 1)
+                    // TOTAL WEIGHT — use stored value, or auto-calculate from components
                     _bY += 4;
                     doc.setFontSize(12); doc.setFont(undefined,'bold'); doc.setTextColor(0,0,0);
                     let _bTotalWStr = '_______________ grams';
                     const _bSizeFormula = formula && formula.sizes && formula.sizes[_bSize];
                     if (_bSizeFormula && _bSizeFormula.totalWeight) {
-                        // Use stored totalWeight for this batch size
+                        // Stored totalWeight for this exact size
                         const _tw = parseFloat(String(_bSizeFormula.totalWeight).replace(/[,\s]/g,'').replace('grams','').replace('g',''));
                         if (!isNaN(_tw)) _bTotalWStr = _tw.toFixed(2) + ' grams';
-                    } else if (formula && formula.totalWeight && _batches.length === 1) {
-                        // Single batch — use top-level totalWeight (same as page 1)
-                        const _tw = parseFloat(String(formula.totalWeight).replace(/[,\s]/g,'').replace('grams','').replace('g',''));
-                        if (!isNaN(_tw)) _bTotalWStr = _tw.toFixed(2) + ' grams';
+                    } else {
+                        // Auto-calculate from components (base + tinters)
+                        const _calcTw = (_bBase||[]).reduce((s,b)=>s+(parseFloat(b.grams)||0),0) +
+                                        (_bTinters||[]).reduce((s,t)=>s+(parseFloat(t.amount||t.grams)||0),0);
+                        if (_calcTw > 0) _bTotalWStr = _calcTw.toFixed(2) + ' grams';
                     }
                     doc.text('TOTAL WEIGHT: ' + _bTotalWStr, 25, _bY);
 
