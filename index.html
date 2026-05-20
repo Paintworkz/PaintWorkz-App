@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.207'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.208'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1721,7 +1721,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.207'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.208'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -9641,6 +9641,10 @@ const firebaseConfig = {
     }
     
         function initializeApp() {
+        // Guard against multiple simultaneous initializations (can occur during auth retries)
+        if (window._appInitializing) return;
+        window._appInitializing = true;
+        setTimeout(() => { window._appInitializing = false; }, 3000);
         console.log('     Initializing PaintWorkz...');
 
         // Force-close any modals that may have been left open
@@ -10212,7 +10216,16 @@ const firebaseConfig = {
                 var _jfc=Object.assign({},jobData); delete _jfc.photos;
                 _jfc.userId = window.staffModeOwnerUid || window.currentUser.uid; _jfc.lastModified=new Date().toISOString();
                 try{if(typeof Blob!=='undefined'&&new Blob([JSON.stringify(_jfc)]).size>850000){_jfc.items=(_jfc.items||[]).map(function(it){return{h:it.h,w:it.w,qty:it.qty,desc:it.desc,prof:it.prof,fm:it.fm,mode:it.mode,e:it.e,type:it.type,thk:it.thk,brand:it.brand,color:it.color,finish:it.finish,sqm:it.sqm,cts:it.cts};});}}catch(se){}
-                var _jref=window.doc(window.firebaseDb,'users',window.staffModeOwnerUid||window.currentUser.uid,'jobs',jobData.id);
+                // Sanitize Firestore doc ID — slashes/dots are invalid in Firestore paths
+                var _safeDocId = String(jobData.id).replace(/[\/\\\.#$\[\]]/g, '-');
+                if (_safeDocId !== jobData.id) {
+                    // Update the stored ID to the sanitized version
+                    jobData.id = _safeDocId; _jfc.id = _safeDocId;
+                    const _hist = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+                    const _hi = _hist.findIndex(j => j.jobNum === jobData.jobNum || j.id === jobData.id);
+                    if (_hi >= 0) { _hist[_hi].id = _safeDocId; localStorage.setItem('jobHistory', JSON.stringify(_hist)); }
+                }
+                var _jref=window.doc(window.firebaseDb,'users',window.staffModeOwnerUid||window.currentUser.uid,'jobs',_safeDocId);
                 window.setDoc(_jref,_jfc,{merge:false}).then(function(){console.log('Job pushed to Firestore:',jobData.jobNum);if(window.debouncedFirebaseSync)window.debouncedFirebaseSync();}).catch(function(e){console.error('Direct job push failed:',e);});
             }catch(_dpe){console.error('Direct push error:',_dpe);}
         }
@@ -12618,44 +12631,24 @@ const firebaseConfig = {
             return;
         }
         
-        adminAlertsDiv.innerHTML = '';
-        alerts.forEach((alert, i) => {
+        // Build all HTML in one pass then set innerHTML once (avoids 500x DOM re-parse)
+        const parts = alerts.map((alert, i) => {
             const alertDate = new Date(alert.timestamp);
             let icon = '    ';
             let bgColor = '#f0f0f0';
             let borderColor = '#999';
             
-            if (alert.type === 'JOB_COMPLETED') {
-                icon = '   ';
-                bgColor = '#f0fdf4';
-                borderColor = '#34c759';
-            } else if (alert.type === 'JOB_SAVED') {
-                icon = '   ';
-                bgColor = '#f0fdf4';
-                borderColor = '#34c759';
-            } else if (alert.type === 'JOB_UPDATED') {
-                icon = '      ';
-                bgColor = '#fffbf0';
-                borderColor = '#ffc107';
-            } else if (alert.type === 'NEW_CLIENT') {
-                icon = '    ';
-                bgColor = '#f0fdf4';
-                borderColor = '#34c759';
-            } else if (alert.type === 'CLIENT_DELETED') {
-                icon = '       ';
-                bgColor = '#fdf0f0';
-                borderColor = '#ff3b30';
-            } else if (alert.type === 'PROFILE_ADDED') {
-                icon = '    ';
-                bgColor = '#fff3e0';
-                borderColor = '#ff9800';
-            }
+            if (alert.type === 'JOB_COMPLETED') { icon = '   '; bgColor = '#f0fdf4'; borderColor = '#34c759'; }
+            else if (alert.type === 'JOB_SAVED') { icon = '   '; bgColor = '#f0fdf4'; borderColor = '#34c759'; }
+            else if (alert.type === 'JOB_UPDATED') { icon = '      '; bgColor = '#fffbf0'; borderColor = '#ffc107'; }
+            else if (alert.type === 'NEW_CLIENT') { icon = '    '; bgColor = '#f0fdf4'; borderColor = '#34c759'; }
+            else if (alert.type === 'CLIENT_DELETED') { icon = '       '; bgColor = '#fdf0f0'; borderColor = '#ff3b30'; }
+            else if (alert.type === 'PROFILE_ADDED') { icon = '    '; bgColor = '#fff3e0'; borderColor = '#ff9800'; }
             
-            // Extract user info from metadata if available
             const userInfo = alert.metadata?.editedBy || alert.metadata?.createdBy || '';
             const userDisplay = userInfo ? `<div style="font-size:10px; color:#666; margin-top:4px;">by ${userInfo}</div>` : '';
             
-            adminAlertsDiv.innerHTML += `<div class="card" style="border-left:5px solid ${borderColor}; background:${bgColor}; margin-bottom:10px;">
+            return `<div class="card" style="border-left:5px solid ${borderColor}; background:${bgColor}; margin-bottom:10px;">
                 <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:8px;">
                     <div style="flex:1;">
                         <div style="font-weight:900; color:#000; font-size:13px;">${icon} ${alert.message}</div>
@@ -12668,17 +12661,22 @@ const firebaseConfig = {
                 </div>
             </div>`;
         });
-        // Add clear archive button at the bottom of the list
-        adminAlertsDiv.innerHTML += `<div style="text-align:center; padding:10px 0; margin-top:8px;">
+        parts.push(`<div style="text-align:center; padding:10px 0; margin-top:8px;">
             <button onclick="clearNotifArchive()" style="background:#ff3b30; color:#fff; border:none; padding:8px 20px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">🗑️ Clear Entire Archive (${alerts.length} items)</button>
-        </div>`;
+        </div>`);
+        adminAlertsDiv.innerHTML = parts.join('');
     }
 
     // ── Description dropdown system ───────────────────────────────────────────
-    var _descSuggestions = [];
-    var _descDropdownIdx = -1;
+    let _descSuggestionsCache = null;
+    let _descSuggestionsCacheTime = 0;
 
     function getDescSuggestions() {
+        // Cache for 60 seconds — scanning 143 jobs × all items on every keystroke kills performance
+        const now = Date.now();
+        if (_descSuggestionsCache && now - _descSuggestionsCacheTime < 60000) {
+            return _descSuggestionsCache;
+        }
         const defaults = ['BACK PANEL','BASE DOOR','BOTTOM','BULKHEAD','DOUBLE DRAWER',
             'DOOR','DRAWER','END PANEL','FRIDGE PANEL','ISLAND PANEL','KICK PANEL',
             'LAUNDRY DOOR','OVERHEAD DOOR','PANEL','PANTRY DOOR LEFT','PANTRY DOOR RIGHT',
@@ -12700,7 +12698,9 @@ const firebaseConfig = {
         } catch(e) {}
         // Also pull from current job
         items.forEach(function(it) { if (it.desc) seen.add(it.desc.toUpperCase()); });
-        return Array.from(seen).sort();
+        _descSuggestionsCache = Array.from(seen).sort();
+        _descSuggestionsCacheTime = now;
+        return _descSuggestionsCache;
     }
 
     function saveDescRecent(val) {
@@ -21988,8 +21988,8 @@ if ('serviceWorker' in navigator && _swAllowed) {
         if (window.currentUser && window.firebaseDb && window.doc && window.setDoc) {
             try {
                 if (!job.id) {
-                    // Use jobNum as stable Firestore doc ID (same as syncJobsToFirebase)
-                    job.id = String(job.jobNum);
+                    // Use sanitized jobNum as stable Firestore doc ID — slashes are invalid in Firestore paths
+                    job.id = String(job.jobNum).replace(/[\/\\\.#$\[\]]/g, '-');
                     history[jobIdx] = job;
                     safeStorage.setJSON('jobHistory', history);
                 }
