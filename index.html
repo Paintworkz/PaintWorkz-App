@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.208'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.210'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1721,7 +1721,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.208'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.210'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -3024,7 +3024,7 @@ const firebaseConfig = {
                 const _freshSession = !sessionStorage.getItem('pw_session_active_' + user.uid);
                 if (!isOwnerLogin && (lastUid !== user.uid || _freshSession)) {
                     console.log('Non-owner login — wiping localStorage for clean slate:', user.email);
-                    const keepGlobal = ['paintworkz_version', 'app_theme', 'pw_tooltips'];
+                    const keepGlobal = ['paintworkz_version', 'app_theme', 'pw_tooltips', 'shopClosures'];
                     for (let i = localStorage.length - 1; i >= 0; i--) {
                         const k = localStorage.key(i);
                         if (k && !keepGlobal.some(g => k === g) && !k.startsWith('pw_tour_done_') && !k.startsWith('jobPhotos_')) {
@@ -5045,7 +5045,7 @@ const firebaseConfig = {
                             <p style="color:#aaa;font-size:12px;text-align:center;padding:16px;">Tap Refresh to load.</p>
                         </div>
                     </div>
-                    <button onclick="loadLoginHistory()" style="width:100%; background:#d4af37; border:none; padding:10px; border-radius:8px; font-weight:900; font-size:13px; cursor:pointer; color:#000;">🔄 Refresh Login History</button>
+                    <button onclick="if(window.loadLoginHistory)window.loadLoginHistory();else alert('Login history not available yet — please wait a moment and try again.')" style="width:100%; background:#d4af37; border:none; padding:10px; border-radius:8px; font-weight:900; font-size:13px; cursor:pointer; color:#000;">🔄 Refresh Login History</button>
                 </div>
 
                 <!-- ── OWNER CODE GENERATOR (owner only) ────────────────────── -->
@@ -5206,7 +5206,7 @@ const firebaseConfig = {
                             <h4 style="margin:0 0 2px; font-weight:900; font-size:14px; color:#d4af37;">🔐 Login Activity</h4>
                             <p style="font-size:11px; color:#636366; margin:0;">Who logged in, when, and on what device</p>
                         </div>
-                        <button onclick="loadLoginHistory()" style="background:#d4af37; border:none; padding:8px 14px; border-radius:8px; font-weight:900; font-size:12px; cursor:pointer; color:#000; white-space:nowrap;">🔄 Refresh</button>
+                        <button onclick="if(window.loadLoginHistory)window.loadLoginHistory();else alert('Login history not available yet — please wait a moment and try again.')" style="background:#d4af37; border:none; padding:8px 14px; border-radius:8px; font-weight:900; font-size:12px; cursor:pointer; color:#000; white-space:nowrap;">🔄 Refresh</button>
                     </div>
                     <div style="background:#000; border-radius:8px; overflow:hidden; max-height:380px; overflow-y:auto;">
                         <div id="loginHistoryList">
@@ -6204,61 +6204,50 @@ const firebaseConfig = {
         });
     }
 
-    // ── LOGIN HISTORY (all users, reads from own UID + known cross-account UIDs) ─
+    // ── LOGIN HISTORY ──────────────────────────────────────────────────────────
     async function loadLoginHistory() {
         const container = document.getElementById('loginHistoryList');
         if (!container) return;
         if (!window.firebaseDb || !window.currentUser) {
-            container.innerHTML = '<p style="color:#999;font-size:12px;padding:12px;">Not connected.</p>';
+            container.innerHTML = '<p style="color:#ff6b6b;font-size:12px;padding:12px;">⚠️ Not connected — please log in first.</p>';
             return;
         }
-        container.innerHTML = '<p style="color:#aaa;font-size:12px;text-align:center;padding:16px;">Loading...</p>';
+        if (!window.collection || !window.getDocs) {
+            container.innerHTML = '<p style="color:#ff9800;font-size:12px;padding:12px;">⚠️ Firebase not fully loaded — wait 5 seconds and try again.</p>';
+            return;
+        }
+        container.innerHTML = '<p style="color:#aaa;font-size:12px;text-align:center;padding:16px;">⏳ Loading...</p>';
         try {
-            // Read from own UID only — cross-uid reads fail with Firestore permission denied
+            console.log('loadLoginHistory: uid=', window.currentUser.uid, 'email=', window.currentUser.email);
+            const col = window.collection(window.firebaseDb, 'users', window.currentUser.uid, 'loginHistory');
+            const snap = await window.getDocs(col);
+            console.log('loginHistory docs:', snap.size);
             const entries = [];
-            try {
-                const col = window.collection(window.firebaseDb, 'users', window.currentUser.uid, 'loginHistory');
-                const snap = await window.getDocs(col);
-                snap.forEach(d => entries.push(d.data()));
-                console.log('Login history loaded:', entries.length, 'entries for', window.currentUser.email);
-            } catch(readErr) {
-                console.warn('loginHistory read error:', readErr.code, readErr.message);
-                container.innerHTML = '<p style="color:#ff6b6b;font-size:12px;padding:12px;">Permission error: ' + readErr.code + '</p>';
-                return;
-            }
-
+            snap.forEach(d => entries.push(d.data()));
             if (entries.length === 0) {
-                container.innerHTML = '<p style="color:#aaa;font-size:12px;text-align:center;padding:16px;">No login history yet.<br><span style="font-size:10px;color:#636366;">Log out and back in on v1.16.203+ to create your first entry.</span></p>';
+                container.innerHTML = '<p style="color:#aaa;font-size:12px;text-align:center;padding:16px;">No login history yet.<br><span style="font-size:10px;color:#636366;">Log out and back in on v1.16.208+ to create the first entry.</span></p>';
                 return;
             }
-
             entries.sort((a, b) => (b.loginTime || '').localeCompare(a.loginTime || ''));
             const rows = entries.slice(0, 50).map(e => {
-                const dt = e.loginTime ? new Date(e.loginTime).toLocaleString('en-AU', {
-                    day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'
-                }) : 'Unknown time';
+                const dt = e.loginTime ? new Date(e.loginTime).toLocaleString('en-AU', { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : 'Unknown';
                 const dev = e.device === 'mobile' ? '📱' : '💻';
-                const badge = e.isOwner
-                    ? '<span style="background:#d4af37;color:#000;font-size:9px;font-weight:900;padding:1px 6px;border-radius:3px;margin-left:6px;">ADMIN</span>'
-                    : e.isPaintWorkz
-                    ? '<span style="background:#34c759;color:#000;font-size:9px;font-weight:900;padding:1px 6px;border-radius:3px;margin-left:6px;">PAINTWORKZ</span>'
+                const badge = e.isOwner ? '<span style="background:#d4af37;color:#000;font-size:9px;font-weight:900;padding:1px 6px;border-radius:3px;margin-left:6px;">ADMIN</span>'
+                    : e.isPaintWorkz ? '<span style="background:#34c759;color:#000;font-size:9px;font-weight:900;padding:1px 6px;border-radius:3px;margin-left:6px;">PAINTWORKZ</span>'
                     : '<span style="background:#2196f3;color:#fff;font-size:9px;font-weight:900;padding:1px 6px;border-radius:3px;margin-left:6px;">STAFF</span>';
                 const ua = e.userAgent || '';
-                let browser = 'Unknown';
-                if (ua.includes('Chrome') && !ua.includes('Edg')) browser = 'Chrome';
-                else if (ua.includes('Safari') && !ua.includes('Chrome')) browser = 'Safari';
-                else if (ua.includes('Firefox')) browser = 'Firefox';
-                else if (ua.includes('Edg')) browser = 'Edge';
+                let browser = ua.includes('Edg') ? 'Edge' : ua.includes('Chrome') ? 'Chrome' : ua.includes('Firefox') ? 'Firefox' : ua.includes('Safari') ? 'Safari' : 'Browser';
                 return '<div style="padding:10px 12px;border-bottom:1px solid #2c2c2e;display:flex;gap:10px;align-items:flex-start;">' +
-                    '<span style="font-size:24px;line-height:1.3;">' + dev + '</span>' +
-                    '<div style="flex:1;min-width:0;">' +
-                    '<div style="font-size:13px;font-weight:900;color:#f2f2f7;">' + (e.email || 'Unknown') + badge + '</div>' +
-                    '<div style="font-size:11px;color:#636366;margin-top:3px;">' + dt + ' &bull; ' + browser + ' &bull; ' + (e.device || 'desktop') + '</div>' +
+                    '<span style="font-size:22px;line-height:1.3;">' + dev + '</span>' +
+                    '<div style="flex:1;">' +
+                    '<div style="font-size:13px;font-weight:900;color:#f2f2f7;">' + (e.email||'Unknown') + badge + '</div>' +
+                    '<div style="font-size:11px;color:#636366;margin-top:3px;">' + dt + ' &bull; ' + browser + ' &bull; ' + (e.device||'desktop') + '</div>' +
                     '</div></div>';
             }).join('');
-            container.innerHTML = rows;
+            container.innerHTML = rows + '<p style="font-size:10px;color:#636366;text-align:center;padding:8px;">' + entries.length + ' login records for ' + window.currentUser.email + '</p>';
         } catch(e) {
-            container.innerHTML = '<p style="color:#ff6b6b;font-size:12px;padding:12px;">Error: ' + e.message + '</p>';
+            console.error('loginHistory error:', e);
+            container.innerHTML = '<p style="color:#ff6b6b;font-size:12px;padding:12px;">Error: ' + (e.code||e.message) + '</p>';
         }
     }
     // ── END SESSION GUARD ──────────────────────────────────────────────────────
@@ -10064,16 +10053,37 @@ const firebaseConfig = {
             jobData.lastEditedByName = currentUserName;
             jobData.lastEditedAt = jobData.timestamp;
             
-            // Add to edit history
+            // Add to edit history with detailed change info
             jobData.editHistory = existingJob.editHistory || [];
+            const _prevParts = parseInt(existingJob.totalParts) || 0;
+            const _newParts = parseInt(jobData.totalParts) || 0;
+            const _prevColors = Array.from(new Set((existingJob.items||[]).map(i=>i.color).filter(Boolean))).sort().join(', ');
+            const _newColors = Array.from(new Set((jobData.items||[]).map(i=>i.color).filter(Boolean))).sort().join(', ');
+            const _prevSqm = parseFloat(existingJob.totalSqm || 0).toFixed(3);
+            const _newSqm = parseFloat(jobData.totalSqm || 0).toFixed(3);
+            const _changes = [];
+            if (_newParts !== _prevParts) _changes.push(`parts ${_prevParts > _newParts ? '▼' : '▲'} ${_prevParts}→${_newParts}`);
+            if (_prevSqm !== _newSqm) _changes.push(`sqm ${_prevSqm}→${_newSqm}`);
+            if (_prevColors !== _newColors) _changes.push(`colour: ${_newColors || 'none'}`);
+            if (String(existingJob.jobNum) !== String(jobData.jobNum)) _changes.push(`job# ${existingJob.jobNum}→${jobData.jobNum}`);
+            if (existingJob.client !== jobData.client) _changes.push(`client: ${jobData.client}`);
+            if (existingJob.color !== jobData.color) _changes.push(`paint: ${existingJob.color||'?'}→${jobData.color||'?'}`);
+            if (existingJob.brand !== jobData.brand) _changes.push(`brand: ${existingJob.brand||'?'}→${jobData.brand||'?'}`);
+            if (existingJob.dateReceived !== jobData.dateReceived) _changes.push(`date: ${jobData.dateReceived}`);
+            // Check for edge changes across items
+            const _prevEdged = (existingJob.items||[]).filter(i=>(i.e||[]).some(Boolean)).length;
+            const _newEdged = (jobData.items||[]).filter(i=>(i.e||[]).some(Boolean)).length;
+            if (_prevEdged !== _newEdged) _changes.push(`edged parts: ${_prevEdged}→${_newEdged}`);
+            const _changesSummary = _changes.length ? _changes.join(' | ') : 'reviewed — no changes detected';
             jobData.editHistory.push({
                 timestamp: jobData.timestamp,
                 userId: currentUserId,
                 userName: currentUserName,
                 action: 'updated',
-                    parts: jobData.totalParts,
-                    sqm: jobData.totalSqm
-                });
+                parts: jobData.totalParts,
+                sqm: jobData.totalSqm,
+                changes: _changesSummary
+            });
                 
                 history[_editIdx] = jobData;
                 currentEditingJobIndex = null;
@@ -10797,8 +10807,9 @@ const firebaseConfig = {
                 hour: '2-digit', 
                 minute: '2-digit' 
             });
-            const actionColor = edit.action === 'created' ? '#34c759' : '#007aff';
-            const actionIcon = edit.action === 'created' ? '✨' : '✏️';
+            const actionColor = edit.action === 'created' ? '#34c759' : edit.action === 'completed' ? '#d4af37' : '#007aff';
+            const actionIcon = edit.action === 'created' ? '✨' : edit.action === 'completed' ? '✅' : '✏️';
+            const changesHtml = edit.changes ? `<div style="font-size:10px; color:#888; margin-top:3px; font-style:italic;">↳ ${edit.changes}</div>` : '';
             
             return `
                 <div style="display:flex; align-items:start; gap:12px; padding:12px; background:${idx % 2 === 0 ? '#f8f8f8' : '#fff'}; border-radius:6px;">
@@ -10807,6 +10818,7 @@ const firebaseConfig = {
                         <div style="font-weight:900; font-size:13px; color:${actionColor}; text-transform:uppercase;">${edit.action}</div>
                         <div style="font-size:11px; color:#666; margin-top:2px;">by <strong>${edit.userName}</strong> • ${timeStr}</div>
                         <div style="font-size:10px; color:#999; margin-top:4px;">${edit.parts} parts • ${edit.sqm} sqm</div>
+                        ${changesHtml}
                     </div>
                 </div>
             `;
@@ -11249,7 +11261,17 @@ const firebaseConfig = {
         
         const job = history[jobIdx];
         job.completed = true;
-        // Register in completed-jobs registry so staff syncs can't overwrite
+        // Add completion event to edit history
+        if (!job.editHistory) job.editHistory = [];
+        job.editHistory.push({
+            timestamp: new Date().toISOString(),
+            userId: window.currentUser?.uid || currentUserId || '',
+            userName: window.currentUserName || currentUserName || 'Unknown',
+            action: 'completed',
+            parts: job.totalParts,
+            sqm: job.totalSqm,
+            changes: `Marked complete — date: ${job.dateCompleted || chosenDateDisplay || 'today'}`
+        });
         try {
             const _reg = JSON.parse(localStorage.getItem('pwCompletedJobs') || '{}');
             const _regId = job.id || String(job.jobNum);
@@ -17134,20 +17156,39 @@ const firebaseConfig = {
                 doc.setTextColor(0, 0, 0);
                 y += 12;
                 
+                // ===== CALCULATE PAINT QUANTITY FOR HEADER - use same logic as paintQty below =====
+                const _settings = JSON.parse(localStorage.getItem('companySettings') || '{}');
+                const _CR_header = JSON.parse(localStorage.getItem('pwCoverageRates') || '{}');
+                const _fin_header = (paintFinish || '').toLowerCase();
+                const _coveragePreview = _fin_header === 'matt' ? (parseFloat(_CR_header.matt) || 5) :
+                                         _fin_header === 'gloss' ? (parseFloat(_CR_header.gloss) || 5) :
+                                         _fin_header === 'semi-gloss' ? (parseFloat(_CR_header.gloss) || 5) :
+                                         _fin_header === 'clear' ? (parseFloat(_CR_header.clear) || 5) :
+                                         (parseFloat(_CR_header.satin) || 5);
+                let _colorSQMPreview = 0;
+                (_labelItems || items).forEach(item => {
+                    if ((item.color||'').trim().toLowerCase() === color.toLowerCase()) {
+                        _colorSQMPreview += (parseFloat(item.sqm)||0) * (parseInt(item.qty)||1);
+                    }
+                });
+                if (_colorSQMPreview === 0 && totalSQM > 0) _colorSQMPreview = totalSQM / colors.length;
+                const _headerLitres = _colorSQMPreview > 0 ? (_colorSQMPreview / _coveragePreview).toFixed(1) : '';
+
                 // ===== PAINT INFO BOX - SIMPLE BLACK TEXT ON WHITE TO SAVE INK =====
                 doc.setFontSize(18);
                 doc.setFont(undefined, 'bold');
-                doc.setTextColor(0, 0, 0);  // Black text instead of white
-                doc.setFillColor(255, 255, 255);  // White background instead of gold
-                doc.setDrawColor(200, 200, 200);  // Light gray border instead of dark
+                doc.setTextColor(0, 0, 0);
+                doc.setFillColor(255, 255, 255);
+                doc.setDrawColor(200, 200, 200);
                 doc.setLineWidth(1);
-                doc.rect(20, y, 170, 24, 'FD');  // Reduced from 32 to 24
-                
-                // Format: Brand | Color | Finish - fill the box with 5mm margins
-                const paintInfo = `${paintBrand} | ${color.toUpperCase()} | ${paintFinish}`;
-                doc.text(paintInfo, 25, y + 16);  // Adjusted y position for smaller box
-                y += 28;  // Gap BELOW paint box
-                y += 8;   // Additional spacing before job details (symmetric with top)
+                doc.rect(20, y, 170, 24, 'FD');
+
+                // Format: Brand | Color | Finish | Litres
+                const _litreLabel = _headerLitres ? ` | ${_headerLitres} L` : '';
+                const paintInfo = `${paintBrand} | ${color.toUpperCase()} | ${paintFinish}${_litreLabel}`;
+                doc.text(paintInfo, 25, y + 16);
+                y += 28;
+                y += 8;
                 
                 // Lookup formula for this color (used in tint formula section below)
                 const formula = paintDatabase.find(f => 
@@ -25917,24 +25958,17 @@ if ('serviceWorker' in navigator && _swAllowed) {
     
     function saveShopClosures(closures) {
         localStorage.setItem('shopClosures', JSON.stringify(closures));
-        
-        // Sync to Firestore — always save to owner UID, retry if not ready yet
-        const _doFirebaseSave = () => {
-            if (!window.currentUser || !window.firebaseDb || !window.doc || !window.setDoc) {
-                console.warn('shopClosures: Firebase not ready — saved locally only');
-                return;
-            }
-            const targetUid = window.staffModeOwnerUid || window.currentUser.uid;
-            const ref = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'shopClosures');
+        // Shop closures are owner-only — only sync to Firestore when owner is logged in
+        const OWNER_UID = 'DgTSkBLD86dIW3zPUmph60RQeE53';
+        const _save = () => {
+            if (!window.currentUser || !window.firebaseDb || !window.doc || !window.setDoc) { setTimeout(_save, 1500); return; }
+            if (window.currentUser.uid !== OWNER_UID) { console.log('ℹ️ Shop closures saved locally (non-owner)'); return; }
+            const ref = window.doc(window.firebaseDb, 'users', OWNER_UID, 'appData', 'shopClosures');
             window.setDoc(ref, { closures, lastUpdated: new Date().toISOString() }, { merge: true })
-                .then(() => console.log('✅ Shop closures saved to Firebase:', closures.length, 'entries'))
-                .catch(e => { console.warn('Shop closures Firebase save failed:', e); if (typeof notify === 'function') notify('⚠️ Closure saved locally — cloud sync failed'); });
+                .then(() => console.log('✅ Shop closures saved to Firebase:', closures.length))
+                .catch(e => { console.warn('Shop closures save failed:', e.code); });
         };
-        if (!window.currentUser || !window.firebaseDb) {
-            setTimeout(_doFirebaseSave, 1500);
-        } else {
-            _doFirebaseSave();
-        }
+        _save();
     }
     
     function renderShopClosures() {
@@ -25973,8 +26007,9 @@ if ('serviceWorker' in navigator && _swAllowed) {
     async function loadShopClosuresFromFirebase() {
         if (!window.currentUser || !window.firebaseDb || !window.getDoc || !window.doc) return;
         try {
-            const targetUid = window.staffModeOwnerUid || window.currentUser.uid;
-            const ref = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'shopClosures');
+            // Always load from owner UID — shop closures are owner-only data
+            const OWNER_UID = 'DgTSkBLD86dIW3zPUmph60RQeE53';
+            const ref = window.doc(window.firebaseDb, 'users', OWNER_UID, 'appData', 'shopClosures');
             const snap = await window.getDoc(ref);
             if (snap.exists()) {
                 const data = snap.data();
