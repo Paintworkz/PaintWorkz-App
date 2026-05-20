@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.215'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.217'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1721,7 +1721,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.215'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.217'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -17162,8 +17162,7 @@ const firebaseConfig = {
                 doc.setTextColor(0, 0, 0);
                 y += 12;
                 
-                // ===== CALCULATE PAINT QUANTITY FOR HEADER - use same logic as paintQty below =====
-                const _settings = JSON.parse(localStorage.getItem('companySettings') || '{}');
+                // ===== CALCULATE BATCHES FIRST so header can show batch sizes not scaled amount =====
                 const _CR_header = JSON.parse(localStorage.getItem('pwCoverageRates') || '{}');
                 const _fin_header = (paintFinish || '').toLowerCase();
                 const _coveragePreview = _fin_header === 'matt' ? (parseFloat(_CR_header.matt) || 5) :
@@ -17178,7 +17177,22 @@ const firebaseConfig = {
                     }
                 });
                 if (_colorSQMPreview === 0 && totalSQM > 0) _colorSQMPreview = totalSQM / colors.length;
-                const _headerLitres = _colorSQMPreview > 0 ? (_colorSQMPreview / _coveragePreview).toFixed(1) : '';
+                const _earlyLitresNeeded = _colorSQMPreview > 0 ? (_colorSQMPreview / _coveragePreview) : 1;
+
+                // Calculate batches NOW so header shows e.g. "4L" or "4L + 3L"
+                function _getBatchesEarly(litres) {
+                    const batches = [];
+                    let remaining = Math.ceil(litres);
+                    while (remaining > 0) {
+                        const picked = remaining >= 4 ? 4 : remaining >= 3 ? 3 : remaining >= 2 ? 2 : 1;
+                        batches.push(picked);
+                        remaining -= picked;
+                    }
+                    return batches;
+                }
+                const _earlyBatches = _getBatchesEarly(_earlyLitresNeeded);
+                // Header shows batch sizes not scaled amount: "4L" or "4L + 3L"
+                const _batchLabel = _earlyBatches.join('L + ') + 'L';
 
                 // ===== PAINT INFO BOX - SIMPLE BLACK TEXT ON WHITE TO SAVE INK =====
                 doc.setFontSize(18);
@@ -17189,9 +17203,8 @@ const firebaseConfig = {
                 doc.setLineWidth(1);
                 doc.rect(20, y, 170, 24, 'FD');
 
-                // Format: Brand | Color | Finish | Litres
-                const _litreLabel = _headerLitres ? ` | ${_headerLitres} L` : '';
-                const paintInfo = `${paintBrand} | ${color.toUpperCase()} | ${paintFinish}${_litreLabel}`;
+                // Format: Brand | Color | Finish | BatchSizes (e.g. "4L" or "4L + 3L")
+                const paintInfo = `${paintBrand} | ${color.toUpperCase()} | ${paintFinish} | ${_batchLabel}`;
                 doc.text(paintInfo, 25, y + 16);
                 y += 28;
                 y += 8;
@@ -17319,24 +17332,11 @@ const firebaseConfig = {
                 const _CR2 = JSON.parse(localStorage.getItem('pwCoverageRates') || '{}');
                 const _finLower = (paintFinish || '').toLowerCase();
                 const _covRate = _finLower==='matt'?(parseFloat(_CR2.matt)||5):_finLower==='gloss'?(parseFloat(_CR2.gloss)||5):(parseFloat(_CR2.satin)||5);
-                const _litresNeeded = formula ? (colorSQM / _covRate) : 1;
-                // Always use standard batch sizes — 4L, 3L, 2L, 1L
-                // e.g. 6.6L needed → ceil(6.6)=7 → 4+3; 3.3L → ceil(3.3)=4 → 4
+                // Use colorSQM (exact for this colour) for the final calculation
+                const _litresNeeded = colorSQM > 0 ? (colorSQM / _covRate) : _earlyLitresNeeded;
 
-                // Build list of standard batches to cover _litresNeeded
-                function _getBatches(litres) {
-                    const batches = [];
-                    let remaining = Math.ceil(litres); // round up to whole litres
-                    while (remaining > 0) {
-                        // Pick largest standard batch that fits
-                        const picked = remaining >= 4 ? 4 : remaining >= 3 ? 3 : remaining >= 2 ? 2 : 1;
-                        batches.push(picked);
-                        remaining -= picked;
-                    }
-                    return batches;
-                }
-
-                const _batches = _getBatches(_litresNeeded);
+                // Reuse the early batch calculation (already calculated before header)
+                const _batches = _getBatchesEarly(_litresNeeded);
                 const _totalBatchL = _batches.reduce((a,b)=>a+b, 0);
 
                 // Generate one mixing card page per batch
@@ -17364,10 +17364,10 @@ const firebaseConfig = {
                     console.warn(`Mixing card: no stored ${_formulaSize}L formula for ${color} — showing blank`);
                 }
 
-                const _batchLabel = _batchesToPrint.length > 1 ? `Batch 1 of ${_batchesToPrint.length}: ${_formulaSize}L (${_litresNeeded.toFixed(1)}L needed total)` : `(Weights for ${_formulaSize} Litre of Paint)`;
+                const _batchSubLabel = _batchesToPrint.length > 1 ? `Batch 1 of ${_batchesToPrint.length}: ${_formulaSize}L (${_litresNeeded.toFixed(1)}L needed total)` : `(Weights for ${_formulaSize} Litre of Paint)`;
 
                 doc.setFontSize(10); doc.setFont(undefined,'normal'); doc.setTextColor(200,30,30);
-                doc.text(_batchLabel, 20, y);
+                doc.text(_batchSubLabel, 20, y);
                 doc.setTextColor(0,0,0);
                 y += 8;
                 
