@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.206'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.207'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1721,7 +1721,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.206'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.207'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -10035,15 +10035,16 @@ const firebaseConfig = {
             // CRITICAL: Resolve index FRESH from current localStorage — immune to onSnapshot reordering
             const _editIdx = _resolveEditIdx(history);
             const existingJob = _editIdx >= 0 ? history[_editIdx] : null;
-            // Safety: if resolved job's jobNum doesn't match what's on screen, treat as new job
-            if (!existingJob || String(existingJob.jobNum) !== String(jobData.jobNum)) {
-                console.warn('⚠️ Save: resolved job mismatch — treating as new job to prevent overwrite corruption', { resolved: existingJob?.jobNum, screen: jobData.jobNum });
+            // Safety: if resolved job not found, fall through to new-job path
+            if (!existingJob) {
+                console.warn('⚠️ Save: could not resolve editing job — treating as new job');
                 currentEditingJobId = null;
                 currentEditingJobIndex = null;
                 // Fall through to new-job path below
             } else {
-            // Preserve the stable ID from existing job so Firebase doc key stays consistent
-            jobData.id = existingJob?.id || `job_${jobData.jobNum}_${Date.now()}`;
+            // Allow job number changes — user may be correcting a typo or renaming
+            // (previously this blocked saves if jobNum changed, causing "new job" duplication)
+            jobData.id = existingJob.id || `job_${jobData.jobNum}_${Date.now()}`;
             if (!confirm(`Save changes to Job #${jobData.jobNum} — ${jobData.client}?\n\nOK = Save & update\nCancel = Go back without saving`)) {
                 return; // User chose not to save
             }
@@ -13525,7 +13526,9 @@ const firebaseConfig = {
                 (window.staffUserName || window.currentUser.email.split('@')[0]) : 
                 'Owner';
             
-            const activityRef = window.doc(window.firebaseDb, 'users', targetUid, 'jobActivity', String(jobNum));
+            // Sanitize jobNum for use as Firestore doc ID — slashes create invalid multi-segment paths
+            const safeJobNum = String(jobNum).replace(/[\/\\.\[\]#$]/g, '-');
+            const activityRef = window.doc(window.firebaseDb, 'users', targetUid, 'jobActivity', safeJobNum);
             
             // Check existing activity
             const snap = await window.getDoc(activityRef);
@@ -17907,8 +17910,8 @@ const firebaseConfig = {
             });
             
             // Save combined PDF with all colors
-            const pdfBlob = doc.output('blob'); const pdfDataUri = URL.createObjectURL(pdfBlob);
             const filename = `MixingCard_${jobNum}_${new Date().toISOString().split('T')[0]}.pdf`;
+            const pdfDataUri = window.batchCapturing ? doc.output('datauristring') : URL.createObjectURL(doc.output('blob'));
             
             showPDFPreview(pdfDataUri, filename, '     Mixing Card Preview');
             if (colors.length > 1) {
@@ -25921,8 +25924,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 console.warn('shopClosures: Firebase not ready — saved locally only');
                 return;
             }
-            // Always save to owner UID — all accounts share the same closures data
-            const targetUid = window.staffModeOwnerUid || (window.currentUser.email === 'ckbedford@outlook.com' ? window.currentUser.uid : 'DgTSkBLD86dIW3zPUmph60RQeE53');
+            const targetUid = window.staffModeOwnerUid || window.currentUser.uid;
             const ref = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'shopClosures');
             window.setDoc(ref, { closures, lastUpdated: new Date().toISOString() }, { merge: true })
                 .then(() => console.log('✅ Shop closures saved to Firebase:', closures.length, 'entries'))
@@ -25971,8 +25973,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
     async function loadShopClosuresFromFirebase() {
         if (!window.currentUser || !window.firebaseDb || !window.getDoc || !window.doc) return;
         try {
-            // Always load from owner UID — all accounts share same closures
-            const targetUid = window.staffModeOwnerUid || (window.currentUser.email === 'ckbedford@outlook.com' ? window.currentUser.uid : 'DgTSkBLD86dIW3zPUmph60RQeE53');
+            const targetUid = window.staffModeOwnerUid || window.currentUser.uid;
             const ref = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'shopClosures');
             const snap = await window.getDoc(ref);
             if (snap.exists()) {
@@ -28984,9 +28985,10 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
     document.addEventListener('visibilitychange', () => {
         if (!document.hidden && window.currentUser) {
             const now = Date.now();
-            if (now - _lastVisibilityLoad > 15000) { // max once per 15s
+            const FIVE_MINUTES = 5 * 60 * 1000;
+            if (now - _lastVisibilityLoad > FIVE_MINUTES) { // max once per 5 minutes
                 _lastVisibilityLoad = now;
-                console.log('     App visible     syncing from Firebase...');
+                console.log('     App visible — syncing from Firebase (5min throttle)...');
                 try { loadAllDataFromFirebase(); } catch(e) {}
                 setTimeout(() => { try { _syncBrandsFromFirestoreOnce(); } catch(e) {} }, 300);
             }
