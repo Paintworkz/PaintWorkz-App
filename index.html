@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.213'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.214'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1721,7 +1721,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.213'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.214'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -17320,26 +17320,16 @@ const firebaseConfig = {
                 const _finLower = (paintFinish || '').toLowerCase();
                 const _covRate = _finLower==='matt'?(parseFloat(_CR2.matt)||5):_finLower==='gloss'?(parseFloat(_CR2.gloss)||5):(parseFloat(_CR2.satin)||5);
                 const _litresNeeded = formula ? (colorSQM / _covRate) : 1;
-                const confirmed = formula ? new Set(formula.confirmedSizes || [1]) : new Set([1]);
-                const _sizes = [4,3,2,1]; // priority: biggest first
+                // Always use standard batch sizes — 4L, 3L, 2L, 1L
+                // e.g. 6.6L needed → ceil(6.6)=7 → 4+3; 3.3L → ceil(3.3)=4 → 4
 
-                // Build list of batches needed to cover _litresNeeded
+                // Build list of standard batches to cover _litresNeeded
                 function _getBatches(litres) {
                     const batches = [];
-                    let remaining = litres;
-                    // Always round up: if remaining > 0, pick smallest confirmed size that covers it
-                    while (remaining > 0.05) {
-                        // Find smallest confirmed size >= remaining (round up)
-                        const sortedAsc = [1,2,3,4].filter(s => confirmed.has(s)).sort((a,b) => a-b);
-                        let picked = null;
-                        for (const s of sortedAsc) {
-                            if (s >= remaining) { picked = s; break; }
-                        }
-                        // If nothing big enough, use the largest confirmed size
-                        if (!picked) {
-                            const sortedDesc = [4,3,2,1].filter(s => confirmed.has(s));
-                            picked = sortedDesc[0] || 4;
-                        }
+                    let remaining = Math.ceil(litres); // round up to whole litres
+                    while (remaining > 0) {
+                        // Pick largest standard batch that fits
+                        const picked = remaining >= 4 ? 4 : remaining >= 3 ? 3 : remaining >= 2 ? 2 : 1;
                         batches.push(picked);
                         remaining -= picked;
                     }
@@ -17362,16 +17352,16 @@ const firebaseConfig = {
                 let _formulaColourants = formula ? (formula.colourants || []) : [];
                 let _formulaSize = _batchesToPrint[0];
 
-                // Load first batch formula data
-                if (formula && formula.sizes && formula.sizes[_formulaSize]) {
-                    _formulaWhiteBase = formula.sizes[_formulaSize].baseTinters || [];
-                    _formulaColourants = formula.sizes[_formulaSize].colourants || [];
-                } else if (formula) {
-                    // Scale from 1L if not confirmed
-                    const base1L = formula.sizes && formula.sizes[1] ? formula.sizes[1] : { baseTinters: formula.whiteBase || formula.baseTinters || [], colourants: formula.colourants || [] };
-                    _formulaWhiteBase = base1L.baseTinters.map(b => ({...b, grams: +((parseFloat(b.grams)||0)*_formulaSize).toFixed(2)}));
-                    _formulaColourants = base1L.colourants.map(c => ({...c, amount: +((parseFloat(c.amount||c.grams)||0)*_formulaSize).toFixed(2)}));
-                }
+                // Get the 1L base recipe (source of truth for scaling)
+                const _base1L = formula ? (
+                    (formula.sizes && formula.sizes[1])
+                        ? formula.sizes[1]
+                        : { baseTinters: formula.whiteBase || formula.baseTinters || [], colourants: formula.colourants || [] }
+                ) : { baseTinters: [], colourants: [] };
+
+                // Scale to the first batch size
+                _formulaWhiteBase = _base1L.baseTinters.map(b => ({...b, grams: +((parseFloat(b.grams)||0)*_formulaSize).toFixed(2)}));
+                _formulaColourants = _base1L.colourants.map(c => ({...c, amount: +((parseFloat(c.amount||c.grams)||0)*_formulaSize).toFixed(2)}));
 
                 const _batchLabel = _batchesToPrint.length > 1 ? `Batch 1 of ${_batchesToPrint.length}: ${_formulaSize}L (${_litresNeeded.toFixed(1)}L needed total)` : `(Weights for ${_formulaSize} Litre of Paint)`;
 
@@ -17670,7 +17660,7 @@ const firebaseConfig = {
                     doc.setFontSize(18); doc.setFont(undefined,'bold');
                     doc.setFillColor(255,255,255); doc.setDrawColor(200,200,200); doc.setLineWidth(1);
                     doc.rect(20, _by, 170, 24, 'FD');
-                    doc.text(`${paintBrand} | ${color.toUpperCase()} | ${paintFinish}`, 25, _by+16); _by += 32;
+                    doc.text(`${paintBrand} | ${color.toUpperCase()} | ${paintFinish} | ${_bSize}L`, 25, _by+16); _by += 32;
                     doc.setFontSize(10); doc.setFont(undefined,'normal'); doc.setTextColor(200,30,30);
                     doc.text(`Batch ${_bi+1} of ${_batchesToPrint.length}: ${_bSize}L (${_litresNeeded.toFixed(1)}L needed total — mix ${_batchesToPrint.join('L + ')}L)`, 20, _by);
                     doc.setTextColor(0,0,0); _by += 8;
