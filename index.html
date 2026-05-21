@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.230'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.231'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1721,7 +1721,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.230'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.231'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -18799,8 +18799,11 @@ const firebaseConfig = {
                 return addBizDays(start, totalBiz);
             }
 
-            // Active jobs (not completed)
-            const activeJobs = jobHistory.filter(j => !j.completed);
+            // Active jobs — exclude completed, archived, quotes and on-hold, sorted by due date (soonest first)
+            const activeJobs = jobHistory
+                .filter(j => !j.completed && !j.archived && (!j.jobStatus || j.jobStatus === 'job'))
+                .map(j => ({ ...j, _dueDate: getCompletionDate(j) }))
+                .sort((a, b) => a._dueDate - b._dueDate);
 
             // ===== LOGO =====
             if (headerLogo) {
@@ -18822,10 +18825,10 @@ const firebaseConfig = {
             // ===== JOB SUMMARY TABLE =====
             const tblLeft = 20;
             const tblW    = pageWidth - 40;
-            const rh      = 8;   // row height
+            const rh      = 10;  // row height — increased for readability
 
             // Column widths (must add to tblW)
-            const cw = { num:30, client:60, name:65, paint:110, sqm:25, due:40 };
+            const cw = { num:28, client:62, name:65, paint:110, sqm:25, due:40 };
             // calc positions
             let cx = tblLeft;
             const col = {};
@@ -18835,40 +18838,42 @@ const firebaseConfig = {
             doc.setFillColor(30,30,30);
             doc.rect(tblLeft, y, tblW, rh, 'F');
             doc.setFont(undefined, 'bold');
-            doc.setFontSize(7.5);
+            doc.setFontSize(8.5);  // larger header text
             doc.setTextColor(255,255,255);
             const headers = { num:'JOB #', client:'CLIENT', name:'JOB NAME', paint:'PAINT (Brand    Colour    Finish)', sqm:'SQM', due:'DUE DATE' };
             for (const [k,label] of Object.entries(headers)) {
-                doc.text(label, col[k]+2, y+5.5);
+                doc.text(label, col[k]+2, y+6.5);
             }
             y += rh;
 
             doc.setFont(undefined, 'normal');
-            doc.setFontSize(7);
+            doc.setFontSize(8.5);  // larger body text — was 7, now 8.5 for readability
 
             for (let i = 0; i < activeJobs.length; i++) {
                 const job = activeJobs[i];
                 if (y > pageHeight - 25) { doc.addPage(); y = 15; }
 
-                // Alternate row bg
-                doc.setFillColor(i%2===0 ? 248 : 238, i%2===0 ? 248 : 238, i%2===0 ? 248 : 238);
+                // Alternate row bg — slightly more contrast for readability
+                doc.setFillColor(i%2===0 ? 252 : 242, i%2===0 ? 252 : 242, i%2===0 ? 252 : 242);
                 doc.rect(tblLeft, y, tblW, rh, 'F');
 
-                doc.setDrawColor(210,210,210);
-                doc.setLineWidth(0.15);
+                doc.setDrawColor(200,200,200);
+                doc.setLineWidth(0.2);
                 doc.rect(tblLeft, y, tblW, rh);
 
                 doc.setTextColor(0,0,0);
                 // Job #
                 doc.setFont(undefined, 'bold');
-                doc.text(`#${(job.jobNum||'').toString().substring(0,8)}`, col.num+2, y+5.5);
+                doc.setFontSize(9);
+                doc.text(`#${(job.jobNum||'').toString().substring(0,8)}`, col.num+2, y+6.5);
                 doc.setFont(undefined, 'normal');
+                doc.setFontSize(8.5);
 
                 // Client
-                doc.text((job.client||'').substring(0,18), col.client+2, y+5.5);
+                doc.text((job.client||'').substring(0,20), col.client+2, y+6.5);
 
                 // Job name
-                doc.text((job.jobName||job.name||'').substring(0,20), col.name+2, y+5.5);
+                doc.text((job.jobName||job.name||'').substring(0,22), col.name+2, y+6.5);
 
                 // Paint: brand    colour    finish (from first item with colour, or job-level fields)
                 let paintStr = '';
@@ -18884,17 +18889,19 @@ const firebaseConfig = {
                     }
                     paintStr = uniquePaints.join(' / ');
                 }
-                doc.text(paintStr.substring(0,42), col.paint+2, y+5.5);
+                doc.text(paintStr.substring(0,42), col.paint+2, y+6.5);
 
                 // SQM
-                const sqmVal = job.totalSqm || job.totalSQM; doc.text(sqmVal ? parseFloat(sqmVal).toFixed(1) : '   ', col.sqm+2, y+5.5);
+                const sqmVal = job.totalSqm || job.totalSQM; doc.text(sqmVal ? parseFloat(sqmVal).toFixed(1) : '   ', col.sqm+2, y+6.5);
 
-                // Due date (calculated from schedule)
-                const dueDate = getCompletionDate(job);
+                // Due date — bold green, bigger for visibility
+                const dueDate = job._dueDate || getCompletionDate(job);
+                doc.setFontSize(9);
                 doc.setFont(undefined, 'bold');
-                doc.setTextColor(0, 100, 0);
-                doc.text(dueDate.toLocaleDateString('en-AU'), col.due+2, y+5.5);
+                doc.setTextColor(0, 120, 0);
+                doc.text(dueDate.toLocaleDateString('en-AU'), col.due+2, y+6.5);
                 doc.setFont(undefined, 'normal');
+                doc.setFontSize(8.5);
                 doc.setTextColor(0,0,0);
 
                 y += rh;
