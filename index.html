@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.227'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.228'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1721,7 +1721,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.227'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.228'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -3567,6 +3567,14 @@ const firebaseConfig = {
                     <input type="text" id="jN" placeholder="####" style="text-align:center;" autocomplete="off" onchange="loadJobPhotosForCurrentJobNum(); _checkDuplicateJobNum(this.value);">
                     <div id="jNDuplicateWarning" style="display:none; font-size:9px; color:#ff3b30; font-weight:900; padding:2px 0; text-align:center;"></div>
                 </div>
+                <div style="flex:1">
+                    <label>Job Type</label>
+                    <select id="jobStatus" style="height:35px; font-size:12px; font-weight:900; border-radius:6px; border:1px solid #ddd; width:100%;" onchange="updateJobStatusStyle()">
+                        <option value="job">🟢 JOB</option>
+                        <option value="quote">🟡 QUOTE</option>
+                        <option value="hold">🔵 ON HOLD</option>
+                    </select>
+                </div>
             </div>
 
             <div style="background:#f9f9f9; padding:10px; border-radius:8px; border:1px solid #eee; margin-bottom:10px;">
@@ -4029,6 +4037,8 @@ const firebaseConfig = {
             <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; align-items:center;">
                 <button onclick="filterHistory('all')" id="filter-all" style="background:#d4af37; color:#000; border:none; padding:8px 14px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">ALL</button>
                 <button onclick="filterHistory('active')" id="filter-active" style="background:#f0f0f0; color:#666; border:none; padding:8px 14px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">ACTIVE</button>
+                <button onclick="filterHistory('quote')" id="filter-quote" style="background:#f0f0f0; color:#666; border:none; padding:8px 14px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">🟡 QUOTES</button>
+                <button onclick="filterHistory('hold')" id="filter-hold" style="background:#f0f0f0; color:#666; border:none; padding:8px 14px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">🔵 ON HOLD</button>
                 <button onclick="filterHistory('completed')" id="filter-completed" style="background:#f0f0f0; color:#666; border:none; padding:8px 14px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">COMPLETED</button>
                 <button onclick="filterHistory('archives')" id="filter-archives" style="background:#f0f0f0; color:#666; border:none; padding:8px 14px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">ARCHIVES</button>
                 <button onclick="manualArchiveNow()" style="background:#ff9500; color:#fff; border:none; padding:8px 14px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer; margin-left:10px;">📦 ARCHIVE OLD JOBS</button>
@@ -10017,7 +10027,7 @@ const firebaseConfig = {
             totalParts: String(items.reduce((s,i) => s + (parseInt(i.qty)||1), 0)),  // Calculate from items array, not DOM
             timestamp: new Date().toISOString(),
             savedDate: new Date().toLocaleString('en-AU'),
-            completed: false,  // Always false when saving new
+            jobStatus: document.getElementById('jobStatus')?.value || 'job', // 'job', 'quote', or 'hold'
             timeline: getDefaultTimeline(),
             scheduledFinish: getScheduledFinishDate(document.getElementById('dRec').value, getDefaultTimeline()),
             _hasPhotos:(typeof jobPhotos!=="undefined"&&jobPhotos.length>0)
@@ -10356,6 +10366,9 @@ const firebaseConfig = {
         }
         
         console.log('    All form fields cleared');
+        // Reset job status to default JOB
+        const _jsSel = document.getElementById('jobStatus');
+        if (_jsSel) { _jsSel.value = 'job'; updateJobStatusStyle(); }
         
         // Clear the items list from localStorage too
         localStorage.removeItem('currentJob');
@@ -10601,6 +10614,32 @@ const firebaseConfig = {
     
     // Debounced version to prevent multiple rapid calls
     let renderHistoryTimer = null;
+    // ── JOB STATUS FUNCTIONS ──────────────────────────────────────────────────
+    function updateJobStatusStyle() {
+        const sel = document.getElementById('jobStatus');
+        if (!sel) return;
+        const colors = { job: '#34c759', quote: '#ff9f0a', hold: '#007aff' };
+        const bg = colors[sel.value] || '#34c759';
+        sel.style.background = bg;
+        sel.style.color = '#000';
+        sel.style.fontWeight = '900';
+        sel.style.border = `2px solid ${bg}`;
+    }
+
+    function getJobStatusBadge(status) {
+        if (!status || status === 'job') return '';
+        if (status === 'quote') return '<span style="background:#ff9f0a;color:#000;font-size:9px;font-weight:900;padding:2px 8px;border-radius:4px;margin-left:6px;letter-spacing:0.5px;">QUOTE</span>';
+        if (status === 'hold') return '<span style="background:#007aff;color:#fff;font-size:9px;font-weight:900;padding:2px 8px;border-radius:4px;margin-left:6px;letter-spacing:0.5px;">ON HOLD</span>';
+        return '';
+    }
+
+    function isJobActive(job) {
+        // Returns true if job should be counted in reports/schedule/workload
+        // Quotes and On Hold jobs are excluded
+        return !job.jobStatus || job.jobStatus === 'job';
+    }
+    // ── END JOB STATUS FUNCTIONS ──────────────────────────────────────────────
+
     function renderHistory() {
         if (renderHistoryTimer) {
             clearTimeout(renderHistoryTimer);
@@ -10645,7 +10684,11 @@ const firebaseConfig = {
         
         // SECOND: Apply active/completed/archives filter
         if (historyFilter === 'active') {
-            filteredHistory = filteredHistory.filter(j => !j.completed && !j.archived);
+            filteredHistory = filteredHistory.filter(j => !j.completed && !j.archived && (!j.jobStatus || j.jobStatus === 'job'));
+        } else if (historyFilter === 'quote') {
+            filteredHistory = filteredHistory.filter(j => j.jobStatus === 'quote' && !j.archived);
+        } else if (historyFilter === 'hold') {
+            filteredHistory = filteredHistory.filter(j => j.jobStatus === 'hold' && !j.archived);
         } else if (historyFilter === 'completed') {
             filteredHistory = filteredHistory.filter(j => j.completed === true && !j.archived);
         } else if (historyFilter === 'archives') {
@@ -10702,11 +10745,18 @@ const firebaseConfig = {
                     Created by ${job.createdByName}${job.lastEditedByName && job.lastEditedByName !== job.createdByName ? ' • Last edited by ' + job.lastEditedByName : ''}
                 </div>` : '';
             
-            historyList.innerHTML += `<div class="card" style="border-left:5px solid ${isComplete ? '#34c759' : 'var(--gs)'}; position:relative; ${isComplete ? 'background:#f0fff4;' : ''}; overflow:visible;">
+            const _jStatus = job.jobStatus || 'job';
+            const _isQuote = _jStatus === 'quote';
+            const _isHold = _jStatus === 'hold';
+            const _cardBorder = isComplete ? '#34c759' : _isQuote ? '#ff9f0a' : _isHold ? '#007aff' : 'var(--gs)';
+            const _cardBg = isComplete ? 'background:#f0fff4;' : _isQuote ? 'background:#fff8ed;' : _isHold ? 'background:#f0f4ff;' : '';
+            const _statusBadge = getJobStatusBadge(_jStatus);
+
+            historyList.innerHTML += `<div class="card" style="border-left:5px solid ${_cardBorder}; position:relative; ${_cardBg}; overflow:visible; ${_isQuote||_isHold ? 'opacity:0.88;' : ''}">
                 <div style="display:grid; grid-template-columns: 1fr auto 120px; gap:10px; align-items:start; margin-bottom:8px; position:relative; z-index:1;">
                     <div>
                         <div style="font-weight:900; font-size:14px;" class="job-name-text">
-                            Job #${job.jobNum || 'N/A'}: ${job.jobName || 'Unnamed'}
+                            Job #${job.jobNum || 'N/A'}: ${job.jobName || 'Unnamed'}${_statusBadge}
                         </div>
                         <div style="font-size:11px; color:#666; font-weight:700;">${job.client || 'No Client'}</div>
                         ${auditInfo}
@@ -10785,17 +10835,20 @@ const firebaseConfig = {
         historyFilter = filter;
         
         // Update button styles
-        document.getElementById('filter-all').style.background = filter === 'all' ? '#d4af37' : '#f0f0f0';
-        document.getElementById('filter-all').style.color = filter === 'all' ? '#000' : '#666';
-        
-        document.getElementById('filter-active').style.background = filter === 'active' ? '#d4af37' : '#f0f0f0';
-        document.getElementById('filter-active').style.color = filter === 'active' ? '#000' : '#666';
-        
-        document.getElementById('filter-completed').style.background = filter === 'completed' ? '#34c759' : '#f0f0f0';
-        document.getElementById('filter-completed').style.color = filter === 'completed' ? '#fff' : '#666';
-        
-        document.getElementById('filter-archives').style.background = filter === 'archives' ? '#8e8e93' : '#f0f0f0';
-        document.getElementById('filter-archives').style.color = filter === 'archives' ? '#fff' : '#666';
+        const filterBtns = {
+            'all':       { el: 'filter-all',       active: '#d4af37', aColor: '#000' },
+            'active':    { el: 'filter-active',    active: '#34c759', aColor: '#fff' },
+            'quote':     { el: 'filter-quote',     active: '#ff9f0a', aColor: '#000' },
+            'hold':      { el: 'filter-hold',      active: '#007aff', aColor: '#fff' },
+            'completed': { el: 'filter-completed', active: '#34c759', aColor: '#fff' },
+            'archives':  { el: 'filter-archives',  active: '#8e8e93', aColor: '#fff' }
+        };
+        Object.entries(filterBtns).forEach(([key, cfg]) => {
+            const btn = document.getElementById(cfg.el);
+            if (!btn) return;
+            btn.style.background = filter === key ? cfg.active : '#f0f0f0';
+            btn.style.color      = filter === key ? cfg.aColor : '#666';
+        });
         
         renderHistory();
     }
@@ -10940,8 +10993,9 @@ const firebaseConfig = {
         document.getElementById('dRec').value = job.dateReceived || '';
         document.getElementById('jNm').value = job.jobName || '';
         document.getElementById('jN').value = job.jobNum || '';
-
-        // ── LOAD INTEGRITY CHECK ──────────────────────────────────────────────
+        // Restore job status
+        const _jsEl = document.getElementById('jobStatus');
+        if (_jsEl) { _jsEl.value = job.jobStatus || 'job'; updateJobStatusStyle(); }
         // Show part count immediately on load. If backup has more parts, warn user.
         try {
             const _loadedParts = items.reduce((s,i) => s + (parseInt(i.qty)||1), 0);
@@ -27246,8 +27300,8 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         });
         
         // Update summary
-        const activeJobs = history.filter(j => !j.completed).length;
-        const totalSqm = history.filter(j => !j.completed).reduce((sum, j) => sum + parseFloat(j.totalSqm || 0), 0);
+        const activeJobs = history.filter(j => !j.completed && (!j.jobStatus || j.jobStatus === 'job')).length;
+        const totalSqm = history.filter(j => !j.completed && (!j.jobStatus || j.jobStatus === 'job')).reduce((sum, j) => sum + parseFloat(j.totalSqm || 0), 0);
         
         if (document.getElementById('totalActiveJobs')) document.getElementById('totalActiveJobs').innerText = activeJobs;
         if (document.getElementById('totalTasks')) document.getElementById('totalTasks').innerText = `${completedTasks}/${totalTasks}`;
@@ -27845,7 +27899,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             safeStorage.setJSON('jobHistory', _safeStrip);
             window._syncingFromCloud = false;
             fullHistory = safeJobs;
-            history = safeJobs.filter(j => !j.completed);
+            history = safeJobs.filter(j => !j.completed && (!j.jobStatus || j.jobStatus === 'job'));
             try { if (typeof renderHistory === 'function') renderHistory(); } catch(e) {}
 
             // Re-push any jobs that were completed locally but not in Firestore
