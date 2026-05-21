@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.232'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.233'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1721,7 +1721,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.232'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.233'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -23082,43 +23082,60 @@ if ('serviceWorker' in navigator && _swAllowed) {
     function sharePDF() {
         if (!window._currentPdfDataUri) { notify('No PDF loaded'); return; }
         var filename = (window._currentPdfFilename || 'PaintWorkz_Document') + '.pdf';
+        var isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
 
-        function _doShare(blob) {
-            var file = new File([blob], filename, { type: 'application/pdf' });
-            if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                navigator.share({ files: [file], title: filename.replace('.pdf',''), text: 'PaintWorkz Pro document' })
-                    .catch(function(e) { if (e.name !== 'AbortError') { _shareFallback(blob, filename); } });
-            } else {
-                _shareFallback(blob, filename);
+        // Decode data URI to blob (always works since we switched all PDFs to datauristring)
+        function _getBlob() {
+            try {
+                var dataUri = window._currentPdfDataUri;
+                var b64 = dataUri.includes(',') ? dataUri.split(',')[1] : dataUri;
+                var byteStr = atob(b64);
+                var bytes = new Uint8Array(byteStr.length);
+                for (var i = 0; i < byteStr.length; i++) bytes[i] = byteStr.charCodeAt(i);
+                return new Blob([bytes], { type: 'application/pdf' });
+            } catch(e) { return null; }
+        }
+
+        if (isMobile && navigator.canShare) {
+            // Mobile: use Web Share API — works properly on iOS/Android
+            var blob = _getBlob();
+            if (blob) {
+                var file = new File([blob], filename, { type: 'application/pdf' });
+                if (navigator.canShare({ files: [file] })) {
+                    navigator.share({ files: [file], title: filename.replace('.pdf',''), text: 'PaintWorkz Pro document' })
+                        .catch(function(e) { if (e.name !== 'AbortError') { _desktopSend(filename); } });
+                    return;
+                }
             }
         }
 
-        if (window._currentPdfDataUri.startsWith('blob:')) {
-            // Fetch the blob from the URL before it gets revoked
-            fetch(window._currentPdfDataUri)
-                .then(function(r) { return r.blob(); })
-                .then(function(blob) { _doShare(blob); })
-                .catch(function() {
-                    notify('⚠️ PDF expired — please regenerate and try again');
-                });
-        } else {
-            // data URI — decode to blob
-            var byteStr = atob(window._currentPdfDataUri.split(',')[1]);
-            var bytes = new Uint8Array(byteStr.length);
-            for (var i = 0; i < byteStr.length; i++) bytes[i] = byteStr.charCodeAt(i);
-            _doShare(new Blob([bytes], { type: 'application/pdf' }));
-        }
+        // Desktop (Windows/Mac): download the file first, then open mail client
+        // Web Share on desktop is unreliable — Outlook shows "no_name" empty attachment
+        _desktopSend(filename);
     }
-    function _shareFallback(blob, filename) {
-        var url = URL.createObjectURL(blob);
+
+    function _desktopSend(filename) {
+        // Step 1: Download the PDF with correct filename
+        var dataUri = window._currentPdfDataUri;
         var a = document.createElement('a');
-        a.href = url; a.download = filename; a.click();
-        setTimeout(function() { URL.revokeObjectURL(url); }, 5000);
+        a.href = dataUri;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+        // Step 2: Open Outlook/mail client with pre-filled subject and body
         var subject = encodeURIComponent(filename.replace('.pdf','').replace(/_/g,' '));
-        var bodyText = 'Hi,' + '\n\n' + 'Please find the PaintWorkz Pro document attached.' + '\n\n' + 'Regards\nPaintWorkz Pro | paintworkzpro.com';
+        var bodyText = 'Hi,\n\nPlease find the PaintWorkz Pro document attached.\n\nRegards\nPaintWorkz Pro | paintworkzpro.com';
         var body = encodeURIComponent(bodyText);
-        setTimeout(function() { window.location.href = 'mailto:?subject=' + subject + '&body=' + body; }, 600);
-        notify('PDF saved - attach it to the email that opens');
+        setTimeout(function() { window.open('mailto:?subject=' + subject + '&body=' + body, '_self'); }, 800);
+
+        // Show instruction overlay so user knows what to do
+        var overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1c1c1e;color:#f2f2f7;padding:14px 20px;border-radius:12px;font-size:13px;font-weight:700;z-index:99999;box-shadow:0 4px 20px rgba(0,0,0,0.5);max-width:320px;text-align:center;border:1px solid #3a3a3c;';
+        overlay.innerHTML = '📎 PDF downloaded — attach <b>' + filename + '</b> to the email that just opened';
+        document.body.appendChild(overlay);
+        setTimeout(function() { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }, 6000);
     }
     window.sharePDF = sharePDF;
 
