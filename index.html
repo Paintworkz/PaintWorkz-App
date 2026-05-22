@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.242'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.243'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1731,7 +1731,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.242'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.243'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -13219,25 +13219,30 @@ const firebaseConfig = {
         // Render charges history panel when forms tab opens
         if (t === 'forms') {
             setTimeout(function(){ try { renderChargesHistoryPanel(); } catch(e){} }, 100);
-            // FORCE colored backgrounds (CSS not working)
+            // Apply form card backgrounds from admin colour settings (with fallback defaults)
             setTimeout(() => {
-                const cards = {
-                    'form-supply': 'rgba(33, 150, 243, 0.15)',      // Blue
-                    'form-estimate': 'rgba(0, 188, 212, 0.15)',     // Cyan
-                    'form-mixing': 'rgba(255, 193, 7, 0.15)',       // Amber
-                    'form-quote': 'rgba(63, 81, 181, 0.15)',        // Indigo
-                    'form-paint-order': 'rgba(76, 175, 80, 0.15)',  // Green
-                    'form-invoice': 'rgba(244, 67, 54, 0.15)',      // Red
-                    'form-label': 'rgba(233, 30, 99, 0.15)',        // Pink
-                    'form-cover': 'rgba(255, 152, 0, 0.15)',        // Orange
-                    'form-a3schedule': 'rgba(76, 175, 80, 0.15)',   // Green
-                    'form-batch': 'rgba(156, 39, 176, 0.15)'        // Purple
+                const defaults = {
+                    'form-supply':      '#e3f2fd',
+                    'form-estimate':    '#e0f2f1',
+                    'form-mixing':      '#f3e5f5',
+                    'form-quote':       '#fff3cd',
+                    'form-paint-order': 'rgba(76,175,80,0.12)',
+                    'form-invoice':     '#f0f8ff',
+                    'form-label':       '#e0f2f1',
+                    'form-cover':       '#fce4ec',
+                    'form-a3schedule':  '#fff8e1',
+                    'form-batch':       '#f3e5f5',
+                    'form-part-labels': '#e0f7fa',
+                    'form-job-label':   '#e8eaf6',
                 };
-                Object.keys(cards).forEach(id => {
+                Object.keys(defaults).forEach(id => {
                     const el = document.getElementById(id);
-                    if (el) el.style.background = cards[id];
+                    if (!el) return;
+                    // Use admin-saved colour if available, else default
+                    const saved = localStorage.getItem(id + '_color');
+                    el.style.background = (saved && /^#[0-9A-F]{6}$/i.test(saved)) ? saved : defaults[id];
                 });
-                console.log('✅ Form backgrounds forced (JS override) - all 10 forms');
+                console.log('✅ Form backgrounds applied - all forms');
             }, 150);
         }
         
@@ -26443,11 +26448,17 @@ if ('serviceWorker' in navigator && _swAllowed) {
             const contentY = y + (sizeVal === 8 ? 13 : 9);
             const desc = item.desc || item.type || 'PART';
             const h = item.h || '—', w = item.w || '—', thk = item.thk || item.thick || '18';
-            const prof = item.prof || '';
-            const colour = (item.color || item.colour || '').substring(0, 20);
+            const prof = (item.prof || '').replace(/\s*\(\d+\)\s*/, '').substring(0, 22); // strip code e.g. "(203)"
+            const colour = (item.color || item.colour || '').substring(0, 24);
             const finish = item.finish || '';
             const mode = item.mode || '';
-            const edges = Array.isArray(item.e) ? item.e.filter(Boolean).join(' ') : '';
+            // Fix edges — array of booleans [top,bot,left,right] or strings
+            let edgeStr = '';
+            if (Array.isArray(item.e)) {
+                const edgeLabels = ['T','B','L','R'];
+                edgeStr = item.e.map((v,i) => (v && v !== 'false' && v !== false) ? edgeLabels[i] : null).filter(Boolean).join(' ');
+            } else if (typeof item.e === 'string') { edgeStr = item.e; }
+            const edgeDisplay = edgeStr ? `Edges: ${edgeStr}` : '';
 
             if (sizeVal === 8) {
                 // Large label — full detail
@@ -26456,24 +26467,33 @@ if ('serviceWorker' in navigator && _swAllowed) {
 
                 doc.setFontSize(9); doc.setFont(undefined, 'normal');
                 doc.text(`${h} × ${w} × ${thk}mm`, x + 2, contentY + 8);
-                doc.text(prof.substring(0,25), x + 2, contentY + 14);
+                doc.text(prof, x + 2, contentY + 14);
 
                 doc.setFontSize(8); doc.setFont(undefined, 'bold'); doc.setTextColor(0,100,180);
                 doc.text(colour, x + 2, contentY + 20);
                 doc.setFont(undefined, 'normal'); doc.setTextColor(80,80,80);
-                doc.text(`${finish}  ${mode}${edges?' | '+edges:''}`, x + 2, contentY + 26);
+                doc.text(`${finish}  ${mode}${edgeDisplay?' | '+edgeDisplay:''}`, x + 2, contentY + 26);
 
-                // Part number bottom right
+                // QR code bottom right — encodes part info
+                try {
+                    const qrText = `Job #${jobNum} | ${desc} | ${h}x${w}x${thk}mm | ${colour} ${finish} | ${mode}`;
+                    const qrDataUrl = generateQRDataURL(qrText, 150);
+                    if (qrDataUrl) { doc.addImage(qrDataUrl, 'PNG', x + lw - 22, y + lh - 24, 20, 20); }
+                } catch(e) {}
+
+                // Part counter
                 doc.setFontSize(7); doc.setTextColor(150,150,150);
-                doc.text(`${i+1}/${totalLabels}`, x + lw - 10, y + lh - 3);
+                doc.text(`${i+1}/${totalLabels}`, x + 2, y + lh - 3);
             } else {
                 // Smaller labels — compact
                 doc.setFontSize(10); doc.setFont(undefined, 'bold'); doc.setTextColor(0,0,0);
                 doc.text(desc.substring(0,20), x + 2, contentY);
                 doc.setFontSize(7.5); doc.setFont(undefined, 'normal');
                 doc.text(`${h}×${w}×${thk}mm`, x + 2, contentY + 5);
+                doc.setTextColor(0,100,180); doc.setFont(undefined, 'bold');
                 doc.text(colour.substring(0,22), x + 2, contentY + 10);
-                doc.text(`${prof.substring(0,15)}  ${mode}`, x + 2, contentY + 15);
+                doc.setFont(undefined, 'normal'); doc.setTextColor(80,80,80);
+                doc.text(`${prof.substring(0,15)}  ${mode}${edgeDisplay?' '+edgeDisplay:''}`, x + 2, contentY + 15);
                 doc.setFontSize(6); doc.setTextColor(150,150,150);
                 doc.text(`${i+1}/${totalLabels}`, x + lw - 8, y + lh - 2);
             }
