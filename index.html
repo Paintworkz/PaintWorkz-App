@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.238'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.239'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1731,7 +1731,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.238'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.239'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -4031,7 +4031,8 @@ const firebaseConfig = {
                 <div id="form-label" class="form-card" onclick="genForm('Shop Label')" style="border-left:5px solid #e91e63 !important;"><h4>🏷️ Shop Label <span class="pw-help">?<span class="pw-help-tip">A compact label to stick on the job in your spray booth. Shows job number, client, colour, finish and a QR code. Scan the QR on any phone to pull up the full job.</span></span></h4><p>Print & post on job</p></div>
                 <div id="form-cover" class="form-card" onclick="genForm('Cover Sheet')" style="border-left:5px solid #ff9800 !important;"><h4>📋 Cover Sheet <span class="pw-help">?<span class="pw-help-tip">A one-page job summary with client details, job info, colour and key dimensions. Clips to the front of a job folder.</span></span></h4><p>Job info summary</p></div>
                 <div id="form-a3schedule" class="form-card" onclick="openA3ScheduleModal()" style="border-left:5px solid #4caf50 !important;"><h4>📅 A3 Schedule</h4><p>Work schedule view</p></div>
-                <div id="form-part-labels" class="form-card" onclick="openPartLabelsModal()" style="border-left:5px solid #00bcd4 !important;"><h4>🏷️ Part Labels <span class="pw-help">?<span class="pw-help-tip">Print adhesive labels for individual parts. Select which parts to label, set the quantity per part, choose your label sheet size and generate a print-ready PDF.</span></span></h4><p>A4 adhesive label sheets</p></div>
+                <div id="form-part-labels" class="form-card" onclick="openPartLabelsModal()" style="background:linear-gradient(135deg,#006064,#00838f) !important; border-left:5px solid #00bcd4 !important; color:#fff !important;"><h4 style="color:#fff;">🏷️ Part Labels <span class="pw-help">?<span class="pw-help-tip">Print adhesive labels for individual parts. Select which parts to label, set the quantity per part, choose your label sheet size and generate a print-ready PDF.</span></span></h4><p style="color:#b2ebf2;">A4 adhesive label sheets</p></div>
+                <div id="form-job-label" class="form-card" onclick="genJobLabel()" style="background:linear-gradient(135deg,#1a237e,#283593) !important; border-left:5px solid #3f51b5 !important; color:#fff !important;"><h4 style="color:#fff;">📦 Job Label <span class="pw-help">?<span class="pw-help-tip">A single large label for the overall job — use on packaging or courier boxes. Shows job number, client, address, colour and part count.</span></span></h4><p style="color:#c5cae9;">Courier / packaging label</p></div>
                 <div id="form-batch" class="form-card" onclick="openBatchPrintModal()" style="border-left:5px solid #9c27b0 !important;"><h4>📦 Batch Print <span class="pw-help">?<span class="pw-help-tip">Select multiple PDF types and print them all at once — useful for generating estimate, label and supply docket together in one go.</span></span></h4><p>Select & print multiple</p></div>
             </div>
         </div>
@@ -26185,6 +26186,112 @@ if ('serviceWorker' in navigator && _swAllowed) {
         notify('🇦🇺 ' + added + ' ' + stateNames[state] + ' public holidays imported for ' + year + (skipped ? ' (' + skipped + ' already existed)' : ''));
     }
 
+    function genJobLabel() {
+        const jobItems = window.pdfItemsToUse && window.pdfItemsToUse.length > 0 ? window.pdfItemsToUse : items;
+        if (!jobItems || jobItems.length === 0) { notify('⚠️ No parts loaded — open a job first'); return; }
+
+        const jobNum   = document.getElementById('jN')?.value || '';
+        const jobName  = document.getElementById('jNm')?.value || '';
+        const clientEl = document.getElementById('cli');
+        const client   = clientEl?.options[clientEl.selectedIndex]?.text || '';
+        const dateRec  = document.getElementById('dRec')?.value || '';
+        const totalParts = jobItems.reduce((s,i) => s + (parseInt(i.qty)||1), 0);
+        const totalSqm   = jobItems.reduce((s,i) => s + ((parseFloat(i.sqm)||0) * (parseInt(i.qty)||1)), 0).toFixed(2);
+        const colours    = [...new Set(jobItems.map(i => i.color||i.colour).filter(Boolean))];
+        const brands     = [...new Set(jobItems.map(i => i.brand).filter(Boolean))];
+
+        // Get company info
+        let companySettings = {};
+        try { companySettings = JSON.parse(localStorage.getItem('companySettings') || '{}'); } catch(e) {}
+
+        const doc = new jsPDF({ unit:'mm', format:'a4' });
+        const pw = 210, ph = 297;
+
+        // Outer border
+        doc.setDrawColor(0,0,0); doc.setLineWidth(3);
+        doc.rect(10, 10, pw-20, ph-20);
+
+        // Company logo if available
+        let logoY = 20;
+        const logoData = window._companyLogoDataUri || localStorage.getItem('companyLogo');
+        if (logoData) {
+            try { doc.addImage(logoData, 'PNG', 15, logoY, 40, 25); } catch(e) {}
+        }
+
+        // Company name top right
+        doc.setFontSize(11); doc.setFont(undefined, 'normal'); doc.setTextColor(80,80,80);
+        const compName = companySettings.name || 'PaintWorkz Pro';
+        const compPhone = companySettings.phone || '';
+        const compEmail = companySettings.email || '';
+        doc.text(compName, pw-15, 25, {align:'right'});
+        if (compPhone) doc.text(compPhone, pw-15, 31, {align:'right'});
+        if (compEmail) doc.text(compEmail, pw-15, 37, {align:'right'});
+
+        // Big divider
+        doc.setDrawColor(0,188,212); doc.setLineWidth(2);
+        doc.line(15, 50, pw-15, 50);
+
+        // JOB header
+        doc.setFontSize(14); doc.setFont(undefined, 'bold'); doc.setTextColor(0,188,212);
+        doc.text('JOB LABEL', 15, 62);
+        doc.setFontSize(52); doc.setFont(undefined, 'bold'); doc.setTextColor(0,0,0);
+        doc.text(`#${jobNum}`, 15, 88);
+
+        // Job name + client
+        doc.setFontSize(22); doc.setFont(undefined, 'bold'); doc.setTextColor(30,30,30);
+        doc.text(jobName || client, 15, 105);
+        if (jobName) {
+            doc.setFontSize(16); doc.setFont(undefined, 'normal'); doc.setTextColor(80,80,80);
+            doc.text(client, 15, 115);
+        }
+
+        // Divider
+        doc.setDrawColor(200,200,200); doc.setLineWidth(0.5);
+        doc.line(15, 122, pw-15, 122);
+
+        // Info grid
+        const infoY = 132;
+        const col1 = 15, col2 = pw/2;
+
+        doc.setFontSize(9); doc.setFont(undefined, 'bold'); doc.setTextColor(100,100,100);
+        doc.text('DATE RECEIVED', col1, infoY);
+        doc.text('TOTAL PARTS', col2, infoY);
+        doc.setFontSize(18); doc.setFont(undefined, 'bold'); doc.setTextColor(0,0,0);
+        doc.text(dateRec || '—', col1, infoY+10);
+        doc.text(String(totalParts), col2, infoY+10);
+
+        doc.setFontSize(9); doc.setFont(undefined, 'bold'); doc.setTextColor(100,100,100);
+        doc.text('TOTAL SQM', col1, infoY+22);
+        doc.text('PAINT BRAND', col2, infoY+22);
+        doc.setFontSize(18); doc.setFont(undefined, 'bold'); doc.setTextColor(0,0,0);
+        doc.text(totalSqm + ' m²', col1, infoY+32);
+        doc.text(brands.join(' / ') || '—', col2, infoY+32);
+
+        // Colour section
+        const colourY = infoY + 48;
+        doc.setDrawColor(200,200,200); doc.setLineWidth(0.5);
+        doc.line(15, colourY-6, pw-15, colourY-6);
+        doc.setFontSize(9); doc.setFont(undefined, 'bold'); doc.setTextColor(100,100,100);
+        doc.text('PAINT COLOUR(S)', 15, colourY);
+        doc.setFontSize(colours.length > 1 ? 16 : 22); doc.setFont(undefined, 'bold'); doc.setTextColor(0,100,180);
+        colours.forEach((c, idx) => { doc.text(c, 15, colourY + 12 + idx*12); });
+
+        // Large barcode-style job number at bottom
+        doc.setDrawColor(0,0,0); doc.setLineWidth(0.5);
+        doc.setFillColor(0,0,0);
+        doc.rect(15, ph-40, pw-30, 22, 'F');
+        doc.setFontSize(20); doc.setFont(undefined, 'bold'); doc.setTextColor(255,255,255);
+        doc.text(`JOB #${jobNum}  |  ${client}  |  ${totalParts} PARTS`, (pw)/2, ph-26, {align:'center'});
+
+        // Footer
+        doc.setFontSize(7); doc.setFont(undefined, 'normal'); doc.setTextColor(160,160,160);
+        doc.text(`Generated: ${new Date().toLocaleString('en-AU')}  |  PaintWorkz Pro`, pw/2, ph-12, {align:'center'});
+
+        const filename = `JobLabel_${jobNum}_${client.replace(/\s+/g,'_')}`;
+        const pdfDataUri = doc.output('datauristring');
+        setTimeout(() => showPDFPreview(pdfDataUri, filename, '📦 Job Label Preview'), 100);
+    }
+
     // ── PART LABELS ──────────────────────────────────────────────────────────
     function openPartLabelsModal() {
         const jobItems = window.pdfItemsToUse && window.pdfItemsToUse.length > 0 ? window.pdfItemsToUse : items;
@@ -26270,7 +26377,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
         };
         const cfg = configs[sizeVal] || configs[8];
 
-        const doc = new window.jsPDF({ unit:'mm', format:'a4' });
+        const doc = new jsPDF({ unit:'mm', format:'a4' });
         const jobNum = document.getElementById('jN')?.value || '';
         const jobClient = document.getElementById('cli')?.options[document.getElementById('cli')?.selectedIndex]?.text || '';
 
