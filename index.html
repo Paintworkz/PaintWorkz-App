@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.246'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.247'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1731,7 +1731,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.246'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.247'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -26240,16 +26240,20 @@ if ('serviceWorker' in navigator && _swAllowed) {
         const sizeVal = parseInt(document.getElementById('jobLabelSizeSelect')?.value || '8');
         if (!jobItems || jobItems.length === 0) { notify('⚠️ No parts loaded — open a job first'); return; }
         if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) { notify('PDF library not loaded'); return; }
+
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF({ unit:'mm', format:'a4' });
-        const jobNum  = document.getElementById('jN')?.value || '';
-        const jobName = document.getElementById('jNm')?.value || '';
+
+        const jobNum   = document.getElementById('jN')?.value || '';
+        const jobName  = document.getElementById('jNm')?.value || '';
         const clientEl = document.getElementById('cli');
-        const client  = clientEl?.options[clientEl.selectedIndex]?.text || '';
-        const dateRec = document.getElementById('dRec')?.value || '';
-        const totalParts = jobItems.reduce((s,i) => s + (parseInt(i.qty)||1), 0);
-        const totalSqm   = jobItems.reduce((s,i) => s + ((parseFloat(i.sqm)||0)*(parseInt(i.qty)||1)), 0).toFixed(2);
+        const client   = clientEl?.options[clientEl.selectedIndex]?.text || '';
+        const dateRec  = document.getElementById('dRec')?.value || '';
+        const totalParts = jobItems.reduce((s,i) => s+(parseInt(i.qty)||1), 0);
+        const totalSqm   = jobItems.reduce((s,i) => s+((parseFloat(i.sqm)||0)*(parseInt(i.qty)||1)), 0).toFixed(2);
         const colours    = [...new Set(jobItems.map(i => i.color||i.colour).filter(Boolean))];
+        const logoData   = window._companyLogoDataUri || localStorage.getItem('companyLogo');
+
         const configs = {
             8:  { cols:2, rows:4, lw:99.1, lh:67.7, mt:10.7, ml:5.7, gap:0 },
             14: { cols:2, rows:7, lw:99.1, lh:38.1, mt:10.7, ml:5.7, gap:0 },
@@ -26258,43 +26262,81 @@ if ('serviceWorker' in navigator && _swAllowed) {
         };
         const cfg = configs[sizeVal] || configs[8];
         const is8 = sizeVal === 8;
+
         for (let i = 0; i < qty; i++) {
             const col = i % cfg.cols;
             const row = Math.floor((i % (cfg.cols * cfg.rows)) / cfg.cols);
             if (i > 0 && i % (cfg.cols * cfg.rows) === 0) doc.addPage();
-            const x = cfg.ml + col * (cfg.lw + cfg.gap);
-            const y = cfg.mt + row * cfg.lh;
-            const lw = cfg.lw - 1, lh = cfg.lh - 1;
-            doc.setDrawColor(63,81,181); doc.setLineWidth(0.5); doc.rect(x, y, lw, lh);
-            doc.setFillColor(63,81,181); doc.rect(x, y, 3, lh, 'F');
 
-            const cy = y + (is8 ? 8 : 6);
-            doc.setFont(undefined,'bold'); doc.setTextColor(60,60,60);
-            doc.setFontSize(is8 ? 6.5 : 5.5);
+            const x  = cfg.ml + col * (cfg.lw + cfg.gap);
+            const y  = cfg.mt + row * cfg.lh;
+            const lw = cfg.lw - 1;
+            const lh = cfg.lh - 1;
+
+            // ── Border + left accent (same as part labels) ──
+            doc.setDrawColor(63,81,181); doc.setLineWidth(0.5);
+            doc.rect(x, y, lw, lh);
+            doc.setFillColor(63,81,181);
+            doc.rect(x, y, 3, lh, 'F');
+
+            // ── Header row: Job # | Client ──────────────────
+            doc.setFont(undefined,'bold'); doc.setTextColor(60,60,80);
+            doc.setFontSize(is8 ? 7 : 5.5);
             doc.text(`Job #${jobNum}  |  ${client}`.substring(0,34), x+5, y+(is8?5:4));
-            doc.setDrawColor(220,220,220); doc.setLineWidth(0.2);
-            doc.line(x+4, y+(is8?7:5.5), x+lw-2, y+(is8?7:5.5));
+
+            // Logo small top right
+            if (logoData) {
+                try { doc.addImage(logoData,'PNG', x+lw-(is8?18:12), y+1, is8?16:10, is8?10:6); } catch(e){}
+            }
+
+            // ── Divider ───────────────────────────────────────
+            doc.setDrawColor(210,210,210); doc.setLineWidth(0.2);
+            doc.line(x+4, y+(is8?7:6), x+lw-2, y+(is8?7:6));
+
+            // ── Job name ─────────────────────────────────────
+            const nameY = y + (is8 ? 13 : 9);
             doc.setFont(undefined,'bold'); doc.setTextColor(0,0,0);
-            doc.setFontSize(is8 ? 13 : 9);
-            doc.text((jobName||client).substring(0, is8?24:20), x+5, cy);
+            doc.setFontSize(is8 ? 13 : 8.5);
+            doc.text((jobName||client).substring(0, is8?22:20), x+5, nameY);
+
             if (is8) {
-                doc.setFontSize(8); doc.setFont(undefined,'normal'); doc.setTextColor(60,60,60);
-                doc.text(`Date: ${dateRec}`, x+5, cy+8);
-                doc.text(`Parts: ${totalParts}   SQM: ${totalSqm}m\xb2`, x+5, cy+14);
-                doc.setFontSize(8); doc.setFont(undefined,'bold'); doc.setTextColor(0,100,180);
-                colours.slice(0,2).forEach((c,ci) => doc.text(c.substring(0,24), x+5, cy+21+(ci*7)));
-                try { const qrDataUrl = generateQRDataURL(`Job #${jobNum} | ${client} | ${totalParts} parts | ${colours.join(', ')}`, 150); if (qrDataUrl) doc.addImage(qrDataUrl, 'PNG', x+lw-20, y+lh-21, 18, 18); } catch(e) {}
-                doc.setFontSize(5.5); doc.setTextColor(150,150,150);
+                // ── Detail rows ───────────────────────────────
+                doc.setFont(undefined,'normal'); doc.setFontSize(8); doc.setTextColor(50,50,50);
+                doc.text(`Date: ${dateRec}`, x+5, nameY+9);
+                doc.text(`Parts: ${totalParts}   SQM: ${totalSqm}\u33A1`, x+5, nameY+16);
+
+                // ── Colours (blue bold) ───────────────────────
+                doc.setFont(undefined,'bold'); doc.setFontSize(8); doc.setTextColor(0,100,180);
+                colours.slice(0,2).forEach((c,ci) => {
+                    doc.text(c.substring(0,24), x+5, nameY+24+(ci*8));
+                });
+
+                // ── QR bottom right ───────────────────────────
+                try {
+                    const qrText = `Job #${jobNum} | ${client} | ${totalParts} parts | ${colours.join(', ')}`;
+                    const qrDataUrl = generateQRDataURL(qrText, 150);
+                    if (qrDataUrl) doc.addImage(qrDataUrl,'PNG', x+lw-21, y+lh-22, 19, 19);
+                } catch(e) {}
+
+                // ── Footer ────────────────────────────────────
+                doc.setFont(undefined,'normal'); doc.setFontSize(5.5); doc.setTextColor(160,160,160);
                 doc.text(`${i+1}/${qty}  paintworkzpro.com.au`, x+5, y+lh-2.5);
+
             } else {
-                doc.setFontSize(6.5); doc.setFont(undefined,'normal'); doc.setTextColor(60,60,60);
-                doc.text(`${totalParts} parts | ${totalSqm}m\xb2`, x+5, cy+6);
-                doc.setTextColor(0,100,180); doc.setFont(undefined,'bold');
-                doc.text(colours[0]?.substring(0,20)||'', x+5, cy+12);
-                doc.setFontSize(5); doc.setTextColor(150,150,150);
+                // ── Compact layout for smaller labels ─────────
+                doc.setFont(undefined,'normal'); doc.setFontSize(6.5); doc.setTextColor(50,50,50);
+                doc.text(`${dateRec}  |  ${totalParts} pts  ${totalSqm}m\xb2`, x+5, nameY+6);
+                doc.setFont(undefined,'bold'); doc.setFontSize(6.5); doc.setTextColor(0,100,180);
+                doc.text(colours[0]?.substring(0,22)||'', x+5, nameY+13);
+                try {
+                    const qrDataUrl = generateQRDataURL(`Job #${jobNum} | ${client} | ${totalParts} parts`, 100);
+                    if (qrDataUrl) doc.addImage(qrDataUrl,'PNG', x+lw-16, y+lh-17, 14, 14);
+                } catch(e) {}
+                doc.setFont(undefined,'normal'); doc.setFontSize(5); doc.setTextColor(160,160,160);
                 doc.text(`${i+1}/${qty}`, x+5, y+lh-2);
             }
         }
+
         document.getElementById('jobLabelStickersModal').style.display = 'none';
         const filename = `JobLabelStickers_${jobNum}_${new Date().toISOString().split('T')[0]}`;
         const pdfDataUri = doc.output('datauristring');
