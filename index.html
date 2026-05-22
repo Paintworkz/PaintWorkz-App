@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.248'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.249'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1731,7 +1731,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.248'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.249'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -26284,17 +26284,17 @@ if ('serviceWorker' in navigator && _swAllowed) {
             doc.setFontSize(is8 ? 7 : 5.5);
             doc.text(`Job #${jobNum}  |  ${client}`.substring(0,34), x+5, y+(is8?5:4));
 
-            // Logo small top right
-            if (logoData) {
-                try { doc.addImage(logoData,'PNG', x+lw-(is8?18:12), y+1, is8?16:10, is8?10:6); } catch(e){}
-            }
+            // Logo top right — proper size (the PaintWorkz logo is already circular design)
+            const _logoSz = is8 ? 20 : 13;
+            if (logoData) { try { doc.addImage(logoData,"PNG", x+lw-_logoSz-2, y+1, _logoSz, _logoSz); } catch(e){} }
 
-            // ── Job name ─────────────────────────────────────
+            // Job name — wrapped, constrained away from logo
             const nameY = y + (is8 ? 10 : 8);
-            doc.setFont(undefined,'bold'); doc.setTextColor(0,0,0);
+            const _nameMaxW = lw - _logoSz - 10;
+            doc.setFont(undefined,"bold"); doc.setTextColor(0,0,0);
             doc.setFontSize(is8 ? 13 : 8.5);
-            doc.text((jobName||client).substring(0, is8?22:20), x+5, nameY);
-
+            const _nameLines = doc.splitTextToSize(jobName||client, _nameMaxW);
+            doc.text(_nameLines.slice(0,2), x+5, nameY);
             if (is8) {
                 // ── Detail rows ───────────────────────────────
                 doc.setFont(undefined,'normal'); doc.setFontSize(8); doc.setTextColor(50,50,50);
@@ -26562,6 +26562,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
         const doc = new jsPDF({ unit:'mm', format:'a4' });
         const jobNum = document.getElementById('jN')?.value || '';
         const jobClient = document.getElementById('cli')?.options[document.getElementById('cli')?.selectedIndex]?.text || '';
+        const logoData = window._companyLogoDataUri || localStorage.getItem('companyLogo');
 
         let labelIdx = 0;
         const totalLabels = selected.length;
@@ -26576,25 +26577,29 @@ if ('serviceWorker' in navigator && _swAllowed) {
             const lw = cfg.lw - 1;
             const lh = cfg.lh - 1;
 
-            // Label border
-            doc.setDrawColor(0,188,212); doc.setLineWidth(0.5);
-            doc.rect(x, y, lw, lh);
-            // Teal left accent bar
-            doc.setFillColor(0,188,212);
-            doc.rect(x, y, 3, lh, 'F');
+            // Label border + teal left accent
+            doc.setDrawColor(0,188,212); doc.setLineWidth(0.5); doc.rect(x, y, lw, lh);
+            doc.setFillColor(0,188,212); doc.rect(x, y, 3, lh, 'F');
 
-            // Header: Job # + Client (top area, no overlap)
-            doc.setFont(undefined, 'bold'); doc.setTextColor(0,0,0);
-            doc.setFontSize(sizeVal === 8 ? 7.5 : 6);
-            doc.text(`Job #${jobNum}  |  ${jobClient}`.substring(0,36), x + 5, y + 5);
+            // Logo top right — round/oval crop effect via clipping isn't supported in jsPDF
+            // so just place it sized nicely; the PaintWorkz logo is already circular
+            const logoSize = sizeVal === 8 ? 14 : 10;
+            const logoX = x + lw - logoSize - 2;
+            if (logoData) { try { doc.addImage(logoData, 'PNG', logoX, y + 1, logoSize, logoSize); } catch(e) {} }
 
-            // Thin divider line under header
+            // Header text — constrained to not overlap logo
+            const maxHeaderW = lw - logoSize - 8;
+            doc.setFont(undefined, 'bold'); doc.setTextColor(60,60,80);
+            doc.setFontSize(sizeVal === 8 ? 7 : 5.5);
+            doc.text(`Job #${jobNum}  |  ${jobClient}`.substring(0,32), x + 5, y + 5, { maxWidth: maxHeaderW });
+
+            // Thin divider
             doc.setDrawColor(220,220,220); doc.setLineWidth(0.2);
             doc.line(x + 4, y + 7, x + lw - 2, y + 7);
 
             const contentY = y + (sizeVal === 8 ? 12 : 10);
             const desc = item.desc || item.type || 'PART';
-            const h = item.h || '—', w = item.w || '—', thk = item.thk || item.thick || '18';
+            const h = item.h || '—', w2 = item.w || '—', thk = item.thk || item.thick || '18';
             const prof = (item.prof || '').replace(/\s*\(\d+\)\s*/, '').substring(0, 22);
             const colour = (item.color || item.colour || '').substring(0, 24);
             const finish = item.finish || '';
@@ -26606,38 +26611,42 @@ if ('serviceWorker' in navigator && _swAllowed) {
             } else if (typeof item.e === 'string') { edgeStr = item.e; }
             const edgeDisplay = edgeStr ? `Edges: ${edgeStr}` : '';
 
-            if (sizeVal === 8) {
-                // Large label
-                doc.setFontSize(13); doc.setFont(undefined, 'bold'); doc.setTextColor(0,0,0);
-                doc.text(desc.substring(0,24), x + 5, contentY);
+            // Text max width — leave room for QR code bottom right
+            const textMaxW = lw - (sizeVal === 8 ? 25 : 18);
 
-                doc.setFontSize(9); doc.setFont(undefined, 'normal'); doc.setTextColor(40,40,40);
-                doc.text(`${h} × ${w} × ${thk}mm`, x + 5, contentY + 8);
-                doc.text(prof, x + 5, contentY + 14);
+            if (sizeVal === 8) {
+                // Description — wrapped to avoid QR
+                doc.setFontSize(12); doc.setFont(undefined, 'bold'); doc.setTextColor(0,0,0);
+                const descLines = doc.splitTextToSize(desc, textMaxW);
+                doc.text(descLines.slice(0,2), x + 5, contentY); // max 2 lines
+                const afterDesc = contentY + (descLines.length > 1 ? 10 : 8);
+
+                doc.setFontSize(8.5); doc.setFont(undefined, 'normal'); doc.setTextColor(40,40,40);
+                doc.text(`${h} × ${w2} × ${thk}mm`, x + 5, afterDesc);
+                doc.text(prof, x + 5, afterDesc + 6);
 
                 doc.setFontSize(8.5); doc.setFont(undefined, 'bold'); doc.setTextColor(0,100,180);
-                doc.text(colour, x + 5, contentY + 21);
+                doc.text(colour, x + 5, afterDesc + 13);
 
                 doc.setFontSize(7.5); doc.setFont(undefined, 'normal'); doc.setTextColor(80,80,80);
-                doc.text(`${finish}  ${mode}${edgeDisplay?' | '+edgeDisplay:''}`, x + 5, contentY + 27);
+                doc.text(`${finish}  ${mode}${edgeDisplay?' | '+edgeDisplay:''}`, x + 5, afterDesc + 19);
 
-                // QR code — bottom right
+                // QR code bottom right
                 try {
-                    const qrText = `Job #${jobNum} | ${desc} | ${h}x${w}x${thk}mm | ${colour} ${finish} | ${mode}`;
+                    const qrText = `Job #${jobNum} | ${desc} | ${h}x${w2}x${thk}mm | ${colour} ${finish} | ${mode}`;
                     const qrDataUrl = generateQRDataURL(qrText, 150);
                     if (qrDataUrl) { doc.addImage(qrDataUrl, 'PNG', x + lw - 21, y + lh - 22, 18, 18); }
                 } catch(e) {}
 
-                // Part counter + branding footer
                 doc.setFontSize(6); doc.setTextColor(150,150,150);
                 doc.text(`${i+1}/${totalLabels}`, x + 5, y + lh - 3);
-                doc.text('paintworkzpro.com.au', x + lw - 22, y + lh - 3);
+                doc.text('paintworkzpro.com.au', x + lw - 24, y + lh - 3);
             } else {
-                // Smaller labels — compact
-                doc.setFontSize(9); doc.setFont(undefined, 'bold'); doc.setTextColor(0,0,0);
-                doc.text(desc.substring(0,20), x + 5, contentY);
-                doc.setFontSize(7); doc.setFont(undefined, 'normal'); doc.setTextColor(40,40,40);
-                doc.text(`${h}×${w}×${thk}mm  ${prof.substring(0,14)}`, x + 5, contentY + 5);
+                doc.setFontSize(8.5); doc.setFont(undefined, 'bold'); doc.setTextColor(0,0,0);
+                const descLines = doc.splitTextToSize(desc, textMaxW);
+                doc.text(descLines[0], x + 5, contentY);
+                doc.setFontSize(6.5); doc.setFont(undefined, 'normal'); doc.setTextColor(40,40,40);
+                doc.text(`${h}×${w2}×${thk}mm  ${prof.substring(0,14)}`, x + 5, contentY + 5);
                 doc.setTextColor(0,100,180); doc.setFont(undefined, 'bold');
                 doc.text(colour.substring(0,22), x + 5, contentY + 10);
                 doc.setFont(undefined, 'normal'); doc.setTextColor(80,80,80);
