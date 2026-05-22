@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.241'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.242'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1731,7 +1731,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.241'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.242'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -22725,6 +22725,8 @@ if ('serviceWorker' in navigator && _swAllowed) {
             { id: 'form-cover',        label: '     Cover Sheet',    desc: 'Background colour of the Cover Sheet button in Forms tab',   def: '#fce4ec' },
             { id: 'form-a3schedule',   label: '     A3 Schedule',    desc: 'Background colour of the A3 Schedule button in Forms tab',   def: '#fff8e1' },
             { id: 'form-batch',        label: '     Batch Print',    desc: 'Background colour of the Batch Print button in Forms tab',   def: '#f3e5f5' },
+            { id: 'form-part-labels',  label: '🏷️ Part Labels',    desc: 'Background colour of the Part Labels button in Forms tab',    def: '#e0f7fa' },
+            { id: 'form-job-label',    label: '📦 Job Label',       desc: 'Background colour of the Job Label button in Forms tab',     def: '#e8eaf6' },
         ];
         let html = '';
         
@@ -22749,6 +22751,8 @@ if ('serviceWorker' in navigator && _swAllowed) {
             { id: 'form-cover',        label: '📋 Cover Sheet',   desc: 'Left border colour of the Cover Sheet button',   def: '#ff9800' },
             { id: 'form-a3schedule',   label: '📅 A3 Schedule',   desc: 'Left border colour of the A3 Schedule button',   def: '#4caf50' },
             { id: 'form-batch',        label: '📦 Batch Print',   desc: 'Left border colour of the Batch Print button',   def: '#9c27b0' },
+            { id: 'form-part-labels',  label: '🏷️ Part Labels',   desc: 'Left border colour of the Part Labels button',   def: '#00bcd4' },
+            { id: 'form-job-label',    label: '📦 Job Label',      desc: 'Left border colour of the Job Label button',     def: '#3f51b5' },
         ];
         html += `<div style="grid-column:1/-1; margin:16px 0 12px; padding:8px; background:#fff3cd; border-left:4px solid #ff9800; border-radius:4px; font-size:11px; font-weight:700; color:#e65100;">
             🎨 BORDER COLORS (5px left accent)
@@ -26206,7 +26210,19 @@ if ('serviceWorker' in navigator && _swAllowed) {
 
         if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) { notify('PDF library not loaded — wait a moment and try again'); return; }
         const { jsPDF } = window.jspdf;
+        // Get client address from client database
+        let clientAddress = '';
+        try {
+            const clientDb = JSON.parse(localStorage.getItem('clientDatabase') || '[]');
+            const match = clientDb.find(c => c.name === client || c.company === client);
+            if (match) {
+                const parts = [match.address, match.suburb, match.state, match.postcode].filter(Boolean);
+                clientAddress = parts.join(', ');
+            }
+        } catch(e) {}
+
         const doc = new jsPDF({ unit:'mm', format:'a4' });
+        const { jsPDF: _j2 } = window.jspdf; // already have jsPDF from above
         const pw = 210, ph = 297;
 
         // Outer border
@@ -26239,13 +26255,26 @@ if ('serviceWorker' in navigator && _swAllowed) {
         doc.setFontSize(52); doc.setFont(undefined, 'bold'); doc.setTextColor(0,0,0);
         doc.text(`#${jobNum}`, 15, 88);
 
-        // Job name + client
+        // Job name + client + address
         doc.setFontSize(22); doc.setFont(undefined, 'bold'); doc.setTextColor(30,30,30);
         doc.text(jobName || client, 15, 105);
         if (jobName) {
             doc.setFontSize(16); doc.setFont(undefined, 'normal'); doc.setTextColor(80,80,80);
             doc.text(client, 15, 115);
         }
+        if (clientAddress) {
+            doc.setFontSize(12); doc.setFont(undefined, 'normal'); doc.setTextColor(100,100,100);
+            doc.text(clientAddress, 15, jobName ? 123 : 118);
+        }
+
+        // QR code top right (encodes job info)
+        try {
+            const qrText = `Job: #${jobNum} | Client: ${client} | Parts: ${totalParts} | SQM: ${totalSqm} | Colours: ${colours.join(', ')}`;
+            const qrDataUrl = generateQRDataURL(qrText, 300);
+            if (qrDataUrl) { doc.addImage(qrDataUrl, 'PNG', pw-70, 55, 55, 55); }
+            doc.setFontSize(6); doc.setTextColor(150,150,150);
+            doc.text('Scan for job details', pw-70+(55/2), 113, {align:'center'});
+        } catch(qrErr) { console.warn('QR failed:', qrErr); }
 
         // Divider
         doc.setDrawColor(200,200,200); doc.setLineWidth(0.5);
@@ -26382,6 +26411,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
         if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) { notify('PDF library not loaded — wait a moment and try again'); return; }
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF({ unit:'mm', format:'a4' });
+        const jobNum = document.getElementById('jN')?.value || '';
         const jobClient = document.getElementById('cli')?.options[document.getElementById('cli')?.selectedIndex]?.text || '';
 
         let labelIdx = 0;
