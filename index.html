@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.243'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.244'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1731,7 +1731,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.243'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.244'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -13222,25 +13222,27 @@ const firebaseConfig = {
             // Apply form card backgrounds from admin colour settings (with fallback defaults)
             setTimeout(() => {
                 const defaults = {
-                    'form-supply':      '#e3f2fd',
-                    'form-estimate':    '#e0f2f1',
-                    'form-mixing':      '#f3e5f5',
-                    'form-quote':       '#fff3cd',
-                    'form-paint-order': 'rgba(76,175,80,0.12)',
-                    'form-invoice':     '#f0f8ff',
-                    'form-label':       '#e0f2f1',
-                    'form-cover':       '#fce4ec',
-                    'form-a3schedule':  '#fff8e1',
-                    'form-batch':       '#f3e5f5',
-                    'form-part-labels': '#e0f7fa',
-                    'form-job-label':   '#e8eaf6',
+                    'form-supply':      'rgba(33,150,243,0.15)',
+                    'form-estimate':    'rgba(0,188,212,0.15)',
+                    'form-mixing':      'rgba(255,193,7,0.15)',
+                    'form-quote':       'rgba(63,81,181,0.15)',
+                    'form-paint-order': 'rgba(76,175,80,0.15)',
+                    'form-invoice':     'rgba(244,67,54,0.15)',
+                    'form-label':       'rgba(233,30,99,0.15)',
+                    'form-cover':       'rgba(255,152,0,0.15)',
+                    'form-a3schedule':  'rgba(76,175,80,0.15)',
+                    'form-batch':       'rgba(156,39,176,0.15)',
+                    'form-part-labels': 'rgba(0,188,212,0.15)',
+                    'form-job-label':   'rgba(63,81,181,0.15)',
                 };
                 Object.keys(defaults).forEach(id => {
                     const el = document.getElementById(id);
                     if (!el) return;
-                    // Use admin-saved colour if available, else default
+                    // Only use saved colour if user explicitly saved an rgba value via admin
+                    // Hex values from old admin colour pickers are ignored — rgba defaults look correct
                     const saved = localStorage.getItem(id + '_color');
-                    el.style.background = (saved && /^#[0-9A-F]{6}$/i.test(saved)) ? saved : defaults[id];
+                    const useCustom = saved && saved.startsWith('rgba(');
+                    el.style.background = useCustom ? saved : defaults[id];
                 });
                 console.log('✅ Form backgrounds applied - all forms');
             }, 150);
@@ -26433,69 +26435,73 @@ if ('serviceWorker' in navigator && _swAllowed) {
             const lh = cfg.lh - 1;
 
             // Label border
-            doc.setDrawColor(180,180,180); doc.setLineWidth(0.3);
+            doc.setDrawColor(0,188,212); doc.setLineWidth(0.5);
             doc.rect(x, y, lw, lh);
+            // Teal left accent bar
+            doc.setFillColor(0,188,212);
+            doc.rect(x, y, 3, lh, 'F');
 
-            // Cyan header bar
-            doc.setFillColor(0, 188, 212);
-            doc.rect(x, y, lw, sizeVal === 8 ? 10 : 7, 'F');
+            // Header: Job # + Client (top area, no overlap)
+            doc.setFont(undefined, 'bold'); doc.setTextColor(0,0,0);
+            doc.setFontSize(sizeVal === 8 ? 7.5 : 6);
+            doc.text(`Job #${jobNum}  |  ${jobClient}`.substring(0,36), x + 5, y + 5);
 
-            // Job # + Client in header
-            doc.setFont(undefined, 'bold'); doc.setTextColor(0, 0, 0);
-            doc.setFontSize(sizeVal === 8 ? 9 : 7);
-            doc.text(`Job #${jobNum}  ${jobClient}`.substring(0, 30), x + 2, y + (sizeVal === 8 ? 6.5 : 4.8));
+            // Thin divider line under header
+            doc.setDrawColor(220,220,220); doc.setLineWidth(0.2);
+            doc.line(x + 4, y + 7, x + lw - 2, y + 7);
 
-            const contentY = y + (sizeVal === 8 ? 13 : 9);
+            const contentY = y + (sizeVal === 8 ? 12 : 10);
             const desc = item.desc || item.type || 'PART';
             const h = item.h || '—', w = item.w || '—', thk = item.thk || item.thick || '18';
-            const prof = (item.prof || '').replace(/\s*\(\d+\)\s*/, '').substring(0, 22); // strip code e.g. "(203)"
+            const prof = (item.prof || '').replace(/\s*\(\d+\)\s*/, '').substring(0, 22);
             const colour = (item.color || item.colour || '').substring(0, 24);
             const finish = item.finish || '';
             const mode = item.mode || '';
-            // Fix edges — array of booleans [top,bot,left,right] or strings
             let edgeStr = '';
             if (Array.isArray(item.e)) {
                 const edgeLabels = ['T','B','L','R'];
-                edgeStr = item.e.map((v,i) => (v && v !== 'false' && v !== false) ? edgeLabels[i] : null).filter(Boolean).join(' ');
+                edgeStr = item.e.map((v,ei) => (v && v !== 'false' && v !== false) ? edgeLabels[ei] : null).filter(Boolean).join(' ');
             } else if (typeof item.e === 'string') { edgeStr = item.e; }
             const edgeDisplay = edgeStr ? `Edges: ${edgeStr}` : '';
 
             if (sizeVal === 8) {
-                // Large label — full detail
-                doc.setFontSize(14); doc.setFont(undefined, 'bold'); doc.setTextColor(0,0,0);
-                doc.text(desc.substring(0,22), x + 2, contentY);
+                // Large label
+                doc.setFontSize(13); doc.setFont(undefined, 'bold'); doc.setTextColor(0,0,0);
+                doc.text(desc.substring(0,24), x + 5, contentY);
 
-                doc.setFontSize(9); doc.setFont(undefined, 'normal');
-                doc.text(`${h} × ${w} × ${thk}mm`, x + 2, contentY + 8);
-                doc.text(prof, x + 2, contentY + 14);
+                doc.setFontSize(9); doc.setFont(undefined, 'normal'); doc.setTextColor(40,40,40);
+                doc.text(`${h} × ${w} × ${thk}mm`, x + 5, contentY + 8);
+                doc.text(prof, x + 5, contentY + 14);
 
-                doc.setFontSize(8); doc.setFont(undefined, 'bold'); doc.setTextColor(0,100,180);
-                doc.text(colour, x + 2, contentY + 20);
-                doc.setFont(undefined, 'normal'); doc.setTextColor(80,80,80);
-                doc.text(`${finish}  ${mode}${edgeDisplay?' | '+edgeDisplay:''}`, x + 2, contentY + 26);
+                doc.setFontSize(8.5); doc.setFont(undefined, 'bold'); doc.setTextColor(0,100,180);
+                doc.text(colour, x + 5, contentY + 21);
 
-                // QR code bottom right — encodes part info
+                doc.setFontSize(7.5); doc.setFont(undefined, 'normal'); doc.setTextColor(80,80,80);
+                doc.text(`${finish}  ${mode}${edgeDisplay?' | '+edgeDisplay:''}`, x + 5, contentY + 27);
+
+                // QR code — bottom right
                 try {
                     const qrText = `Job #${jobNum} | ${desc} | ${h}x${w}x${thk}mm | ${colour} ${finish} | ${mode}`;
                     const qrDataUrl = generateQRDataURL(qrText, 150);
-                    if (qrDataUrl) { doc.addImage(qrDataUrl, 'PNG', x + lw - 22, y + lh - 24, 20, 20); }
+                    if (qrDataUrl) { doc.addImage(qrDataUrl, 'PNG', x + lw - 21, y + lh - 22, 18, 18); }
                 } catch(e) {}
 
-                // Part counter
-                doc.setFontSize(7); doc.setTextColor(150,150,150);
-                doc.text(`${i+1}/${totalLabels}`, x + 2, y + lh - 3);
+                // Part counter + branding footer
+                doc.setFontSize(6); doc.setTextColor(150,150,150);
+                doc.text(`${i+1}/${totalLabels}`, x + 5, y + lh - 3);
+                doc.text('paintworkzpro.com.au', x + lw - 22, y + lh - 3);
             } else {
                 // Smaller labels — compact
-                doc.setFontSize(10); doc.setFont(undefined, 'bold'); doc.setTextColor(0,0,0);
-                doc.text(desc.substring(0,20), x + 2, contentY);
-                doc.setFontSize(7.5); doc.setFont(undefined, 'normal');
-                doc.text(`${h}×${w}×${thk}mm`, x + 2, contentY + 5);
+                doc.setFontSize(9); doc.setFont(undefined, 'bold'); doc.setTextColor(0,0,0);
+                doc.text(desc.substring(0,20), x + 5, contentY);
+                doc.setFontSize(7); doc.setFont(undefined, 'normal'); doc.setTextColor(40,40,40);
+                doc.text(`${h}×${w}×${thk}mm  ${prof.substring(0,14)}`, x + 5, contentY + 5);
                 doc.setTextColor(0,100,180); doc.setFont(undefined, 'bold');
-                doc.text(colour.substring(0,22), x + 2, contentY + 10);
+                doc.text(colour.substring(0,22), x + 5, contentY + 10);
                 doc.setFont(undefined, 'normal'); doc.setTextColor(80,80,80);
-                doc.text(`${prof.substring(0,15)}  ${mode}${edgeDisplay?' '+edgeDisplay:''}`, x + 2, contentY + 15);
-                doc.setFontSize(6); doc.setTextColor(150,150,150);
-                doc.text(`${i+1}/${totalLabels}`, x + lw - 8, y + lh - 2);
+                doc.text(`${finish}  ${mode}${edgeDisplay?' | '+edgeDisplay:''}`, x + 5, contentY + 15);
+                doc.setFontSize(5.5); doc.setTextColor(150,150,150);
+                doc.text(`${i+1}/${totalLabels}`, x + 5, y + lh - 2);
             }
             labelIdx++;
         });
