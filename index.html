@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.258'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.260'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1731,7 +1731,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.258'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.260'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -3129,7 +3129,8 @@ const firebaseConfig = {
                                 setTimeout(() => { try { _syncBrandsFromFirestoreOnce(); } catch(e) {} }, 600);
                                 setTimeout(() => { if (typeof loadDefaultTimelineFromFirebase === 'function') loadDefaultTimelineFromFirebase(); }, 800);
                                 setTimeout(() => { if (typeof loadShopClosuresFromFirebase === 'function') loadShopClosuresFromFirebase(); }, 800);
-                                // Load stock with retry — phone Safari needs extra time for Firebase init
+                                // Load user preferences (units, currency, language) from their account
+                                setTimeout(() => { if (typeof loadUserPreferences === 'function') loadUserPreferences(user.uid); }, 500);
                                 (function() {
                                     var _stockAttempts = 0;
                                     var _stockInterval = setInterval(function() {
@@ -3160,7 +3161,7 @@ const firebaseConfig = {
                             setTimeout(() => { try { _syncBrandsFromFirestoreOnce(); } catch(e) {} }, 600);
                             setTimeout(() => { if (typeof loadDefaultTimelineFromFirebase === 'function') loadDefaultTimelineFromFirebase(); }, 800);
                             setTimeout(() => { if (typeof loadShopClosuresFromFirebase === 'function') loadShopClosuresFromFirebase(); }, 900);
-                        } else if (attempts > 0) {
+                            setTimeout(() => { if (typeof loadUserPreferences === 'function') loadUserPreferences(user.uid); }, 500);
                             setTimeout(() => tryLoad(attempts - 1), 400);
                         } else {
                             console.warn('⚠️ loadAllDataFromFirebase never became available');
@@ -4222,7 +4223,7 @@ const firebaseConfig = {
 
             <div style="display: flex; flex-direction: column; align-items: center; padding: 15px 0; border-top: 1px solid #eee;">
                 <div id="liveSq" style="font-size: 50px; font-weight: 900; color: var(--gs); line-height: 1;">0.000</div>
-                <div style="font-size: 10px; font-weight: 900; color: #aaa;">CURRENT PART SQM (m²)</div>
+                <div style="font-size: 10px; font-weight: 900; color: #aaa;">CURRENT PART SQM (${getAreaLabel()})</div>
             </div>
 
             <button class="add-main-btn" onclick="addPart()">ADD PART +</button>
@@ -4557,7 +4558,7 @@ const firebaseConfig = {
             <h3>Generate Form</h3>
             <div class="form-grid">
                 <div id="form-supply" class="form-card" onclick="genForm('Supply Docket')"><h4>Supply Docket <span class="pw-help">?<span class="pw-help-tip">A detailed part list showing every door, panel and drawer with dimensions, finish and paint colour. Give to your paint supplier or use as a job checklist.</span></span></h4><p>Part list for client</p></div>
-                <div id="form-estimate" class="form-card" onclick="genForm('Estimate')"><h4>Estimate <span class="pw-help">?<span class="pw-help-tip">A detailed cost breakdown grouped by colour — shows every door/panel with SQM, price per m² and totals. Use for internal costing or as a preliminary quote.</span></span></h4><p>Job breakdown only</p></div>
+                <div id="form-estimate" class="form-card" onclick="genForm('Estimate')"><h4>Estimate <span class="pw-help">?<span class="pw-help-tip">A detailed cost breakdown grouped by colour — shows every door/panel with SQM, price per ${getAreaLabel()} and totals. Use for internal costing or as a preliminary quote.</span></span></h4><p>Job breakdown only</p></div>
                 <div id="form-mixing" class="form-card" onclick="genForm('Mixing Card')"><h4>Mixing Card <span class="pw-help">?<span class="pw-help-tip">The tinter formula card for your spray booth. Shows base code, tinter amounts and quantities to mix. Hand to your paint technician before spraying.</span></span></h4><p>Paint shop formula</p></div>
                 <div id="form-quote" class="form-card" onclick="genForm('Quote Form')"><h4>Quote Form <span class="pw-help">?<span class="pw-help-tip">A formal quote showing the job breakdown and your pricing. Includes raw door cost vs 2Pac painting cost columns. Suitable to send directly to the client.</span></span></h4><p>Raw vs Paint pricing</p></div>
                 <div id="form-paint-order" class="form-card" onclick="genPaintOrderFormPDF()" style="border-left:5px solid #4caf50 !important;"><h4>🎨 Paint Order</h4><p>Manufacturing order form</p></div>
@@ -4746,7 +4747,50 @@ const firebaseConfig = {
         <div class="card" style="overflow-y:auto; overflow-x:auto; flex:1; min-height:0; margin-top:calc(var(--nav-h) + 49px); margin-bottom:0; padding:0 15px 150px 15px; border-radius:0; position:relative; z-index:1; scrollbar-width:none; -ms-overflow-style:none;">
             <!-- General Settings Tab -->
             <div id="admin-tab-general-content" class="admin-tab-content active" style="padding-top:12px;">
-                <!-- VERSION DISPLAY - Always visible -->
+
+                <!-- ── MY PREFERENCES — always visible, saves to Firebase ── -->
+                <div style="background:linear-gradient(135deg,#1a237e,#283593); border-radius:12px; padding:16px; margin-bottom:16px; border:1px solid #3949ab;">
+                    <div style="font-size:13px; font-weight:900; color:#fff; margin-bottom:4px;">⚙️ MY PREFERENCES</div>
+                    <div style="font-size:11px; color:#9fa8da; margin-bottom:14px;">Your personal settings — saved to your account, follow you on every device.</div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+                        <div>
+                            <label style="display:block; font-weight:900; font-size:10px; color:#9fa8da; margin-bottom:5px;">📐 MEASUREMENT UNITS</label>
+                            <select id="prefUnitsSelect" onchange="savePreference('units',this.value)" style="width:100%; padding:9px; border:1px solid #3949ab; border-radius:6px; font-size:12px; font-weight:700; background:#1c2160; color:#fff; box-sizing:border-box;">
+                                <option value="METRIC">Metric — mm / m² (AU/NZ)</option>
+                                <option value="IMPERIAL_US">Imperial US — in / sqft (USA)</option>
+                                <option value="IMPERIAL_UK">Imperial UK — in / sqft (UK)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display:block; font-weight:900; font-size:10px; color:#9fa8da; margin-bottom:5px;">📏 INCH FORMAT</label>
+                            <select id="prefInchFmtSelect" onchange="savePreference('inchFmt',this.value)" style="width:100%; padding:9px; border:1px solid #3949ab; border-radius:6px; font-size:12px; font-weight:700; background:#1c2160; color:#fff; box-sizing:border-box;">
+                                <option value="decimal">Decimal — 84.5"</option>
+                                <option value="fractional">Fractional — 84½"</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display:block; font-weight:900; font-size:10px; color:#9fa8da; margin-bottom:5px;">💰 CURRENCY</label>
+                            <select id="prefCurrencySelect" onchange="savePreference('currency',this.value)" style="width:100%; padding:9px; border:1px solid #3949ab; border-radius:6px; font-size:12px; font-weight:700; background:#1c2160; color:#fff; box-sizing:border-box;">
+                                <option value="AUD">AUD — Australian Dollar ($)</option>
+                                <option value="USD">USD — US Dollar ($)</option>
+                                <option value="GBP">GBP — British Pound (£)</option>
+                                <option value="EUR">EUR — Euro (€)</option>
+                                <option value="NZD">NZD — New Zealand Dollar ($)</option>
+                                <option value="CAD">CAD — Canadian Dollar ($)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display:block; font-weight:900; font-size:10px; color:#9fa8da; margin-bottom:5px;">🌐 LANGUAGE / SPELLING</label>
+                            <select id="prefLocaleSelect" onchange="savePreference('locale',this.value)" style="width:100%; padding:9px; border:1px solid #3949ab; border-radius:6px; font-size:12px; font-weight:700; background:#1c2160; color:#fff; box-sizing:border-box;">
+                                <option value="en-AU">English (AU) — Australian</option>
+                                <option value="en-US">English (US) — American</option>
+                                <option value="en-GB">English (UK) — British</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="prefSaveStatus" style="font-size:10px; color:#81c784; font-weight:700; min-height:14px;"></div>
+                </div>
+                <!-- ── END MY PREFERENCES ── -->
                 <div style="background:#f0f0f0; border:2px solid #2196f3; border-radius:6px; padding:15px; margin-bottom:20px;">
                     <div style="display:flex; justify-content:space-between; align-items:center;">
                         <div>
@@ -4798,10 +4842,31 @@ const firebaseConfig = {
                 <p style="font-size:11px; color:#666; margin-bottom:15px;">Configure global app settings for measurements, precision, and AI features</p>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-bottom:20px;">
                     <div>
-                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Measurement Units</label>
+                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">📐 Measurement Units</label>
                         <select id="globalUnitsSelect" onchange="setUnits(this.value)" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
-                            <option value="METRIC">METRIC (mm)</option>
-                            <option value="IMPERIAL">IMPERIAL (inches)</option>
+                            <option value="METRIC">Metric — mm / ${getAreaLabel()} (AU/NZ)</option>
+                            <option value="IMPERIAL_US">Imperial US — in / sqft (USA)</option>
+                            <option value="IMPERIAL_UK">Imperial UK — in / sqft (UK)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">📏 Inch Format <span id="inchFormatLabel" style="display:none;">(Imperial only)</span></label>
+                        <select id="globalInchFormatSelect" onchange="setInchFormat(this.value)" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
+                            <option value="decimal">Decimal — 84.5"</option>
+                            <option value="fractional">Fractional — 84½"</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-bottom:20px;">
+                    <div>
+                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">💰 Currency</label>
+                        <select id="globalCurrencySelect" onchange="setCurrency(this.value)" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
+                            <option value="AUD">AUD — Australian Dollar ($)</option>
+                            <option value="USD">USD — US Dollar ($)</option>
+                            <option value="GBP">GBP — British Pound (£)</option>
+                            <option value="EUR">EUR — Euro (€)</option>
+                            <option value="NZD">NZD — New Zealand Dollar ($)</option>
+                            <option value="CAD">CAD — Canadian Dollar ($)</option>
                         </select>
                     </div>
                     <div>
@@ -4834,6 +4899,7 @@ const firebaseConfig = {
                         <select id="localeSelect" onchange="setLocale(this.value)" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
                             <option value="en-AU">English (AU) — Australian spelling</option>
                             <option value="en-US">English (US) — American spelling</option>
+                            <option value="en-GB">English (UK) — British spelling</option>
                         </select>
                         <p style="font-size:10px; color:#999; margin-top:4px; margin-bottom:0;">Changes spelling throughout the app. Auto-detected from your device.</p>
                     </div>
@@ -4944,7 +5010,7 @@ const firebaseConfig = {
                             <div style="font-size:11px; color:#ccc;">Paint coverage rate tracking requires the Pro plan.</div>
                         </div>
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                            <h4 style="margin:0; font-weight:900; font-size:13px;">🪣 Paint Coverage Rates <span class="pw-help">?<span class="pw-help-tip">How many m² one litre of paint covers. Satin/Gloss ~5 m²/L, Undercoat ~8 m²/L. Used to calculate litres needed and paint base cost per job.</span></span></h4>
+                            <h4 style="margin:0; font-weight:900; font-size:13px;">🪣 Paint Coverage Rates <span class="pw-help">?<span class="pw-help-tip">How many ${getAreaLabel()} one litre of paint covers. Satin/Gloss ~5 ${getAreaLabel()}/L, Undercoat ~8 ${getAreaLabel()}/L. Used to calculate litres needed and paint base cost per job.</span></span></h4>
                             <button id="coverageRatesToggle" onclick="toggleSection('coverageRatesBody', this)" style="background:none; border:none; cursor:pointer; font-weight:900; font-size:18px; color:#999;">+</button>
                         </div>
                         <div id="coverageRatesBody" style="display:none;">
@@ -4959,7 +5025,7 @@ const firebaseConfig = {
                                     <input type="number" inputmode="decimal" id="cr_clearUc" min="1" max="30" step="0.5" value="8" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:14px; font-weight:900; text-align:center; box-sizing:border-box;" oninput="saveCoverageRates()">
                                 </div>
                                 <div style="background:#f5f5f5; border-radius:8px; padding:12px;">
-                                    <label style="font-size:11px; font-weight:900; color:#555; display:block; margin-bottom:6px;">✨ Satin (sqm/L) <span class="pw-help">?<span class="pw-help-tip">How many square metres one litre of satin 2Pac covers at normal application thickness. Industry average is around 5 m²/L.</span></span></label>
+                                    <label style="font-size:11px; font-weight:900; color:#555; display:block; margin-bottom:6px;">✨ Satin (sqm/L) <span class="pw-help">?<span class="pw-help-tip">How many square metres one litre of satin 2Pac covers at normal application thickness. Industry average is around 5 ${getAreaLabel()}/L.</span></span></label>
                                     <input type="number" inputmode="decimal" id="cr_satin" min="1" max="30" step="0.5" value="5" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:14px; font-weight:900; text-align:center; box-sizing:border-box;" oninput="saveCoverageRates()">
                                 </div>
                                 <div style="background:#f5f5f5; border-radius:8px; padding:12px;">
@@ -4967,7 +5033,7 @@ const firebaseConfig = {
                                     <input type="number" inputmode="decimal" id="cr_gloss" min="1" max="30" step="0.5" value="5" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:14px; font-weight:900; text-align:center; box-sizing:border-box;" oninput="saveCoverageRates()">
                                 </div>
                                 <div style="background:#f5f5f5; border-radius:8px; padding:12px;">
-                                    <label style="font-size:11px; font-weight:900; color:#555; display:block; margin-bottom:6px;">✨ Matt (sqm/L) <span class="pw-help">?<span class="pw-help-tip">Coverage rate for matt finish. Usually similar to satin — around 5 m²/L.</span></span></label>
+                                    <label style="font-size:11px; font-weight:900; color:#555; display:block; margin-bottom:6px;">✨ Matt (sqm/L) <span class="pw-help">?<span class="pw-help-tip">Coverage rate for matt finish. Usually similar to satin — around 5 ${getAreaLabel()}/L.</span></span></label>
                                     <input type="number" inputmode="decimal" id="cr_matt" min="1" max="30" step="0.5" value="5" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:14px; font-weight:900; text-align:center; box-sizing:border-box;" oninput="saveCoverageRates()">
                                 </div>
                                 <div style="background:#f5f5f5; border-radius:8px; padding:12px;">
@@ -5940,11 +6006,11 @@ const firebaseConfig = {
                                 <label style="font-size:9px; font-weight:900; color:#999; text-transform:uppercase; display:block; margin-bottom:3px;">📐 Min Job SQM</label>
                                 <select id="rMinSqmFilter" style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:5px; font-size:11px; font-weight:700; color:#333; background:#fff;">
                                     <option value="0">— All Sizes —</option>
-                                    <option value="10">10m² +</option>
-                                    <option value="20">20m² +</option>
-                                    <option value="30">30m² +</option>
-                                    <option value="50">50m² +</option>
-                                    <option value="100">100m² +</option>
+                                    <option value="10">10${getAreaLabel()} +</option>
+                                    <option value="20">20${getAreaLabel()} +</option>
+                                    <option value="30">30${getAreaLabel()} +</option>
+                                    <option value="50">50${getAreaLabel()} +</option>
+                                    <option value="100">100${getAreaLabel()} +</option>
                                 </select>
                             </div>
                             <div style="display:flex; gap:5px;">
@@ -6011,7 +6077,7 @@ const firebaseConfig = {
     </div>
     
 <div class="sticky-footer" id="stickyFooter" style="display:none;">
-    <div class="footer-item" style="margin-left:15px;"><div class="footer-label">TOTAL SQM (m²)</div><div class="footer-val" id="tA">0.000</div></div>
+    <div class="footer-item" style="margin-left:15px;"><div class="footer-label">TOTAL SQM (${getAreaLabel()})</div><div class="footer-val" id="tA">0.000</div></div>
     <div style="flex:1; display:flex; justify-content:center; gap:20px; align-items:center;">
         <div class="icon-btn" onclick="genPDF()" style="color:#fff">📄</div>
         <div onclick="openChatAI()" title="Chat with AI Helper" style="display:none; align-items:center; justify-content:center; width:50px; height:50px; background:linear-gradient(135deg, #6200ea 0%, #7c3aed 100%); border-radius:50%; cursor:pointer; font-size:24px; color:#fff; box-shadow:0 4px 12px rgba(98, 0, 234, 0.4); transition:all 0.3s; border:2px solid rgba(255,255,255,0.3); animation:pulse 2s infinite;">💬</div>
@@ -7218,18 +7284,197 @@ const firebaseConfig = {
     }
     
     // Setters for Admin UI controls
+    // ── USER PREFERENCES (Firebase-backed, per user account) ─────────────────
+    async function savePreference(key, value) {
+        // Apply immediately
+        var lsMap = {units:'pw_units', inchFmt:'pw_inchFmt', currency:'pw_currency', locale:'pw_locale'};
+        if (lsMap[key]) localStorage.setItem(lsMap[key], value);
+
+        // Apply effect
+        if (key === 'units') { setUnits(value); }
+        if (key === 'currency') { notify('💰 Currency: ' + value); }
+        if (key === 'locale') { setLocale(value); }
+        if (key === 'inchFmt') { setInchFormat(value); }
+
+        // Save to Firebase under current user
+        try {
+            var user = window._currentUser;
+            if (!user) return;
+            var { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js');
+            var prefRef = doc(window._db, 'users', user.uid, 'settings', 'preferences');
+            var data = {};
+            data[key] = value;
+            await setDoc(prefRef, data, { merge: true });
+            var el = document.getElementById('prefSaveStatus');
+            if (el) { el.textContent = '✓ Saved to your account'; setTimeout(function(){ el.textContent=''; }, 2000); }
+        } catch(e) {
+            console.warn('Pref save failed:', e);
+        }
+    }
+
+    async function loadUserPreferences(uid) {
+        try {
+            var { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js');
+            var prefRef = doc(window._db, 'users', uid, 'settings', 'preferences');
+            var snap = await getDoc(prefRef);
+            if (!snap.exists()) return;
+            var prefs = snap.data();
+            if (prefs.units)    { localStorage.setItem('pw_units',    prefs.units);    _applyUnitLabels(); }
+            if (prefs.inchFmt)  { localStorage.setItem('pw_inchFmt',  prefs.inchFmt); }
+            if (prefs.currency) { localStorage.setItem('pw_currency', prefs.currency); }
+            if (prefs.locale)   { localStorage.setItem('pw_locale',   prefs.locale); if (typeof setLocale==='function') setLocale(prefs.locale); }
+            // Sync dropdowns
+            _syncPrefDropdowns();
+            console.log('✅ User preferences loaded from Firebase');
+        } catch(e) {
+            console.warn('Pref load failed:', e);
+        }
+    }
+
+    function _syncPrefDropdowns() {
+        var maps = {
+            prefUnitsSelect:   localStorage.getItem('pw_units')    || 'METRIC',
+            prefInchFmtSelect: localStorage.getItem('pw_inchFmt')  || 'decimal',
+            prefCurrencySelect:localStorage.getItem('pw_currency') || 'AUD',
+            prefLocaleSelect:  localStorage.getItem('pw_locale')   || 'en-AU',
+            globalUnitsSelect: localStorage.getItem('pw_units')    || 'METRIC',
+            globalCurrencySelect:localStorage.getItem('pw_currency')|| 'AUD',
+            globalInchFormatSelect:localStorage.getItem('pw_inchFmt')||'decimal',
+            localeSelect:      localStorage.getItem('pw_locale')   || 'en-AU',
+        };
+        Object.entries(maps).forEach(function(pair){
+            var el = document.getElementById(pair[0]);
+            if (el) el.value = pair[1];
+        });
+    }
+    window.loadUserPreferences = loadUserPreferences;
+    window._syncPrefDropdowns  = _syncPrefDropdowns;
+
+    // ── UNIT / CURRENCY / FORMAT HELPERS ──────────────────────────────────────
+    // GOLDEN RULE: all stored data stays in mm and sqm forever.
+    // Conversion happens ONLY at display and input boundaries.
+
+    function getUnits()       { return localStorage.getItem('pw_units')      || 'METRIC'; }
+    function getInchFmt()     { return localStorage.getItem('pw_inchFmt')    || 'decimal'; }
+    function getCurrencyCode(){ return localStorage.getItem('pw_currency')   || 'AUD'; }
+    function isImperial()     { return getUnits() !== 'METRIC'; }
+
+    function getCurrencySymbol() {
+        var map = {AUD:'$', USD:'$', GBP:'£', EUR:'€', NZD:'$', CAD:'$'};
+        return map[getCurrencyCode()] || '$';
+    }
+    function getCurrencyLabel() {
+        var map = {AUD:'AUD $', USD:'USD $', GBP:'GBP £', EUR:'EUR €', NZD:'NZD $', CAD:'CAD $'};
+        return map[getCurrencyCode()] || '$';
+    }
+
+    // mm → display string (no units suffix — caller adds "mm" or '"')
+    function mmToDisplay(mm) {
+        if (!isImperial()) return parseFloat(mm).toFixed(0);
+        var inches = parseFloat(mm) / 25.4;
+        if (getInchFmt() === 'fractional') return toFractionalInch(inches);
+        return inches.toFixed(2);
+    }
+
+    // User input value → mm for storage
+    function inputToMm(val) {
+        var n = parseFloat(val) || 0;
+        return isImperial() ? n * 25.4 : n;
+    }
+
+    // sqm → display area string
+    function sqmToDisplay(sqm, decimals) {
+        var d = decimals !== undefined ? decimals : 3;
+        if (!isImperial()) return parseFloat(sqm).toFixed(d) + ' ${getAreaLabel()}';
+        return (parseFloat(sqm) * 10.7639).toFixed(2) + ' sqft';
+    }
+
+    function getUnitLabel()  { return isImperial() ? 'in'   : 'mm';  }
+    function getAreaLabel()  { return isImperial() ? 'sqft' : '${getAreaLabel()}';  }
+
+    // Fractional inch display e.g. 84½"
+    function toFractionalInch(inches) {
+        var whole = Math.floor(Math.abs(inches));
+        var frac  = Math.abs(inches) - whole;
+        var denoms = [2,4,8,16,32];
+        var bestNum=0, bestDen=1, bestDiff=1;
+        denoms.forEach(function(d){
+            var num = Math.round(frac * d);
+            var diff = Math.abs(frac - num/d);
+            if (diff < bestDiff) { bestDiff=diff; bestNum=num; bestDen=d; }
+        });
+        // Simplify fraction
+        function gcd(a,b){ return b===0?a:gcd(b,a%b); }
+        var g = gcd(bestNum, bestDen);
+        bestNum /= g; bestDen /= g;
+        var unicodeMap = {'1/2':'½','1/4':'¼','3/4':'¾','1/8':'⅛','3/8':'⅜','5/8':'⅝','7/8':'⅞',
+            '1/16':'¹⁄₁₆','3/16':'³⁄₁₆','5/16':'⁵⁄₁₆','7/16':'⁷⁄₁₆','9/16':'⁹⁄₁₆',
+            '11/16':'¹¹⁄₁₆','13/16':'¹³⁄₁₆','15/16':'¹⁵⁄₁₆'};
+        var key = bestNum + '/' + bestDen;
+        var fracStr = (bestNum===0) ? '' : (unicodeMap[key] || ' '+key);
+        return (whole > 0 || bestNum===0 ? whole : '') + fracStr + '"';
+    }
+
+    // Price rate per sqm → rate per sqft for display
+    function rateToDisplay(ratePerSqm) {
+        if (!isImperial()) return ratePerSqm;
+        return (ratePerSqm / 10.7639).toFixed(2);
+    }
+
     function setUnits(value) {
+        localStorage.setItem('pw_units', value);
         AdminSettings.units = value;
         saveAdminSettings();
-        notify(` Units changed to: ${value}`);
+        // Update measure sheet labels
+        _applyUnitLabels();
+        notify('📐 Units: ' + (value==='METRIC' ? 'Metric mm/${getAreaLabel()}' : value==='IMPERIAL_US' ? 'Imperial US in/sqft' : 'Imperial UK in/sqft'));
     }
-    
+
+    function setInchFormat(value) {
+        localStorage.setItem('pw_inchFmt', value);
+        notify('📏 Inch format: ' + value);
+    }
+
+    function setCurrency(value) {
+        localStorage.setItem('pw_currency', value);
+        notify('💰 Currency: ' + value);
+    }
+
+    // Apply unit labels to measure sheet inputs dynamically
+    function _applyUnitLabels() {
+        var ul = getUnitLabel(), al = getAreaLabel();
+        ['hLabel','wLabel','thkLabel'].forEach(function(id){
+            var el = document.getElementById(id);
+            if (el) el.textContent = ul;
+        });
+        var hEl = document.getElementById('h');
+        if (hEl) hEl.placeholder = 'Length (' + ul + ')';
+        var wEl = document.getElementById('w');
+        if (wEl) wEl.placeholder = 'Width (' + ul + ')';
+        var sqLabel = document.getElementById('sqLabel');
+        if (sqLabel) sqLabel.textContent = al;
+        var tALabel = document.getElementById('tALabel');
+        if (tALabel) tALabel.textContent = al;
+    }
+
+    // Load saved settings into dropdowns on admin open
+    function loadGlobalSettingsDropdowns() {
+        var u = getUnits(), c = getCurrencyCode(), f = getInchFmt();
+        var us = document.getElementById('globalUnitsSelect');
+        var cs = document.getElementById('globalCurrencySelect');
+        var fs = document.getElementById('globalInchFormatSelect');
+        if (us) us.value = u;
+        if (cs) cs.value = c;
+        if (fs) fs.value = f;
+    }
+
     function setPrecision(value) {
         AdminSettings.precision = parseFloat(value);
         saveAdminSettings();
         notify(` Precision set to: ${value}`);
     }
-    
+
+
     function togglePredictiveInput(value) {
         AdminSettings.predictiveInput = value;
         saveAdminSettings();
@@ -8489,7 +8734,7 @@ const firebaseConfig = {
         doc.setFont(undefined,'normal'); doc.setFontSize(13);
         doc.setTextColor(200,30,30);
         doc.text(size + 'L', 20, y);
-        doc.text(_coverageRate + ' m²/L', 110, y);
+        doc.text(_coverageRate + ' ${getAreaLabel()}/L', 110, y);
         doc.setTextColor(0,0,0);
         y += 14;
 
@@ -13844,6 +14089,8 @@ const firebaseConfig = {
             if (window._adminTabLastClick && Date.now() - window._adminTabLastClick < 600) return;
             window._adminTabLastClick = Date.now();
             renderAdminAlerts();
+            // Sync preference dropdowns with current saved values
+            setTimeout(function(){ if (typeof _syncPrefDropdowns==='function') _syncPrefDropdowns(); }, 100);
         }
         
         // Render schedule calendar and jobs chart when viewing schedule tab
@@ -14119,9 +14366,13 @@ const firebaseConfig = {
     }
 
     function up() {
-        const h = parseFloat(document.getElementById('h').value) || 0;
-        const w = parseFloat(document.getElementById('w').value) || 0;
-        const thk = parseFloat(document.getElementById('thk').value) || 18;
+        const hRaw = parseFloat(document.getElementById('h').value) || 0;
+        const wRaw = parseFloat(document.getElementById('w').value) || 0;
+        const thkRaw = parseFloat(document.getElementById('thk').value) || (isImperial() ? 0.75 : 18);
+        // Convert inputs to mm for calculation
+        const h = isImperial() ? hRaw * 25.4 : hRaw;
+        const w = isImperial() ? wRaw * 25.4 : wRaw;
+        const thk = isImperial() ? thkRaw * 25.4 : thkRaw;
         const eL = (document.getElementById('E1').classList.contains('active')?1:0) + (document.getElementById('E2').classList.contains('active')?1:0);
         const eS = (document.getElementById('E3').classList.contains('active')?1:0) + (document.getElementById('E4').classList.contains('active')?1:0);
         let area = (h * w);
@@ -14129,7 +14380,15 @@ const firebaseConfig = {
         const defaults = loadDefaultSettings();
         if(mode === 'SE') area += ((eL * h) + (eS * w)) * defaults.seReturn;
         area += ((eL * h * thk) + (eS * w * thk));
-        if (document.getElementById('liveSq')) document.getElementById('liveSq').innerText = (area / 1000000).toFixed(3);
+        const sqmVal = area / 1000000;
+        const liveSqEl = document.getElementById('liveSq');
+        if (liveSqEl) {
+            if (isImperial()) {
+                liveSqEl.innerText = (sqmVal * 10.7639).toFixed(2);
+            } else {
+                liveSqEl.innerText = sqmVal.toFixed(3);
+            }
+        }
     }
     
     // ===== CAMERA FUNCTIONALITY WITH TIMESTAMPS =====
@@ -14629,8 +14888,13 @@ const firebaseConfig = {
         // Check for bulk colour change BEFORE adding part
         checkBulkColourChange();
         
-        const h = document.getElementById('h').value;
-        const w = document.getElementById('w').value;
+        const hRaw = document.getElementById('h').value;
+        const wRaw = document.getElementById('w').value;
+        const thkRaw = document.getElementById('thk').value;
+        // Store everything in mm — convert from inches if imperial mode
+        const h = isImperial() ? String((parseFloat(hRaw)||0) * 25.4) : hRaw;
+        const w = isImperial() ? String((parseFloat(wRaw)||0) * 25.4) : wRaw;
+        const thkStored = isImperial() ? String((parseFloat(thkRaw)||18) * 25.4) : (thkRaw || '18');
         const prof = document.getElementById('prof-select').value;
         const _rawDesc = (document.getElementById('desc').value || '').trim();
         // If desc is blank, default to current part type name (not generic "Part")
@@ -14671,7 +14935,7 @@ const firebaseConfig = {
                 code: (document.getElementById('p-code').value || '').toUpperCase(),
                 finish: document.getElementById('p-finish').value,
                 type: pType,
-                thk: document.getElementById('thk').value,
+                thk: thkStored,
                 cts: document.getElementById('ctsPart') ? document.getElementById('ctsPart').checked : false
             });
             saveDescRecent(desc);
@@ -14941,7 +15205,7 @@ const firebaseConfig = {
                 <div class="pl-center">
                     <div style="font-size:10px; font-weight:900; color:${clr}; text-transform:uppercase; line-height:1;">${it.desc} (${it.fm})${it.cts ? '<span style="background:#2c3e50; color:#d4af37; font-size:9px; font-weight:900; padding:2px 6px; border-radius:3px; margin-left:4px;">CTS</span>' : ''}</div>
                     <div class="pl-brand">${it.brand} · ${it.color} · ${it.finish}</div>
-                    <div class="pl-dims">${it.h} x ${it.w} x ${it.thk}</div>
+                    <div class="pl-dims">${mmToDisplay(it.h)} x ${mmToDisplay(it.w)} x ${mmToDisplay(it.thk)} ${getUnitLabel()}</div>
                     <div class="pl-meta">
                         <span style="font-weight:700; background:${clr}; color:#fff; padding:2px 6px; border-radius:3px; font-size:9px; text-transform:uppercase;">${it.type}</span>
                         <span style="font-weight:700;">${it.prof}</span>
@@ -14952,7 +15216,7 @@ const firebaseConfig = {
                 </div>
                 <div class="pl-right">
                     <div class="pl-mode" style="color:${mC}; border-color:${mC}; background:${mC}20">${it.mode}</div>
-                    <div class="pl-sqm">${rowSqm.toFixed(3)}<span style="font-size:9px; font-weight:700; color:#999;">m²</span></div>
+                    <div class="pl-sqm">${isImperial() ? (rowSqm*10.7639).toFixed(2) : rowSqm.toFixed(3)}<span style="font-size:9px; font-weight:700; color:#999;">${getAreaLabel()}</span></div>
                 </div>
                 <input type="checkbox" class="part-colour-cb" data-idx="${originalIndex}" style="width:18px;height:18px;cursor:pointer;flex-shrink:0;margin:0 2px;" title="Tick to change colour on this part"><button class="edit-btn" onclick="editItem(${originalIndex})" style="background:rgba(33,150,243,0.12); color:#2196f3; border:1px solid rgba(33,150,243,0.3); padding:6px 12px; border-radius:6px; font-weight:900; cursor:pointer; font-size:11px; white-space:nowrap; flex-shrink:0;"><span class="edit-btn-icon">✏️</span><span class="edit-btn-text" style="display:none;">✏️ Edit</span></button><button class="del-btn" onclick="deleteItem(${originalIndex})">✕</button>
             `;
@@ -14966,8 +15230,9 @@ const firebaseConfig = {
             l.appendChild(_rowDiv);
         });
         
-        if (document.getElementById('tA')) document.getElementById('tA').innerText = tA.toFixed(3);
+        if (document.getElementById('tA')) document.getElementById('tA').innerText = isImperial() ? (tA * 10.7639).toFixed(2) : tA.toFixed(3);
         if (document.getElementById('tQ')) document.getElementById('tQ').innerText = tQ;
+        _applyUnitLabels();
     }
 
     // ── DRAG TO REORDER PARTS ──────────────────────────────────────────────────
@@ -15991,7 +16256,7 @@ const firebaseConfig = {
                 doc.line(lm,y+rH,rm,y+rH);
 
                 // Clear: show actual value; if 0/undefined show    
-                const fmt=v=>(v!==undefined&&v!==null&&Number(v)>0)?'$'+Number(v):'   ';
+                const fmt=v=>(v!==undefined&&v!==null&&Number(v)>0)?getCurrencySymbol()+Number(v):'   ';
                 [tierNums[tierName]||'   ',name,fmt(matt),fmt(satin),fmt(semiG),fmt(gloss),fmt(clear)].forEach((v,i)=>{
                     doc.setFont('helvetica',i===1?'bold':'normal');
                     doc.setFontSize(7); doc.setTextColor(28,28,28);
@@ -16161,7 +16426,7 @@ const firebaseConfig = {
             y += 12;
             
             // Table headers definitions - expanded to use full page width (15mm margins each side = 180mm available)
-            const headers = ['Qty', 'H', 'W', 'Thk', 'Mld', 'Edge', 'Mode', 'Panel', 'Profile', 'm²', '$/m²', 'Total'];
+            const headers = ['Qty', 'H', 'W', 'Thk', 'Mld', 'Edge', 'Mode', 'Panel', 'Profile', '${getAreaLabel()}', '$/${getAreaLabel()}', 'Total'];
             const colWidths = [8, 15, 15, 13, 14, 13, 10, 15, 38, 10, 10, 18];
             const cellHeight = 6;
             
@@ -16300,8 +16565,8 @@ const firebaseConfig = {
                 // Calculate x position for Total column (sum of all column widths before it)
                 const totalColX = x + (8+16+16+14+14+15+10+15+26+12+12);
                 doc.text(`Subtotal (${colourName}):`, x, y);
-                doc.text(`$${colourTotal.toFixed(2)} excl.`, 188, y, { align: 'right' });
-                doc.setFontSize(7.5); doc.text(`GST: $${(colourTotal*0.1).toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`$${(colourTotal*1.1).toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(9);
+                doc.text(`${getCurrencySymbol()}${colourTotal.toFixed(2)} excl.`, 188, y, { align: 'right' });
+                doc.setFontSize(7.5); doc.text(`GST: $${(colourTotal*0.1).toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`${getCurrencySymbol()}${(colourTotal*1.1).toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(9);
                 y += 15;
                 
                 // Add colour-specific surcharge if applicable
@@ -16316,8 +16581,8 @@ const firebaseConfig = {
                                 doc.setFont(undefined, 'normal');
                                 doc.setFontSize(8);
                                 doc.text(`  Paint Surcharge (${s.label}):`, x, y);
-                                doc.text(`$${s.amount.toFixed(2)} excl.`, 188, y, { align: 'right' });
-                                doc.setFontSize(7); doc.text(`GST: $${(s.amount*0.1).toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`$${(s.amount*1.1).toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(8);
+                                doc.text(`${getCurrencySymbol()}${s.amount.toFixed(2)} excl.`, 188, y, { align: 'right' });
+                                doc.setFontSize(7); doc.text(`GST: $${(s.amount*0.1).toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`${getCurrencySymbol()}${(s.amount*1.1).toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(8);
                                 y += 15;
                                 grandTotal += s.amount;
                             }
@@ -16345,7 +16610,7 @@ const firebaseConfig = {
                 if (y + _ctsEstHeight > 265) { doc.addPage(); y = 20; }
                 doc.setFontSize(11); doc.setFont(undefined,'bold');
                 doc.setFillColor(245,245,245); doc.setDrawColor(0,0,0); doc.setLineWidth(1.0);
-                var ctsHeaders = ['Qty','H','W','Thk','Profile','m²','$/m²','Total'];
+                var ctsHeaders = ['Qty','H','W','Thk','Profile','${getAreaLabel()}','$/${getAreaLabel()}','Total'];
                 var ctsCW = [8,15,15,13,52,12,12,18];
                 var _ctsTotalW = ctsCW.reduce(function(a,b){return a+b;},0);
                 // Draw box first, then text on top
@@ -16419,15 +16684,15 @@ const firebaseConfig = {
             // Show additional charges clearly
             if (appliedCharges && appliedCharges.deliveryCharge > 0) {
                 doc.text(`Delivery/Pickup (${appliedCharges.deliveryRegionLabel}):`, x, y);
-                doc.text(`$${appliedCharges.deliveryCharge.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
+                doc.text(`${getCurrencySymbol()}${appliedCharges.deliveryCharge.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
                 grandTotal += appliedCharges.deliveryCharge;
                 y += 6;
             }
             
             if (appliedCharges && appliedCharges.courierCost > 0) {
                 doc.text(`Freight Charge:`, x, y);
-                doc.text(`$${appliedCharges.courierCost.toFixed(2)} excl.`, 188, y, { align: 'right' });
-                doc.setFontSize(7.5); doc.text(`GST: $${(appliedCharges.courierCost*0.1).toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`$${(appliedCharges.courierCost*1.1).toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(9);
+                doc.text(`${getCurrencySymbol()}${appliedCharges.courierCost.toFixed(2)} excl.`, 188, y, { align: 'right' });
+                doc.setFontSize(7.5); doc.text(`GST: $${(appliedCharges.courierCost*0.1).toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`${getCurrencySymbol()}${(appliedCharges.courierCost*1.1).toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(9);
                 grandTotal += appliedCharges.courierCost;
                 y += 15;
             }
@@ -16472,8 +16737,8 @@ const firebaseConfig = {
             y += 5;
             doc.setFont(undefined, 'bold'); doc.setFontSize(9);
             doc.text(`Subtotal (inc. charges):`, x, y);
-            doc.text(`$${grandTotal.toFixed(2)} excl.`, 188, y, { align: 'right' });
-            doc.setFontSize(7.5); doc.text(`GST: $${gstAmount.toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`$${totalWithGST.toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(9);
+            doc.text(`${getCurrencySymbol()}${grandTotal.toFixed(2)} excl.`, 188, y, { align: 'right' });
+            doc.setFontSize(7.5); doc.text(`GST: $${gstAmount.toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`${getCurrencySymbol()}${totalWithGST.toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(9);
             y += 14;
             doc.setFont(undefined, 'normal'); doc.setFontSize(8);
             doc.text(`GST (${(gstRate*100).toFixed(0)}%): $${gstAmount.toFixed(2)}`, x, y);
@@ -16627,7 +16892,7 @@ const firebaseConfig = {
             y += 12;
             
             // Table headers definitions - expanded to use full page width (15mm margins each side = 180mm available)
-            const headers = ['Qty', 'H', 'W', 'Thk', 'Mld', 'Edge', 'Mode', 'Panel', 'Profile', 'm²', '$/m²', 'Total'];
+            const headers = ['Qty', 'H', 'W', 'Thk', 'Mld', 'Edge', 'Mode', 'Panel', 'Profile', '${getAreaLabel()}', '$/${getAreaLabel()}', 'Total'];
             const colWidths = [8, 15, 15, 13, 14, 13, 10, 15, 38, 10, 10, 18];
             const cellHeight = 6;
             
@@ -16766,8 +17031,8 @@ const firebaseConfig = {
                 // Calculate x position for Total column (sum of all column widths before it)
                 const totalColX = x + (8+16+16+14+14+15+10+15+26+12+12);
                 doc.text(`Subtotal (${colourName}):`, x, y);
-                doc.text(`$${colourTotal.toFixed(2)} excl.`, 188, y, { align: 'right' });
-                doc.setFontSize(7.5); doc.text(`GST: $${(colourTotal*0.1).toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`$${(colourTotal*1.1).toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(9);
+                doc.text(`${getCurrencySymbol()}${colourTotal.toFixed(2)} excl.`, 188, y, { align: 'right' });
+                doc.setFontSize(7.5); doc.text(`GST: $${(colourTotal*0.1).toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`${getCurrencySymbol()}${(colourTotal*1.1).toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(9);
                 y += 15;
                 
                 // Add colour-specific surcharge if applicable
@@ -16782,8 +17047,8 @@ const firebaseConfig = {
                                 doc.setFont(undefined, 'normal');
                                 doc.setFontSize(8);
                                 doc.text(`  Paint Surcharge (${s.label}):`, x, y);
-                                doc.text(`$${s.amount.toFixed(2)} excl.`, 188, y, { align: 'right' });
-                                doc.setFontSize(7); doc.text(`GST: $${(s.amount*0.1).toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`$${(s.amount*1.1).toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(8);
+                                doc.text(`${getCurrencySymbol()}${s.amount.toFixed(2)} excl.`, 188, y, { align: 'right' });
+                                doc.setFontSize(7); doc.text(`GST: $${(s.amount*0.1).toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`${getCurrencySymbol()}${(s.amount*1.1).toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(8);
                                 y += 15;
                                 grandTotal += s.amount;
                             }
@@ -16811,7 +17076,7 @@ const firebaseConfig = {
                 if (y + _ctsEstHeight > 265) { doc.addPage(); y = 20; }
                 doc.setFontSize(11); doc.setFont(undefined,'bold');
                 doc.setFillColor(245,245,245); doc.setDrawColor(0,0,0); doc.setLineWidth(1.0);
-                var ctsHeaders = ['Qty','H','W','Thk','Profile','m²','$/m²','Total'];
+                var ctsHeaders = ['Qty','H','W','Thk','Profile','${getAreaLabel()}','$/${getAreaLabel()}','Total'];
                 var ctsCW = [8,15,15,13,52,12,12,18];
                 var _ctsTotalW = ctsCW.reduce(function(a,b){return a+b;},0);
                 // Draw box first, then text on top
@@ -16885,15 +17150,15 @@ const firebaseConfig = {
             // Show additional charges clearly
             if (appliedCharges && appliedCharges.deliveryCharge > 0) {
                 doc.text(`Delivery/Pickup (${appliedCharges.deliveryRegionLabel}):`, x, y);
-                doc.text(`$${appliedCharges.deliveryCharge.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
+                doc.text(`${getCurrencySymbol()}${appliedCharges.deliveryCharge.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
                 grandTotal += appliedCharges.deliveryCharge;
                 y += 6;
             }
             
             if (appliedCharges && appliedCharges.courierCost > 0) {
                 doc.text(`Freight Charge:`, x, y);
-                doc.text(`$${appliedCharges.courierCost.toFixed(2)} excl.`, 188, y, { align: 'right' });
-                doc.setFontSize(7.5); doc.text(`GST: $${(appliedCharges.courierCost*0.1).toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`$${(appliedCharges.courierCost*1.1).toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(9);
+                doc.text(`${getCurrencySymbol()}${appliedCharges.courierCost.toFixed(2)} excl.`, 188, y, { align: 'right' });
+                doc.setFontSize(7.5); doc.text(`GST: $${(appliedCharges.courierCost*0.1).toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`${getCurrencySymbol()}${(appliedCharges.courierCost*1.1).toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(9);
                 grandTotal += appliedCharges.courierCost;
                 y += 15;
             }
@@ -16938,8 +17203,8 @@ const firebaseConfig = {
             y += 5;
             doc.setFont(undefined, 'bold'); doc.setFontSize(9);
             doc.text(`Subtotal (inc. charges):`, x, y);
-            doc.text(`$${grandTotal.toFixed(2)} excl.`, 188, y, { align: 'right' });
-            doc.setFontSize(7.5); doc.text(`GST: $${gstAmount.toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`$${totalWithGST.toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(9);
+            doc.text(`${getCurrencySymbol()}${grandTotal.toFixed(2)} excl.`, 188, y, { align: 'right' });
+            doc.setFontSize(7.5); doc.text(`GST: $${gstAmount.toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`${getCurrencySymbol()}${totalWithGST.toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(9);
             y += 14;
             doc.setFont(undefined, 'normal'); doc.setFontSize(8);
             doc.text(`GST (${(gstRate*100).toFixed(0)}%): $${gstAmount.toFixed(2)}`, x, y);
@@ -17093,7 +17358,7 @@ const firebaseConfig = {
             y += 12;
             
             // Table headers definitions - expanded to use full page width (15mm margins each side = 180mm available)
-            const headers = ['Qty', 'H', 'W', 'Thk', 'Mld', 'Edge', 'Mode', 'Panel', 'Profile', 'm²', '$/m²', 'Total'];
+            const headers = ['Qty', 'H', 'W', 'Thk', 'Mld', 'Edge', 'Mode', 'Panel', 'Profile', '${getAreaLabel()}', '$/${getAreaLabel()}', 'Total'];
             const colWidths = [8, 15, 15, 13, 14, 13, 10, 15, 38, 10, 10, 18];
             const cellHeight = 6;
             
@@ -17232,8 +17497,8 @@ const firebaseConfig = {
                 // Calculate x position for Total column (sum of all column widths before it)
                 const totalColX = x + (8+16+16+14+14+15+10+15+26+12+12);
                 doc.text(`Subtotal (${colourName}):`, x, y);
-                doc.text(`$${colourTotal.toFixed(2)} excl.`, 188, y, { align: 'right' });
-                doc.setFontSize(7.5); doc.text(`GST: $${(colourTotal*0.1).toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`$${(colourTotal*1.1).toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(9);
+                doc.text(`${getCurrencySymbol()}${colourTotal.toFixed(2)} excl.`, 188, y, { align: 'right' });
+                doc.setFontSize(7.5); doc.text(`GST: $${(colourTotal*0.1).toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`${getCurrencySymbol()}${(colourTotal*1.1).toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(9);
                 y += 15;
                 
                 // Add colour-specific surcharge if applicable
@@ -17248,8 +17513,8 @@ const firebaseConfig = {
                                 doc.setFont(undefined, 'normal');
                                 doc.setFontSize(8);
                                 doc.text(`  Paint Surcharge (${s.label}):`, x, y);
-                                doc.text(`$${s.amount.toFixed(2)} excl.`, 188, y, { align: 'right' });
-                                doc.setFontSize(7); doc.text(`GST: $${(s.amount*0.1).toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`$${(s.amount*1.1).toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(8);
+                                doc.text(`${getCurrencySymbol()}${s.amount.toFixed(2)} excl.`, 188, y, { align: 'right' });
+                                doc.setFontSize(7); doc.text(`GST: $${(s.amount*0.1).toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`${getCurrencySymbol()}${(s.amount*1.1).toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(8);
                                 y += 15;
                                 grandTotal += s.amount;
                             }
@@ -17277,7 +17542,7 @@ const firebaseConfig = {
                 if (y + _ctsEstHeight > 265) { doc.addPage(); y = 20; }
                 doc.setFontSize(11); doc.setFont(undefined,'bold');
                 doc.setFillColor(245,245,245); doc.setDrawColor(0,0,0); doc.setLineWidth(1.0);
-                var ctsHeaders = ['Qty','H','W','Thk','Profile','m²','$/m²','Total'];
+                var ctsHeaders = ['Qty','H','W','Thk','Profile','${getAreaLabel()}','$/${getAreaLabel()}','Total'];
                 var ctsCW = [8,15,15,13,52,12,12,18];
                 var _ctsTotalW = ctsCW.reduce(function(a,b){return a+b;},0);
                 // Draw box first, then text on top
@@ -17351,15 +17616,15 @@ const firebaseConfig = {
             // Show additional charges clearly
             if (appliedCharges && appliedCharges.deliveryCharge > 0) {
                 doc.text(`Delivery/Pickup (${appliedCharges.deliveryRegionLabel}):`, x, y);
-                doc.text(`$${appliedCharges.deliveryCharge.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
+                doc.text(`${getCurrencySymbol()}${appliedCharges.deliveryCharge.toFixed(2)}`, totalColX + 8, y, { align: 'right' });
                 grandTotal += appliedCharges.deliveryCharge;
                 y += 6;
             }
             
             if (appliedCharges && appliedCharges.courierCost > 0) {
                 doc.text(`Freight Charge:`, x, y);
-                doc.text(`$${appliedCharges.courierCost.toFixed(2)} excl.`, 188, y, { align: 'right' });
-                doc.setFontSize(7.5); doc.text(`GST: $${(appliedCharges.courierCost*0.1).toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`$${(appliedCharges.courierCost*1.1).toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(9);
+                doc.text(`${getCurrencySymbol()}${appliedCharges.courierCost.toFixed(2)} excl.`, 188, y, { align: 'right' });
+                doc.setFontSize(7.5); doc.text(`GST: $${(appliedCharges.courierCost*0.1).toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`${getCurrencySymbol()}${(appliedCharges.courierCost*1.1).toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(9);
                 grandTotal += appliedCharges.courierCost;
                 y += 15;
             }
@@ -17404,8 +17669,8 @@ const firebaseConfig = {
             y += 5;
             doc.setFont(undefined, 'bold'); doc.setFontSize(9);
             doc.text(`Subtotal (inc. charges):`, x, y);
-            doc.text(`$${grandTotal.toFixed(2)} excl.`, 188, y, { align: 'right' });
-            doc.setFontSize(7.5); doc.text(`GST: $${gstAmount.toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`$${totalWithGST.toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(9);
+            doc.text(`${getCurrencySymbol()}${grandTotal.toFixed(2)} excl.`, 188, y, { align: 'right' });
+            doc.setFontSize(7.5); doc.text(`GST: $${gstAmount.toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`${getCurrencySymbol()}${totalWithGST.toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(9);
             y += 14;
             doc.setFont(undefined, 'normal'); doc.setFontSize(8);
             doc.text(`GST (${(gstRate*100).toFixed(0)}%): $${gstAmount.toFixed(2)}`, x, y);
@@ -18031,7 +18296,7 @@ const firebaseConfig = {
                                       _fin === 'clear' ? (parseFloat(_CR.clear) || 5) :
                                       (parseFloat(_CR.satin) || 5); // default satin
                 const paintQty = (colorSQM / _coverageRate).toFixed(1);
-                doc.text(paintQty + ' L  (' + _coverageRate + ' m²/L)', rightCol, y);
+                doc.text(paintQty + ' L  (' + _coverageRate + ' ${getAreaLabel()}/L)', rightCol, y);
                 y += 14;
                 
                 // ===== DIVIDER =====
@@ -18397,7 +18662,7 @@ const firebaseConfig = {
                     const _bColorParts = (window.pdfItemsToUse && window.pdfItemsToUse.length > 0 ? window.pdfItemsToUse : items).filter(i=>(i.color||'').trim().toLowerCase()===color.toLowerCase()).reduce((s,i)=>s+(parseInt(i.qty)||1),0);
                     doc.text(`${_bColorSQM.toFixed(2)} m`, 20, _by);
                     doc.text(String(_bColorParts), 65, _by);
-                    doc.text(`${_bPaintQty} L  (${_coveragePreview} m²/L)`, 110, _by);
+                    doc.text(`${_bPaintQty} L  (${_coveragePreview} ${getAreaLabel()}/L)`, 110, _by);
                     doc.setTextColor(0,0,0); _by += 10;
 
                     // ── GOLD DIVIDER ─────────────────────────────────────────
@@ -20443,7 +20708,7 @@ const firebaseConfig = {
         _totalPaintCost += parseFloat(clearUcL)   * (_estCosts['UC']      || 0);
         _totalPaintCost += parseFloat(undercoatL) * (_estCosts['UCWHITE'] || 0);
         const _grossProfit = _totalEstVal - _totalPaintCost;
-        const _fmtKpi = v => v >= 1000 ? '$' + (v/1000).toFixed(1) + 'k' : '$' + Math.round(v).toLocaleString();
+        const _fmtKpi = v => v >= 1000 ? getCurrencySymbol() + (v/1000).toFixed(1) + 'k' : getCurrencySymbol() + Math.round(v).toLocaleString();
         // Base cost fallback: if no formula matches, estimate from total SQM × avg rate
         const _hasAnyCost = Object.values(getBaseCosts()).some(v => v > 0);
         const _paintCostNote = (!_hasAnyCost) ? '<div style="font-size:9px;color:#e57373;margin-top:4px;">⚠ Set $/L in Admin → Paint Stock Settings</div>' : (Object.keys(baseCodeLitres).length === 0 && _hasAnyCost) ? '<div style="font-size:9px;color:#ff9800;margin-top:4px;">⚠ Add paint formulas to Database → Paint for cost analysis</div>' : '';
@@ -20467,10 +20732,10 @@ const firebaseConfig = {
         <!-- KPI cards - up to 8 across -->
         <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(100px,1fr)); gap:10px; margin-bottom:18px;">
             ${kpiCard('       ', 'Jobs', jobs.length, '#2196f3')}
-            ${kpiCard('    ', 'Total SQM', totalSqm.toFixed(1) + 'm²', '#4caf50')}
+            ${kpiCard('    ', 'Total SQM', totalSqm.toFixed(1) + '${getAreaLabel()}', '#4caf50')}
             ${kpiCard('    ', 'Parts', totalParts, '#ff9800')}
             ${kpiCard('    ', 'Colours', Object.keys(colourCount).length, '#9c27b0')}
-            ${kpiCard('    ', 'Undercoat SQM', undercoatSqm + 'm²', '#795548')}
+            ${kpiCard('    ', 'Undercoat SQM', undercoatSqm + '${getAreaLabel()}', '#795548')}
             ${kpiCard('    ', 'Est. Revenue', _fmtKpi(_totalEstVal), '#1565c0')}
             ${kpiCard('⏱', 'Avg Days/Job', _avgDaysKpi, '#00838f')}
             ${totalCtsRevenue > 0 ? kpiCard('✂️', 'CTS Revenue', _fmtKpi(totalCtsRevenue), '#2c3e50') : ''}
@@ -20529,7 +20794,7 @@ const firebaseConfig = {
                         <tr style="border-bottom:1px solid #f0f0f0; background:#e8f5e9;">
                             <td style="padding:6px 8px; font-weight:900; color:#2e7d32;">Undercoat White</td>
                             <td style="padding:6px 8px; text-align:right; font-weight:900; font-size:14px; color:#2e7d32;">${undercoatL}</td>
-                            <td style="padding:6px 8px; color:#888; font-size:9px;">uc · ${ucRate}m²/L</td>
+                            <td style="padding:6px 8px; color:#888; font-size:9px;">uc · ${ucRate}${getAreaLabel()}/L</td>
                         </tr>
                         <tr style="border-bottom:1px solid #f0f0f0;">
                             <td style="padding:6px 8px; font-weight:700; color:#0d47a1;">XB6930 Satin White</td>
@@ -20564,12 +20829,12 @@ const firebaseConfig = {
                         <tr style="border-bottom:1px solid #f0f0f0;">
                             <td style="padding:7px 10px; font-weight:700; color:#388e3c;">Clear U/C</td>
                             <td style="padding:6px 8px; text-align:right; font-weight:900; font-size:15px; color:#388e3c;">${clearUcL}</td>
-                            <td style="padding:7px 10px; color:#888; font-size:10px;">u/c · ${ucClearRate}m²/L</td>
+                            <td style="padding:7px 10px; color:#888; font-size:10px;">u/c · ${ucClearRate}${getAreaLabel()}/L</td>
                         </tr>
                         <tr style="border-bottom:1px solid #f0f0f0; background:#fafafa;">
                             <td style="padding:7px 10px; font-weight:700; color:#6a1b9a;">Clear Coat</td>
                             <td style="padding:6px 8px; text-align:right; font-weight:900; font-size:15px; color:#6a1b9a;">${clearPaintLitres.toFixed(1)}</td>
-                            <td style="padding:7px 10px; color:#888; font-size:10px;">clear · ${clrRate}m²/L</td>
+                            <td style="padding:7px 10px; color:#888; font-size:10px;">clear · ${clrRate}${getAreaLabel()}/L</td>
                         </tr>
                         <tr style="background:#e3f2fd; border-top:2px solid #1565c0;">
                             <td style="padding:7px 8px; font-weight:900; color:#1565c0;">TOTAL SATIN</td>
@@ -20795,7 +21060,7 @@ const firebaseConfig = {
                     data:{ labels: chartLabels, datasets },
                     options:{ responsive:true,
                         plugins:{ legend:{ display: _reportStatusFilter === 'all', position:'top', labels:{ font:{size:10}, boxWidth:12 } } },
-                        scales:{ y:{ beginAtZero:true, ticks:{font:{size:10}, callback:v=>v+'m²'} }, x:{ ticks:{font:{size:useWeekly?9:10}, maxRotation:45} } }
+                        scales:{ y:{ beginAtZero:true, ticks:{font:{size:10}, callback:v=>v+'${getAreaLabel()}'} }, x:{ ticks:{font:{size:useWeekly?9:10}, maxRotation:45} } }
                     }
                 });
             }
@@ -20880,7 +21145,7 @@ const firebaseConfig = {
                         </div>
                         <div style="text-align:right; flex-shrink:0;">
                             <div style="font-size:15px; font-weight:900; color:${col}; line-height:1;">${c[1].toFixed(1)}</div>
-                            <div style="font-size:9px; color:${tileSub2}; margin-top:1px;">m²</div>
+                            <div style="font-size:9px; color:${tileSub2}; margin-top:1px;">${getAreaLabel()}</div>
                         </div>
                     </div>`;
                 });
@@ -20899,7 +21164,7 @@ const firebaseConfig = {
                         datasets:[{ data: topColours.map(c=>+c[1].toFixed(2)),
                             backgroundColor: palette, borderRadius:5 }]
                     }, options:{ indexAxis:'y', responsive:true, plugins:{legend:{display:false}},
-                        scales:{ x:{ beginAtZero:true, ticks:{font:{size:11}, callback: v => v+'m²'} }, y:{ ticks:{font:{size:11}, crossAlign:'far'} } } }
+                        scales:{ x:{ beginAtZero:true, ticks:{font:{size:11}, callback: v => v+'${getAreaLabel()}'} }, y:{ ticks:{font:{size:11}, crossAlign:'far'} } } }
                 });
             }
 
@@ -20913,7 +21178,7 @@ const firebaseConfig = {
                         datasets:[{ data: topProfiles.map(p=>+p[1].toFixed(2)),
                             backgroundColor: palette.slice(2), borderRadius:5 }]
                     }, options:{ indexAxis:'y', responsive:true, plugins:{legend:{display:false}},
-                        scales:{ x:{ beginAtZero:true, ticks:{font:{size:11}, callback: v => v+'m²'} }, y:{ ticks:{font:{size:11}, crossAlign:'far'} } } }
+                        scales:{ x:{ beginAtZero:true, ticks:{font:{size:11}, callback: v => v+'${getAreaLabel()}'} }, y:{ ticks:{font:{size:11}, crossAlign:'far'} } } }
                 });
             }
 
@@ -20924,7 +21189,7 @@ const firebaseConfig = {
                     datasets:[{ data: topClients.map(c=>+c[1].toFixed(2)),
                         backgroundColor: palette.slice(1), borderRadius:5 }]
                 }, options:{ responsive:true, plugins:{legend:{display:false}},
-                    scales:{ y:{ beginAtZero:true, ticks:{font:{size:11}, callback: v => v+'m²'} }, x:{ ticks:{font:{size:11}, maxRotation:30} } } }});
+                    scales:{ y:{ beginAtZero:true, ticks:{font:{size:11}, callback: v => v+'${getAreaLabel()}'} }, x:{ ticks:{font:{size:11}, maxRotation:30} } } }});
             }
 
             // Monthly jobs bar
@@ -21085,7 +21350,7 @@ const firebaseConfig = {
                         chart.data.datasets.forEach((ds, di) => {
                             chart.getDatasetMeta(di).data.forEach((bar, i) => {
                                 const val = ds.data[i]; if (!val) return;
-                                const lbl = '$' + (val >= 1000 ? (val/1000).toFixed(1)+'k' : val.toLocaleString());
+                                const lbl = getCurrencySymbol() + (val >= 1000 ? (val/1000).toFixed(1)+'k' : val.toLocaleString());
                                 ctx.save(); ctx.fillStyle='#fff'; ctx.font='bold 10px sans-serif';
                                 ctx.textAlign='right'; ctx.textBaseline='middle';
                                 ctx.fillText(lbl, bar.x - 6, bar.y); ctx.restore();
@@ -21489,10 +21754,10 @@ const firebaseConfig = {
         const _matTotal = Math.abs(Math.round(stock['XB6910'] || 0)) + Math.abs(Math.round(stock['XB6911'] || 0));
         alert(
             `⚡ RECALC COMPLETE — ${jobCount} jobs processed\n\n` +
-            `Undercoat deducted: ${_ucTotal}L (at ${_ucR}m²/L)\n` +
-            `Satin base deducted: ${_satTotal}L (at ${_satR}m²/L)\n` +
-            `Gloss base deducted: ${_glsTotal}L (at ${_glsR}m²/L)\n` +
-            `Matt base deducted: ${_matTotal}L (at ${_matR}m²/L)\n\n` +
+            `Undercoat deducted: ${_ucTotal}L (at ${_ucR}${getAreaLabel()}/L)\n` +
+            `Satin base deducted: ${_satTotal}L (at ${_satR}${getAreaLabel()}/L)\n` +
+            `Gloss base deducted: ${_glsTotal}L (at ${_glsR}${getAreaLabel()}/L)\n` +
+            `Matt base deducted: ${_matTotal}L (at ${_matR}${getAreaLabel()}/L)\n\n` +
             `All values are now NEGATIVE (deducted from 0).\n` +
             `Go to Database → Stock, enter your actual drum quantities,\n` +
             `then the stock levels will show what you actually have left.`
@@ -23657,7 +23922,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
                         p.description || `${p.height}x${p.width}x${p.thickness}`,
                         p.doorProfile || "N/A",
                         p.finish || "Satin",
-                        `$${pricing.total}`
+                        `${getCurrencySymbol()}${pricing.total}`
                     ];
                 });
             } else {
@@ -24253,7 +24518,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
             var chHist = jobHistory[jIdx].chargesHistory.slice().sort(function(a,b){ return (b.appliedAt||'')>(a.appliedAt||'') ? 1 : -1; });
             var hHtml = '';
             chHist.forEach(function(c) {
-                var total = c.totalWithCharges ? '$' + c.totalWithCharges.toFixed(2) : '?';
+                var total = c.totalWithCharges ? getCurrencySymbol() + c.totalWithCharges.toFixed(2) : '?';
                 var date = c.appliedAt ? new Date(c.appliedAt).toLocaleDateString('en-AU') : '';
                 var label = (c.formType||'DOC').toUpperCase();
                 hHtml += '<div style="display:flex; justify-content:space-between; padding:2px 0;">' +
@@ -24536,7 +24801,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
             parts.push('Other $' + c.otherChargeAmount.toFixed(2));
         }
         var date = c.appliedAt ? new Date(c.appliedAt).toLocaleDateString('en-AU') : '';
-        var total = c.totalWithCharges ? '$' + c.totalWithCharges.toFixed(2) : '?';
+        var total = c.totalWithCharges ? getCurrencySymbol() + c.totalWithCharges.toFixed(2) : '?';
         var label = (c.formType || 'DOC').toUpperCase();
         return '<div style="display:flex; justify-content:space-between; align-items:baseline; padding:5px 0; border-bottom:1px solid #4a3500;">' +
                '<div><span style="background:#d4af37; color:#000; font-size:9px; font-weight:900; padding:2px 6px; border-radius:3px; margin-right:6px;">' + label + '</span>' +
@@ -24588,7 +24853,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 parts.push('Other $' + c.otherChargeAmount.toFixed(2));
             }
             var date = c.appliedAt ? new Date(c.appliedAt).toLocaleDateString('en-AU') : '';
-            var total = c.totalWithCharges ? '$' + c.totalWithCharges.toFixed(2) : '?';
+            var total = c.totalWithCharges ? getCurrencySymbol() + c.totalWithCharges.toFixed(2) : '?';
             var label = (c.formType || 'DOC').toUpperCase();
             html += '<div style="display:flex; justify-content:space-between; align-items:baseline; padding:5px 0; border-bottom:1px solid #3a2a00;">' +
                 '<div style="flex:1;">' +
@@ -25680,7 +25945,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
             }
 
             // ── DISCLAIMER ──
-            const noteLines=['All prices per m² excl. GST. Prices subject to change without notice.','For profiles not listed, please contact us for an estimate.'];
+            const noteLines=['All prices per ${getAreaLabel()} excl. GST. Prices subject to change without notice.','For profiles not listed, please contact us for an estimate.'];
             const noteH = 3.5 + noteLines.length*4.5;
             doc.setFillColor(255,252,235); doc.setDrawColor(198,168,28); doc.setLineWidth(0.22);
             doc.roundedRect(lm,y,rm-lm,noteH,1.5,1.5,'FD');
@@ -25692,7 +25957,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
             doc.setDrawColor(200,200,200); doc.setLineWidth(0.22);
             doc.line(lm,ph-11,rm,ph-11);
             doc.setFont('helvetica','normal'); doc.setFontSize(6.5); doc.setTextColor(140,140,140);
-            doc.text('All prices per m² excl. GST. Prices subject to change without notice.',lm,ph-6.5);
+            doc.text('All prices per ${getAreaLabel()} excl. GST. Prices subject to change without notice.',lm,ph-6.5);
             doc.setFont('helvetica','bold'); doc.setTextColor(95,108,195);
             doc.text('paintworkzpro.com.au',rm,ph-6.5,{align:'right'});
             doc.setFont('helvetica','normal'); doc.setFontSize(5.5); doc.setTextColor(185,185,185);
@@ -26979,7 +27244,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
         doc.text('TOTAL SQM', col1, infoY+22);
         doc.text('PAINT BRAND', col2, infoY+22);
         doc.setFontSize(18); doc.setFont(undefined, 'bold'); doc.setTextColor(0,0,0);
-        doc.text(totalSqm + ' m²', col1, infoY+32);
+        doc.text(totalSqm + ' ${getAreaLabel()}', col1, infoY+32);
         doc.text(brands.join(' / ') || '—', col2, infoY+32);
 
         // Colour section
@@ -31088,7 +31353,7 @@ const TOUR_STEPS = [
     //  6. PAINT MODE
     { tab:'measure', target:'mSS',
       title:'🖌️ Paint Mode — SS / DS / SE',
-      body:'SS = Single Side. DS = Double Side (both faces). SE = Single Side + Edge Return — paint wraps around one edge like an L-shape. This drives your price per m².'
+      body:'SS = Single Side. DS = Double Side (both faces). SE = Single Side + Edge Return — paint wraps around one edge like an L-shape. This drives your price per ${getAreaLabel()}.'
     },
     //  7. EDGES
     { tab:'measure', target:'E1',
@@ -31181,7 +31446,7 @@ const TOUR_STEPS = [
     //  22. PRICE MATRIX
     { tab:'admin', adminTab:'pricing', target:'admin-pricing-matrix',
       title:'💲 Price Matrix',
-      body:'Set your per-m² rate for every door profile and finish — Matt, Satin, Semi-Gloss, Gloss and Clear. Organised by tier. Rates pull through automatically to all estimates and invoices.',
+      body:'Set your per-${getAreaLabel()} rate for every door profile and finish — Matt, Satin, Semi-Gloss, Gloss and Clear. Organised by tier. Rates pull through automatically to all estimates and invoices.',
       onEnter: function() {
           setTimeout(function() {
               if (typeof switchMatrixView === 'function') switchMatrixView('paint');
@@ -31191,7 +31456,7 @@ const TOUR_STEPS = [
     //  23. CTS MATRIX
     { tab:'admin', adminTab:'pricing', target:'admin-cts-matrix',
       title:'✂️ CTS Price Matrix',
-      body:'Supply price per m² for each profile and board thickness. Add edge routing types with their per-lineal-metre rate. Push to Cloud saves for all staff accounts.',
+      body:'Supply price per ${getAreaLabel()} for each profile and board thickness. Add edge routing types with their per-lineal-metre rate. Push to Cloud saves for all staff accounts.',
       onEnter: function() {
           setTimeout(function() {
               if (typeof switchMatrixView === 'function') switchMatrixView('cts');
