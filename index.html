@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.253'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.254'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1731,7 +1731,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.253'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.254'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -3456,27 +3456,210 @@ const firebaseConfig = {
         </div>
     </div>
 </div>
-<div id="loginScreen" style="position:fixed; top:0; left:0; right:0; bottom:0; background:linear-gradient(135deg, #d4af37, #f9f1b0); z-index:10000; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px;">
-    <div style="background:var(--modal-bg,#fff); border-radius:20px; padding:30px; width:100%; max-width:400px; box-shadow:0 10px 40px rgba(0,0,0,0.3); color:var(--modal-text,inherit);">
+<div id="loginScreen" style="position:fixed; top:0; left:0; right:0; bottom:0; z-index:10000; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; overflow:hidden;">
+
+    <!-- Animated colour wash canvas -->
+    <canvas id="loginBg" style="position:absolute; top:0; left:0; width:100%; height:100%; z-index:0;"></canvas>
+
+    <!-- Floating cabinet silhouettes -->
+    <svg id="loginSvg" style="position:absolute; top:0; left:0; width:100%; height:100%; z-index:1; pointer-events:none; opacity:0.12;" xmlns="http://www.w3.org/2000/svg"></svg>
+
+    <!-- Spray particle overlay -->
+    <canvas id="loginParticles" style="position:absolute; top:0; left:0; width:100%; height:100%; z-index:2; pointer-events:none; opacity:0.35;"></canvas>
+
+    <style>
+        @keyframes loginFadeIn { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes logoPulse { 0%,100% { filter: drop-shadow(0 0 12px rgba(212,175,55,0.6)); } 50% { filter: drop-shadow(0 0 28px rgba(212,175,55,1)); } }
+        #loginCard { animation: loginFadeIn 0.8s ease both; position:relative; z-index:10; }
+        #loginLogoWrap { animation: logoPulse 3s ease-in-out infinite; }
+    </style>
+
+    <!-- Login card -->
+    <div id="loginCard" style="background:rgba(15,15,25,0.82); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border-radius:24px; padding:32px; width:100%; max-width:400px; box-shadow:0 20px 60px rgba(0,0,0,0.6); border:1px solid rgba(212,175,55,0.25); color:#f2f2f7;">
+        <!-- Logo -->
+        <div id="loginLogoWrap" style="text-align:center; margin-bottom:20px;">
+            <img src="logo.png" onerror="this.style.display='none'; document.getElementById('loginLogoText').style.display='block';" style="width:100px; height:100px; border-radius:50%; object-fit:cover; border:3px solid rgba(212,175,55,0.6);">
+            <div id="loginLogoText" style="display:none; font-size:32px; font-weight:900; color:#d4af37; letter-spacing:1px;">PaintWorkz</div>
+            <div style="font-size:11px; font-weight:700; color:rgba(212,175,55,0.7); letter-spacing:3px; margin-top:6px; text-transform:uppercase;">Pro</div>
+        </div>
         <div style="text-align:center; margin-bottom:25px;">
             <h1 style="margin:0; color:#d4af37; font-size:32px;">&#x1F3A8; PaintWorkz</h1>
             <p style="color:#666; margin:10px 0 0; font-size:14px;">Live Sync &#x2022; All Devices</p>
         </div>
         <div id="loginPanelAdmin">
-            <input type="email" id="loginEmail" placeholder="Email" style="margin-bottom:12px; padding:15px;">
-            <input type="password" id="loginPassword" placeholder="Password (or 4-digit PIN for staff)" style="margin-bottom:20px; padding:15px;">
-            <button onclick="handleLogin()" style="width:100%; background:#d4af37; border:none; padding:15px; border-radius:10px; font-weight:900; font-size:16px; cursor:pointer; margin-bottom:10px;">SIGN IN</button>
-            <button onclick="trySignup()" style="width:100%; background:#333; color:#d4af37; border:2px solid #d4af37; padding:15px; border-radius:10px; font-weight:900; font-size:16px; cursor:pointer; margin-bottom:10px;">CREATE ACCOUNT</button>
-            <button onclick="showForgotPassword()" style="width:100%; background:transparent; border:none; color:#999; font-size:12px; font-weight:700; cursor:pointer; padding:6px;">Forgot password?</button>
-            <div style="margin-top:16px; padding:12px; background:#f0f9ff; border-radius:8px; border-left:3px solid #2196f3;">
-                <div style="font-size:11px; font-weight:900; color:#1976d2; margin-bottom:4px;">&#x1F477; STAFF LOGIN</div>
-                <div style="font-size:10px; color:#666; line-height:1.4;">Staff: Use your email + 4-digit PIN as password. Ask admin to create your account in Admin → Settings → Staff Accounts.</div>
+            <input type="email" id="loginEmail" placeholder="Email" style="margin-bottom:12px; padding:15px; background:rgba(255,255,255,0.08); border:1px solid rgba(212,175,55,0.3); border-radius:10px; color:#f2f2f7; width:100%; box-sizing:border-box; font-size:15px;">
+            <input type="password" id="loginPassword" placeholder="Password (or 4-digit PIN for staff)" style="margin-bottom:20px; padding:15px; background:rgba(255,255,255,0.08); border:1px solid rgba(212,175,55,0.3); border-radius:10px; color:#f2f2f7; width:100%; box-sizing:border-box; font-size:15px;">
+            <button onclick="handleLogin()" style="width:100%; background:#d4af37; border:none; padding:15px; border-radius:10px; font-weight:900; font-size:16px; cursor:pointer; margin-bottom:10px; color:#000; letter-spacing:0.5px;">SIGN IN</button>
+            <button onclick="trySignup()" style="width:100%; background:transparent; color:#d4af37; border:2px solid rgba(212,175,55,0.5); padding:15px; border-radius:10px; font-weight:900; font-size:16px; cursor:pointer; margin-bottom:10px;">CREATE ACCOUNT</button>
+            <button onclick="showForgotPassword()" style="width:100%; background:transparent; border:none; color:rgba(255,255,255,0.4); font-size:12px; font-weight:700; cursor:pointer; padding:6px;">Forgot password?</button>
+            <div style="margin-top:16px; padding:12px; background:rgba(33,150,243,0.1); border-radius:8px; border-left:3px solid #2196f3;">
+                <div style="font-size:11px; font-weight:900; color:#64b5f6; margin-bottom:4px;">&#x1F477; STAFF LOGIN</div>
+                <div style="font-size:10px; color:rgba(255,255,255,0.5); line-height:1.4;">Staff: Use your email + 4-digit PIN as password. Ask admin to create your account in Admin → Settings → Staff Accounts.</div>
             </div>
         </div>
 
-        <div id="loginError" style="color:red; font-weight:900; margin-top:15px; text-align:center; display:none;"></div>
+        <div id="loginError" style="color:#ff6b6b; font-weight:900; margin-top:15px; text-align:center; display:none;"></div>
     </div>
-    <div id="loginVersionText" style="text-align:center; margin-top:12px; font-size:10px; color:rgba(128,128,128,0.8); font-weight:700;"></div>
+    <div id="loginVersionText" style="text-align:center; margin-top:12px; font-size:10px; color:rgba(255,255,255,0.3); font-weight:700; position:relative; z-index:10;"></div>
+
+    <script>
+    (function() {
+        // ── COLOUR WASH BACKGROUND ────────────────────────────────────────────
+        var bgCanvas = document.getElementById('loginBg');
+        var bgCtx = bgCanvas ? bgCanvas.getContext('2d') : null;
+        // Paint colours — satin whites, navies, teals, golds
+        var colours = [
+            [20,25,40],    // deep navy
+            [15,60,80],    // dark teal
+            [30,20,50],    // deep purple-navy
+            [40,30,15],    // dark gold-brown
+            [20,40,35],    // deep forest
+            [25,15,45],    // indigo night
+        ];
+        var cIdx = 0, cNext = 1, cT = 0;
+        function lerpColour(a,b,t) { return [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t, a[2]+(b[2]-a[2])*t]; }
+
+        function resizeBg() {
+            if (!bgCanvas) return;
+            bgCanvas.width = window.innerWidth;
+            bgCanvas.height = window.innerHeight;
+        }
+        resizeBg();
+        window.addEventListener('resize', resizeBg);
+
+        function drawBg() {
+            if (!bgCtx || !bgCanvas) return;
+            cT += 0.003;
+            if (cT >= 1) { cT = 0; cIdx = cNext; cNext = (cNext+1) % colours.length; }
+            var c = lerpColour(colours[cIdx], colours[cNext], cT);
+            var w = bgCanvas.width, h = bgCanvas.height;
+            // Radial gradient from centre — colour wash
+            var g = bgCtx.createRadialGradient(w*0.5, h*0.5, 0, w*0.5, h*0.5, Math.max(w,h)*0.8);
+            g.addColorStop(0, 'rgb('+Math.round(c[0]+20)+','+Math.round(c[1]+20)+','+Math.round(c[2]+20)+')');
+            g.addColorStop(0.5, 'rgb('+Math.round(c[0])+','+Math.round(c[1])+','+Math.round(c[2])+')');
+            g.addColorStop(1, 'rgb('+Math.round(c[0]*0.4)+','+Math.round(c[1]*0.4)+','+Math.round(c[2]*0.4)+')');
+            bgCtx.fillStyle = g;
+            bgCtx.fillRect(0,0,w,h);
+        }
+
+        // ── FLOATING CABINET SILHOUETTES ──────────────────────────────────────
+        var svg = document.getElementById('loginSvg');
+        var shapes = [];
+        var shapeTemplates = [
+            // Door (rectangle with inner panel recess)
+            function(x,y,s) { return '<rect x="'+(x)+'" y="'+(y)+'" width="'+(s*0.7)+'" height="'+(s*1.2)+'" rx="2" fill="none" stroke="white" stroke-width="1.5"/><rect x="'+(x+s*0.08)+'" y="'+(y+s*0.08)+'" width="'+(s*0.54)+'" height="'+(s*1.04)+'" rx="1" fill="none" stroke="white" stroke-width="0.8"/>'; },
+            // Drawer (wide shallow rectangle)
+            function(x,y,s) { return '<rect x="'+(x)+'" y="'+(y)+'" width="'+(s*1.4)+'" height="'+(s*0.35)+'" rx="2" fill="none" stroke="white" stroke-width="1.5"/><circle cx="'+(x+s*0.7)+'" cy="'+(y+s*0.175)+'" r="'+(s*0.04)+'" fill="white"/>'; },
+            // Panel (tall narrow rectangle)
+            function(x,y,s) { return '<rect x="'+(x)+'" y="'+(y)+'" width="'+(s*0.3)+'" height="'+(s*1.4)+'" rx="1" fill="none" stroke="white" stroke-width="1.2"/>'; },
+            // Shaker door (door with cross divider)
+            function(x,y,s) { return '<rect x="'+(x)+'" y="'+(y)+'" width="'+(s*0.75)+'" height="'+(s*1.1)+'" rx="2" fill="none" stroke="white" stroke-width="1.5"/><line x1="'+(x+s*0.375)+'" y1="'+(y)+'" x2="'+(x+s*0.375)+'" y2="'+(y+s*1.1)+'" stroke="white" stroke-width="0.8"/><line x1="'+(x)+'" y1="'+(y+s*0.55)+'" x2="'+(x+s*0.75)+'" y2="'+(y+s*0.55)+'" stroke="white" stroke-width="0.8"/>'; },
+        ];
+
+        function createShape() {
+            var tmpl = shapeTemplates[Math.floor(Math.random()*shapeTemplates.length)];
+            var w = window.innerWidth, h = window.innerHeight;
+            return {
+                x: Math.random()*w, y: Math.random()*h,
+                vx: (Math.random()-0.5)*0.3, vy: (Math.random()-0.5)*0.2,
+                s: 40+Math.random()*80,
+                rot: Math.random()*360, rotV: (Math.random()-0.5)*0.15,
+                op: 0.1+Math.random()*0.5,
+                tmpl: tmpl
+            };
+        }
+
+        for (var i=0; i<14; i++) shapes.push(createShape());
+
+        function updateSvg() {
+            if (!svg) return;
+            var w = window.innerWidth, h = window.innerHeight;
+            var html = '';
+            shapes.forEach(function(sh) {
+                sh.x += sh.vx; sh.y += sh.vy; sh.rot += sh.rotV;
+                if (sh.x < -200) sh.x = w+100;
+                if (sh.x > w+200) sh.x = -100;
+                if (sh.y < -200) sh.y = h+100;
+                if (sh.y > h+200) sh.y = -100;
+                html += '<g transform="translate('+sh.x+','+sh.y+') rotate('+sh.rot+') scale(1)" opacity="'+sh.op+'">'
+                    + sh.tmpl(-sh.s/2, -sh.s/2, sh.s) + '</g>';
+            });
+            svg.innerHTML = html;
+        }
+
+        // ── SPRAY PARTICLES ───────────────────────────────────────────────────
+        var pCanvas = document.getElementById('loginParticles');
+        var pCtx = pCanvas ? pCanvas.getContext('2d') : null;
+        var particles = [];
+        function resizeP() {
+            if (!pCanvas) return;
+            pCanvas.width = window.innerWidth;
+            pCanvas.height = window.innerHeight;
+        }
+        resizeP();
+        window.addEventListener('resize', resizeP);
+
+        var sprayGold = [[212,175,55],[240,200,80],[180,140,30]];
+        var sprayTeal = [[0,188,212],[0,150,170],[0,220,240]];
+
+        function spawnSpray(n) {
+            var palette = Math.random() > 0.5 ? sprayGold : sprayTeal;
+            var col = palette[Math.floor(Math.random()*palette.length)];
+            var ox = Math.random()*window.innerWidth;
+            var oy = Math.random()*window.innerHeight;
+            for (var i=0; i<n; i++) {
+                var angle = Math.random()*Math.PI*2;
+                var speed = 0.3+Math.random()*1.2;
+                particles.push({
+                    x:ox, y:oy,
+                    vx:Math.cos(angle)*speed,
+                    vy:Math.sin(angle)*speed,
+                    r:col[0], g:col[1], b:col[2],
+                    life:1, decay:0.004+Math.random()*0.008,
+                    size:1+Math.random()*2.5
+                });
+            }
+        }
+
+        setInterval(function(){ spawnSpray(30); }, 2200);
+        spawnSpray(80);
+
+        function drawParticles() {
+            if (!pCtx || !pCanvas) return;
+            pCtx.clearRect(0,0,pCanvas.width,pCanvas.height);
+            for (var i=particles.length-1; i>=0; i--) {
+                var p = particles[i];
+                p.x += p.vx; p.y += p.vy;
+                p.vx *= 0.99; p.vy *= 0.99;
+                p.life -= p.decay;
+                if (p.life <= 0) { particles.splice(i,1); continue; }
+                pCtx.beginPath();
+                pCtx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+                pCtx.fillStyle = 'rgba('+p.r+','+p.g+','+p.b+','+p.life+')';
+                pCtx.fill();
+            }
+        }
+
+        // ── ANIMATION LOOP ────────────────────────────────────────────────────
+        var loginAnim = null;
+        function loginLoop() {
+            drawBg();
+            updateSvg();
+            drawParticles();
+            loginAnim = requestAnimationFrame(loginLoop);
+        }
+
+        // Start when login screen is visible, stop when hidden
+        var loginScreen = document.getElementById('loginScreen');
+        var obs = new MutationObserver(function() {
+            var visible = loginScreen && loginScreen.style.display !== 'none';
+            if (visible && !loginAnim) { loginLoop(); }
+            else if (!visible && loginAnim) { cancelAnimationFrame(loginAnim); loginAnim = null; }
+        });
+        if (loginScreen) obs.observe(loginScreen, { attributes:true, attributeFilter:['style'] });
+        loginLoop(); // start immediately
+    })();
+    </script>
 </div>
 
 <div id="resetPasswordScreen" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:linear-gradient(135deg, #d4af37, #f9f1b0); z-index:10001; flex-direction:column; align-items:center; justify-content:center; padding:20px;">
