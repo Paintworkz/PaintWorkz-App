@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.267'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.268'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1731,7 +1731,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.267'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.268'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -3096,6 +3096,8 @@ const firebaseConfig = {
                 })();
                 const loginScreen = document.getElementById('loginScreen');
                 const appContainer = document.getElementById('appContainer');
+                // Cancel login animation IMMEDIATELY so canvas stops blocking paint
+                if (window.loginAnim) { cancelAnimationFrame(window.loginAnim); window.loginAnim = null; }
                 if (loginScreen) loginScreen.style.display = 'none';
                 if (appContainer) appContainer.style.display = 'block';
                 const mh = document.getElementById('mainHeader');
@@ -3984,9 +3986,11 @@ const firebaseConfig = {
 
         // ── ANIMATION LOOP ────────────────────────────────────────────────────
         var loginAnim = null;
+        window.loginAnim = null; // expose for external cancel
         function loginLoop() {
             drawBg(); updateSvg(); drawParticles(); updatePainter(pntCtx);
             loginAnim = requestAnimationFrame(loginLoop);
+            window.loginAnim = loginAnim; // keep window reference in sync
         }
         var loginScreen = document.getElementById('loginScreen');
         var obs = new MutationObserver(function() {
@@ -11521,7 +11525,10 @@ const firebaseConfig = {
         if (renderHistoryTimer) clearTimeout(renderHistoryTimer);
         renderHistoryTimer = setTimeout(() => {
             if (_renderHistoryRunning) return;
-            renderHistoryNow();
+            // Yield to browser paint first (so login screen can hide, app can appear)
+            requestAnimationFrame(() => {
+                setTimeout(() => renderHistoryNow(), 0);
+            });
         }, 400);
     }
     
