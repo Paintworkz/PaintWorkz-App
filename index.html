@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.270'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.280'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1732,7 +1732,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.270'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.280'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -3155,7 +3155,7 @@ const firebaseConfig = {
                         setTimeout(() => tryLoad(10), 500);
                     });
                 } else {
-                    // DOM already loaded - retry until main script has defined the function
+                    // DOM already loaded - call once
                     const tryLoad = (attempts) => {
                         if (window.loadAllDataFromFirebase) {
                             try { window.loadAllDataFromFirebase(); } catch(e) { console.error('loadAllDataFromFirebase error:', e); }
@@ -3164,12 +3164,15 @@ const firebaseConfig = {
                             setTimeout(() => { if (typeof loadDefaultTimelineFromFirebase === 'function') loadDefaultTimelineFromFirebase(); }, 800);
                             setTimeout(() => { if (typeof loadShopClosuresFromFirebase === 'function') loadShopClosuresFromFirebase(); }, 900);
                             setTimeout(() => { if (typeof loadUserPreferences === 'function') loadUserPreferences(user.uid); }, 500);
+                            // SUCCESS - stop retrying
+                        } else if (attempts > 0) {
+                            // Function not ready yet - retry
                             setTimeout(() => tryLoad(attempts - 1), 400);
                         } else {
                             console.warn('⚠️ loadAllDataFromFirebase never became available');
                         }
                     };
-                    setTimeout(() => tryLoad(10), 500); // retry up to 10x every 400ms
+                    setTimeout(() => tryLoad(10), 500);
                 }
                 
                 // Set up real-time sync so changes on one device appear on all others instantly
@@ -4750,48 +4753,6 @@ const firebaseConfig = {
             <!-- General Settings Tab -->
             <div id="admin-tab-general-content" class="admin-tab-content active" style="padding-top:12px;">
 
-                <!-- ── MY PREFERENCES — always visible, saves to Firebase ── -->
-                <div style="background:linear-gradient(135deg,#1a237e,#283593); border-radius:12px; padding:16px; margin-bottom:16px; border:1px solid #3949ab;">
-                    <div style="font-size:13px; font-weight:900; color:#fff; margin-bottom:4px;">⚙️ MY PREFERENCES</div>
-                    <div style="font-size:11px; color:#9fa8da; margin-bottom:14px;">Your personal settings — saved to your account, follow you on every device.</div>
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
-                        <div>
-                            <label style="display:block; font-weight:900; font-size:10px; color:#9fa8da; margin-bottom:5px;">📐 MEASUREMENT UNITS</label>
-                            <select id="prefUnitsSelect" onchange="savePreference('units',this.value)" style="width:100%; padding:9px; border:1px solid #3949ab; border-radius:6px; font-size:12px; font-weight:700; background:#1c2160; color:#fff; box-sizing:border-box;">
-                                <option value="METRIC">Metric — mm / m² (AU/NZ)</option>
-                                <option value="IMPERIAL_US">Imperial US — in / sqft (USA)</option>
-                                <option value="IMPERIAL_UK">Imperial UK — in / sqft (UK)</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label style="display:block; font-weight:900; font-size:10px; color:#9fa8da; margin-bottom:5px;">📏 INCH FORMAT</label>
-                            <select id="prefInchFmtSelect" onchange="savePreference('inchFmt',this.value)" style="width:100%; padding:9px; border:1px solid #3949ab; border-radius:6px; font-size:12px; font-weight:700; background:#1c2160; color:#fff; box-sizing:border-box;">
-                                <option value="decimal">Decimal — 84.5"</option>
-                                <option value="fractional">Fractional — 84½"</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label style="display:block; font-weight:900; font-size:10px; color:#9fa8da; margin-bottom:5px;">💰 CURRENCY</label>
-                            <select id="prefCurrencySelect" onchange="savePreference('currency',this.value)" style="width:100%; padding:9px; border:1px solid #3949ab; border-radius:6px; font-size:12px; font-weight:700; background:#1c2160; color:#fff; box-sizing:border-box;">
-                                <option value="AUD">AUD — Australian Dollar ($)</option>
-                                <option value="USD">USD — US Dollar ($)</option>
-                                <option value="GBP">GBP — British Pound (£)</option>
-                                <option value="EUR">EUR — Euro (€)</option>
-                                <option value="NZD">NZD — New Zealand Dollar ($)</option>
-                                <option value="CAD">CAD — Canadian Dollar ($)</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label style="display:block; font-weight:900; font-size:10px; color:#9fa8da; margin-bottom:5px;">🌐 LANGUAGE / SPELLING</label>
-                            <select id="prefLocaleSelect" onchange="savePreference('locale',this.value)" style="width:100%; padding:9px; border:1px solid #3949ab; border-radius:6px; font-size:12px; font-weight:700; background:#1c2160; color:#fff; box-sizing:border-box;">
-                                <option value="en-AU">English (AU) — Australian</option>
-                                <option value="en-US">English (US) — American</option>
-                                <option value="en-GB">English (UK) — British</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div id="prefSaveStatus" style="font-size:10px; color:#81c784; font-weight:700; min-height:14px;"></div>
-                </div>
                 <!-- ── END MY PREFERENCES ── -->
                 <div style="background:#f0f0f0; border:2px solid #2196f3; border-radius:6px; padding:15px; margin-bottom:20px;">
                     <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -4842,6 +4803,48 @@ const firebaseConfig = {
                 </div>
                 <div id="global-settings-container" style="display:none;">
                 <p style="font-size:11px; color:#666; margin-bottom:15px;">Configure global app settings for measurements, precision, and AI features</p>
+                <!-- ── MY PREFERENCES — always visible, saves to Firebase ── -->
+                <div style="background:linear-gradient(135deg,#1a237e,#283593); border-radius:12px; padding:16px; margin-bottom:16px; border:1px solid #3949ab;">
+                    <div style="font-size:13px; font-weight:900; color:#fff; margin-bottom:4px;">⚙️ MY PREFERENCES</div>
+                    <div style="font-size:11px; color:#9fa8da; margin-bottom:14px;">Your personal settings — saved to your account, follow you on every device.</div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+                        <div>
+                            <label style="display:block; font-weight:900; font-size:10px; color:#9fa8da; margin-bottom:5px;">📐 MEASUREMENT UNITS</label>
+                            <select id="prefUnitsSelect" onchange="savePreference('units',this.value)" style="width:100%; padding:9px; border:1px solid #3949ab; border-radius:6px; font-size:12px; font-weight:700; background:#1c2160; color:#fff; box-sizing:border-box;">
+                                <option value="METRIC">Metric — mm / m² (AU/NZ)</option>
+                                <option value="IMPERIAL_US">Imperial US — in / sqft (USA)</option>
+                                <option value="IMPERIAL_UK">Imperial UK — in / sqft (UK)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display:block; font-weight:900; font-size:10px; color:#9fa8da; margin-bottom:5px;">📏 INCH FORMAT</label>
+                            <select id="prefInchFmtSelect" onchange="savePreference('inchFmt',this.value)" style="width:100%; padding:9px; border:1px solid #3949ab; border-radius:6px; font-size:12px; font-weight:700; background:#1c2160; color:#fff; box-sizing:border-box;">
+                                <option value="decimal">Decimal — 84.5"</option>
+                                <option value="fractional">Fractional — 84½"</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display:block; font-weight:900; font-size:10px; color:#9fa8da; margin-bottom:5px;">💰 CURRENCY</label>
+                            <select id="prefCurrencySelect" onchange="savePreference('currency',this.value)" style="width:100%; padding:9px; border:1px solid #3949ab; border-radius:6px; font-size:12px; font-weight:700; background:#1c2160; color:#fff; box-sizing:border-box;">
+                                <option value="AUD">AUD — Australian Dollar ($)</option>
+                                <option value="USD">USD — US Dollar ($)</option>
+                                <option value="GBP">GBP — British Pound (£)</option>
+                                <option value="EUR">EUR — Euro (€)</option>
+                                <option value="NZD">NZD — New Zealand Dollar ($)</option>
+                                <option value="CAD">CAD — Canadian Dollar ($)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display:block; font-weight:900; font-size:10px; color:#9fa8da; margin-bottom:5px;">🌐 LANGUAGE / SPELLING</label>
+                            <select id="prefLocaleSelect" onchange="savePreference('locale',this.value)" style="width:100%; padding:9px; border:1px solid #3949ab; border-radius:6px; font-size:12px; font-weight:700; background:#1c2160; color:#fff; box-sizing:border-box;">
+                                <option value="en-AU">English (AU) — Australian</option>
+                                <option value="en-US">English (US) — American</option>
+                                <option value="en-GB">English (UK) — British</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="prefSaveStatus" style="font-size:10px; color:#81c784; font-weight:700; min-height:14px;"></div>
+                </div>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-bottom:20px;">
                     <div>
                         <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Measurement Precision</label>
@@ -7342,6 +7345,24 @@ const firebaseConfig = {
         var map = {AUD:'AUD $', USD:'USD $', GBP:'GBP £', EUR:'EUR €', NZD:'NZD $', CAD:'CAD $'};
         return map[getCurrencyCode()] || '$';
     }
+
+    // Tax system that maps currency to tax type and rate
+    function getTaxInfo() {
+        const currency = getCurrencyCode();
+        const taxRates = {
+            'AUD': { label: 'GST', rate: 0.10, name: 'GST (10%)' },
+            'NZD': { label: 'GST', rate: 0.15, name: 'GST (15%)' },
+            'USD': { label: 'Tax', rate: 0.00, name: 'Sales Tax' },
+            'GBP': { label: 'VAT', rate: 0.20, name: 'VAT (20%)' },
+            'CAD': { label: 'GST', rate: 0.05, name: 'GST (5%)' },
+            'EUR': { label: 'VAT', rate: 0.20, name: 'VAT (20%)' }
+        };
+        return taxRates[currency] || { label: 'Tax', rate: 0.00, name: 'Tax' };
+    }
+
+    function getTaxLabel() { return getTaxInfo().label; }
+    function getTaxRate() { return getTaxInfo().rate; }
+
 
     // mm → display string (no units suffix — caller adds "mm" or '"')
     function mmToDisplay(mm) {
@@ -16558,7 +16579,7 @@ const firebaseConfig = {
                 const totalColX = x + (8+16+16+14+14+15+10+15+26+12+12);
                 doc.text(`Subtotal (${colourName}):`, x, y);
                 doc.text(`${getCurrencySymbol()}${colourTotal.toFixed(2)} excl.`, 188, y, { align: 'right' });
-                doc.setFontSize(7.5); doc.text(`GST: $${(colourTotal*0.1).toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`${getCurrencySymbol()}${(colourTotal*1.1).toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(9);
+                doc.setFontSize(7.5); doc.text(`${getTaxLabel()}: $${(colourTotal*getTaxRate()).toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`${getCurrencySymbol()}${(colourTotal*(1+getTaxRate())).toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(9);
                 y += 15;
                 
                 // Add colour-specific surcharge if applicable
@@ -16574,7 +16595,7 @@ const firebaseConfig = {
                                 doc.setFontSize(8);
                                 doc.text(`  Paint Surcharge (${s.label}):`, x, y);
                                 doc.text(`${getCurrencySymbol()}${s.amount.toFixed(2)} excl.`, 188, y, { align: 'right' });
-                                doc.setFontSize(7); doc.text(`GST: $${(s.amount*0.1).toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`${getCurrencySymbol()}${(s.amount*1.1).toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(8);
+                                doc.setFontSize(7); doc.text(`${getTaxLabel()}: $${(s.amount*getTaxRate()).toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`${getCurrencySymbol()}${(s.amount*(1+getTaxRate())).toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(8);
                                 y += 15;
                                 grandTotal += s.amount;
                             }
@@ -16659,7 +16680,7 @@ const firebaseConfig = {
                 doc.setFont(undefined,'bold'); doc.setFontSize(9); doc.setTextColor(0,0,0);
                 doc.text('CTS Subtotal:', x+2, y+4);
                 doc.text('$'+ctsGrandTotal.toFixed(2)+' excl.', 188, y+4, {align:'right'});
-                doc.setFontSize(7.5); doc.text('GST: $'+(ctsGrandTotal*0.1).toFixed(2), 188, y+8, {align:'right'}); doc.text('$'+(ctsGrandTotal*1.1).toFixed(2)+' incl.', 188, y+12, {align:'right'}); doc.setFontSize(9);
+                doc.setFontSize(7.5); doc.text(getTaxLabel() + ': $'+(ctsGrandTotal*getTaxRate()).toFixed(2), 188, y+8, {align:'right'}); doc.text('$'+(ctsGrandTotal*(1+getTaxRate())).toFixed(2)+' incl.', 188, y+12, {align:'right'}); doc.setFontSize(9);
                 doc.setFont(undefined,'normal'); doc.setTextColor(0,0,0);
                 grandTotal += ctsGrandTotal; y += 18;
             }
@@ -16684,7 +16705,7 @@ const firebaseConfig = {
             if (appliedCharges && appliedCharges.courierCost > 0) {
                 doc.text(`Freight Charge:`, x, y);
                 doc.text(`${getCurrencySymbol()}${appliedCharges.courierCost.toFixed(2)} excl.`, 188, y, { align: 'right' });
-                doc.setFontSize(7.5); doc.text(`GST: $${(appliedCharges.courierCost*0.1).toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`${getCurrencySymbol()}${(appliedCharges.courierCost*1.1).toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(9);
+                doc.setFontSize(7.5); doc.text(`${getTaxLabel()}: $${(appliedCharges.courierCost*getTaxRate()).toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`${getCurrencySymbol()}${(appliedCharges.courierCost*(1+getTaxRate())).toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(9);
                 grandTotal += appliedCharges.courierCost;
                 y += 15;
             }
@@ -16701,7 +16722,7 @@ const firebaseConfig = {
                     const descH = descLines.length * 4.5;
                     doc.setFont(undefined, 'bold');
                     doc.text('$'+row.amount.toFixed(2)+' excl.', 188, y, { align: 'right' });
-                    doc.setFontSize(7.5); doc.text('GST: $'+(row.amount*0.1).toFixed(2), 188, y+4, { align: 'right' }); doc.text('$'+(row.amount*1.1).toFixed(2)+' incl.', 188, y+8, { align: 'right' });
+                    doc.setFontSize(7.5); doc.text(getTaxLabel() + ': $'+(row.amount*getTaxRate()).toFixed(2), 188, y+4, { align: 'right' }); doc.text('$'+(row.amount*(1+getTaxRate())).toFixed(2)+' incl.', 188, y+8, { align: 'right' });
                     doc.setFontSize(9); doc.setFont(undefined, 'normal');
                     grandTotal += row.amount;
                     y += Math.max(descH, 16); // 3 stacked lines need more space
@@ -16712,7 +16733,7 @@ const firebaseConfig = {
                 descLines.forEach(function(line, li) { doc.text(line, x, y + li * 4.5); });
                 const descH = descLines.length * 4.5;
                 doc.text('$'+appliedCharges.otherChargeAmount.toFixed(2)+' excl.', 188, y, { align: 'right' });
-                doc.setFontSize(7.5); doc.text('GST: $'+(appliedCharges.otherChargeAmount*0.1).toFixed(2), 188, y+4, { align: 'right' }); doc.text('$'+(appliedCharges.otherChargeAmount*1.1).toFixed(2)+' incl.', 188, y+8, { align: 'right' }); doc.setFontSize(9);
+                doc.setFontSize(7.5); doc.text(getTaxLabel() + ': $'+(appliedCharges.otherChargeAmount*getTaxRate()).toFixed(2), 188, y+4, { align: 'right' }); doc.text('$'+(appliedCharges.otherChargeAmount*(1+getTaxRate())).toFixed(2)+' incl.', 188, y+8, { align: 'right' }); doc.setFontSize(9);
                 grandTotal += appliedCharges.otherChargeAmount;
                 y += Math.max(descH, 16);
             }
@@ -16730,7 +16751,7 @@ const firebaseConfig = {
             doc.setFont(undefined, 'bold'); doc.setFontSize(9);
             doc.text(`Subtotal (inc. charges):`, x, y);
             doc.text(`${getCurrencySymbol()}${grandTotal.toFixed(2)} excl.`, 188, y, { align: 'right' });
-            doc.setFontSize(7.5); doc.text(`GST: $${gstAmount.toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`${getCurrencySymbol()}${totalWithGST.toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(9);
+            doc.setFontSize(7.5); doc.text(`${getTaxLabel()}: $${gstAmount.toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`${getCurrencySymbol()}${totalWithGST.toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(9);
             y += 14;
             doc.setFont(undefined, 'normal'); doc.setFontSize(8);
             doc.text(`GST (${(gstRate*100).toFixed(0)}%): $${gstAmount.toFixed(2)}`, x, y);
@@ -17028,7 +17049,7 @@ const firebaseConfig = {
                 const totalColX = x + (8+16+16+14+14+15+10+15+26+12+12);
                 doc.text(`Subtotal (${colourName}):`, x, y);
                 doc.text(`${getCurrencySymbol()}${colourTotal.toFixed(2)} excl.`, 188, y, { align: 'right' });
-                doc.setFontSize(7.5); doc.text(`GST: $${(colourTotal*0.1).toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`${getCurrencySymbol()}${(colourTotal*1.1).toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(9);
+                doc.setFontSize(7.5); doc.text(`${getTaxLabel()}: $${(colourTotal*getTaxRate()).toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`${getCurrencySymbol()}${(colourTotal*(1+getTaxRate())).toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(9);
                 y += 15;
                 
                 // Add colour-specific surcharge if applicable
@@ -17044,7 +17065,7 @@ const firebaseConfig = {
                                 doc.setFontSize(8);
                                 doc.text(`  Paint Surcharge (${s.label}):`, x, y);
                                 doc.text(`${getCurrencySymbol()}${s.amount.toFixed(2)} excl.`, 188, y, { align: 'right' });
-                                doc.setFontSize(7); doc.text(`GST: $${(s.amount*0.1).toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`${getCurrencySymbol()}${(s.amount*1.1).toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(8);
+                                doc.setFontSize(7); doc.text(`${getTaxLabel()}: $${(s.amount*getTaxRate()).toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`${getCurrencySymbol()}${(s.amount*(1+getTaxRate())).toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(8);
                                 y += 15;
                                 grandTotal += s.amount;
                             }
@@ -17129,7 +17150,7 @@ const firebaseConfig = {
                 doc.setFont(undefined,'bold'); doc.setFontSize(9); doc.setTextColor(0,0,0);
                 doc.text('CTS Subtotal:', x+2, y+4);
                 doc.text('$'+ctsGrandTotal.toFixed(2)+' excl.', 188, y+4, {align:'right'});
-                doc.setFontSize(7.5); doc.text('GST: $'+(ctsGrandTotal*0.1).toFixed(2), 188, y+8, {align:'right'}); doc.text('$'+(ctsGrandTotal*1.1).toFixed(2)+' incl.', 188, y+12, {align:'right'}); doc.setFontSize(9);
+                doc.setFontSize(7.5); doc.text(getTaxLabel() + ': $'+(ctsGrandTotal*getTaxRate()).toFixed(2), 188, y+8, {align:'right'}); doc.text('$'+(ctsGrandTotal*(1+getTaxRate())).toFixed(2)+' incl.', 188, y+12, {align:'right'}); doc.setFontSize(9);
                 doc.setFont(undefined,'normal'); doc.setTextColor(0,0,0);
                 grandTotal += ctsGrandTotal; y += 18;
             }
@@ -17154,7 +17175,7 @@ const firebaseConfig = {
             if (appliedCharges && appliedCharges.courierCost > 0) {
                 doc.text(`Freight Charge:`, x, y);
                 doc.text(`${getCurrencySymbol()}${appliedCharges.courierCost.toFixed(2)} excl.`, 188, y, { align: 'right' });
-                doc.setFontSize(7.5); doc.text(`GST: $${(appliedCharges.courierCost*0.1).toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`${getCurrencySymbol()}${(appliedCharges.courierCost*1.1).toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(9);
+                doc.setFontSize(7.5); doc.text(`${getTaxLabel()}: $${(appliedCharges.courierCost*getTaxRate()).toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`${getCurrencySymbol()}${(appliedCharges.courierCost*(1+getTaxRate())).toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(9);
                 grandTotal += appliedCharges.courierCost;
                 y += 15;
             }
@@ -17171,7 +17192,7 @@ const firebaseConfig = {
                     const descH = descLines.length * 4.5;
                     doc.setFont(undefined, 'bold');
                     doc.text('$'+row.amount.toFixed(2)+' excl.', 188, y, { align: 'right' });
-                    doc.setFontSize(7.5); doc.text('GST: $'+(row.amount*0.1).toFixed(2), 188, y+4, { align: 'right' }); doc.text('$'+(row.amount*1.1).toFixed(2)+' incl.', 188, y+8, { align: 'right' });
+                    doc.setFontSize(7.5); doc.text(getTaxLabel() + ': $'+(row.amount*getTaxRate()).toFixed(2), 188, y+4, { align: 'right' }); doc.text('$'+(row.amount*(1+getTaxRate())).toFixed(2)+' incl.', 188, y+8, { align: 'right' });
                     doc.setFontSize(9); doc.setFont(undefined, 'normal');
                     grandTotal += row.amount;
                     y += Math.max(descH, 16); // 3 stacked lines need more space
@@ -17182,7 +17203,7 @@ const firebaseConfig = {
                 descLines.forEach(function(line, li) { doc.text(line, x, y + li * 4.5); });
                 const descH = descLines.length * 4.5;
                 doc.text('$'+appliedCharges.otherChargeAmount.toFixed(2)+' excl.', 188, y, { align: 'right' });
-                doc.setFontSize(7.5); doc.text('GST: $'+(appliedCharges.otherChargeAmount*0.1).toFixed(2), 188, y+4, { align: 'right' }); doc.text('$'+(appliedCharges.otherChargeAmount*1.1).toFixed(2)+' incl.', 188, y+8, { align: 'right' }); doc.setFontSize(9);
+                doc.setFontSize(7.5); doc.text(getTaxLabel() + ': $'+(appliedCharges.otherChargeAmount*getTaxRate()).toFixed(2), 188, y+4, { align: 'right' }); doc.text('$'+(appliedCharges.otherChargeAmount*(1+getTaxRate())).toFixed(2)+' incl.', 188, y+8, { align: 'right' }); doc.setFontSize(9);
                 grandTotal += appliedCharges.otherChargeAmount;
                 y += Math.max(descH, 16);
             }
@@ -17200,7 +17221,7 @@ const firebaseConfig = {
             doc.setFont(undefined, 'bold'); doc.setFontSize(9);
             doc.text(`Subtotal (inc. charges):`, x, y);
             doc.text(`${getCurrencySymbol()}${grandTotal.toFixed(2)} excl.`, 188, y, { align: 'right' });
-            doc.setFontSize(7.5); doc.text(`GST: $${gstAmount.toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`${getCurrencySymbol()}${totalWithGST.toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(9);
+            doc.setFontSize(7.5); doc.text(`${getTaxLabel()}: $${gstAmount.toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`${getCurrencySymbol()}${totalWithGST.toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(9);
             y += 14;
             doc.setFont(undefined, 'normal'); doc.setFontSize(8);
             doc.text(`GST (${(gstRate*100).toFixed(0)}%): $${gstAmount.toFixed(2)}`, x, y);
@@ -17498,7 +17519,7 @@ const firebaseConfig = {
                 const totalColX = x + (8+16+16+14+14+15+10+15+26+12+12);
                 doc.text(`Subtotal (${colourName}):`, x, y);
                 doc.text(`${getCurrencySymbol()}${colourTotal.toFixed(2)} excl.`, 188, y, { align: 'right' });
-                doc.setFontSize(7.5); doc.text(`GST: $${(colourTotal*0.1).toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`${getCurrencySymbol()}${(colourTotal*1.1).toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(9);
+                doc.setFontSize(7.5); doc.text(`${getTaxLabel()}: $${(colourTotal*getTaxRate()).toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`${getCurrencySymbol()}${(colourTotal*(1+getTaxRate())).toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(9);
                 y += 15;
                 
                 // Add colour-specific surcharge if applicable
@@ -17514,7 +17535,7 @@ const firebaseConfig = {
                                 doc.setFontSize(8);
                                 doc.text(`  Paint Surcharge (${s.label}):`, x, y);
                                 doc.text(`${getCurrencySymbol()}${s.amount.toFixed(2)} excl.`, 188, y, { align: 'right' });
-                                doc.setFontSize(7); doc.text(`GST: $${(s.amount*0.1).toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`${getCurrencySymbol()}${(s.amount*1.1).toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(8);
+                                doc.setFontSize(7); doc.text(`${getTaxLabel()}: $${(s.amount*getTaxRate()).toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`${getCurrencySymbol()}${(s.amount*(1+getTaxRate())).toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(8);
                                 y += 15;
                                 grandTotal += s.amount;
                             }
@@ -17599,7 +17620,7 @@ const firebaseConfig = {
                 doc.setFont(undefined,'bold'); doc.setFontSize(9); doc.setTextColor(0,0,0);
                 doc.text('CTS Subtotal:', x+2, y+4);
                 doc.text('$'+ctsGrandTotal.toFixed(2)+' excl.', 188, y+4, {align:'right'});
-                doc.setFontSize(7.5); doc.text('GST: $'+(ctsGrandTotal*0.1).toFixed(2), 188, y+8, {align:'right'}); doc.text('$'+(ctsGrandTotal*1.1).toFixed(2)+' incl.', 188, y+12, {align:'right'}); doc.setFontSize(9);
+                doc.setFontSize(7.5); doc.text(getTaxLabel() + ': $'+(ctsGrandTotal*getTaxRate()).toFixed(2), 188, y+8, {align:'right'}); doc.text('$'+(ctsGrandTotal*(1+getTaxRate())).toFixed(2)+' incl.', 188, y+12, {align:'right'}); doc.setFontSize(9);
                 doc.setFont(undefined,'normal'); doc.setTextColor(0,0,0);
                 grandTotal += ctsGrandTotal; y += 18;
             }
@@ -17624,7 +17645,7 @@ const firebaseConfig = {
             if (appliedCharges && appliedCharges.courierCost > 0) {
                 doc.text(`Freight Charge:`, x, y);
                 doc.text(`${getCurrencySymbol()}${appliedCharges.courierCost.toFixed(2)} excl.`, 188, y, { align: 'right' });
-                doc.setFontSize(7.5); doc.text(`GST: $${(appliedCharges.courierCost*0.1).toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`${getCurrencySymbol()}${(appliedCharges.courierCost*1.1).toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(9);
+                doc.setFontSize(7.5); doc.text(`${getTaxLabel()}: $${(appliedCharges.courierCost*getTaxRate()).toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`${getCurrencySymbol()}${(appliedCharges.courierCost*(1+getTaxRate())).toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(9);
                 grandTotal += appliedCharges.courierCost;
                 y += 15;
             }
@@ -17641,7 +17662,7 @@ const firebaseConfig = {
                     const descH = descLines.length * 4.5;
                     doc.setFont(undefined, 'bold');
                     doc.text('$'+row.amount.toFixed(2)+' excl.', 188, y, { align: 'right' });
-                    doc.setFontSize(7.5); doc.text('GST: $'+(row.amount*0.1).toFixed(2), 188, y+4, { align: 'right' }); doc.text('$'+(row.amount*1.1).toFixed(2)+' incl.', 188, y+8, { align: 'right' });
+                    doc.setFontSize(7.5); doc.text(getTaxLabel() + ': $'+(row.amount*getTaxRate()).toFixed(2), 188, y+4, { align: 'right' }); doc.text('$'+(row.amount*(1+getTaxRate())).toFixed(2)+' incl.', 188, y+8, { align: 'right' });
                     doc.setFontSize(9); doc.setFont(undefined, 'normal');
                     grandTotal += row.amount;
                     y += Math.max(descH, 16); // 3 stacked lines need more space
@@ -17652,7 +17673,7 @@ const firebaseConfig = {
                 descLines.forEach(function(line, li) { doc.text(line, x, y + li * 4.5); });
                 const descH = descLines.length * 4.5;
                 doc.text('$'+appliedCharges.otherChargeAmount.toFixed(2)+' excl.', 188, y, { align: 'right' });
-                doc.setFontSize(7.5); doc.text('GST: $'+(appliedCharges.otherChargeAmount*0.1).toFixed(2), 188, y+4, { align: 'right' }); doc.text('$'+(appliedCharges.otherChargeAmount*1.1).toFixed(2)+' incl.', 188, y+8, { align: 'right' }); doc.setFontSize(9);
+                doc.setFontSize(7.5); doc.text(getTaxLabel() + ': $'+(appliedCharges.otherChargeAmount*getTaxRate()).toFixed(2), 188, y+4, { align: 'right' }); doc.text('$'+(appliedCharges.otherChargeAmount*(1+getTaxRate())).toFixed(2)+' incl.', 188, y+8, { align: 'right' }); doc.setFontSize(9);
                 grandTotal += appliedCharges.otherChargeAmount;
                 y += Math.max(descH, 16);
             }
@@ -17670,7 +17691,7 @@ const firebaseConfig = {
             doc.setFont(undefined, 'bold'); doc.setFontSize(9);
             doc.text(`Subtotal (inc. charges):`, x, y);
             doc.text(`${getCurrencySymbol()}${grandTotal.toFixed(2)} excl.`, 188, y, { align: 'right' });
-            doc.setFontSize(7.5); doc.text(`GST: $${gstAmount.toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`${getCurrencySymbol()}${totalWithGST.toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(9);
+            doc.setFontSize(7.5); doc.text(`${getTaxLabel()}: $${gstAmount.toFixed(2)}`, 188, y+4, { align: 'right' }); doc.text(`${getCurrencySymbol()}${totalWithGST.toFixed(2)} incl.`, 188, y+8, { align: 'right' }); doc.setFontSize(9);
             y += 14;
             doc.setFont(undefined, 'normal'); doc.setFontSize(8);
             doc.text(`GST (${(gstRate*100).toFixed(0)}%): $${gstAmount.toFixed(2)}`, x, y);
@@ -27115,7 +27136,8 @@ if ('serviceWorker' in navigator && _swAllowed) {
 
                 // ── QR bottom right ───────────────────────────
                 try {
-                    const qrText = `Job #${jobNum} | ${client} | ${totalParts} parts | ${colours.join(', ')}`;
+                    const displayQrArea = isImperial() ? (parseFloat(totalSqm) * 10.7639).toFixed(2) : parseFloat(totalSqm).toFixed(2);
+                    const qrText = `Job: #${jobNum} | Client: ${client} | Parts: ${totalParts} | ${getAreaLabel().toUpperCase()}: ${displayQrArea} | Colours: ${colours.join(', ')}`;
                     const qrDataUrl = generateQRDataURL(qrText, 150);
                     if (qrDataUrl) doc.addImage(qrDataUrl,'PNG', x+lw-21, y+lh-22, 19, 19);
                 } catch(e) {}
@@ -27131,7 +27153,8 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 doc.setFont(undefined,'bold'); doc.setFontSize(6.5); doc.setTextColor(0,100,180);
                 doc.text(colours[0]?.substring(0,22)||'', x+5, nameY+13);
                 try {
-                    const qrDataUrl = generateQRDataURL(`Job #${jobNum} | ${client} | ${totalParts} parts`, 100);
+                    const displayQrArea = isImperial() ? (parseFloat(totalSqm) * 10.7639).toFixed(2) : parseFloat(totalSqm).toFixed(2);
+                    const qrDataUrl = generateQRDataURL(`Job: #${jobNum} | Client: ${client} | Parts: ${totalParts} | ${getAreaLabel().toUpperCase()}: ${displayQrArea} | Colours: ${colours.join(', ')}`, 100);
                     if (qrDataUrl) doc.addImage(qrDataUrl,'PNG', x+lw-16, y+lh-17, 14, 14);
                 } catch(e) {}
                 doc.setFont(undefined,'normal'); doc.setFontSize(5); doc.setTextColor(160,160,160);
@@ -28999,7 +29022,8 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         
         if (document.getElementById('totalActiveJobs')) document.getElementById('totalActiveJobs').innerText = activeJobs;
         if (document.getElementById('totalTasks')) document.getElementById('totalTasks').innerText = `${completedTasks}/${totalTasks}`;
-        if (document.getElementById('totalWorkload')) document.getElementById('totalWorkload').innerText = totalSqm.toFixed(1);
+        const displayWorkload = isImperial() ? (totalSqm * 10.7639).toFixed(1) : totalSqm.toFixed(1);
+        if (document.getElementById('totalWorkload')) document.getElementById('totalWorkload').innerText = displayWorkload + ' ' + getAreaLabel();
         
     }
 
