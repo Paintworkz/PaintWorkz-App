@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.264'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.265'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1731,7 +1731,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.264'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.265'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -3120,54 +3120,40 @@ const firebaseConfig = {
                 }, 100);
                 
                 // Load jobs from Firebase ONLY after document is fully loaded
+                if (window._dataLoadChainStarted) return; // Prevent multiple chains from onAuthStateChanged firing repeatedly
+                window._dataLoadChainStarted = true;
+
+                const _startDataLoad = () => {
+                    if (window.loadAllDataFromFirebase) {
+                        try { window.loadAllDataFromFirebase(); } catch(e) { console.error('loadAllDataFromFirebase error:', e); }
+                        setTimeout(() => { try { _syncBrandsFromFirestoreOnce(); } catch(e) {} }, 600);
+                        setTimeout(() => { if (typeof loadDefaultTimelineFromFirebase === 'function') loadDefaultTimelineFromFirebase(); }, 800);
+                        setTimeout(() => { if (typeof loadShopClosuresFromFirebase === 'function') loadShopClosuresFromFirebase(); }, 900);
+                        setTimeout(() => { if (typeof loadUserPreferences === 'function') loadUserPreferences(user.uid); }, 500);
+                        (function() {
+                            var _stockAttempts = 0;
+                            var _stockInterval = setInterval(function() {
+                                _stockAttempts++;
+                                if (typeof loadStockFromFirebase === 'function' && window.currentUser && window.firebaseDb) {
+                                    clearInterval(_stockInterval);
+                                    loadStockFromFirebase().then(function() {
+                                        try { if (typeof renderStockTab === 'function') renderStockTab(); } catch(e) {}
+                                    });
+                                } else if (_stockAttempts >= 15) {
+                                    clearInterval(_stockInterval);
+                                }
+                            }, 400);
+                        })();
+                    } else {
+                        // Function not defined yet — wait and retry once more
+                        setTimeout(_startDataLoad, 800);
+                    }
+                };
+
                 if (document.readyState === 'loading') {
-                    document.addEventListener('DOMContentLoaded', () => {
-                        const tryLoad = (attempts) => {
-                            if (window.loadAllDataFromFirebase) {
-                                try { window.loadAllDataFromFirebase(); } catch(e) { console.error('loadAllDataFromFirebase error:', e); }
-                                // Load paint brands and timeline early in parallel
-                                setTimeout(() => { try { _syncBrandsFromFirestoreOnce(); } catch(e) {} }, 600);
-                                setTimeout(() => { if (typeof loadDefaultTimelineFromFirebase === 'function') loadDefaultTimelineFromFirebase(); }, 800);
-                                setTimeout(() => { if (typeof loadShopClosuresFromFirebase === 'function') loadShopClosuresFromFirebase(); }, 800);
-                                // Load user preferences (units, currency, language) from their account
-                                setTimeout(() => { if (typeof loadUserPreferences === 'function') loadUserPreferences(user.uid); }, 500);
-                                (function() {
-                                    var _stockAttempts = 0;
-                                    var _stockInterval = setInterval(function() {
-                                        _stockAttempts++;
-                                        if (typeof loadStockFromFirebase === 'function' && window.currentUser && window.firebaseDb) {
-                                            clearInterval(_stockInterval);
-                                            loadStockFromFirebase().then(function() {
-                                                try { if (typeof renderStockTab === 'function') renderStockTab(); } catch(e) {}
-                                            });
-                                        } else if (_stockAttempts >= 15) {
-                                            clearInterval(_stockInterval);
-                                            console.warn('Stock load: Firebase not ready after 15 attempts');
-                                        }
-                                    }, 400);
-                                })();
-                            } else if (attempts > 0) {
-                                setTimeout(() => tryLoad(attempts - 1), 400);
-                            }
-                        };
-                        setTimeout(() => tryLoad(10), 500);
-                    });
+                    document.addEventListener('DOMContentLoaded', () => { setTimeout(_startDataLoad, 500); });
                 } else {
-                    // DOM already loaded - retry until main script has defined the function
-                    const tryLoad = (attempts) => {
-                        if (window.loadAllDataFromFirebase) {
-                            try { window.loadAllDataFromFirebase(); } catch(e) { console.error('loadAllDataFromFirebase error:', e); }
-                            // Load paint brands and timeline early in parallel
-                            setTimeout(() => { try { _syncBrandsFromFirestoreOnce(); } catch(e) {} }, 600);
-                            setTimeout(() => { if (typeof loadDefaultTimelineFromFirebase === 'function') loadDefaultTimelineFromFirebase(); }, 800);
-                            setTimeout(() => { if (typeof loadShopClosuresFromFirebase === 'function') loadShopClosuresFromFirebase(); }, 900);
-                            setTimeout(() => { if (typeof loadUserPreferences === 'function') loadUserPreferences(user.uid); }, 500);
-                            setTimeout(() => tryLoad(attempts - 1), 400);
-                        } else {
-                            console.warn('⚠️ loadAllDataFromFirebase never became available');
-                        }
-                    };
-                    setTimeout(() => tryLoad(10), 500); // retry up to 10x every 400ms
+                    setTimeout(_startDataLoad, 500);
                 }
                 
                 // Set up real-time sync so changes on one device appear on all others instantly
@@ -27553,12 +27539,11 @@ if ('serviceWorker' in navigator && _swAllowed) {
     
     var _shopClosuresLoaded = false;
     async function loadShopClosuresFromFirebase() {
-        if (_shopClosuresLoaded) return; // Only load once per session
+        if (_shopClosuresLoaded) return;
+        _shopClosuresLoaded = true; // Set permanently - never retry regardless of outcome
         if (!window.currentUser || !window.firebaseDb || !window.getDoc || !window.doc) return;
-        _shopClosuresLoaded = true; // Set BEFORE the async call to prevent concurrent calls
         try {
-            // Always load from DATA UID — paint_workz holds all operational data
-            const OWNER_UID = 'gh3XNClBwAgKulXhxmpVKkNLDq62'; // DATA UID = paint_workz
+            const OWNER_UID = 'gh3XNClBwAgKulXhxmpVKkNLDq62';
             const ref = window.doc(window.firebaseDb, 'users', OWNER_UID, 'appData', 'shopClosures');
             const snap = await window.getDoc(ref);
             if (snap.exists()) {
@@ -27570,8 +27555,8 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 }
             }
         } catch(e) {
-            _shopClosuresLoaded = false; // Reset on error so save operations can retry
             console.warn('loadShopClosuresFromFirebase error (non-critical):', e.message);
+            // Do NOT reset _shopClosuresLoaded — one attempt per session, period
         }
     }
     
