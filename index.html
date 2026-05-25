@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.260'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.270'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1645,6 +1645,7 @@ const firebaseConfig = {
             app = initializeApp(firebaseConfig);
             auth = getAuth(app);
             db = getFirestore(app);
+            window._db = db; // Assign to window for loadUserPreferences
             const _storage = getStorage(app);
             window.firebaseStorage = _storage;
             window.storageRef = ref;
@@ -1731,7 +1732,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.260'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.270'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -2972,6 +2973,7 @@ const firebaseConfig = {
             app = initializeApp(firebaseConfig);
             auth = getAuth(app);
             db = getFirestore(app);
+            window._db = db; // Assign to window for loadUserPreferences
             const _storage = getStorage(app);
             window.firebaseStorage = _storage;
             window.storageRef = ref;
@@ -4223,7 +4225,7 @@ const firebaseConfig = {
 
             <div style="display: flex; flex-direction: column; align-items: center; padding: 15px 0; border-top: 1px solid #eee;">
                 <div id="liveSq" style="font-size: 50px; font-weight: 900; color: var(--gs); line-height: 1;">0.000</div>
-                <div style="font-size: 10px; font-weight: 900; color: #aaa;">CURRENT PART SQM (m²)</div>
+                <div style="font-size: 10px; font-weight: 900; color: #aaa;">CURRENT PART SQM (${getAreaLabel()})</div>
             </div>
 
             <button class="add-main-btn" onclick="addPart()">ADD PART +</button>
@@ -4558,7 +4560,7 @@ const firebaseConfig = {
             <h3>Generate Form</h3>
             <div class="form-grid">
                 <div id="form-supply" class="form-card" onclick="genForm('Supply Docket')"><h4>Supply Docket <span class="pw-help">?<span class="pw-help-tip">A detailed part list showing every door, panel and drawer with dimensions, finish and paint colour. Give to your paint supplier or use as a job checklist.</span></span></h4><p>Part list for client</p></div>
-                <div id="form-estimate" class="form-card" onclick="genForm('Estimate')"><h4>Estimate <span class="pw-help">?<span class="pw-help-tip">A detailed cost breakdown grouped by colour — shows every door/panel with SQM, price per m² and totals. Use for internal costing or as a preliminary quote.</span></span></h4><p>Job breakdown only</p></div>
+                <div id="form-estimate" class="form-card" onclick="genForm('Estimate')"><h4>Estimate <span class="pw-help">?<span class="pw-help-tip">A detailed cost breakdown grouped by colour — shows every door/panel with SQM, price per ${getAreaLabel()} and totals. Use for internal costing or as a preliminary quote.</span></span></h4><p>Job breakdown only</p></div>
                 <div id="form-mixing" class="form-card" onclick="genForm('Mixing Card')"><h4>Mixing Card <span class="pw-help">?<span class="pw-help-tip">The tinter formula card for your spray booth. Shows base code, tinter amounts and quantities to mix. Hand to your paint technician before spraying.</span></span></h4><p>Paint shop formula</p></div>
                 <div id="form-quote" class="form-card" onclick="genForm('Quote Form')"><h4>Quote Form <span class="pw-help">?<span class="pw-help-tip">A formal quote showing the job breakdown and your pricing. Includes raw door cost vs 2Pac painting cost columns. Suitable to send directly to the client.</span></span></h4><p>Raw vs Paint pricing</p></div>
                 <div id="form-paint-order" class="form-card" onclick="genPaintOrderFormPDF()" style="border-left:5px solid #4caf50 !important;"><h4>🎨 Paint Order</h4><p>Manufacturing order form</p></div>
@@ -4748,6 +4750,49 @@ const firebaseConfig = {
             <!-- General Settings Tab -->
             <div id="admin-tab-general-content" class="admin-tab-content active" style="padding-top:12px;">
 
+                <!-- ── MY PREFERENCES — always visible, saves to Firebase ── -->
+                <div style="background:linear-gradient(135deg,#1a237e,#283593); border-radius:12px; padding:16px; margin-bottom:16px; border:1px solid #3949ab;">
+                    <div style="font-size:13px; font-weight:900; color:#fff; margin-bottom:4px;">⚙️ MY PREFERENCES</div>
+                    <div style="font-size:11px; color:#9fa8da; margin-bottom:14px;">Your personal settings — saved to your account, follow you on every device.</div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+                        <div>
+                            <label style="display:block; font-weight:900; font-size:10px; color:#9fa8da; margin-bottom:5px;">📐 MEASUREMENT UNITS</label>
+                            <select id="prefUnitsSelect" onchange="savePreference('units',this.value)" style="width:100%; padding:9px; border:1px solid #3949ab; border-radius:6px; font-size:12px; font-weight:700; background:#1c2160; color:#fff; box-sizing:border-box;">
+                                <option value="METRIC">Metric — mm / m² (AU/NZ)</option>
+                                <option value="IMPERIAL_US">Imperial US — in / sqft (USA)</option>
+                                <option value="IMPERIAL_UK">Imperial UK — in / sqft (UK)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display:block; font-weight:900; font-size:10px; color:#9fa8da; margin-bottom:5px;">📏 INCH FORMAT</label>
+                            <select id="prefInchFmtSelect" onchange="savePreference('inchFmt',this.value)" style="width:100%; padding:9px; border:1px solid #3949ab; border-radius:6px; font-size:12px; font-weight:700; background:#1c2160; color:#fff; box-sizing:border-box;">
+                                <option value="decimal">Decimal — 84.5"</option>
+                                <option value="fractional">Fractional — 84½"</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display:block; font-weight:900; font-size:10px; color:#9fa8da; margin-bottom:5px;">💰 CURRENCY</label>
+                            <select id="prefCurrencySelect" onchange="savePreference('currency',this.value)" style="width:100%; padding:9px; border:1px solid #3949ab; border-radius:6px; font-size:12px; font-weight:700; background:#1c2160; color:#fff; box-sizing:border-box;">
+                                <option value="AUD">AUD — Australian Dollar ($)</option>
+                                <option value="USD">USD — US Dollar ($)</option>
+                                <option value="GBP">GBP — British Pound (£)</option>
+                                <option value="EUR">EUR — Euro (€)</option>
+                                <option value="NZD">NZD — New Zealand Dollar ($)</option>
+                                <option value="CAD">CAD — Canadian Dollar ($)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display:block; font-weight:900; font-size:10px; color:#9fa8da; margin-bottom:5px;">🌐 LANGUAGE / SPELLING</label>
+                            <select id="prefLocaleSelect" onchange="savePreference('locale',this.value)" style="width:100%; padding:9px; border:1px solid #3949ab; border-radius:6px; font-size:12px; font-weight:700; background:#1c2160; color:#fff; box-sizing:border-box;">
+                                <option value="en-AU">English (AU) — Australian</option>
+                                <option value="en-US">English (US) — American</option>
+                                <option value="en-GB">English (UK) — British</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="prefSaveStatus" style="font-size:10px; color:#81c784; font-weight:700; min-height:14px;"></div>
+                </div>
+                <!-- ── END MY PREFERENCES ── -->
                 <div style="background:#f0f0f0; border:2px solid #2196f3; border-radius:6px; padding:15px; margin-bottom:20px;">
                     <div style="display:flex; justify-content:space-between; align-items:center;">
                         <div>
@@ -4775,11 +4820,11 @@ const firebaseConfig = {
                 <p style="font-size:11px; color:#666; margin-bottom:15px;">Set default values for new parts in the Measure tab. <span class="pw-help">?<span class="pw-help-tip">These pre-fill every new part — profile type, paint mode, finish and thickness. Saves time when most of your jobs use the same setup.</span></span></p>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-bottom:20px;">
                     <div>
-                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Default Material Thickness (mm)</label>
+                        <label id="defaultThicknessLabel" style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Default Material Thickness (mm)</label>
                         <input type="number" inputmode="decimal" id="defaultThickness" value="18" min="1" max="50" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
                     </div>
                     <div>
-                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Default SE Return Value (mm)</label>
+                        <label id="defaultSEReturnLabel" style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Default SE Return Value (mm)</label>
                         <input type="number" inputmode="decimal" id="defaultSEReturn" value="100" min="10" max="500" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
                     </div>
                 </div>
@@ -4797,77 +4842,7 @@ const firebaseConfig = {
                 </div>
                 <div id="global-settings-container" style="display:none;">
                 <p style="font-size:11px; color:#666; margin-bottom:15px;">Configure global app settings for measurements, precision, and AI features</p>
-                <!-- ── MY PREFERENCES (saves to your account) ── -->
-                <div style="background:rgba(63,81,181,0.1); border:1px solid rgba(63,81,181,0.4); border-radius:10px; padding:14px; margin-bottom:18px;">
-                    <div style="font-size:11px; font-weight:900; color:#5c6bc0; margin-bottom:10px;">⚙️ MY PREFERENCES — saved to your account, follow you on any device</div>
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:8px;">
-                        <div>
-                            <label style="display:block; font-weight:900; font-size:10px; color:#666; margin-bottom:5px;">📐 MEASUREMENT UNITS</label>
-                            <select id="prefUnitsSelect" onchange="savePreference('units',this.value)" style="width:100%; padding:9px; border:1px solid #ccc; border-radius:6px; font-size:12px; font-weight:700; box-sizing:border-box;">
-                                <option value="METRIC">Metric — mm / m² (AU/NZ)</option>
-                                <option value="IMPERIAL_US">Imperial US — in / sqft (USA)</option>
-                                <option value="IMPERIAL_UK">Imperial UK — in / sqft (UK)</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label style="display:block; font-weight:900; font-size:10px; color:#666; margin-bottom:5px;">📏 INCH FORMAT</label>
-                            <select id="prefInchFmtSelect" onchange="savePreference('inchFmt',this.value)" style="width:100%; padding:9px; border:1px solid #ccc; border-radius:6px; font-size:12px; font-weight:700; box-sizing:border-box;">
-                                <option value="decimal">Decimal — 84.5"</option>
-                                <option value="fractional">Fractional — 84½"</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label style="display:block; font-weight:900; font-size:10px; color:#666; margin-bottom:5px;">💰 CURRENCY</label>
-                            <select id="prefCurrencySelect" onchange="savePreference('currency',this.value)" style="width:100%; padding:9px; border:1px solid #ccc; border-radius:6px; font-size:12px; font-weight:700; box-sizing:border-box;">
-                                <option value="AUD">AUD — Australian Dollar ($)</option>
-                                <option value="USD">USD — US Dollar ($)</option>
-                                <option value="GBP">GBP — British Pound (£)</option>
-                                <option value="EUR">EUR — Euro (€)</option>
-                                <option value="NZD">NZD — New Zealand Dollar ($)</option>
-                                <option value="CAD">CAD — Canadian Dollar ($)</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label style="display:block; font-weight:900; font-size:10px; color:#666; margin-bottom:5px;">🌐 LANGUAGE / SPELLING</label>
-                            <select id="prefLocaleSelect" onchange="savePreference('locale',this.value)" style="width:100%; padding:9px; border:1px solid #ccc; border-radius:6px; font-size:12px; font-weight:700; box-sizing:border-box;">
-                                <option value="en-AU">English (AU) — Australian</option>
-                                <option value="en-US">English (US) — American</option>
-                                <option value="en-GB">English (UK) — British</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div id="prefSaveStatus" style="font-size:10px; color:#4caf50; font-weight:700; min-height:14px;"></div>
-                </div>
-                <!-- ── END MY PREFERENCES ── -->
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-bottom:20px;">
-                    <div>
-                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">📐 Measurement Units</label>
-                        <select id="globalUnitsSelect" onchange="setUnits(this.value)" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
-                            <option value="METRIC">Metric — mm / m² (AU/NZ)</option>
-                            <option value="IMPERIAL_US">Imperial US — in / sqft (USA)</option>
-                            <option value="IMPERIAL_UK">Imperial UK — in / sqft (UK)</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">📏 Inch Format <span id="inchFormatLabel" style="display:none;">(Imperial only)</span></label>
-                        <select id="globalInchFormatSelect" onchange="setInchFormat(this.value)" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
-                            <option value="decimal">Decimal — 84.5"</option>
-                            <option value="fractional">Fractional — 84½"</option>
-                        </select>
-                    </div>
-                </div>
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-bottom:20px;">
-                    <div>
-                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">💰 Currency</label>
-                        <select id="globalCurrencySelect" onchange="setCurrency(this.value)" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
-                            <option value="AUD">AUD — Australian Dollar ($)</option>
-                            <option value="USD">USD — US Dollar ($)</option>
-                            <option value="GBP">GBP — British Pound (£)</option>
-                            <option value="EUR">EUR — Euro (€)</option>
-                            <option value="NZD">NZD — New Zealand Dollar ($)</option>
-                            <option value="CAD">CAD — Canadian Dollar ($)</option>
-                        </select>
-                    </div>
                     <div>
                         <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Measurement Precision</label>
                         <select id="globalPrecisionSelect" onchange="setPrecision(this.value)" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
@@ -4876,6 +4851,7 @@ const firebaseConfig = {
                             <option value="0.001">0.001 (nearest thousandth)</option>
                         </select>
                     </div>
+                    <div></div>
                 </div>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-bottom:15px;">
                     <div style="padding:12px; background:#f0f8ff; border-radius:6px; border-left:4px solid #2196f3;">
@@ -5009,7 +4985,7 @@ const firebaseConfig = {
                             <div style="font-size:11px; color:#ccc;">Paint coverage rate tracking requires the Pro plan.</div>
                         </div>
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                            <h4 style="margin:0; font-weight:900; font-size:13px;">🪣 Paint Coverage Rates <span class="pw-help">?<span class="pw-help-tip">How many m² one litre of paint covers. Satin/Gloss ~5 m²/L, Undercoat ~8 m²/L. Used to calculate litres needed and paint base cost per job.</span></span></h4>
+                            <h4 style="margin:0; font-weight:900; font-size:13px;">🪣 Paint Coverage Rates <span class="pw-help">?<span class="pw-help-tip">How many ${getAreaLabel()} one litre of paint covers. Satin/Gloss ~5 ${getAreaLabel()}/L, Undercoat ~8 ${getAreaLabel()}/L. Used to calculate litres needed and paint base cost per job.</span></span></h4>
                             <button id="coverageRatesToggle" onclick="toggleSection('coverageRatesBody', this)" style="background:none; border:none; cursor:pointer; font-weight:900; font-size:18px; color:#999;">+</button>
                         </div>
                         <div id="coverageRatesBody" style="display:none;">
@@ -5024,7 +5000,7 @@ const firebaseConfig = {
                                     <input type="number" inputmode="decimal" id="cr_clearUc" min="1" max="30" step="0.5" value="8" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:14px; font-weight:900; text-align:center; box-sizing:border-box;" oninput="saveCoverageRates()">
                                 </div>
                                 <div style="background:#f5f5f5; border-radius:8px; padding:12px;">
-                                    <label style="font-size:11px; font-weight:900; color:#555; display:block; margin-bottom:6px;">✨ Satin (sqm/L) <span class="pw-help">?<span class="pw-help-tip">How many square metres one litre of satin 2Pac covers at normal application thickness. Industry average is around 5 m²/L.</span></span></label>
+                                    <label style="font-size:11px; font-weight:900; color:#555; display:block; margin-bottom:6px;">✨ Satin (sqm/L) <span class="pw-help">?<span class="pw-help-tip">How many square metres one litre of satin 2Pac covers at normal application thickness. Industry average is around 5 ${getAreaLabel()}/L.</span></span></label>
                                     <input type="number" inputmode="decimal" id="cr_satin" min="1" max="30" step="0.5" value="5" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:14px; font-weight:900; text-align:center; box-sizing:border-box;" oninput="saveCoverageRates()">
                                 </div>
                                 <div style="background:#f5f5f5; border-radius:8px; padding:12px;">
@@ -5032,7 +5008,7 @@ const firebaseConfig = {
                                     <input type="number" inputmode="decimal" id="cr_gloss" min="1" max="30" step="0.5" value="5" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:14px; font-weight:900; text-align:center; box-sizing:border-box;" oninput="saveCoverageRates()">
                                 </div>
                                 <div style="background:#f5f5f5; border-radius:8px; padding:12px;">
-                                    <label style="font-size:11px; font-weight:900; color:#555; display:block; margin-bottom:6px;">✨ Matt (sqm/L) <span class="pw-help">?<span class="pw-help-tip">Coverage rate for matt finish. Usually similar to satin — around 5 m²/L.</span></span></label>
+                                    <label style="font-size:11px; font-weight:900; color:#555; display:block; margin-bottom:6px;">✨ Matt (sqm/L) <span class="pw-help">?<span class="pw-help-tip">Coverage rate for matt finish. Usually similar to satin — around 5 ${getAreaLabel()}/L.</span></span></label>
                                     <input type="number" inputmode="decimal" id="cr_matt" min="1" max="30" step="0.5" value="5" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:14px; font-weight:900; text-align:center; box-sizing:border-box;" oninput="saveCoverageRates()">
                                 </div>
                                 <div style="background:#f5f5f5; border-radius:8px; padding:12px;">
@@ -6005,11 +5981,11 @@ const firebaseConfig = {
                                 <label style="font-size:9px; font-weight:900; color:#999; text-transform:uppercase; display:block; margin-bottom:3px;">📐 Min Job SQM</label>
                                 <select id="rMinSqmFilter" style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:5px; font-size:11px; font-weight:700; color:#333; background:#fff;">
                                     <option value="0">— All Sizes —</option>
-                                    <option value="10">10sqm +</option>
-                                    <option value="20">20sqm +</option>
-                                    <option value="30">30sqm +</option>
-                                    <option value="50">50sqm +</option>
-                                    <option value="100">100sqm +</option>
+                                    <option value="10">10${getAreaLabel()} +</option>
+                                    <option value="20">20${getAreaLabel()} +</option>
+                                    <option value="30">30${getAreaLabel()} +</option>
+                                    <option value="50">50${getAreaLabel()} +</option>
+                                    <option value="100">100${getAreaLabel()} +</option>
                                 </select>
                             </div>
                             <div style="display:flex; gap:5px;">
@@ -6064,7 +6040,7 @@ const firebaseConfig = {
             </div>
             <div style="text-align:center; padding:8px;">
                 <div id="totalWorkload" style="font-size:13px; font-weight:900; color:#2196f3;">0</div>
-                <div style="font-size:9px; color:#666; font-weight:700;">SQM Workload</div>
+                <div id="workloadLabel" style="font-size:9px; color:#666; font-weight:700;"></div>
             </div>
         </div>
     </div>
@@ -6076,7 +6052,7 @@ const firebaseConfig = {
     </div>
     
 <div class="sticky-footer" id="stickyFooter" style="display:none;">
-    <div class="footer-item" style="margin-left:15px;"><div class="footer-label">TOTAL <span id="tALabel">m²</span></div><div class="footer-val" id="tA">0.000</div></div>
+    <div class="footer-item" style="margin-left:15px;"><div class="footer-label">TOTAL SQM (${getAreaLabel()})</div><div class="footer-val" id="tA">0.000</div></div>
     <div style="flex:1; display:flex; justify-content:center; gap:20px; align-items:center;">
         <div class="icon-btn" onclick="genPDF()" style="color:#fff">📄</div>
         <div onclick="openChatAI()" title="Chat with AI Helper" style="display:none; align-items:center; justify-content:center; width:50px; height:50px; background:linear-gradient(135deg, #6200ea 0%, #7c3aed 100%); border-radius:50%; cursor:pointer; font-size:24px; color:#fff; box-shadow:0 4px 12px rgba(98, 0, 234, 0.4); transition:all 0.3s; border:2px solid rgba(255,255,255,0.3); animation:pulse 2s infinite;">💬</div>
@@ -7384,7 +7360,7 @@ const firebaseConfig = {
     // sqm → display area string
     function sqmToDisplay(sqm, decimals) {
         var d = decimals !== undefined ? decimals : 3;
-        if (!isImperial()) return parseFloat(sqm).toFixed(d) + ' m²';
+        if (!isImperial()) return parseFloat(sqm).toFixed(d) + ' ' + getAreaLabel();
         return (parseFloat(sqm) * 10.7639).toFixed(2) + ' sqft';
     }
 
@@ -7426,7 +7402,7 @@ const firebaseConfig = {
         saveAdminSettings();
         // Update measure sheet labels
         _applyUnitLabels();
-        notify('📐 Units: ' + (value==='METRIC' ? 'Metric mm/m²' : value==='IMPERIAL_US' ? 'Imperial US in/sqft' : 'Imperial UK in/sqft'));
+        notify('📐 Units: ' + (value==='METRIC' ? 'Metric mm/${getAreaLabel()}' : value==='IMPERIAL_US' ? 'Imperial US in/sqft' : 'Imperial UK in/sqft'));
     }
 
     function setInchFormat(value) {
@@ -7454,6 +7430,14 @@ const firebaseConfig = {
         if (sqLabel) sqLabel.textContent = al;
         var tALabel = document.getElementById('tALabel');
         if (tALabel) tALabel.textContent = al;
+        // Update workload label
+        var workloadLabel = document.getElementById('workloadLabel');
+        if (workloadLabel) workloadLabel.textContent = al.toUpperCase() + ' Workload';
+        // Update default thickness labels
+        var thkLabel = document.getElementById('defaultThicknessLabel');
+        if (thkLabel) thkLabel.textContent = 'Default Material Thickness (' + ul + ')';
+        var seLabel = document.getElementById('defaultSEReturnLabel');
+        if (seLabel) seLabel.textContent = 'Default SE Return Value (' + ul + ')';
     }
 
     // Load saved settings into dropdowns on admin open
@@ -8733,7 +8717,7 @@ const firebaseConfig = {
         doc.setFont(undefined,'normal'); doc.setFontSize(13);
         doc.setTextColor(200,30,30);
         doc.text(size + 'L', 20, y);
-        doc.text(_coverageRate + ' m²/L', 110, y);
+        doc.text(_coverageRate + ' ${getAreaLabel()}/L', 110, y);
         doc.setTextColor(0,0,0);
         y += 14;
 
@@ -10129,7 +10113,7 @@ const firebaseConfig = {
                 if (_target && String(_target.jobNum) === String(_jNum)) {
                     _hist[_editIdx].items = items;
                     _hist[_editIdx].totalParts = String(items.reduce((s,i) => s + (parseInt(i.qty)||1), 0));
-                    _hist[_editIdx].totalSqm = isImperial() ? String((parseFloat(document.getElementById('tA')?.innerText||0)/10.7639).toFixed(3)) : (document.getElementById('tA')?.innerText || _hist[_editIdx].totalSqm);
+                    _hist[_editIdx].totalSqm = document.getElementById('tA')?.innerText || _hist[_editIdx].totalSqm;
                     _hist[_editIdx].colors = Array.from(new Set(items.map(i => i.color).filter(c => c && c.trim()))).join(', ') || _hist[_editIdx].color;
                     localStorage.setItem('jobHistory', JSON.stringify(_hist));
                 }
@@ -10679,6 +10663,11 @@ const firebaseConfig = {
                 render();
             }
             
+            // Apply unit labels on initialization
+            if (typeof _applyUnitLabels === 'function') {
+                _applyUnitLabels();
+            }
+            
             console.log('    App initialized - measure sheet cleared, clients loaded');
             
             // Auto-archive old completed jobs
@@ -10921,7 +10910,7 @@ const firebaseConfig = {
             colors: Array.from(new Set(items.map(i => i.color).filter(c => c && c.trim()))).join(', ') || document.getElementById('p-color').value,  // All unique colors
             code: document.getElementById('p-code').value,
             finish: document.getElementById('p-finish').value,
-            totalSqm: isImperial() ? String((parseFloat(document.getElementById('tA')?.innerText||0)/10.7639).toFixed(3)) : (document.getElementById('tA')?.innerText || '0.000'),
+            totalSqm: document.getElementById('tA')?.innerText || '0.000',
             totalParts: String(items.reduce((s,i) => s + (parseInt(i.qty)||1), 0)),  // Calculate from items array, not DOM
             timestamp: new Date().toISOString(),
             savedDate: new Date().toLocaleString('en-AU'),
@@ -15215,7 +15204,7 @@ const firebaseConfig = {
                 </div>
                 <div class="pl-right">
                     <div class="pl-mode" style="color:${mC}; border-color:${mC}; background:${mC}20">${it.mode}</div>
-                    <div class="pl-sqm">${isImperial() ? (rowSqm*10.7639).toFixed(2) : rowSqm.toFixed(3)}<span style="font-size:9px; font-weight:700; color:#999;">m²</span></div>
+                    <div class="pl-sqm">${isImperial() ? (rowSqm*10.7639).toFixed(2) : rowSqm.toFixed(3)}<span style="font-size:9px; font-weight:700; color:#999;">${getAreaLabel()}</span></div>
                 </div>
                 <input type="checkbox" class="part-colour-cb" data-idx="${originalIndex}" style="width:18px;height:18px;cursor:pointer;flex-shrink:0;margin:0 2px;" title="Tick to change colour on this part"><button class="edit-btn" onclick="editItem(${originalIndex})" style="background:rgba(33,150,243,0.12); color:#2196f3; border:1px solid rgba(33,150,243,0.3); padding:6px 12px; border-radius:6px; font-weight:900; cursor:pointer; font-size:11px; white-space:nowrap; flex-shrink:0;"><span class="edit-btn-icon">✏️</span><span class="edit-btn-text" style="display:none;">✏️ Edit</span></button><button class="del-btn" onclick="deleteItem(${originalIndex})">✕</button>
             `;
@@ -16425,7 +16414,7 @@ const firebaseConfig = {
             y += 12;
             
             // Table headers definitions - expanded to use full page width (15mm margins each side = 180mm available)
-            const headers = ['Qty', 'H', 'W', 'Thk', 'Mld', 'Edge', 'Mode', 'Panel', 'Profile', 'm²', '$/m²', 'Total'];
+            const headers = ['Qty', 'H', 'W', 'Thk', 'Mld', 'Edge', 'Mode', 'Panel', 'Profile', getAreaLabel(), '$/' + getAreaLabel(), 'Total'];
             const colWidths = [8, 15, 15, 13, 14, 13, 10, 15, 38, 10, 10, 18];
             const cellHeight = 6;
             
@@ -16542,8 +16531,12 @@ const firebaseConfig = {
                     colourTotal += rowTotal;
                     grandTotal += rowTotal;
                     
+                    // Convert to imperial if needed for display
+                    const displayArea = isImperial() ? (sqm * 10.7639).toFixed(2) : sqm.toFixed(3);
+                    const displayRate = isImperial() ? (pricePerSqm / 10.7639).toFixed(2) : pricePerSqm.toFixed(0);
+                    
                     // Data array now includes SQ/MTR column
-                    const data = [qty, height, width, thickness, isMoulded, edgesDisplay, paintMode, panel, profile, sqm.toFixed(3), pricePerSqm.toFixed(0), rowTotal.toFixed(2)];
+                    const data = [qty, height, width, thickness, isMoulded, edgesDisplay, paintMode, panel, profile, displayArea, displayRate, rowTotal.toFixed(2)];
                     
                     // Draw cells
                     data.forEach((value, i) => {
@@ -16609,7 +16602,7 @@ const firebaseConfig = {
                 if (y + _ctsEstHeight > 265) { doc.addPage(); y = 20; }
                 doc.setFontSize(11); doc.setFont(undefined,'bold');
                 doc.setFillColor(245,245,245); doc.setDrawColor(0,0,0); doc.setLineWidth(1.0);
-                var ctsHeaders = ['Qty','H','W','Thk','Profile','m²','$/m²','Total'];
+                var ctsHeaders = ['Qty','H','W','Thk','Profile','${getAreaLabel()}','$/${getAreaLabel()}','Total'];
                 var ctsCW = [8,15,15,13,52,12,12,18];
                 var _ctsTotalW = ctsCW.reduce(function(a,b){return a+b;},0);
                 // Draw box first, then text on top
@@ -16891,7 +16884,7 @@ const firebaseConfig = {
             y += 12;
             
             // Table headers definitions - expanded to use full page width (15mm margins each side = 180mm available)
-            const headers = ['Qty', 'H', 'W', 'Thk', 'Mld', 'Edge', 'Mode', 'Panel', 'Profile', 'm²', '$/m²', 'Total'];
+            const headers = ['Qty', 'H', 'W', 'Thk', 'Mld', 'Edge', 'Mode', 'Panel', 'Profile', getAreaLabel(), '$/' + getAreaLabel(), 'Total'];
             const colWidths = [8, 15, 15, 13, 14, 13, 10, 15, 38, 10, 10, 18];
             const cellHeight = 6;
             
@@ -17008,8 +17001,12 @@ const firebaseConfig = {
                     colourTotal += rowTotal;
                     grandTotal += rowTotal;
                     
+                    // Convert to imperial if needed for display
+                    const displayArea = isImperial() ? (sqm * 10.7639).toFixed(2) : sqm.toFixed(3);
+                    const displayRate = isImperial() ? (pricePerSqm / 10.7639).toFixed(2) : pricePerSqm.toFixed(0);
+                    
                     // Data array now includes SQ/MTR column
-                    const data = [qty, height, width, thickness, isMoulded, edgesDisplay, paintMode, panel, profile, sqm.toFixed(3), pricePerSqm.toFixed(0), rowTotal.toFixed(2)];
+                    const data = [qty, height, width, thickness, isMoulded, edgesDisplay, paintMode, panel, profile, displayArea, displayRate, rowTotal.toFixed(2)];
                     
                     // Draw cells
                     data.forEach((value, i) => {
@@ -17075,7 +17072,7 @@ const firebaseConfig = {
                 if (y + _ctsEstHeight > 265) { doc.addPage(); y = 20; }
                 doc.setFontSize(11); doc.setFont(undefined,'bold');
                 doc.setFillColor(245,245,245); doc.setDrawColor(0,0,0); doc.setLineWidth(1.0);
-                var ctsHeaders = ['Qty','H','W','Thk','Profile','m²','$/m²','Total'];
+                var ctsHeaders = ['Qty','H','W','Thk','Profile','${getAreaLabel()}','$/${getAreaLabel()}','Total'];
                 var ctsCW = [8,15,15,13,52,12,12,18];
                 var _ctsTotalW = ctsCW.reduce(function(a,b){return a+b;},0);
                 // Draw box first, then text on top
@@ -17357,7 +17354,7 @@ const firebaseConfig = {
             y += 12;
             
             // Table headers definitions - expanded to use full page width (15mm margins each side = 180mm available)
-            const headers = ['Qty', 'H', 'W', 'Thk', 'Mld', 'Edge', 'Mode', 'Panel', 'Profile', 'm²', '$/m²', 'Total'];
+            const headers = ['Qty', 'H', 'W', 'Thk', 'Mld', 'Edge', 'Mode', 'Panel', 'Profile', getAreaLabel(), '$/' + getAreaLabel(), 'Total'];
             const colWidths = [8, 15, 15, 13, 14, 13, 10, 15, 38, 10, 10, 18];
             const cellHeight = 6;
             
@@ -17474,8 +17471,12 @@ const firebaseConfig = {
                     colourTotal += rowTotal;
                     grandTotal += rowTotal;
                     
+                    // Convert to imperial if needed for display
+                    const displayArea = isImperial() ? (sqm * 10.7639).toFixed(2) : sqm.toFixed(3);
+                    const displayRate = isImperial() ? (pricePerSqm / 10.7639).toFixed(2) : pricePerSqm.toFixed(0);
+                    
                     // Data array now includes SQ/MTR column
-                    const data = [qty, height, width, thickness, isMoulded, edgesDisplay, paintMode, panel, profile, sqm.toFixed(3), pricePerSqm.toFixed(0), rowTotal.toFixed(2)];
+                    const data = [qty, height, width, thickness, isMoulded, edgesDisplay, paintMode, panel, profile, displayArea, displayRate, rowTotal.toFixed(2)];
                     
                     // Draw cells
                     data.forEach((value, i) => {
@@ -17541,7 +17542,7 @@ const firebaseConfig = {
                 if (y + _ctsEstHeight > 265) { doc.addPage(); y = 20; }
                 doc.setFontSize(11); doc.setFont(undefined,'bold');
                 doc.setFillColor(245,245,245); doc.setDrawColor(0,0,0); doc.setLineWidth(1.0);
-                var ctsHeaders = ['Qty','H','W','Thk','Profile','m²','$/m²','Total'];
+                var ctsHeaders = ['Qty','H','W','Thk','Profile','${getAreaLabel()}','$/${getAreaLabel()}','Total'];
                 var ctsCW = [8,15,15,13,52,12,12,18];
                 var _ctsTotalW = ctsCW.reduce(function(a,b){return a+b;},0);
                 // Draw box first, then text on top
@@ -18064,7 +18065,8 @@ const firebaseConfig = {
             // Totals row
             y2 += 3;
             doc.setFont(undefined,'bold'); doc.setFontSize(9); doc.setTextColor(44,62,80);
-            doc.text('Total CTS SQM: ' + ctsDocketSqm.toFixed(3) + ' m\u00B2', margin2, y2);
+            const displayCtsArea = isImperial() ? (ctsDocketSqm * 10.7639).toFixed(2) : ctsDocketSqm.toFixed(3);
+            doc.text('Total CTS ' + getAreaLabel().toUpperCase() + ': ' + displayCtsArea + ' ' + getAreaLabel(), margin2, y2);
             doc.text('Total CTS Parts: ' + ctsSupplyItems.reduce(function(s,it){return s+(it.qty||1);},0), margin2 + 90, y2);
         }
         // Show preview
@@ -18089,10 +18091,8 @@ const firebaseConfig = {
             const jobNum = document.getElementById('jNum')?.value || document.getElementById('jN')?.value || '';
             const jobName = document.getElementById('jNm')?.value || 'Job Name';
             const dateReceived = normDateDisplay(document.getElementById('dRec')?.value || document.getElementById('dat')?.value) || new Date().toLocaleDateString('en-AU',{day:'2-digit',month:'2-digit',year:'numeric'});
-            // Always use sqm internally for mixing calculations — convert back from sqft if imperial
-            const _displayArea = parseFloat(document.getElementById('tA')?.innerText || '0') || 0;
-            const totalSQM = isImperial() ? _displayArea / 10.7639 : _displayArea;
-            console.log('MIXING CARD START - totalSQM: ' + totalSQM + ' m² (display was: ' + _displayArea + ' ' + getAreaLabel() + '), items: ' + items.length);
+            const totalSQM = parseFloat(document.getElementById('tA')?.innerText || '0') || 0;  // FIX: was 'tot', should be 'tA'
+            console.log('MIXING CARD START - totalSQM: ' + totalSQM + ', items: ' + items.length);
             
             // Get paint data - use FIRST ITEM'S BRAND (all items should have same brand per part logic)
             const paintBrand = (items[0]?.brand) || document.getElementById('p-brand')?.value || 'Dulux';
@@ -18297,7 +18297,7 @@ const firebaseConfig = {
                                       _fin === 'clear' ? (parseFloat(_CR.clear) || 5) :
                                       (parseFloat(_CR.satin) || 5); // default satin
                 const paintQty = (colorSQM / _coverageRate).toFixed(1);
-                doc.text(paintQty + ' L  (' + _coverageRate + ' m²/L)', rightCol, y);
+                doc.text(paintQty + ' L  (' + _coverageRate + ' ${getAreaLabel()}/L)', rightCol, y);
                 y += 14;
                 
                 // ===== DIVIDER =====
@@ -18610,7 +18610,8 @@ const firebaseConfig = {
                 doc.setFontSize(9);
                 doc.setFont(undefined, 'italic');
                 doc.setTextColor(100, 100, 100);
-                doc.text(`Generated: ${new Date().toLocaleDateString('en-AU')} | ${color} | Base: ${paintQty}L | SQM: ${colorSQM.toFixed(2)}`, 20, pageHeight - 8);
+                const displayColorArea = isImperial() ? (colorSQM * 10.7639).toFixed(2) : colorSQM.toFixed(2);
+                doc.text(`Generated: ${new Date().toLocaleDateString('en-AU')} | ${color} | Base: ${paintQty}L | ${getAreaLabel().toUpperCase()}: ${displayColorArea}`, 20, pageHeight - 8);
                 
                 doc.text('   2026 - PaintWorkz Pro Software', 20, pageHeight - 5);
                 doc.setFontSize(6.5); doc.setFont('helvetica','normal'); doc.setTextColor(170,170,170);
@@ -18663,7 +18664,7 @@ const firebaseConfig = {
                     const _bColorParts = (window.pdfItemsToUse && window.pdfItemsToUse.length > 0 ? window.pdfItemsToUse : items).filter(i=>(i.color||'').trim().toLowerCase()===color.toLowerCase()).reduce((s,i)=>s+(parseInt(i.qty)||1),0);
                     doc.text(`${_bColorSQM.toFixed(2)} m`, 20, _by);
                     doc.text(String(_bColorParts), 65, _by);
-                    doc.text(`${_bPaintQty} L  (${_coveragePreview} m²/L)`, 110, _by);
+                    doc.text(`${_bPaintQty} L  (${_coveragePreview} ${getAreaLabel()}/L)`, 110, _by);
                     doc.setTextColor(0,0,0); _by += 10;
 
                     // ── GOLD DIVIDER ─────────────────────────────────────────
@@ -18743,7 +18744,8 @@ const firebaseConfig = {
 
                     // Footer (same as page 1)
                     doc.setFontSize(7); doc.setFont('helvetica','normal'); doc.setTextColor(128,128,128);
-                    doc.text(`Generated: ${new Date().toLocaleDateString('en-AU')} | ${color} | Base: ${_bPaintQty}L | SQM: ${_bColorSQM.toFixed(2)}`, 20, pageHeight - 8);
+                    const displayBatchColorArea = isImperial() ? (_bColorSQM * 10.7639).toFixed(2) : _bColorSQM.toFixed(2);
+                    doc.text(`Generated: ${new Date().toLocaleDateString('en-AU')} | ${color} | Base: ${_bPaintQty}L | ${getAreaLabel().toUpperCase()}: ${displayBatchColorArea}`, 20, pageHeight - 8);
                     doc.text('Created by paintworkzpro.com.au', doc.internal.pageSize.getWidth()-10, pageHeight-4, {align:'right'});
                     doc.setTextColor(0,0,0);
                 }
@@ -19086,7 +19088,8 @@ const firebaseConfig = {
                 doc.setFont(undefined, 'bold');
                 doc.setTextColor(200, 30, 30);
                 
-                const sqmText = `SQM: ${colorSQM.toFixed(2)} m2`;
+                const displayMixArea = isImperial() ? (colorSQM * 10.7639).toFixed(2) : colorSQM.toFixed(2);
+                const sqmText = `${getAreaLabel().toUpperCase()}: ${displayMixArea}`;
                 const sqmWidth = doc.getTextWidth(sqmText);
                 doc.text(sqmText, (pageWidth - sqmWidth) / 2, y);
                 y += 8;
@@ -19546,7 +19549,7 @@ const firebaseConfig = {
             
             // Table headers
             const cols = [13, 22, 12, 17, 17, 17, 20, 70];
-            const headers = ['Line No', 'Door/Panel', 'Qty', 'Height (mm)', 'Width (mm)', 'Edge Profile', 'Paint Options', 'Description/Diagram'];
+            const headers = ['Line No', 'Door/Panel', 'Qty', 'Height (' + getUnitLabel() + ')', 'Width (' + getUnitLabel() + ')', 'Edge Profile', 'Paint Options', 'Description/Diagram'];
             
             doc.setLineWidth(0.4);
             let colX = margin;
@@ -20733,10 +20736,10 @@ const firebaseConfig = {
         <!-- KPI cards - up to 8 across -->
         <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(100px,1fr)); gap:10px; margin-bottom:18px;">
             ${kpiCard('       ', 'Jobs', jobs.length, '#2196f3')}
-            ${kpiCard('    ', 'Total SQM', totalSqm.toFixed(1) + 'm²', '#4caf50')}
+            ${kpiCard('    ', 'Total SQM', totalSqm.toFixed(1) + '${getAreaLabel()}', '#4caf50')}
             ${kpiCard('    ', 'Parts', totalParts, '#ff9800')}
             ${kpiCard('    ', 'Colours', Object.keys(colourCount).length, '#9c27b0')}
-            ${kpiCard('    ', 'Undercoat SQM', undercoatSqm + 'm²', '#795548')}
+            ${kpiCard('    ', 'Undercoat SQM', undercoatSqm + '${getAreaLabel()}', '#795548')}
             ${kpiCard('    ', 'Est. Revenue', _fmtKpi(_totalEstVal), '#1565c0')}
             ${kpiCard('⏱', 'Avg Days/Job', _avgDaysKpi, '#00838f')}
             ${totalCtsRevenue > 0 ? kpiCard('✂️', 'CTS Revenue', _fmtKpi(totalCtsRevenue), '#2c3e50') : ''}
@@ -20795,7 +20798,7 @@ const firebaseConfig = {
                         <tr style="border-bottom:1px solid #f0f0f0; background:#e8f5e9;">
                             <td style="padding:6px 8px; font-weight:900; color:#2e7d32;">Undercoat White</td>
                             <td style="padding:6px 8px; text-align:right; font-weight:900; font-size:14px; color:#2e7d32;">${undercoatL}</td>
-                            <td style="padding:6px 8px; color:#888; font-size:9px;">uc · ${ucRate}m²/L</td>
+                            <td style="padding:6px 8px; color:#888; font-size:9px;">uc · ${ucRate}${getAreaLabel()}/L</td>
                         </tr>
                         <tr style="border-bottom:1px solid #f0f0f0;">
                             <td style="padding:6px 8px; font-weight:700; color:#0d47a1;">XB6930 Satin White</td>
@@ -20830,12 +20833,12 @@ const firebaseConfig = {
                         <tr style="border-bottom:1px solid #f0f0f0;">
                             <td style="padding:7px 10px; font-weight:700; color:#388e3c;">Clear U/C</td>
                             <td style="padding:6px 8px; text-align:right; font-weight:900; font-size:15px; color:#388e3c;">${clearUcL}</td>
-                            <td style="padding:7px 10px; color:#888; font-size:10px;">u/c · ${ucClearRate}m²/L</td>
+                            <td style="padding:7px 10px; color:#888; font-size:10px;">u/c · ${ucClearRate}${getAreaLabel()}/L</td>
                         </tr>
                         <tr style="border-bottom:1px solid #f0f0f0; background:#fafafa;">
                             <td style="padding:7px 10px; font-weight:700; color:#6a1b9a;">Clear Coat</td>
                             <td style="padding:6px 8px; text-align:right; font-weight:900; font-size:15px; color:#6a1b9a;">${clearPaintLitres.toFixed(1)}</td>
-                            <td style="padding:7px 10px; color:#888; font-size:10px;">clear · ${clrRate}m²/L</td>
+                            <td style="padding:7px 10px; color:#888; font-size:10px;">clear · ${clrRate}${getAreaLabel()}/L</td>
                         </tr>
                         <tr style="background:#e3f2fd; border-top:2px solid #1565c0;">
                             <td style="padding:7px 8px; font-weight:900; color:#1565c0;">TOTAL SATIN</td>
@@ -21061,7 +21064,7 @@ const firebaseConfig = {
                     data:{ labels: chartLabels, datasets },
                     options:{ responsive:true,
                         plugins:{ legend:{ display: _reportStatusFilter === 'all', position:'top', labels:{ font:{size:10}, boxWidth:12 } } },
-                        scales:{ y:{ beginAtZero:true, ticks:{font:{size:10}, callback:v=>v+'m²'} }, x:{ ticks:{font:{size:useWeekly?9:10}, maxRotation:45} } }
+                        scales:{ y:{ beginAtZero:true, ticks:{font:{size:10}, callback:v=>v+'${getAreaLabel()}'} }, x:{ ticks:{font:{size:useWeekly?9:10}, maxRotation:45} } }
                     }
                 });
             }
@@ -21146,7 +21149,7 @@ const firebaseConfig = {
                         </div>
                         <div style="text-align:right; flex-shrink:0;">
                             <div style="font-size:15px; font-weight:900; color:${col}; line-height:1;">${c[1].toFixed(1)}</div>
-                            <div style="font-size:9px; color:${tileSub2}; margin-top:1px;">m²</div>
+                            <div style="font-size:9px; color:${tileSub2}; margin-top:1px;">${getAreaLabel()}</div>
                         </div>
                     </div>`;
                 });
@@ -21165,7 +21168,7 @@ const firebaseConfig = {
                         datasets:[{ data: topColours.map(c=>+c[1].toFixed(2)),
                             backgroundColor: palette, borderRadius:5 }]
                     }, options:{ indexAxis:'y', responsive:true, plugins:{legend:{display:false}},
-                        scales:{ x:{ beginAtZero:true, ticks:{font:{size:11}, callback: v => v+'m²'} }, y:{ ticks:{font:{size:11}, crossAlign:'far'} } } }
+                        scales:{ x:{ beginAtZero:true, ticks:{font:{size:11}, callback: v => v+'${getAreaLabel()}'} }, y:{ ticks:{font:{size:11}, crossAlign:'far'} } } }
                 });
             }
 
@@ -21179,7 +21182,7 @@ const firebaseConfig = {
                         datasets:[{ data: topProfiles.map(p=>+p[1].toFixed(2)),
                             backgroundColor: palette.slice(2), borderRadius:5 }]
                     }, options:{ indexAxis:'y', responsive:true, plugins:{legend:{display:false}},
-                        scales:{ x:{ beginAtZero:true, ticks:{font:{size:11}, callback: v => v+'m²'} }, y:{ ticks:{font:{size:11}, crossAlign:'far'} } } }
+                        scales:{ x:{ beginAtZero:true, ticks:{font:{size:11}, callback: v => v+'${getAreaLabel()}'} }, y:{ ticks:{font:{size:11}, crossAlign:'far'} } } }
                 });
             }
 
@@ -21190,7 +21193,7 @@ const firebaseConfig = {
                     datasets:[{ data: topClients.map(c=>+c[1].toFixed(2)),
                         backgroundColor: palette.slice(1), borderRadius:5 }]
                 }, options:{ responsive:true, plugins:{legend:{display:false}},
-                    scales:{ y:{ beginAtZero:true, ticks:{font:{size:11}, callback: v => v+'m²'} }, x:{ ticks:{font:{size:11}, maxRotation:30} } } }});
+                    scales:{ y:{ beginAtZero:true, ticks:{font:{size:11}, callback: v => v+'${getAreaLabel()}'} }, x:{ ticks:{font:{size:11}, maxRotation:30} } } }});
             }
 
             // Monthly jobs bar
@@ -21755,10 +21758,10 @@ const firebaseConfig = {
         const _matTotal = Math.abs(Math.round(stock['XB6910'] || 0)) + Math.abs(Math.round(stock['XB6911'] || 0));
         alert(
             `⚡ RECALC COMPLETE — ${jobCount} jobs processed\n\n` +
-            `Undercoat deducted: ${_ucTotal}L (at ${_ucR}m²/L)\n` +
-            `Satin base deducted: ${_satTotal}L (at ${_satR}m²/L)\n` +
-            `Gloss base deducted: ${_glsTotal}L (at ${_glsR}m²/L)\n` +
-            `Matt base deducted: ${_matTotal}L (at ${_matR}m²/L)\n\n` +
+            `Undercoat deducted: ${_ucTotal}L (at ${_ucR}${getAreaLabel()}/L)\n` +
+            `Satin base deducted: ${_satTotal}L (at ${_satR}${getAreaLabel()}/L)\n` +
+            `Gloss base deducted: ${_glsTotal}L (at ${_glsR}${getAreaLabel()}/L)\n` +
+            `Matt base deducted: ${_matTotal}L (at ${_matR}${getAreaLabel()}/L)\n\n` +
             `All values are now NEGATIVE (deducted from 0).\n` +
             `Go to Database → Stock, enter your actual drum quantities,\n` +
             `then the stock levels will show what you actually have left.`
@@ -23966,8 +23969,9 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 return acc;
             }, { sqm: 0, total: 0 });
             
+            const displayTotalArea = isImperial() ? (totals.sqm * 10.7639).toFixed(2) : totals.sqm.toFixed(3);
             doc.setFontSize(10).setFont(undefined, 'bold');
-            doc.text(`Total SQM: ${totals.sqm.toFixed(3)} m2`, 14, finalY);
+            doc.text(`Total ${getAreaLabel().toUpperCase()}: ${displayTotalArea}`, 14, finalY);
             doc.text(`Total (ex GST): $${totals.total.toFixed(2)}`, 14, finalY + 6);
             
             doc.save(`${formType}_${jobName}.pdf`);
@@ -25946,7 +25950,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
             }
 
             // ── DISCLAIMER ──
-            const noteLines=['All prices per m² excl. GST. Prices subject to change without notice.','For profiles not listed, please contact us for an estimate.'];
+            const noteLines=['All prices per ${getAreaLabel()} excl. GST. Prices subject to change without notice.','For profiles not listed, please contact us for an estimate.'];
             const noteH = 3.5 + noteLines.length*4.5;
             doc.setFillColor(255,252,235); doc.setDrawColor(198,168,28); doc.setLineWidth(0.22);
             doc.roundedRect(lm,y,rm-lm,noteH,1.5,1.5,'FD');
@@ -25958,7 +25962,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
             doc.setDrawColor(200,200,200); doc.setLineWidth(0.22);
             doc.line(lm,ph-11,rm,ph-11);
             doc.setFont('helvetica','normal'); doc.setFontSize(6.5); doc.setTextColor(140,140,140);
-            doc.text('All prices per m² excl. GST. Prices subject to change without notice.',lm,ph-6.5);
+            doc.text('All prices per ${getAreaLabel()} excl. GST. Prices subject to change without notice.',lm,ph-6.5);
             doc.setFont('helvetica','bold'); doc.setTextColor(95,108,195);
             doc.text('paintworkzpro.com.au',rm,ph-6.5,{align:'right'});
             doc.setFont('helvetica','normal'); doc.setFontSize(5.5); doc.setTextColor(185,185,185);
@@ -27100,7 +27104,8 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 // ── Detail rows ───────────────────────────────
                 doc.setFont(undefined,'normal'); doc.setFontSize(8); doc.setTextColor(50,50,50);
                 doc.text(`Date: ${dateRec}`, x+5, nameY+9);
-                doc.text(`Parts: ${totalParts}   SQM: ${totalSqm}m2`, x+5, nameY+16);
+                const displayLabelArea = isImperial() ? (parseFloat(totalSqm) * 10.7639).toFixed(2) : parseFloat(totalSqm).toFixed(2);
+                doc.text(`Parts: ${totalParts}   ${getAreaLabel().toUpperCase()}: ${displayLabelArea}`, x+5, nameY+16);
 
                 // ── Colours (blue bold) ───────────────────────
                 doc.setFont(undefined,'bold'); doc.setFontSize(8); doc.setTextColor(0,100,180);
@@ -27219,7 +27224,8 @@ if ('serviceWorker' in navigator && _swAllowed) {
 
         // QR code top right (encodes job info)
         try {
-            const qrText = `Job: #${jobNum} | Client: ${client} | Parts: ${totalParts} | SQM: ${totalSqm} | Colours: ${colours.join(', ')}`;
+            const displayQrArea = isImperial() ? (parseFloat(totalSqm) * 10.7639).toFixed(2) : parseFloat(totalSqm).toFixed(2);
+            const qrText = `Job: #${jobNum} | Client: ${client} | Parts: ${totalParts} | ${getAreaLabel().toUpperCase()}: ${displayQrArea} | Colours: ${colours.join(', ')}`;
             const qrDataUrl = generateQRDataURL(qrText, 300);
             if (qrDataUrl) { doc.addImage(qrDataUrl, 'PNG', pw-70, 55, 55, 55); }
             doc.setFontSize(6); doc.setTextColor(150,150,150);
@@ -27245,7 +27251,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
         doc.text('TOTAL SQM', col1, infoY+22);
         doc.text('PAINT BRAND', col2, infoY+22);
         doc.setFontSize(18); doc.setFont(undefined, 'bold'); doc.setTextColor(0,0,0);
-        doc.text(totalSqm + ' m²', col1, infoY+32);
+        doc.text(totalSqm + ' ${getAreaLabel()}', col1, infoY+32);
         doc.text(brands.join(' / ') || '—', col2, infoY+32);
 
         // Colour section
@@ -31354,7 +31360,7 @@ const TOUR_STEPS = [
     //  6. PAINT MODE
     { tab:'measure', target:'mSS',
       title:'🖌️ Paint Mode — SS / DS / SE',
-      body:'SS = Single Side. DS = Double Side (both faces). SE = Single Side + Edge Return — paint wraps around one edge like an L-shape. This drives your price per m².'
+      body:'SS = Single Side. DS = Double Side (both faces). SE = Single Side + Edge Return — paint wraps around one edge like an L-shape. This drives your price per ${getAreaLabel()}.'
     },
     //  7. EDGES
     { tab:'measure', target:'E1',
@@ -31447,7 +31453,7 @@ const TOUR_STEPS = [
     //  22. PRICE MATRIX
     { tab:'admin', adminTab:'pricing', target:'admin-pricing-matrix',
       title:'💲 Price Matrix',
-      body:'Set your per-m² rate for every door profile and finish — Matt, Satin, Semi-Gloss, Gloss and Clear. Organised by tier. Rates pull through automatically to all estimates and invoices.',
+      body:'Set your per-${getAreaLabel()} rate for every door profile and finish — Matt, Satin, Semi-Gloss, Gloss and Clear. Organised by tier. Rates pull through automatically to all estimates and invoices.',
       onEnter: function() {
           setTimeout(function() {
               if (typeof switchMatrixView === 'function') switchMatrixView('paint');
@@ -31457,7 +31463,7 @@ const TOUR_STEPS = [
     //  23. CTS MATRIX
     { tab:'admin', adminTab:'pricing', target:'admin-cts-matrix',
       title:'✂️ CTS Price Matrix',
-      body:'Supply price per m² for each profile and board thickness. Add edge routing types with their per-lineal-metre rate. Push to Cloud saves for all staff accounts.',
+      body:'Supply price per ${getAreaLabel()} for each profile and board thickness. Add edge routing types with their per-lineal-metre rate. Push to Cloud saves for all staff accounts.',
       onEnter: function() {
           setTimeout(function() {
               if (typeof switchMatrixView === 'function') switchMatrixView('cts');
