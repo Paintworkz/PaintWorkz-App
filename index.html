@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.262'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.263'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1731,7 +1731,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.262'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.263'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -7255,66 +7255,69 @@ const firebaseConfig = {
     
     // Setters for Admin UI controls
     // ── USER PREFERENCES (Firebase-backed, per user account) ─────────────────
+    var _prefLoading = false; // guard against multiple simultaneous calls
+
     async function savePreference(key, value) {
-        // Apply immediately
+        // Apply locally first
         var lsMap = {units:'pw_units', inchFmt:'pw_inchFmt', currency:'pw_currency', locale:'pw_locale'};
         if (lsMap[key]) localStorage.setItem(lsMap[key], value);
-
-        // Apply effect
-        if (key === 'units') { setUnits(value); }
+        if (key === 'units')    { setUnits(value); }
         if (key === 'currency') { notify('💰 Currency: ' + value); }
-        if (key === 'locale') { setLocale(value); }
-        if (key === 'inchFmt') { setInchFormat(value); }
+        if (key === 'locale')   { if (typeof setLocale==='function') setLocale(value); }
+        if (key === 'inchFmt')  { setInchFormat(value); }
 
-        // Save to Firebase under current user
+        // Save to Firebase using already-loaded Firestore from window scope
         try {
-            var user = window._currentUser;
-            if (!user) return;
-            var { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js');
-            var prefRef = doc(window._db, 'users', user.uid, 'settings', 'preferences');
+            var db = window.firebaseDb;
+            var user = window._currentUser || window.currentUser;
+            var _doc = window.doc, _setDoc = window.setDoc;
+            if (!db || !user || !_doc || !_setDoc) return;
+            var prefRef = _doc(db, 'users', user.uid, 'settings', 'preferences');
             var data = {};
             data[key] = value;
-            await setDoc(prefRef, data, { merge: true });
+            await _setDoc(prefRef, data, { merge: true });
             var el = document.getElementById('prefSaveStatus');
-            if (el) { el.textContent = '✓ Saved to your account'; setTimeout(function(){ el.textContent=''; }, 2000); }
+            if (el) { el.textContent = '✓ Saved'; setTimeout(function(){ el.textContent=''; }, 2000); }
         } catch(e) {
-            console.warn('Pref save failed:', e);
+            console.warn('Pref save failed (non-critical):', e.message);
         }
     }
 
     async function loadUserPreferences(uid) {
+        if (_prefLoading) return; // prevent multiple simultaneous calls
+        _prefLoading = true;
         try {
-            var { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js');
-            var prefRef = doc(window._db, 'users', uid, 'settings', 'preferences');
-            var snap = await getDoc(prefRef);
-            if (!snap.exists()) return;
+            var db = window.firebaseDb;
+            var _doc = window.doc, _getDoc = window.getDoc;
+            if (!db || !uid || !_doc || !_getDoc) { _prefLoading = false; return; }
+            var prefRef = _doc(db, 'users', uid, 'settings', 'preferences');
+            var snap = await _getDoc(prefRef);
+            if (!snap.exists()) { _prefLoading = false; return; }
             var prefs = snap.data();
             if (prefs.units)    { localStorage.setItem('pw_units',    prefs.units);    _applyUnitLabels(); }
             if (prefs.inchFmt)  { localStorage.setItem('pw_inchFmt',  prefs.inchFmt); }
             if (prefs.currency) { localStorage.setItem('pw_currency', prefs.currency); }
             if (prefs.locale)   { localStorage.setItem('pw_locale',   prefs.locale); if (typeof setLocale==='function') setLocale(prefs.locale); }
-            // Sync dropdowns
             _syncPrefDropdowns();
-            console.log('✅ User preferences loaded from Firebase');
+            console.log('✅ User preferences loaded');
         } catch(e) {
-            console.warn('Pref load failed:', e);
+            console.warn('Pref load failed (non-critical):', e.message);
         }
+        _prefLoading = false;
     }
 
     function _syncPrefDropdowns() {
         var maps = {
-            prefUnitsSelect:   localStorage.getItem('pw_units')    || 'METRIC',
-            prefInchFmtSelect: localStorage.getItem('pw_inchFmt')  || 'decimal',
-            prefCurrencySelect:localStorage.getItem('pw_currency') || 'AUD',
-            prefLocaleSelect:  localStorage.getItem('pw_locale')   || 'en-AU',
-            globalUnitsSelect: localStorage.getItem('pw_units')    || 'METRIC',
-            globalCurrencySelect:localStorage.getItem('pw_currency')|| 'AUD',
-            globalInchFormatSelect:localStorage.getItem('pw_inchFmt')||'decimal',
-            localeSelect:      localStorage.getItem('pw_locale')   || 'en-AU',
+            prefUnitsSelect:      localStorage.getItem('pw_units')    || 'METRIC',
+            prefInchFmtSelect:    localStorage.getItem('pw_inchFmt')  || 'decimal',
+            prefCurrencySelect:   localStorage.getItem('pw_currency') || 'AUD',
+            prefLocaleSelect:     localStorage.getItem('pw_locale')   || 'en-AU',
+            localeSelect:         localStorage.getItem('pw_locale')   || 'en-AU',
+            globalPrecisionSelect: localStorage.getItem('pw_precision') || '0.1',
         };
-        Object.entries(maps).forEach(function(pair){
-            var el = document.getElementById(pair[0]);
-            if (el) el.value = pair[1];
+        Object.keys(maps).forEach(function(id){
+            var el = document.getElementById(id);
+            if (el) el.value = maps[id];
         });
     }
     window.loadUserPreferences = loadUserPreferences;
