@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.263'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.264'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1731,7 +1731,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.263'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.264'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -15223,7 +15223,6 @@ const firebaseConfig = {
         
         if (document.getElementById('tA')) document.getElementById('tA').innerText = isImperial() ? (tA * 10.7639).toFixed(2) : tA.toFixed(3);
         if (document.getElementById('tQ')) document.getElementById('tQ').innerText = tQ;
-        _applyUnitLabels();
     }
 
     // ── DRAG TO REORDER PARTS ──────────────────────────────────────────────────
@@ -27552,8 +27551,11 @@ if ('serviceWorker' in navigator && _swAllowed) {
         }).join('');
     }
     
+    var _shopClosuresLoaded = false;
     async function loadShopClosuresFromFirebase() {
+        if (_shopClosuresLoaded) return; // Only load once per session
         if (!window.currentUser || !window.firebaseDb || !window.getDoc || !window.doc) return;
+        _shopClosuresLoaded = true; // Set BEFORE the async call to prevent concurrent calls
         try {
             // Always load from DATA UID — paint_workz holds all operational data
             const OWNER_UID = 'gh3XNClBwAgKulXhxmpVKkNLDq62'; // DATA UID = paint_workz
@@ -27565,14 +27567,11 @@ if ('serviceWorker' in navigator && _swAllowed) {
                     localStorage.setItem('shopClosures', JSON.stringify(data.closures));
                     renderShopClosures();
                     console.log('✅ Shop closures loaded from Firebase:', data.closures.length, 'entries');
-                } else {
-                    console.log('ℹ️ No shop closures in Firebase yet');
                 }
-            } else {
-                console.log('ℹ️ shopClosures document does not exist in Firebase yet');
             }
         } catch(e) {
-            console.warn('loadShopClosuresFromFirebase error:', e);
+            _shopClosuresLoaded = false; // Reset on error so save operations can retry
+            console.warn('loadShopClosuresFromFirebase error (non-critical):', e.message);
         }
     }
     
