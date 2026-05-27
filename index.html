@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.16.302 | Updated: 2026-05-27                       ║
+║  Version: v1.16.303 | Updated: 2026-05-27                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.302'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.303'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1727,7 +1727,7 @@ const firebaseConfig = {
 /* 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.16.302 | Updated: 2026-05-27                       ║
+║  Version: v1.16.303 | Updated: 2026-05-27                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 */
@@ -1735,7 +1735,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.302'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.303'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -4778,7 +4778,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.302</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.303</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-03-25</div>
                         </div>
                     </div>
@@ -5740,7 +5740,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.302</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-05-25</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.303</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-05-25</span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);if(typeof tab==='function')tab('measure');setTimeout(function(){if(typeof startTour==='function')startTour();},300);" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -6756,7 +6756,7 @@ const firebaseConfig = {
     console.log('%cUnauthorized copying, modification, or claiming ownership is prohibited.', 'color:#ff0000;font-weight:bold;');
     console.log('%cAll rights reserved    2026 Colin Bedford', 'color:#ff0000;font-weight:bold;');
     console.log('');
-    //                    VERSION: v1.16.302 | 2026-05-27 | Colin Bedford                   
+    //                    VERSION: v1.16.303 | 2026-05-27 | Colin Bedford                   
     //                    ADMIN TABS FIXED | COVER SHEET FIXED | DELETE CONFIRMATION ADDED                   
     console.log('%c PaintWorkz Pro ' + CURRENT_VERSION + ' ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     // Changelog logs removed for production performance
@@ -31038,12 +31038,24 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                 error => {
                     console.error('Realtime sync error:', error);
                     window.realtimeSyncActive = false;
+                    // Auto-reconnect after permission-denied (caused by transient _onStorageEvent credential change)
+                    if (error.code === 'permission-denied') {
+                        console.log('[RealtimeSync] Permission-denied — reconnecting in 5s...');
+                        setTimeout(() => {
+                            if (!window.realtimeSyncActive && window.currentUser) {
+                                console.log('[RealtimeSync] Attempting reconnect...');
+                                try { setupRealtimeSync(); } catch(e) {}
+                            }
+                        }, 5000);
+                    }
                 }
             );
 
             //        Cross-device global notifications (skip ones this device just sent)
             let _lastNotifTs = new Date().toISOString();
-            const _notifRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'globalNotifications');
+            const _notifUid = window.resolvedDataUid || window.currentUser?.uid;
+            if (!_notifUid) return;
+            const _notifRef = window.doc(window.firebaseDb, 'users', _notifUid, 'appData', 'globalNotifications');
             window.onSnapshot(_notifRef, snap => {
                 if (!snap.exists()) return;
                 const notifs = snap.data().notifications || [];
@@ -31108,8 +31120,14 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
 
     function syncJobsToFirebase() {
         // Guard: Wait for Firebase to be ready and user to be logged in
-        if (!window.firebaseReady || !window.currentUser || !window.firebaseDb || !window.doc || !window.setDoc) {
-            console.warn('Firebase not ready or user not logged in. Sync delayed.');
+        if (!window.firebaseReady || !window.firebaseDb || !window.doc || !window.setDoc) {
+            console.warn('Firebase not ready. Sync delayed.');
+            return;
+        }
+        // Use real Firebase auth state — window.currentUser may be cached from before a transient credential change
+        const _authUser = (typeof auth !== 'undefined' && auth.currentUser) ? auth.currentUser : window.currentUser;
+        if (!_authUser) {
+            console.warn('No authenticated user — skipping sync');
             return;
         }
         
