@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.16.311 | Updated: 2026-05-28                       ║
+║  Version: v1.16.312 | Updated: 2026-05-28                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.311'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.312'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1727,7 +1727,7 @@ const firebaseConfig = {
 /* 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.16.311 | Updated: 2026-05-28                       ║
+║  Version: v1.16.312 | Updated: 2026-05-28                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 */
@@ -1735,7 +1735,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.311'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.312'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -4777,7 +4777,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.311</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.312</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-03-25</div>
                         </div>
                     </div>
@@ -5739,7 +5739,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.311</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-05-25</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.312</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-05-25</span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);if(typeof tab==='function')tab('measure');setTimeout(function(){if(typeof startTour==='function')startTour();},300);" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -6756,7 +6756,7 @@ const firebaseConfig = {
     console.log('%cUnauthorized copying, modification, or claiming ownership is prohibited.', 'color:#ff0000;font-weight:bold;');
     console.log('%cAll rights reserved    2026 Colin Bedford', 'color:#ff0000;font-weight:bold;');
     console.log('');
-    //                    VERSION: v1.16.311 | 2026-05-28 | Colin Bedford                   
+    //                    VERSION: v1.16.312 | 2026-05-28 | Colin Bedford                   
     //                    ADMIN TABS FIXED | COVER SHEET FIXED | DELETE CONFIRMATION ADDED                   
     console.log('%c PaintWorkz Pro ' + CURRENT_VERSION + ' ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     // Changelog logs removed for production performance
@@ -11584,6 +11584,7 @@ const firebaseConfig = {
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
         
+        const _justArchivedIds = new Set(); // Track only jobs archived THIS session
         history.forEach(job => {
             if (!job.completed || job.archived) return;
             
@@ -11612,11 +11613,13 @@ const firebaseConfig = {
                 job.archived = true;
                 modified = true;
                 archivedCount++;
+                if (job.id) _justArchivedIds.add(job.id);
                 console.log(`📦 Archiving job #${job.jobNum} (no completion date)`);
             } else if (completedDate < thirtyDaysAgo) {
                 job.archived = true;
                 modified = true;
                 archivedCount++;
+                if (job.id) _justArchivedIds.add(job.id);
                 console.log(`📦 Archiving job #${job.jobNum} (completed ${completedDate.toLocaleDateString()})`);
             }
         });
@@ -11626,30 +11629,31 @@ const firebaseConfig = {
             console.log(`✅ Auto-archived ${archivedCount} old completed jobs`);
             notify(`📦 Archived ${archivedCount} old jobs`);
             
-            // Sync to Firestore so archives persist
-            // Defer until resolvedDataUid is available (set by loadAllDataFromFirebase)
+            // Sync ONLY newly archived jobs — collect just the ones changed this session
+            const _newlyArchivedIds = history
+                .filter(job => job.archived && job.id && _justArchivedIds.has(job.id))
+                .map(job => job.id);
+
             const _doArchiveSync = () => {
                 const syncUid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser?.uid;
                 if (!syncUid || !window.firebaseDb || !window.doc || !window.setDoc) return;
+                if (_newlyArchivedIds.length === 0) return;
                 try {
-                    history.forEach(job => {
-                        if (job.archived && job.id) {
-                            const jobDocRef = window.doc(window.firebaseDb, 'users', syncUid, 'jobs', job.id);
-                            window.setDoc(jobDocRef, { archived: true }, { merge: true }).catch(e => {
-                                console.error('Failed to sync archive status for job', job.id, e);
-                            });
-                        }
+                    _newlyArchivedIds.forEach(jobId => {
+                        const jobDocRef = window.doc(window.firebaseDb, 'users', syncUid, 'jobs', jobId);
+                        window.setDoc(jobDocRef, { archived: true, lastModified: new Date().toISOString() }, { merge: true }).catch(e => {
+                            console.error('Failed to sync archive status for job', jobId, e);
+                        });
                     });
-                    console.log('📤 Archive status synced to Firestore via', syncUid);
+                    console.log('📤 Archive status synced to Firestore via', syncUid, '— jobs:', _newlyArchivedIds);
                 } catch(e) {
                     console.error('Firestore sync error:', e);
                 }
             };
-            // If resolvedDataUid already set, sync now; otherwise wait for loadAllDataFromFirebase
             if (window.resolvedDataUid) {
                 _doArchiveSync();
             } else {
-                setTimeout(_doArchiveSync, 6000); // Wait for data load to complete
+                setTimeout(_doArchiveSync, 6000);
             }
         } else {
             console.log('ℹ️ No jobs to archive');
@@ -27313,7 +27317,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 // ── QR bottom right ───────────────────────────
                 try {
                     const displayQrArea = isImperial() ? (parseFloat(totalSqm) * 10.7639).toFixed(2) : parseFloat(totalSqm).toFixed(2);
-                    const qrText = `https://app.paintworkzpro.com.au/`;
+                    const qrText = `JOB: #${jobNum} | CLIENT: ${client} | COLOUR: ${color} | PARTS: ${totalParts} | APP: app.paintworkzpro.com.au`;
                     const qrDataUrl = generateQRDataURL(qrText, 150);
                     if (qrDataUrl) doc.addImage(qrDataUrl,'PNG', x+lw-21, y+lh-22, 19, 19);
                 } catch(e) {}
@@ -27660,7 +27664,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 // QR code bottom right
                 try {
                     const displayQrArea = isImperial() ? (parseFloat(totalSqm) * 10.7639).toFixed(2) : parseFloat(totalSqm).toFixed(2);
-                    const qrText = `https://app.paintworkzpro.com.au/`;
+                    const qrText = `JOB: #${jobNum} | CLIENT: ${client} | COLOUR: ${color} | PARTS: ${totalParts} | APP: app.paintworkzpro.com.au`;
                     const qrDataUrl = generateQRDataURL(qrText, 150);
                     if (qrDataUrl) { doc.addImage(qrDataUrl, 'PNG', x + lw - 21, y + lh - 22, 18, 18); }
                 } catch(e) {
@@ -27684,7 +27688,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 // QR code bottom right
                 try {
                     const displayQrArea = isImperial() ? (parseFloat(totalSqm) * 10.7639).toFixed(2) : parseFloat(totalSqm).toFixed(2);
-                    const qrText = `https://app.paintworkzpro.com.au/`;
+                    const qrText = `JOB: #${jobNum} | CLIENT: ${client} | COLOUR: ${color} | PARTS: ${totalParts} | APP: app.paintworkzpro.com.au`;
                     const qrDataUrl = generateQRDataURL(qrText, 100);
                     if (qrDataUrl) { doc.addImage(qrDataUrl, 'PNG', x + lw - 13, y + lh - 13, 11, 11); }
                 } catch(e) {
@@ -29794,7 +29798,11 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                         }
                     }
                 }
-            } catch(planErr) { console.warn('Plan load error:', planErr.message); }
+            } catch(planErr) {
+                // CRITICAL: Do NOT reset plan on load failure — preserve existing plan
+                // Background refresh permission-denied would otherwise reset Pro → Free and lock save button
+                console.warn('Plan load error (keeping existing plan:', window.currentPlan, '):', planErr.message);
+            }
 
             //        1. Jobs                                                                                                                                     
             const userDocRef = window.doc(window.firebaseDb, 'users', dataUid);
