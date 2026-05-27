@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.16.305 | Updated: 2026-05-27                       ║
+║  Version: v1.16.306 | Updated: 2026-05-28                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.305'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.306'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1727,7 +1727,7 @@ const firebaseConfig = {
 /* 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.16.305 | Updated: 2026-05-27                       ║
+║  Version: v1.16.306 | Updated: 2026-05-28                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 */
@@ -1735,7 +1735,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.305'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.306'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -4782,7 +4782,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.305</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.306</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-03-25</div>
                         </div>
                     </div>
@@ -5744,7 +5744,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.305</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-05-25</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.306</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-05-25</span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);if(typeof tab==='function')tab('measure');setTimeout(function(){if(typeof startTour==='function')startTour();},300);" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -6761,7 +6761,7 @@ const firebaseConfig = {
     console.log('%cUnauthorized copying, modification, or claiming ownership is prohibited.', 'color:#ff0000;font-weight:bold;');
     console.log('%cAll rights reserved    2026 Colin Bedford', 'color:#ff0000;font-weight:bold;');
     console.log('');
-    //                    VERSION: v1.16.305 | 2026-05-27 | Colin Bedford                   
+    //                    VERSION: v1.16.306 | 2026-05-28 | Colin Bedford                   
     //                    ADMIN TABS FIXED | COVER SHEET FIXED | DELETE CONFIRMATION ADDED                   
     console.log('%c PaintWorkz Pro ' + CURRENT_VERSION + ' ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     // Changelog logs removed for production performance
@@ -29803,9 +29803,18 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             window._syncingFromCloud = true;
             safeStorage.setJSON('jobHistory', _safeStrip);
             window._syncingFromCloud = false;
-            fullHistory = safeJobs;
-            history = safeJobs.filter(j => !j.completed && (!j.jobStatus || j.jobStatus === 'job'));
-            try { if (typeof renderHistory === 'function') renderHistory(); } catch(e) {}
+            // Split jobs: active first, archived last (so active jobs are available immediately)
+            const _activeJobs = safeJobs.filter(j => !j.archived);
+            const _archivedJobs = safeJobs.filter(j => j.archived);
+            // Load active jobs immediately into memory
+            fullHistory = _activeJobs;
+            history = _activeJobs.filter(j => !j.completed && (!j.jobStatus || j.jobStatus === 'job'));
+            // Defer archived jobs — append after a short delay so they don't block the UI
+            setTimeout(() => {
+                fullHistory = _activeJobs.concat(_archivedJobs);
+                console.log('📦 Archived jobs appended:', _archivedJobs.length);
+            }, 2000);
+            // Don't renderHistory() here — wait until ALL data (clients, formulas, profiles) is loaded
 
             // Re-push any jobs that were completed locally but not in Firestore
             repushQueue.forEach(job => {
