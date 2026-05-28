@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.16.324 | Updated: 2026-05-28                       ║
+║  Version: v1.16.325 | Updated: 2026-05-28                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.324'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.325'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1760,7 +1760,7 @@ const firebaseConfig = {
 /* 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.16.324 | Updated: 2026-05-28                       ║
+║  Version: v1.16.325 | Updated: 2026-05-28                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 */
@@ -1768,7 +1768,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.324'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.325'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -4843,7 +4843,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.324</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.325</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-03-25</div>
                         </div>
                     </div>
@@ -5805,7 +5805,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.324</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-05-25</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.325</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-05-25</span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);if(typeof tab==='function')tab('measure');setTimeout(function(){if(typeof startTour==='function')startTour();},300);" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -8430,10 +8430,17 @@ const firebaseConfig = {
         render();
         saveData();
         // CRITICAL: Write directly to Firestore — don't rely on syncJobsToFirebase
-        // (which can fail with resource-exhausted when queue is full)
         if (currentEditingJobId && window.firebaseDb && window.doc && window.updateDoc) {
             const _selSyncUid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser?.uid;
             if (_selSyncUid) {
+                // Mark confirmed IMMEDIATELY — don't wait for async .then()
+                // This closes the snapshot revert window between click and write confirmation
+                if (!window._firebaseConfirmedJobs) window._firebaseConfirmedJobs = {};
+                window._firebaseConfirmedJobs[currentEditingJobId] = Date.now();
+                // Also index by jobNum for robustness (in case id/jobNum mismatch)
+                const _activeJobNum2 = document.getElementById('jN')?.value;
+                if (_activeJobNum2) window._firebaseConfirmedJobs[String(_activeJobNum2)] = Date.now();
+
                 const _selRef = window.doc(window.firebaseDb, 'users', _selSyncUid, 'jobs', currentEditingJobId);
                 const _selColors = [...new Set(items.map(i => i.color || i.colour).filter(Boolean))];
                 window.updateDoc(_selRef, {
@@ -8442,12 +8449,7 @@ const firebaseConfig = {
                     colors: _selColors.join(', ') || newColour,
                     lastModified: new Date().toISOString()
                 })
-                .then(() => {
-                    console.log('✅ Selected parts colour synced to Firestore');
-                    // Track this job as recently Firestore-confirmed to protect from snapshot revert
-                    if (!window._firebaseConfirmedJobs) window._firebaseConfirmedJobs = {};
-                    window._firebaseConfirmedJobs[currentEditingJobId] = Date.now();
-                })
+                .then(() => console.log('✅ Selected parts colour synced to Firestore'))
                 .catch(e => console.warn('Selected colour sync failed:', e));
             }
         }
@@ -8520,13 +8522,12 @@ const firebaseConfig = {
                     if (newBrand) updateData.brand = newBrand;
                     if (newCode) updateData.code = newCode;
                     if (newFinish) updateData.finish = newFinish;
+                    // Mark confirmed IMMEDIATELY before async write completes
+                    if (!window._firebaseConfirmedJobs) window._firebaseConfirmedJobs = {};
+                    window._firebaseConfirmedJobs[currentEditingJobId] = Date.now();
+                    if (newColour) window._firebaseConfirmedJobs[String(document.getElementById('jN')?.value||'')] = Date.now();
                     window.updateDoc(jobRef, updateData)
-                        .then(() => {
-                            console.log('✅ Colour change synced to Firestore via', syncUid);
-                            // Mark confirmed so processSnapshot won't revert this job
-                            if (!window._firebaseConfirmedJobs) window._firebaseConfirmedJobs = {};
-                            window._firebaseConfirmedJobs[currentEditingJobId] = Date.now();
-                        })
+                        .then(() => console.log('✅ Colour change synced to Firestore via', syncUid))
                         .catch(e => console.warn('Colour sync failed:', e));
                 }
             }
@@ -19247,11 +19248,13 @@ const firebaseConfig = {
                     });
 
                     // Shop label QR — plain text (readable on any phone camera)
-                    const qrText = [
-                        `Job: ${jobNum} | ${jobClient}`,
-                        allColourNames.map((c,i) => `${c} | ${allColourParts[i]}pts | ${allColourProfiles[i]}`).join('\n'),
-                        `Finish: ${scheduledFinish || 'TBC'}`
-                    ].filter(Boolean).join('\n');
+                    const qrText = JSON.stringify({
+                        Job: jobNum, Client: jobClient,
+                        Colours: allColourNames.join(' | '),
+                        Parts: allColourParts.join('+'),
+                        Profiles: allColourProfiles.join(' | '),
+                        Finish: scheduledFinish || 'TBC'
+                    });
 
                     const qrDataUrl = generateQRDataURL(qrText, 300);
                     if (qrDataUrl) {
@@ -27464,13 +27467,13 @@ if ('serviceWorker' in navigator && _swAllowed) {
                     const _brands3 = [...new Set(jobItems.map(i => i.brand).filter(Boolean))];
                     const _codes3  = [...new Set(jobItems.map(i => i.code).filter(Boolean))];
                     // Keep URL short — 19mm QR needs simple data to be scannable
-                    const _qrText3 = [
-                        `Job: ${jobNum} | ${client}`,
-                        `${_dispSqm3} | Parts: ${totalParts}`,
-                        `Moulded: ${_mouldedCount} | Flat: ${_flatCount}`,
-                        colours.slice(0,2).join(' | '),
-                        `${_brands3.slice(0,1).join('')} | ${_codes3.slice(0,1).join('')}`
-                    ].filter(Boolean).join('\n');
+                    const _qrText3 = JSON.stringify({
+                        Job: jobNum, Client: client,
+                        SQM: _dispSqm3, Parts: totalParts,
+                        Moulded: _mouldedCount, Flat: _flatCount,
+                        Colour: colours.slice(0,2).join(' | '),
+                        Brand: _brands3[0]||'', Code: _codes3[0]||''
+                    });
                     const qrDataUrl = generateQRDataURL(_qrText3, 250);
                     if (qrDataUrl) doc.addImage(qrDataUrl,'PNG', x+lw-26, y+lh-27, 24, 24);
                 } catch(e) {}
@@ -27586,14 +27589,15 @@ if ('serviceWorker' in navigator && _swAllowed) {
             const _codes  = [...new Set(jobItems.map(i => i.code).filter(Boolean))];
             const _finishes = [...new Set(jobItems.map(i => i.finish).filter(Boolean))];
             const _dispSqm5 = isImperial() ? (parseFloat(totalSqm) * 10.7639).toFixed(2) + 'sqft' : parseFloat(totalSqm).toFixed(2) + 'sqm';
-            // A4 has 55x55mm QR — can hold more data
-            const _qrText5 = [
-                `Job: ${jobNum} | ${client}`,
-                `Date: ${dateRec} | Parts: ${totalParts} | ${_dispSqm5}`,
-                colours.slice(0,2).join(' | '),
-                `${_brands.slice(0,2).join(' | ')} | ${_codes.slice(0,2).join(' | ')}`,
-                `Finish: ${_finishes.slice(0,2).join(' | ')}`
-            ].filter(Boolean).join('\n');
+            // A4 has 55x55mm QR — can hold more data, JSON format for readable scanning
+            const _qrText5 = JSON.stringify({
+                Job: jobNum, Client: client,
+                Date: dateRec, Parts: totalParts, SQM: _dispSqm5,
+                Colour: colours.slice(0,2).join(' | '),
+                Brand: _brands.slice(0,2).join(' | '),
+                Code: _codes.slice(0,2).join(' | '),
+                Finish: _finishes.slice(0,2).join(' | ')
+            });
             const qrDataUrl = generateQRDataURL(_qrText5, 400);
             if (qrDataUrl) { doc.addImage(qrDataUrl, 'PNG', pw-70, 55, 55, 55); }
             doc.setFontSize(6); doc.setTextColor(150,150,150);
@@ -27838,14 +27842,15 @@ if ('serviceWorker' in navigator && _swAllowed) {
                     const _qrH = (rawH === '—' || !rawH) ? '-' : rawH;
                     const _qrW = (rawW === '—' || !rawW) ? '-' : rawW;
                     const _qrThk = (rawThk === '—' || !rawThk) ? '18' : rawThk;
-                    const _qrText1 = [
-                        `Job:${jobNum} ${jobClient}`,
-                        `${desc} ${_itemProfile}`,
-                        `${_qrH}x${_qrW}x${_qrThk}mm`,
-                        `Qty:${_itemQty} ${_itemSqm}sqm`,
-                        `${colour} ${finish} ${mode}`,
-                        _itemBrand ? `${_itemBrand} ${_itemCode}` : ''
-                    ].filter(Boolean).join('\n');
+                    const _qrText1 = JSON.stringify({
+                        Job: jobNum, Client: jobClient,
+                        Part: desc, Profile: _itemProfile,
+                        Dim: `${_qrH}x${_qrW}x${_qrThk}mm`,
+                        Qty: _itemQty, SQM: _itemSqm,
+                        Colour: colour, Finish: finish, Mode: mode,
+                        Brand: _itemBrand, Code: _itemCode
+                    })
+                    const _unused1 = [_qrText1].join('\n');
                     const qrDataUrl = generateQRDataURL(_qrText1, 300);
                     // QR: 30x30mm bottom-right
                     if (qrDataUrl) { doc.addImage(qrDataUrl, 'PNG', x + lw - 33, y + lh - 33, 30, 30); }
@@ -31151,7 +31156,9 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                             // When applyColourToSelected/checkBulkColourChange directly updateDoc
                             // Firestore, the snapshot may lag behind — local version IS correct.
                             const _jobKey = cloudJob.id || String(cloudJob.jobNum);
-                            const _confirmedAt = window._firebaseConfirmedJobs && window._firebaseConfirmedJobs[_jobKey];
+                            const _jobKeyNum = String(cloudJob.jobNum);
+                            const _confirmedAt = window._firebaseConfirmedJobs &&
+                                (window._firebaseConfirmedJobs[_jobKey] || window._firebaseConfirmedJobs[_jobKeyNum]);
                             if (_confirmedAt && (Date.now() - _confirmedAt < 90000) && localMatch) {
                                 // Direct Firestore write confirmed < 90s ago — local wins for colour fields
                                 cloudJob.items = localMatch.items;
@@ -31230,18 +31237,25 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                             return;
                         }
                         if (_hasActiveItems) {
-                            // Only protect the CURRENTLY ACTIVE job's items — NOT all jobs.
-                            // Overwriting all jobs' items was causing colour changes on other
-                            // devices to be reverted when ANY job was open here (e.g. job 162).
-                            const _activeJobId = currentEditingJobId; // the job open in measure sheet
+                            // Protect ONLY the currently active job — not all jobs
+                            const _activeJobId = currentEditingJobId;
                             jobs.forEach(function(cj) {
-                                const isActiveJob = _activeJobId && (cj.id === _activeJobId || cj.jobNum === _activeJobNum);
-                                if (!isActiveJob) return; // only protect active job
+                                const isActiveJob = _activeJobId &&
+                                    (cj.id === _activeJobId || String(cj.jobNum) === String(_activeJobNum));
+                                if (!isActiveJob) return;
                                 const localVersion = _ps.find(function(j){ return j.id===cj.id||(j.jobNum===cj.jobNum&&j.client===cj.client); });
                                 if (localVersion && localVersion.totalParts) {
                                     cj.totalParts = localVersion.totalParts;
                                     cj.items = localVersion.items;
                                     cj.totalSqm = localVersion.totalSqm;
+                                    // CRITICAL: also protect colour fields — history card shows
+                                    // job.colors||job.color, not items[].color. Without this the
+                                    // card stays CLEAR even though items are protected.
+                                    if (localVersion.color)  cj.color  = localVersion.color;
+                                    if (localVersion.colors) cj.colors = localVersion.colors;
+                                    if (localVersion.brand)  cj.brand  = localVersion.brand;
+                                    if (localVersion.code)   cj.code   = localVersion.code;
+                                    if (localVersion.finish) cj.finish = localVersion.finish;
                                 }
                             });
                         }
