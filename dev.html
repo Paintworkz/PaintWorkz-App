@@ -1,4 +1,4 @@
-<!--  
+<!-- 
 ╔════════════════════════════════════════════════════════════════╗
 ║                                                                ║
 ║  ⚖️  OWNERSHIP NOTICE - HARDLOCKED                             ║
@@ -21,13 +21,13 @@
 <!--- 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.16.290-dev-s22 | Updated: 2026-05-26                       ║
+║  Version: v1.16.318-dev-s50 | Updated: 2026-05-28                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.290-dev-s22-dev-s22'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.318-dev-s50-dev-s50'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1154,30 +1154,7 @@
 
 
     
-        /* ── DEV MODE BANNER ── */
-        #devBanner {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 99999;
-            background: repeating-linear-gradient(
-                -45deg,
-                #ff3b30,
-                #ff3b30 10px,
-                #ff9500 10px,
-                #ff9500 20px
-            );
-            color: #fff;
-            text-align: center;
-            font-weight: 900;
-            font-size: 11px;
-            letter-spacing: 1px;
-            padding: 4px 8px;
-            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
-            pointer-events: none;
-        }
-
+        #devBanner { position:fixed;top:0;left:0;right:0;z-index:99999;background:repeating-linear-gradient(-45deg,#ff3b30,#ff3b30 10px,#ff9500 10px,#ff9500 20px);color:#fff;text-align:center;font-weight:900;font-size:11px;letter-spacing:1px;padding:4px 8px;text-shadow:0 1px 2px rgba(0,0,0,0.5);pointer-events:none;}
     </style>
 
 <script>
@@ -1464,7 +1441,7 @@ window.getTooltipKey = getTooltipKey;
 </script>
 </head>
 <body>
-<div id="devBanner">🚧 DEVELOPMENT VERSION — NOT FOR PRODUCTION USE — v1.16.290-dev-s22 🚧</div>
+<div id="devBanner">🚧 DEVELOPMENT VERSION — NOT FOR PRODUCTION USE — v1.16.318-dev-s50 🚧</div>
 
 
 <!-- COPYRIGHT NOTICE -->
@@ -1754,7 +1731,7 @@ const firebaseConfig = {
 /* 
 ╔════════════════════════════════════════════════════════════════╗
 ║  🔄 CACHE BUSTER - AUTOMATICALLY CLEARS OUTDATED CACHE       ║
-║  Version: v1.16.290-dev-s22 | Updated: 2026-05-26                       ║
+║  Version: v1.16.318-dev-s50 | Updated: 2026-05-28                       ║
 ║  If version doesn't match, browser cache is cleared           ║
 ╚════════════════════════════════════════════════════════════════╝
 */
@@ -1762,7 +1739,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.290-dev-s22-dev-s22'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.318-dev-s50-dev-s50'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -3058,6 +3035,8 @@ const firebaseConfig = {
         
         // Set up auth listener
         onAuthStateChanged(auth, user => {
+            const _prevEmail = window.currentUser ? window.currentUser.email : null; // Capture BEFORE overwrite
+            if (user) window._cachedFullUser = user; // Cache full user before any null events
             window.currentUser = user;
             if (user) {
                 // Check for explicit login flag (sessionStorage = same tab only)
@@ -3095,7 +3074,8 @@ const firebaseConfig = {
                 // Mark this session as active so we don't re-wipe mid-session
                 sessionStorage.setItem('pw_session_active_' + user.uid, '1');
                 // SESSION GUARD: enforce single active session per login
-                // Poll until main script has defined window.initSessionGuard (avoids race condition)
+                // This prevents Colin & Blake both using paint_workz simultaneously and corrupting data
+                // The 15s debounce inside initSessionGuard prevents self-kicking during login
                 (function _waitForSessionGuard(attempts) {
                     if (typeof window.initSessionGuard === 'function') {
                         window.initSessionGuard(user);
@@ -3230,6 +3210,16 @@ const firebaseConfig = {
                     }
                 }, 3000);
             } else {
+                // _prevEmail was captured at top before window.currentUser was overwritten
+                // ALWAYS let user-initiated logouts through first
+                if (window._userInitiatedLogout) {
+                    window._userInitiatedLogout = false;
+                    // Fall through to logout UI below
+                } else if (_prevEmail === 'paint_workz@outlook.com' || _prevEmail === 'ckbedford@outlook.com') {
+                    console.log('[Auth] Multi-device account — ignoring auth null for', _prevEmail);
+                    window.currentUser = window._cachedFullUser || window.currentUser; // Restore full user object
+                    return;
+                }
                 if (window.realtimeSyncUnsubscribe) {
                     try { window.realtimeSyncUnsubscribe(); } catch(e) {}
                     window.realtimeSyncUnsubscribe = null;
@@ -4791,7 +4781,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.290-dev-s22</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.318-dev-s50</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-03-25</div>
                         </div>
                     </div>
@@ -5002,8 +4992,8 @@ const firebaseConfig = {
                         <!-- Pro Lock Overlay -->
                         <div id="coverageRatesProLock" style="display:none; position:absolute; inset:0; background:rgba(0,0,0,0.85); border-radius:8px; z-index:10; flex-direction:column; align-items:center; justify-content:center; padding:12px; text-align:center;">
                             <div style="font-size:28px;">🔒</div>
-                            <div style="font-size:13px; font-weight:900; color:#2196f3; margin:6px 0;">Solo Feature</div>
-                            <div style="font-size:11px; color:#ccc;">Paint coverage rate tracking requires Solo plan or higher.</div>
+                            <div style="font-size:13px; font-weight:900; color:#d4af37; margin:6px 0;">Pro Feature</div>
+                            <div style="font-size:11px; color:#ccc;">Paint coverage rate tracking requires the Pro plan.</div>
                         </div>
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                             <h4 style="margin:0; font-weight:900; font-size:13px;">🪣 Paint Coverage Rates <span class="pw-help">?<span class="pw-help-tip">How many ${getAreaLabel()} one litre of paint covers. Satin/Gloss ~5 ${getAreaLabel()}/L, Undercoat ~8 ${getAreaLabel()}/L. Used to calculate litres needed and paint base cost per job.</span></span></h4>
@@ -5753,7 +5743,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.290-dev-s22</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-05-25</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.318-dev-s50</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-05-25</span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);if(typeof tab==='function')tab('measure');setTimeout(function(){if(typeof startTour==='function')startTour();},300);" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -5908,7 +5898,8 @@ const firebaseConfig = {
                 <!-- CTS controls -->
                 <div id="matrixControlsCts" style="display:none;">
                     <div style="display:flex; gap:6px; margin-bottom:8px;">
-                        <button onclick="saveCtsData()" style="flex:1; background:#34c759; color:#fff; border:none; padding:9px 0; border-radius:6px; font-size:10px; font-weight:900; cursor:pointer;">Push to Cloud</button>
+                        <button onclick="syncAllFromFirebase()" style="flex:1; background:#2196f3; color:#fff; border:none; padding:7px 0; border-radius:6px; font-size:10px; font-weight:900; cursor:pointer;">☁️ Sync from Cloud</button>
+                        <button onclick="saveCtsData()" style="flex:1; background:#34c759; color:#fff; border:none; padding:9px 0; border-radius:6px; font-size:10px; font-weight:900; cursor:pointer;">⬆️ Push to Cloud</button>
                     </div>
                     <div style="display:flex; gap:6px; margin-bottom:12px;">
                         <button onclick="genCtsPriceListPDF()" style="flex:1; background:#2c3e50; color:#d4af37; border:none; padding:9px 0; border-radius:6px; font-size:11px; font-weight:900; cursor:pointer; letter-spacing:0.3px;">🖨️ Price List PDF <span class="pw-help">?<span class="pw-help-tip">Prints your full CTS pricing grid — all profiles, thicknesses and edge routing rates. Give to clients or use as a reference sheet.</span></span></button>
@@ -5929,11 +5920,11 @@ const firebaseConfig = {
                     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
                         <div style="display:flex; align-items:center; gap:10px;">
                             <h4 style="margin:0 0 2px; font-weight:900; font-size:14px; color:#d4af37;">🔐 Login Activity</h4>
-                            <button onclick="var el=document.getElementById('loginHistoryListWrap'); var btn=document.getElementById('loginMinBtn'); if(el.style.display==='none'){el.style.display='block';btn.textContent='▲ Minimise';}else{el.style.display='none';btn.textContent='▼ Expand';}" id="loginMinBtn" style="background:#2c2c2e; color:#adadb8; border:1px solid #48484a; padding:4px 10px; border-radius:6px; font-weight:900; font-size:10px; cursor:pointer; white-space:nowrap;">▲ Minimise</button>
+                            <button onclick="var el=document.getElementById('loginHistoryListWrap'); var btn=document.getElementById('loginMinBtn'); if(el.style.display==='none'){el.style.display='block';btn.textContent='▲ Minimise';}else{el.style.display='none';btn.textContent='▼ Expand';}" id="loginMinBtn" style="background:#2c2c2e; color:#adadb8; border:1px solid #48484a; padding:4px 10px; border-radius:6px; font-weight:900; font-size:10px; cursor:pointer; white-space:nowrap;">▼ Expand</button>
                         </div>
                         <button onclick="if(window.loadLoginHistory)window.loadLoginHistory();else alert('Login history not available yet — please wait a moment and try again.')" style="background:#d4af37; border:none; padding:8px 14px; border-radius:8px; font-weight:900; font-size:12px; cursor:pointer; color:#000; white-space:nowrap;">🔄 Refresh</button>
                     </div>
-                    <div id="loginHistoryListWrap">
+                    <div id="loginHistoryListWrap" style="display:none;">
                         <div style="background:#000; border-radius:8px; overflow:hidden; max-height:380px; overflow-y:auto;">
                             <div id="loginHistoryList">
                                 <p style="color:#aaa;font-size:12px;text-align:center;padding:20px;">Tap Refresh to load login history.</p>
@@ -6472,12 +6463,12 @@ const firebaseConfig = {
             }
         }
 
-        //        Paint Coverage Rates - Solo+                                                                                                                  
+        //        Paint Coverage Rates - Pro only                                                                                                                  
         const coverageSection = document.querySelector('#coverageRatesBody');
         const coverageLock = document.getElementById('coverageRatesProLock');
         if (coverageSection) {
             const coverageInputs = ['cr_undercoat','cr_clearUc','cr_satin','cr_gloss','cr_matt','cr_clear'];
-            if (!hasSolo) {
+            if (!hasPro) {
                 // Show overlay
                 if (coverageLock) coverageLock.style.display = 'flex';
                 // Lock inputs
@@ -6769,7 +6760,7 @@ const firebaseConfig = {
     console.log('%cUnauthorized copying, modification, or claiming ownership is prohibited.', 'color:#ff0000;font-weight:bold;');
     console.log('%cAll rights reserved    2026 Colin Bedford', 'color:#ff0000;font-weight:bold;');
     console.log('');
-    //                    VERSION: v1.16.290-dev-s22 | 2026-05-26 | Colin Bedford                   
+    //                    VERSION: v1.16.318-dev-s50 | 2026-05-28 | Colin Bedford                   
     //                    ADMIN TABS FIXED | COVER SHEET FIXED | DELETE CONFIRMATION ADDED                   
     console.log('%c PaintWorkz Pro ' + CURRENT_VERSION + ' ', 'background:#d4af37;color:#000;font-weight:900;padding:8px;border-radius:4px;');
     // Changelog logs removed for production performance
@@ -6814,7 +6805,21 @@ const firebaseConfig = {
     }
     //        End onboarding                                                                                                                            
     function logout() {
+        window._userInitiatedLogout = true; // Flag: auth null guard must let this through
+        window._sessionGuardInitialized = false; // Reset so next login initializes fresh session
         localStorage.removeItem('pw_explicit_login');
+        // Show login screen IMMEDIATELY — don't wait for async signOut to complete
+        // Without this, the screen sits frozen for 1-2s and user thinks nothing happened
+        const _ls = document.getElementById('loginScreen');
+        const _ac = document.getElementById('appContainer');
+        const _mh = document.getElementById('mainHeader');
+        const _mn = document.getElementById('mainNavTabs');
+        const _sf = document.getElementById('stickyFooter');
+        if (_ls) _ls.style.display = 'flex';
+        if (_ac) _ac.style.display = 'none';
+        if (_mh) _mh.style.display = 'none';
+        if (_mn) _mn.style.display = 'none';
+        if (_sf) _sf.style.display = 'none';
         // SESSION GUARD cleanup
         if (window._sessionGuardUnsubscribe) { try { window._sessionGuardUnsubscribe(); } catch(e) {} window._sessionGuardUnsubscribe = null; }
         window._sessionId = null;
@@ -6853,6 +6858,7 @@ const firebaseConfig = {
     // the same account, the old session is immediately invalidated and forced out.
     window._sessionId = null;
     window._sessionGuardUnsubscribe = null;
+    window._sessionGuardInitialized = false; // One-time flag: prevents self-kick from multiple auth fires on same login
 
     function _generateSessionId() {
         return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
@@ -6860,6 +6866,15 @@ const firebaseConfig = {
 
     async function initSessionGuard(user) {
         if (!window.firebaseDb || !window.doc || !window.setDoc || !window.onSnapshot) return;
+
+        // ONE-TIME FLAG: auth fires 3x on login — only initialize the guard once per login session
+        // Without this, each re-fire writes a new sessionId which kicks the current session out (self-kick)
+        // Reset to false on logout so the next login gets a fresh session
+        if (window._sessionGuardInitialized) {
+            console.log('[SessionGuard] Already initialized for this login — skipping re-init');
+            return;
+        }
+        window._sessionGuardInitialized = true;
 
         const sessionId = _generateSessionId();
         window._sessionId = sessionId;
@@ -6947,8 +6962,10 @@ const firebaseConfig = {
         }
         containers.forEach(c => c.innerHTML = '<p style="color:#aaa;font-size:12px;text-align:center;padding:16px;">⏳ Loading...</p>');
         try {
-            console.log('loadLoginHistory: uid=', window.currentUser.uid, 'email=', window.currentUser.email);
-            const col = window.collection(window.firebaseDb, 'users', window.currentUser.uid, 'loginHistory');
+            const _lhUid = window.resolvedDataUid || window.currentUser?.uid;
+            if (!_lhUid) { containers.forEach(c => c.innerHTML = '<p style="color:#ff6b6b;font-size:12px;padding:12px;">⚠️ UID not available — try again in a moment.</p>'); return; }
+            console.log('loadLoginHistory: uid=', _lhUid, 'email=', window.currentUser?.email);
+            const col = window.collection(window.firebaseDb, 'users', _lhUid, 'loginHistory');
             const snap = await window.getDocs(col);
             console.log('loginHistory docs:', snap.size);
             const entries = [];
@@ -8383,11 +8400,12 @@ const firebaseConfig = {
             // CRITICAL: Write colour change to Firestore immediately so onSnapshot can't revert it
             // Just updating currentJob in saveData() isn't enough — the cloud copy still has old colour
             if (currentEditingJobId && window.firebaseDb && window.doc && window.updateDoc) {
-                const syncUid = window.staffModeOwnerUid || window.currentUser?.uid;
+                // Use resolvedDataUid — set during loadAllDataFromFirebase when the correct UID is known.
+                // paint_workz stores data under a fixed UID that differs from auth UID,
+                // so window.currentUser.uid alone gives the wrong Firestore path.
+                const syncUid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser?.uid;
                 if (syncUid) {
                     const jobRef = window.doc(window.firebaseDb, 'users', syncUid, 'jobs', currentEditingJobId);
-                    
-                    // Build update object - only include defined fields (Firestore doesn't allow undefined)
                     const updateData = {
                         items: items,
                         color: newColour,
@@ -8396,10 +8414,9 @@ const firebaseConfig = {
                     if (newBrand) updateData.brand = newBrand;
                     if (newCode) updateData.code = newCode;
                     if (newFinish) updateData.finish = newFinish;
-                    
                     window.updateDoc(jobRef, updateData)
-                    .then(() => console.log('✅ Colour change synced to Firestore'))
-                    .catch(e => console.warn('Colour sync failed:', e));
+                        .then(() => console.log('✅ Colour change synced to Firestore via', syncUid))
+                        .catch(e => console.warn('Colour sync failed:', e));
                 }
             }
         }
@@ -9958,7 +9975,8 @@ const firebaseConfig = {
             console.log('        Clearing stale Firebase data...');
             
             // 1. Delete the old Firebase documents to remove stale data
-            const _uid = window.staffModeOwnerUid || window.currentUser.uid;
+            const _uid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser?.uid;
+        if (!_uid) { console.warn('loadStockFromFirebase: no UID'); return; }
             const configDoc = window.doc(window.firebaseDb, 'users', _uid, 'config', 'doorProfiles');
             window.deleteDoc(configDoc).then(() => {
                 console.log('    Deleted old Firebase doorProfiles document');
@@ -11570,6 +11588,7 @@ const firebaseConfig = {
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
         
+        const _justArchivedIds = new Set(); // Track only jobs archived THIS session
         history.forEach(job => {
             if (!job.completed || job.archived) return;
             
@@ -11598,11 +11617,13 @@ const firebaseConfig = {
                 job.archived = true;
                 modified = true;
                 archivedCount++;
+                if (job.id) _justArchivedIds.add(job.id);
                 console.log(`📦 Archiving job #${job.jobNum} (no completion date)`);
             } else if (completedDate < thirtyDaysAgo) {
                 job.archived = true;
                 modified = true;
                 archivedCount++;
+                if (job.id) _justArchivedIds.add(job.id);
                 console.log(`📦 Archiving job #${job.jobNum} (completed ${completedDate.toLocaleDateString()})`);
             }
         });
@@ -11612,22 +11633,31 @@ const firebaseConfig = {
             console.log(`✅ Auto-archived ${archivedCount} old completed jobs`);
             notify(`📦 Archived ${archivedCount} old jobs`);
             
-            // Sync to Firestore so archives persist
-            if (window.currentUser && window.firebaseDb) {
+            // Sync ONLY newly archived jobs — collect just the ones changed this session
+            const _newlyArchivedIds = history
+                .filter(job => job.archived && job.id && _justArchivedIds.has(job.id))
+                .map(job => job.id);
+
+            const _doArchiveSync = () => {
+                const syncUid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser?.uid;
+                if (!syncUid || !window.firebaseDb || !window.doc || !window.setDoc) return;
+                if (_newlyArchivedIds.length === 0) return;
                 try {
-                    const syncUid = window.staffModeOwnerUid || window.currentUser.uid;
-                    history.forEach(job => {
-                        if (job.archived && job.id) {
-                            const jobDocRef = window.doc(window.firebaseDb, 'users', syncUid, 'jobs', job.id);
-                            window.setDoc(jobDocRef, { archived: true }, { merge: true }).catch(e => {
-                                console.error('Failed to sync archive status for job', job.id, e);
-                            });
-                        }
+                    _newlyArchivedIds.forEach(jobId => {
+                        const jobDocRef = window.doc(window.firebaseDb, 'users', syncUid, 'jobs', jobId);
+                        window.setDoc(jobDocRef, { archived: true, lastModified: new Date().toISOString() }, { merge: true }).catch(e => {
+                            console.error('Failed to sync archive status for job', jobId, e);
+                        });
                     });
-                    console.log('📤 Archive status synced to Firestore');
+                    console.log('📤 Archive status synced to Firestore via', syncUid, '— jobs:', _newlyArchivedIds);
                 } catch(e) {
                     console.error('Firestore sync error:', e);
                 }
+            };
+            if (window.resolvedDataUid) {
+                _doArchiveSync();
+            } else {
+                setTimeout(_doArchiveSync, 6000);
             }
         } else {
             console.log('ℹ️ No jobs to archive');
@@ -12353,7 +12383,7 @@ const firebaseConfig = {
         if (!job.editHistory) job.editHistory = [];
         job.editHistory.push({
             timestamp: new Date().toISOString(),
-            userId: window.currentUser?.uid || currentUserId || '',
+            userId: window.resolvedDataUid || window.currentUser?.uid || '',
             userName: window.currentUserName || (window.isStaffAccount ? window.staffAccountName : (window.currentUser?.email?.split('@')[0] || 'Unknown')),
             action: 'completed',
             parts: job.totalParts,
@@ -19346,80 +19376,80 @@ const firebaseConfig = {
                     customParts
                 });
                 
-                doc.setFontSize(10);
+                doc.setFontSize(14);
                 doc.setFont(undefined, 'bold');
                 doc.setTextColor(0, 0, 0);
                 const mouldedHeaderText = 'MOULDED PARTS';
                 const mouldedHeaderWidth = doc.getTextWidth(mouldedHeaderText);
                 doc.text(mouldedHeaderText, (pageWidth - mouldedHeaderWidth) / 2, y);
-                y += 7;
+                y += 9;
                 
-                doc.setFontSize(9);
+                doc.setFontSize(13);
                 doc.setFont(undefined, 'normal');
                 if (mouldedCount > 0) {
                     Object.entries(mouldedParts).forEach(([profile, qty]) => {
                         const mouldedText = `- ${profile}: ${qty}`;
                         const mouldedWidth = doc.getTextWidth(mouldedText);
                         doc.text(mouldedText, (pageWidth - mouldedWidth) / 2, y);
-                        y += 6;
+                        y += 8;
                     });
-                    y += 2;
+                    y += 3;
                 } else {
                     const noneText = 'None';
                     const noneWidth = doc.getTextWidth(noneText);
                     doc.text(noneText, (pageWidth - noneWidth) / 2, y);
-                    y += 6;
-                    y += 2;
+                    y += 8;
+                    y += 3;
                 }
                 
-                doc.setFontSize(10);
+                doc.setFontSize(14);
                 doc.setFont(undefined, 'bold');
                 doc.setTextColor(0, 0, 0);
                 const flatHeaderText = 'FLAT PANEL PARTS';
                 const flatHeaderWidth = doc.getTextWidth(flatHeaderText);
                 doc.text(flatHeaderText, (pageWidth - flatHeaderWidth) / 2, y);
-                y += 7;
+                y += 9;
                 
-                doc.setFontSize(9);
+                doc.setFontSize(13);
                 doc.setFont(undefined, 'normal');
                 if (flatCount > 0) {
                     Object.entries(flatParts).forEach(([profile, qty]) => {
                         const flatText = `- ${profile}: ${qty}`;
                         const flatWidth = doc.getTextWidth(flatText);
                         doc.text(flatText, (pageWidth - flatWidth) / 2, y);
-                        y += 6;
+                        y += 8;
                     });
-                    y += 2;
+                    y += 3;
                 } else {
                     const flatNoneText = 'None';
                     const flatNoneWidth = doc.getTextWidth(flatNoneText);
                     doc.text(flatNoneText, (pageWidth - flatNoneWidth) / 2, y);
-                    y += 6;
-                    y += 2;
+                    y += 8;
+                    y += 3;
                 }
                 
-                doc.setFontSize(10);
+                doc.setFontSize(14);
                 doc.setFont(undefined, 'bold');
                 doc.setTextColor(0, 0, 0);
                 const customHeaderText = 'CUSTOM PARTS';
                 const customHeaderWidth = doc.getTextWidth(customHeaderText);
                 doc.text(customHeaderText, (pageWidth - customHeaderWidth) / 2, y);
-                y += 7;
+                y += 9;
                 
-                doc.setFontSize(9);
+                doc.setFontSize(13);
                 doc.setFont(undefined, 'normal');
                 if (customCount > 0) {
                     Object.entries(customParts).forEach(([desc, qty]) => {
                         const customText = `- ${desc}: ${qty}`;
                         const customWidth = doc.getTextWidth(customText);
                         doc.text(customText, (pageWidth - customWidth) / 2, y);
-                        y += 6;
+                        y += 8;
                     });
                 } else {
                     const customNoneText = 'None';
                     const customNoneWidth = doc.getTextWidth(customNoneText);
                     doc.text(customNoneText, (pageWidth - customNoneWidth) / 2, y);
-                    y += 6;
+                    y += 8;
                 }
                 
                 y += 8;
@@ -23277,7 +23307,8 @@ if ('serviceWorker' in navigator && _swAllowed) {
                             history[jobIdx] = job;
                             safeStorage.setJSON('jobHistory', history);
                         }
-                        const targetUid = window.staffModeOwnerUid || window.currentUser.uid;
+                        const targetUid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser?.uid;
+                        if (!targetUid) { console.warn('syncJobs: no UID for job', job.jobNum); return; }
                         const jobRef = window.doc(window.firebaseDb, 'users', targetUid, 'jobs', job.id);
                         const jobForCloud = { ...job, lastModified: new Date().toISOString(), userId: targetUid };
                         delete jobForCloud.photos;
@@ -25860,17 +25891,17 @@ if ('serviceWorker' in navigator && _swAllowed) {
         try { var _fp = JSON.parse(localStorage.getItem('doorProfiles') || '[]'); if (_fp.length > 0) profiles = _fp; } catch(e) {}
         var thks = ctsThicknesses;
         var thkHeaders = thks.map(function(t, i) {
-            return '<th style="padding:8px; text-align:center; min-width:70px; color:#d4af37;">' + t + 'mm<br>' +
-                '<button onclick="removeCtsThickness(' + i + ')" style="background:#ff3b30;color:#fff;border:none;border-radius:3px;font-size:8px;padding:1px 5px;cursor:pointer;margin-top:2px;">x</button></th>';
+            return '<th style="padding:10px 8px; text-align:center; min-width:80px; color:#d4af37; font-size:11px; letter-spacing:0.5px;">' + t + 'mm<br>' +
+                '<button onclick="removeCtsThickness(' + i + ')" style="background:#ff3b30;color:#fff;border:none;border-radius:3px;font-size:8px;padding:1px 5px;cursor:pointer;margin-top:2px;">✕</button></th>';
         }).join('');
         var html = '<div style="overflow-x:auto;"><table style="min-width:500px;width:100%;border-collapse:collapse;font-size:10px;background:' + bg + ';">' +
-            '<tr style="background:#2c3e50;color:#d4af37;font-weight:900;">' +
-            '<th style="padding:8px;text-align:left;min-width:160px;color:#d4af37;">Profile</th>' + thkHeaders +
+            '<tr style="background:#1a252f;color:#d4af37;font-weight:900;border-bottom:2px solid #2c3e50;">' +
+            '<th style="padding:10px 12px;text-align:left;min-width:160px;color:#d4af37;font-size:11px;letter-spacing:0.5px;">Profile</th>' + thkHeaders +
             '<th style="padding:8px;text-align:center;background:#1a252f;">' +
             '<button onclick="addCtsThickness()" style="background:#d4af37;color:#000;border:none;border-radius:4px;font-size:9px;font-weight:900;padding:4px 8px;cursor:pointer;">+mm</button></th></tr>';
         var sortedTiers = Object.keys(ctsMatrix).sort();
         sortedTiers.forEach(function(tierName) {
-            html += '<tr style="background:' + rowAlt + ';"><td colspan="' + (thks.length + 2) + '" style="padding:8px;font-weight:900;color:' + textColor + ';">' + tierName + '</td></tr>';
+            html += '<tr style="background:#1a252f;"><td colspan="' + (thks.length + 2) + '" style="padding:7px 12px;font-weight:900;color:#d4af37;font-size:11px;letter-spacing:0.5px;border-top:2px solid #2c3e50;border-bottom:1px solid #2c3e50;">' + tierName + '</td></tr>';
             var tier = ctsMatrix[tierName];
             Object.keys(tier).forEach(function(code) {
                 var row = tier[code];
@@ -26740,7 +26771,8 @@ if ('serviceWorker' in navigator && _swAllowed) {
     function syncMasterMatrixToFirestore() {
         try {
             if (window.currentUser && window.firebaseDb && window.setDoc && window.doc) {
-                const _uid = window.staffModeOwnerUid || window.currentUser.uid;
+                const _uid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser?.uid;
+        if (!_uid) { console.warn('loadStockFromFirebase: no UID'); return; }
                 const ref = window.doc(window.firebaseDb, 'users', _uid, 'appData', 'masterMatrix');
                 window.setDoc(ref, { matrix: masterMatrix, updated: new Date().toISOString() })
                     .then(() => console.log('       Pricing matrix synced to Firestore'))
@@ -27288,9 +27320,24 @@ if ('serviceWorker' in navigator && _swAllowed) {
 
                 // ── QR bottom right ───────────────────────────
                 try {
-                    const displayQrArea = isImperial() ? (parseFloat(totalSqm) * 10.7639).toFixed(2) : parseFloat(totalSqm).toFixed(2);
-                    const qrText = `https://paintworkz.github.io/paintworkz/`;
-                    const qrDataUrl = generateQRDataURL(qrText, 150);
+                    const _dispSqm3 = isImperial() ? (parseFloat(totalSqm) * 10.7639).toFixed(2) + 'sqft' : parseFloat(totalSqm).toFixed(2) + 'sqm';
+                    const _mouldedCount = jobItems.filter(i => {
+                        const p = (i.prof||'').toLowerCase();
+                        return !p.includes('plain') && !p.includes('flat') && !p.includes('101') && !p.includes('benchtop') && !p.includes('600');
+                    }).reduce((s,i) => s+(parseInt(i.qty)||1), 0);
+                    const _flatCount = totalParts - _mouldedCount;
+                    const _brands3 = [...new Set(jobItems.map(i => i.brand).filter(Boolean))];
+                    const _codes3  = [...new Set(jobItems.map(i => i.code).filter(Boolean))];
+                    // Keep URL short — 19mm QR needs simple data to be scannable
+                    const _qrParams3 = new URLSearchParams({
+                        job: jobNum, client: client,
+                        sqm: _dispSqm3, parts: totalParts,
+                        moulded: _mouldedCount, flat: _flatCount,
+                        colour: colours.slice(0,2).join('|'),
+                        brand: _brands3.slice(0,1).join(''),
+                        code: _codes3.slice(0,1).join('')
+                    });
+                    const qrDataUrl = generateQRDataURL(`https://app.paintworkzpro.com.au/job.html?${_qrParams3.toString()}`, 200);
                     if (qrDataUrl) doc.addImage(qrDataUrl,'PNG', x+lw-21, y+lh-22, 19, 19);
                 } catch(e) {}
 
@@ -27305,8 +27352,13 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 doc.setFont(undefined,'bold'); doc.setFontSize(6.5); doc.setTextColor(0,100,180);
                 doc.text(colours[0]?.substring(0,22)||'', x+5, nameY+13);
                 try {
-                    const displayQrArea = isImperial() ? (parseFloat(totalSqm) * 10.7639).toFixed(2) : parseFloat(totalSqm).toFixed(2);
-                    const qrDataUrl = generateQRDataURL(`Job: #${jobNum} | Client: ${client} | Parts: ${totalParts} | ${getAreaLabel().toUpperCase()}: ${displayQrArea} | Colours: ${colours.join(', ')}`, 100);
+                    const _dispSqm4 = isImperial() ? (parseFloat(totalSqm) * 10.7639).toFixed(2) + 'sqft' : parseFloat(totalSqm).toFixed(2) + 'sqm';
+                    const _qrParams4 = new URLSearchParams({
+                        job: jobNum, client: client,
+                        sqm: _dispSqm4, parts: totalParts,
+                        colour: colours.join(' | ')
+                    });
+                    const qrDataUrl = generateQRDataURL(`https://app.paintworkzpro.com.au/job.html?${_qrParams4.toString()}`, 100);
                     if (qrDataUrl) doc.addImage(qrDataUrl,'PNG', x+lw-16, y+lh-17, 14, 14);
                 } catch(e) {}
                 doc.setFont(undefined,'normal'); doc.setFontSize(5); doc.setTextColor(160,160,160);
@@ -27400,8 +27452,20 @@ if ('serviceWorker' in navigator && _swAllowed) {
         // QR code top right (encodes job info)
         try {
             const displayQrArea = isImperial() ? (parseFloat(totalSqm) * 10.7639).toFixed(2) : parseFloat(totalSqm).toFixed(2);
-            const qrText = `https://paintworkz.github.io/paintworkz/`;
-            const qrDataUrl = generateQRDataURL(qrText, 300);
+            const _brands = [...new Set(jobItems.map(i => i.brand).filter(Boolean))];
+            const _codes  = [...new Set(jobItems.map(i => i.code).filter(Boolean))];
+            const _finishes = [...new Set(jobItems.map(i => i.finish).filter(Boolean))];
+            const _dispSqm5 = isImperial() ? (parseFloat(totalSqm) * 10.7639).toFixed(2) + 'sqft' : parseFloat(totalSqm).toFixed(2) + 'sqm';
+            // A4 has 55x55mm QR — can hold more data
+            const _qrParams5 = new URLSearchParams({
+                job: jobNum, client: client,
+                date: dateRec, parts: totalParts, sqm: _dispSqm5,
+                colour: colours.slice(0,2).join('|'),
+                brand: _brands.slice(0,2).join('|'),
+                code: _codes.slice(0,2).join('|'),
+                finish: _finishes.slice(0,2).join('|')
+            });
+            const qrDataUrl = generateQRDataURL(`https://app.paintworkzpro.com.au/job.html?${_qrParams5.toString()}`, 400);
             if (qrDataUrl) { doc.addImage(qrDataUrl, 'PNG', pw-70, 55, 55, 55); }
             doc.setFontSize(6); doc.setTextColor(150,150,150);
             doc.text('Scan for job details', pw-70+(55/2), 113, {align:'center'});
@@ -27633,19 +27697,28 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 doc.setFontSize(7.5); doc.setFont(undefined, 'normal'); doc.setTextColor(80,80,80);
                 doc.text(`${finish}  ${mode}${edgeDisplay?' | '+edgeDisplay:''}`, x + 5, afterDesc + 19);
 
-                // QR code bottom right
+                // QR code bottom right — 28x28mm, keep URL short so QR is scannable
                 try {
-                    const displayQrArea = isImperial() ? (parseFloat(totalSqm) * 10.7639).toFixed(2) : parseFloat(totalSqm).toFixed(2);
-                    const qrText = `https://paintworkz.github.io/paintworkz/`;
-                    const qrDataUrl = generateQRDataURL(qrText, 150);
-                    if (qrDataUrl) { doc.addImage(qrDataUrl, 'PNG', x + lw - 21, y + lh - 22, 18, 18); }
+                    const _itemQty = item.qty || 1;
+                    const _itemCode = item.code || '';
+                    // Short URL — less data = less dense QR = easier to scan on small labels
+                    const _qrParams1 = new URLSearchParams({
+                        job: jobNum, part: desc,
+                        dim: `${rawH}x${rawW}x${rawThk}`,
+                        qty: _itemQty, colour: colour,
+                        finish: finish, mode: mode,
+                        code: _itemCode
+                    });
+                    const qrDataUrl = generateQRDataURL(`https://app.paintworkzpro.com.au/job.html?${_qrParams1.toString()}`, 200);
+                    // Larger QR (28x28mm) placed higher to avoid overlapping footer
+                    if (qrDataUrl) { doc.addImage(qrDataUrl, 'PNG', x + lw - 31, y + lh - 32, 28, 28); }
                 } catch(e) {
                     console.warn('Part label QR generation failed:', e);
                 }
 
                 doc.setFontSize(6); doc.setTextColor(150,150,150);
-                doc.text(`${i+1}/${totalLabels}`, x + 5, y + lh - 3);
-                doc.text('paintworkzpro.com.au', x + lw - 24, y + lh - 3);
+                // Only left footer — right side reserved for QR
+                doc.text(`${i+1}/${totalLabels}  paintworkzpro.com.au`, x + 5, y + lh - 3);
             } else {
                 doc.setFontSize(8.5); doc.setFont(undefined, 'bold'); doc.setTextColor(0,0,0);
                 const descLines = doc.splitTextToSize(desc, textMaxW);
@@ -27659,10 +27732,12 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 
                 // QR code bottom right
                 try {
-                    const displayQrArea = isImperial() ? (parseFloat(totalSqm) * 10.7639).toFixed(2) : parseFloat(totalSqm).toFixed(2);
-                    const qrText = `https://paintworkz.github.io/paintworkz/`;
-                    const qrDataUrl = generateQRDataURL(qrText, 100);
-                    if (qrDataUrl) { doc.addImage(qrDataUrl, 'PNG', x + lw - 13, y + lh - 13, 11, 11); }
+                    const _qrParams2 = new URLSearchParams({
+                        job: jobNum, part: desc,
+                        qty: (item.qty||1), colour: colour
+                    });
+                    const qrDataUrl = generateQRDataURL(`https://app.paintworkzpro.com.au/job.html?${_qrParams2.toString()}`, 120);
+                    if (qrDataUrl) { doc.addImage(qrDataUrl, 'PNG', x + lw - 15, y + lh - 16, 13, 13); }
                 } catch(e) {
                     console.warn('Compact label QR generation failed:', e);
                 }
@@ -29732,6 +29807,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         // Otherwise use current user's uid (normal account)
         // CRITICAL: If staffModeOwnerUid is set, ALWAYS use it (staff mode persists across calls)
         const dataUid = ownerUid || window.staffModeOwnerUid || window.currentUser.uid;
+        window.resolvedDataUid = dataUid; // Store so colour/formula saves use correct UID
         
         
         // DIAGNOSTIC: Log exactly what UID we're using
@@ -29769,7 +29845,11 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                         }
                     }
                 }
-            } catch(planErr) { console.warn('Plan load error:', planErr.message); }
+            } catch(planErr) {
+                // CRITICAL: Do NOT reset plan on load failure — preserve existing plan
+                // Background refresh permission-denied would otherwise reset Pro → Free and lock save button
+                console.warn('Plan load error (keeping existing plan:', window.currentPlan, '):', planErr.message);
+            }
 
             //        1. Jobs                                                                                                                                     
             const userDocRef = window.doc(window.firebaseDb, 'users', dataUid);
@@ -29804,9 +29884,18 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             window._syncingFromCloud = true;
             safeStorage.setJSON('jobHistory', _safeStrip);
             window._syncingFromCloud = false;
-            fullHistory = safeJobs;
-            history = safeJobs.filter(j => !j.completed && (!j.jobStatus || j.jobStatus === 'job'));
-            try { if (typeof renderHistory === 'function') renderHistory(); } catch(e) {}
+            // Split jobs: active first, archived last (so active jobs are available immediately)
+            const _activeJobs = safeJobs.filter(j => !j.archived);
+            const _archivedJobs = safeJobs.filter(j => j.archived);
+            // Load active jobs immediately into memory
+            fullHistory = _activeJobs;
+            history = _activeJobs.filter(j => !j.completed && (!j.jobStatus || j.jobStatus === 'job'));
+            // Defer archived jobs — append after 5s so active jobs, clients, formulas all load first
+            setTimeout(() => {
+                fullHistory = _activeJobs.concat(_archivedJobs);
+                console.log('📦 Archived jobs appended:', _archivedJobs.length);
+            }, 5000);
+            // Don't renderHistory() here — wait until ALL data (clients, formulas, profiles) is loaded
 
             // Re-push any jobs that were completed locally but not in Firestore
             repushQueue.forEach(job => {
@@ -30690,7 +30779,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
     // ---- LOAD STOCK FROM FIRESTORE ----
     async function loadStockFromFirebase() {
         // Retry up to 5 times if Firebase isn't ready yet (important on iPhone Safari)
-        if (!window.currentUser || !window.firebaseDb || !window.getDoc || !window.doc) {
+        if (!window.firebaseDb || !window.getDoc || !window.doc) {
             return new Promise(resolve => {
                 let attempts = 0;
                 const retry = setInterval(() => {
@@ -30924,17 +31013,25 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                                     });
                                 }
                             }
-                            // CRITICAL: Keep local items if cloud has fewer
-                            // Firestore write may have failed silently (doc size > 1MB)
+                            // Keep local items ONLY if cloud has fewer AND local is newer
+                            // Don't block colour/brand/code changes that come from cloud 
                             if (localMatch && Array.isArray(localMatch.items) &&
                                 Array.isArray(cloudJob.items) &&
                                 localMatch.items.length > cloudJob.items.length) {
-                                console.log('✓ Snap: keeping local items (' + localMatch.items.length + ' vs ' + cloudJob.items.length + ') for #' + cloudJob.jobNum);
-                                cloudJob.items = localMatch.items;
+                                const localTime = localMatch.lastModified ? new Date(localMatch.lastModified).getTime() : 0;
+                                const cloudTime = cloudJob.lastModified ? new Date(cloudJob.lastModified).getTime() : 0;
+                                if (localTime > cloudTime) {
+                                    // Local is newer AND has more items — local wins
+                                    console.log('✓ Snap: keeping local items (' + localMatch.items.length + ' vs ' + cloudJob.items.length + ') for #' + cloudJob.jobNum);
+                                    cloudJob.items = localMatch.items;
+                                }
+                                // else: cloud is newer — use cloud items (cross-device update)
                             }
                         });
 
-                        const sigKey = j => `${j.id||j.jobNum}|${j.completed}|${(j.items||[]).length}|${JSON.stringify(j.phases||{})}`;
+                        // sigKey must include colour/brand/code/lastModified so cross-device
+                        // changes (e.g. colour update on home computer) are detected on work computer
+                        const sigKey = j => `${j.id||j.jobNum}|${j.completed}|${(j.items||[]).length}|${JSON.stringify(j.phases||{})}|${j.color||j.colour||''}|${j.brand||''}|${j.code||''}|${j.lastModified||''}`;
                         const cloudSig = jobs.map(sigKey).sort().join(';;');
                         const localSig = local.map(sigKey).sort().join(';;');
                         const hasChanges = cloudSig !== localSig || jobs.length !== local.length;
@@ -31047,12 +31144,24 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                 error => {
                     console.error('Realtime sync error:', error);
                     window.realtimeSyncActive = false;
+                    // Auto-reconnect after permission-denied (caused by transient _onStorageEvent credential change)
+                    if (error.code === 'permission-denied') {
+                        console.log('[RealtimeSync] Permission-denied — reconnecting in 5s...');
+                        setTimeout(() => {
+                            if (!window.realtimeSyncActive && window.currentUser) {
+                                console.log('[RealtimeSync] Attempting reconnect...');
+                                try { setupRealtimeSync(); } catch(e) {}
+                            }
+                        }, 5000);
+                    }
                 }
             );
 
             //        Cross-device global notifications (skip ones this device just sent)
             let _lastNotifTs = new Date().toISOString();
-            const _notifRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'globalNotifications');
+            const _notifUid = window.resolvedDataUid || window.currentUser?.uid;
+            if (!_notifUid) return;
+            const _notifRef = window.doc(window.firebaseDb, 'users', _notifUid, 'appData', 'globalNotifications');
             window.onSnapshot(_notifRef, snap => {
                 if (!snap.exists()) return;
                 const notifs = snap.data().notifications || [];
@@ -31117,8 +31226,20 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
 
     function syncJobsToFirebase() {
         // Guard: Wait for Firebase to be ready and user to be logged in
-        if (!window.firebaseReady || !window.currentUser || !window.firebaseDb || !window.doc || !window.setDoc) {
-            console.warn('Firebase not ready or user not logged in. Sync delayed.');
+        if (!window.firebaseReady || !window.firebaseDb || !window.doc || !window.setDoc) {
+            console.warn('Firebase not ready. Sync delayed.');
+            return;
+        }
+        // Use real Firebase auth state — window.currentUser may be cached from before a transient credential change
+        const _authUser = (typeof auth !== 'undefined' && auth.currentUser) ? auth.currentUser : window.currentUser;
+        if (!_authUser) {
+            console.warn('No authenticated user — skipping sync');
+            return;
+        }
+        // CRITICAL: resolvedDataUid must be set before syncing — it points to correct Firestore path
+        // autoArchiveOldJobs triggers sync via localStorage.setItem BEFORE loadAllDataFromFirebase sets this
+        if (!window.resolvedDataUid) {
+            setTimeout(syncJobsToFirebase, 3000); // Retry in 3s when data load is complete
             return;
         }
         
