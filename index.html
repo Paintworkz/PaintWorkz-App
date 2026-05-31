@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.336'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.337'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1778,7 +1778,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.336'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.337'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -3179,7 +3179,7 @@ const firebaseConfig = {
                         if (window.firebaseDb && window.doc && window.getDoc && !isOwner()) {
                             const _pr=window.doc(window.firebaseDb,"users",user.uid);
                             const _ps=await window.getDoc(_pr);
-                            if (_ps.exists()&&_ps.data().plan){window.currentPlan=_ps.data().plan;console.log("Plan pre-loaded:",window.currentPlan);}
+                            if (_ps.exists()&&_ps.data().plan){window.currentPlan=_ps.data().plan;try{localStorage.setItem('pw_confirmed_plan',window.currentPlan);}catch(e){}console.log("Plan pre-loaded:",window.currentPlan);}
                         }
                     } catch(e){console.warn("Plan pre-load:",e.message);}
                     if(typeof window.applyProLocks==="function")window.applyProLocks();
@@ -4881,7 +4881,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.336</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.337</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-03-25</div>
                         </div>
                     </div>
@@ -5843,7 +5843,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.336</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-05-25</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.337</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-05-25</span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);if(typeof tab==='function')tab('measure');setTimeout(function(){if(typeof startTour==='function')startTour();},300);" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -6296,7 +6296,12 @@ const firebaseConfig = {
     // Stored in Firestore under users/{uid}/subscription.plan
     // Set locally on login via window.currentPlan
     // Owner always bypasses everything.
-    window.currentPlan = 'free'; // default until Firestore confirms
+    // Use last-confirmed plan from localStorage as the starting point so locks
+    // render correctly on refresh instead of flashing 'free' until Firestore responds.
+    // Firestore still confirms/corrects it shortly after load.
+    window.currentPlan = (function(){
+        try { return localStorage.getItem('pw_confirmed_plan') || 'free'; } catch(e) { return 'free'; }
+    })();
 
     function getPlan() {
         if (isOwner()) return 'owner';
@@ -6911,6 +6916,7 @@ const firebaseConfig = {
         clearTimeout(window._archiveAppendTimer); // Kill any pending archive-append timer
         window._staffCheckDone = false; // Re-run staff check on next login
         window._loadingDataFromFirebase = false; // Clear load guard so next login isn't blocked
+        try { localStorage.removeItem('pw_confirmed_plan'); } catch(e) {} // Clear cached plan — next login confirms fresh
         localStorage.removeItem('pw_explicit_login');
         // Show login screen IMMEDIATELY — don't wait for async signOut to complete
         // Without this, the screen sits frozen for 1-2s and user thinks nothing happened
@@ -30032,6 +30038,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                 if (window.isStaffAccount) {
                     // Staff inherit owner's plan — set to 'pro' (owner account)
                     window.currentPlan = 'pro';
+                    try { localStorage.setItem('pw_confirmed_plan', 'pro'); } catch(e) {}
                     if (typeof applyProLocks === 'function') applyProLocks();
                 } else {
                     const userDocRef = window.doc(window.firebaseDb, 'users', dataUid);
@@ -30048,6 +30055,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                                 window.currentPlan = userData.plan;
                                 console.log('Plan loaded from Firestore:', window.currentPlan);
                             }
+                            try { localStorage.setItem('pw_confirmed_plan', window.currentPlan); } catch(e) {}
                             if (typeof applyProLocks === 'function') applyProLocks();
                             if (typeof updateSubscriptionToggle === 'function') updateSubscriptionToggle();
                         }
