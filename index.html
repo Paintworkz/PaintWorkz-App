@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.341'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.342'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1781,7 +1781,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.341'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.342'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -3138,9 +3138,30 @@ const firebaseConfig = {
                 const lastUid = localStorage.getItem('pw_last_uid');
                 const isOwnerLogin = (user.email === 'ckbedford@outlook.com');
                 const _freshSession = !sessionStorage.getItem('pw_session_active_' + user.uid);
+                const _differentUser = (lastUid && lastUid !== user.uid);
+
+                // CRITICAL DATA-LEAK FIX: if a DIFFERENT user is logging in, reset ALL
+                // in-memory data-scoping globals. These persist on `window` across logins
+                // in the same tab — if not cleared, the new account loads the PREVIOUS
+                // account's Firestore data (resolvedDataUid still points at the old UID).
+                if (_differentUser || _freshSession) {
+                    window.resolvedDataUid = null;
+                    window.staffModeOwnerUid = null;
+                    window.isStaffAccount = false;
+                    window._staffCheckDone = false;
+                    window._lastSyncedJobHashes = {};
+                    window.realtimeSyncActive = false;
+                    if (window.realtimeSyncUnsubscribe) { try { window.realtimeSyncUnsubscribe(); } catch(e) {} window.realtimeSyncUnsubscribe = null; }
+                    if (_differentUser) {
+                        // A genuinely different account — purge cross-account caches too
+                        try { localStorage.removeItem('pw_staff_owner_uid'); } catch(e) {}
+                        try { localStorage.removeItem('pw_confirmed_plan'); } catch(e) {}
+                    }
+                }
+
                 if (!isOwnerLogin && (lastUid !== user.uid || _freshSession)) {
                     console.log('Non-owner login — wiping localStorage for clean slate:', user.email);
-                    const keepGlobal = ['paintworkz_version', 'app_theme', 'pw_tooltips', 'shopClosures'];
+                    const keepGlobal = ['paintworkz_version', 'app_theme', 'pw_tooltips'];
                     for (let i = localStorage.length - 1; i >= 0; i--) {
                         const k = localStorage.key(i);
                         // Preserve per-user tooltip + tour prefs so help-icon toggle survives login
@@ -4894,7 +4915,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.341</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.342</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-03-25</div>
                         </div>
                     </div>
@@ -5856,7 +5877,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.341</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-05-25</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.342</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-05-25</span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);if(typeof tab==='function')tab('measure');setTimeout(function(){if(typeof startTour==='function')startTour();},300);" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -28101,10 +28122,11 @@ if ('serviceWorker' in navigator && _swAllowed) {
     
     function saveShopClosures(closures) {
         localStorage.setItem('shopClosures', JSON.stringify(closures));
-        // Use DATA UID — paint_workz is the primary operational account for all data
-        const DATA_UID = 'gh3XNClBwAgKulXhxmpVKkNLDq62';
+        // Save to THIS user's own data path — never a hardcoded shared UID
+        const DATA_UID = window.resolvedDataUid || window.staffModeOwnerUid || (window.currentUser && window.currentUser.uid);
         const _save = () => {
             if (!window.currentUser || !window.firebaseDb || !window.doc || !window.setDoc) { setTimeout(_save, 1500); return; }
+            if (!DATA_UID) return;
             const ref = window.doc(window.firebaseDb, 'users', DATA_UID, 'appData', 'shopClosures');
             window.setDoc(ref, { closures, lastUpdated: new Date().toISOString() }, { merge: true })
                 .then(() => console.log('✅ Shop closures saved to Firebase:', closures.length))
@@ -28149,8 +28171,9 @@ if ('serviceWorker' in navigator && _swAllowed) {
     async function loadShopClosuresFromFirebase() {
         if (!window.currentUser || !window.firebaseDb || !window.getDoc || !window.doc) return;
         try {
-            // Always load from DATA UID — paint_workz holds all operational data
-            const OWNER_UID = 'gh3XNClBwAgKulXhxmpVKkNLDq62'; // DATA UID = paint_workz
+            // Load from THIS user's own data path — never a hardcoded shared UID
+            const OWNER_UID = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid;
+            if (!OWNER_UID) return;
             const ref = window.doc(window.firebaseDb, 'users', OWNER_UID, 'appData', 'shopClosures');
             const snap = await window.getDoc(ref);
             if (snap.exists()) {
@@ -30099,8 +30122,17 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         
         // If ownerUid is provided (staff account), load from owner's path
         // Otherwise use current user's uid (normal account)
-        // CRITICAL: If staffModeOwnerUid is set, ALWAYS use it (staff mode persists across calls)
-        const dataUid = ownerUid || window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid;
+        // SAFETY: only trust resolvedDataUid/staffModeOwnerUid if this is genuinely a
+        // staff account for the CURRENT user. Otherwise default to the current user's own
+        // UID — prevents loading a previous account's data after switching accounts in-tab.
+        let dataUid;
+        if (ownerUid) {
+            dataUid = ownerUid; // explicit staff parent UID passed by the staff-detection branch
+        } else if (window.isStaffAccount && window.staffModeOwnerUid) {
+            dataUid = window.staffModeOwnerUid; // verified staff account → owner's data
+        } else {
+            dataUid = window.currentUser.uid; // normal account → its own data ONLY
+        }
         window.resolvedDataUid = dataUid; // Store so colour/formula saves use correct UID
         window._lastSyncedJobHashes = {}; // Reset — fresh session gets a clean sync baseline
         
