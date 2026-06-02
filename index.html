@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.342'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.343'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1781,7 +1781,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.342'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.343'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -4915,7 +4915,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.342</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.343</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-03-25</div>
                         </div>
                     </div>
@@ -5877,7 +5877,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.342</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-05-25</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.343</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-05-25</span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);if(typeof tab==='function')tab('measure');setTimeout(function(){if(typeof startTour==='function')startTour();},300);" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -7035,7 +7035,9 @@ const firebaseConfig = {
             sessionId,
             loginTime: new Date().toISOString(),
             email: user.email,
-            displayName: user.displayName || user.email.split('@')[0],
+            displayName: user.displayName || (window.isStaffAccount && window.staffAccountName) || user.email.split('@')[0],
+            staffName: (window.isStaffAccount && window.staffAccountName) ? window.staffAccountName : null,
+            isStaff: !!window.isStaffAccount,
             userAgent: navigator.userAgent.substring(0, 250),
             device: /Mobile|iPad|iPhone|Android/.test(navigator.userAgent) ? 'mobile' : 'desktop',
             isOwner: isAdmin,
@@ -7049,14 +7051,31 @@ const firebaseConfig = {
             return;
         }
 
-        // Write login audit to OWN UID only (cross-uid writes fail with Firestore permission denied)
-        try {
-            const auditRef = window.doc(window.firebaseDb, 'users', user.uid, 'loginHistory', sessionId);
-            await window.setDoc(auditRef, sessionData, { merge: false });
-            console.log('✅ Login recorded:', user.email, sessionData.device, new Date().toLocaleTimeString('en-AU'));
-        } catch(e) {
-            console.warn('Login audit write error:', e.code, e.message);
-        }
+        // Write login audit to the SHARED DATA UID (resolvedDataUid) so every device's
+        // login for the operational account lands in ONE place that the reader checks.
+        // Previously wrote to user.uid — but the reader reads from resolvedDataUid, so
+        // logins from accounts whose auth UID ≠ data UID never appeared in the list.
+        // If resolvedDataUid isn't resolved yet, retry until it is (max ~12s).
+        const _writeAudit = (attempt) => {
+            const _auditUid = window.resolvedDataUid || window.staffModeOwnerUid;
+            if (!_auditUid) {
+                if (attempt < 8) { setTimeout(() => _writeAudit(attempt + 1), 1500); return; }
+                // Last resort: write to own uid so the entry isn't lost entirely
+                _doAuditWrite(user.uid);
+                return;
+            }
+            _doAuditWrite(_auditUid);
+        };
+        const _doAuditWrite = async (auditUid) => {
+            try {
+                const auditRef = window.doc(window.firebaseDb, 'users', auditUid, 'loginHistory', sessionId);
+                await window.setDoc(auditRef, sessionData, { merge: false });
+                console.log('✅ Login recorded:', user.email, sessionData.device, 'under', auditUid, new Date().toLocaleTimeString('en-AU'));
+            } catch(e) {
+                console.warn('Login audit write error:', e.code, e.message);
+            }
+        };
+        _writeAudit(0);
 
         // Unsubscribe any stale listener
         if (window._sessionGuardUnsubscribe) {
