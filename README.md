@@ -70,4 +70,3 @@ Payments processed by Paddle. 7-day free trial on Solo.
 
 Colin Bedford — Victoria, Australia  
 ABN 90 419 649 257  
-[cjbed@icloud.com](mailto:cjbed@icloud.com)
