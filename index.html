@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.345'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.346'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1781,7 +1781,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.345'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.346'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -4915,7 +4915,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.345</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.346</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-03-25</div>
                         </div>
                     </div>
@@ -5877,7 +5877,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.345</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-05-25</span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.346</span><span style="color:#d4af37; font-weight:900;" id="versionDate"> | 2026-05-25</span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);if(typeof tab==='function')tab('measure');setTimeout(function(){if(typeof startTour==='function')startTour();},300);" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -8504,10 +8504,14 @@ const firebaseConfig = {
         console.log('     paintFormulas saved locally:', paintDatabase.length, 'formulas');
         
         // Save to Firestore for cross-device sync
+        // CRITICAL: write to the SAME UID the loader reads from (resolvedDataUid).
+        // For accounts where auth-uid ≠ data-uid (e.g. paint_workz), writing to
+        // currentUser.uid meant the loader never saw new formulas and overwrote them.
         if (window.currentUser && window.firebaseDb && window.setDoc && window.doc) {
-            const ref = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'paintFormulas');
+            const _saveUid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid;
+            const ref = window.doc(window.firebaseDb, 'users', _saveUid, 'appData', 'paintFormulas');
             window.setDoc(ref, { formulas: paintDatabase, updated: new Date().toISOString() })
-                .then(() => console.log('       Paint formulas synced to Firestore:', paintDatabase.length, 'formulas'))
+                .then(() => console.log('       Paint formulas synced to Firestore:', paintDatabase.length, 'formulas (uid:', _saveUid, ')'))
                 .catch(e => console.warn('       Firestore paint formula save failed:', e));
         } else {
             console.warn('       Firestore not ready - paint formulas saved locally only');
@@ -8525,21 +8529,42 @@ const firebaseConfig = {
             const targetUid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid;
             const ref = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'paintFormulas');
             const snap = await window.getDoc(ref);
+            // Read whatever is currently in localStorage so we can protect local-only
+            // formulas (e.g. a brand-new colour saved here but not yet in this cloud path).
+            let _local = [];
+            try { _local = JSON.parse(localStorage.getItem('paintFormulas') || '[]'); } catch(e) { _local = []; }
+            if (!Array.isArray(_local)) _local = [];
+            const _key = f => ((f.color||f.colour||'') + '|' + (f.finish||'') + '|' + (f.brand||'')).toLowerCase().trim();
+
             if (snap.exists()) {
                 const data = snap.data();
                 if (Array.isArray(data.formulas) && data.formulas.length > 0) {
-                    paintDatabase = data.formulas;
+                    const _cloud = data.formulas;
+                    const _cloudKeys = new Set(_cloud.map(_key));
+                    // Local formulas the cloud doesn't have = unsynced — KEEP them, don't lose them
+                    const _localOnly = _local.filter(lf => _key(lf) && !_cloudKeys.has(_key(lf)));
+                    paintDatabase = _cloud.concat(_localOnly);
                     localStorage.setItem('paintFormulas', JSON.stringify(paintDatabase));
-                    console.log('       Loaded', paintDatabase.length, 'paint formulas from Firestore (uid:', targetUid, ')');
+                    console.log('       Loaded', _cloud.length, 'cloud +', _localOnly.length, 'local-only paint formulas (uid:', targetUid, ')');
+                    if (_localOnly.length > 0) {
+                        console.log('🛟 Protected ' + _localOnly.length + ' local-only formula(s) missing from cloud — re-syncing');
+                        try { savePaintFormulas(); } catch(e) {} // push the merged set back up
+                    }
                     renderPaintFormulaList();
                     return;
                 }
             }
-            // Only clear if this is the owner's own collection - don't wipe for staff
+            // Cloud empty/missing. DO NOT wipe local — local may hold unsynced formulas.
+            if (_local.length > 0) {
+                paintDatabase = _local;
+                console.log('       Cloud empty — keeping', _local.length, 'local formula(s) and pushing to cloud');
+                try { savePaintFormulas(); } catch(e) {}
+                renderPaintFormulaList();
+                return;
+            }
             if (!window.isStaffAccount) {
-                console.log('       No paint formulas in Firestore for this user - starting empty');
+                console.log('       No paint formulas anywhere - starting empty');
                 paintDatabase = [];
-                localStorage.removeItem('paintFormulas');
             }
         } catch(e) {
             console.warn('       Firestore paint formula load error:', e.message);
@@ -30334,18 +30359,39 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             try {
                 const pfRef = window.doc(window.firebaseDb, 'users', dataUid, 'appData', 'paintFormulas');
                 const pfSnap = await window.getDoc(pfRef);
+                // Protect any local-only formulas (newly created, not yet in this cloud path)
+                let _localPF = [];
+                try { _localPF = JSON.parse(localStorage.getItem('paintFormulas') || '[]'); } catch(e) { _localPF = []; }
+                if (!Array.isArray(_localPF)) _localPF = [];
+                const _pfKey = f => ((f.color||f.colour||'') + '|' + (f.finish||'') + '|' + (f.brand||'')).toLowerCase().trim();
                 if (pfSnap.exists()) {
                     const pfData = pfSnap.data();
                     if (Array.isArray(pfData.formulas) && pfData.formulas.length > 0) {
-                        paintDatabase = pfData.formulas;
+                        const _cloudPF = pfData.formulas;
+                        const _cloudPFKeys = new Set(_cloudPF.map(_pfKey));
+                        // Keep local formulas the cloud doesn't have — these are unsynced, don't lose them
+                        const _localOnlyPF = _localPF.filter(lf => _pfKey(lf) && !_localPF[0]?.id?.startsWith?.('demo-') && !_cloudPFKeys.has(_pfKey(lf)));
+                        paintDatabase = _cloudPF.concat(_localOnlyPF);
                         localStorage.setItem('paintFormulas', JSON.stringify(paintDatabase));
-                        console.log('       Loaded', paintDatabase.length, 'paint formulas from Firestore');
+                        console.log('       Loaded', _cloudPF.length, 'cloud +', _localOnlyPF.length, 'local-only paint formulas');
+                        if (_localOnlyPF.length > 0) {
+                            console.log('🛟 Protected ' + _localOnlyPF.length + ' local-only formula(s) — re-syncing to cloud');
+                            try { savePaintFormulas(); } catch(e) {}
+                        }
                         try { if (typeof renderPaintFormulaList === 'function') renderPaintFormulaList(); } catch(e) {}
                     } else {
-                        // Firestore doc exists but empty     clear stale data
-                        paintDatabase = [];
-                        localStorage.removeItem('paintFormulas');
-                        console.log('       Paint formulas empty in Firestore     cleared for this user');
+                        // Firestore doc exists but empty — DON'T wipe local if it has real formulas
+                        const _realLocal = _localPF.filter(f => !(f.id && f.id.startsWith('demo-')));
+                        if (_realLocal.length > 0) {
+                            paintDatabase = _localPF;
+                            console.log('       Cloud formulas empty — keeping', _localPF.length, 'local formula(s) and re-syncing');
+                            try { savePaintFormulas(); } catch(e) {}
+                            try { if (typeof renderPaintFormulaList === 'function') renderPaintFormulaList(); } catch(e) {}
+                        } else {
+                            paintDatabase = [];
+                            localStorage.removeItem('paintFormulas');
+                            console.log('       Paint formulas empty in Firestore     cleared for this user');
+                        }
                     }
                 } else {
                     // No Firestore record - new user
