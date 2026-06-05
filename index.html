@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.377'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.378'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1781,7 +1781,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.377'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.378'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -11643,6 +11643,8 @@ const firebaseConfig = {
         
         // CLEAR FIRST - before rendering
         console.log('     Starting measure sheet clear...');
+        // ── Clear the unsaved draft now that job is successfully saved ──
+        try { localStorage.removeItem('pwUnsavedDraft'); } catch(e) {}
         items = [];
         console.log('    Cleared items array');
         
@@ -14465,6 +14467,47 @@ const firebaseConfig = {
         // Populate paint brands dropdown when Measure tab is opened
         if (t === 'measure') {
             setTimeout(() => populatePaintBrandsDropdown(), 100);
+
+            // ── DRAFT RECOVERY CHECK ─────────────────────────────────────────
+            // If there's an unsaved draft with parts and the current measure sheet
+            // is empty, offer to restore it — protects against Corey's scenario
+            setTimeout(() => {
+                try {
+                    const _draft = JSON.parse(localStorage.getItem('pwUnsavedDraft') || 'null');
+                    const _currentParts = items.length;
+                    if (_draft && _draft.partCount > 0 && _currentParts === 0) {
+                        const _age = _draft.savedAt ? Math.round((Date.now() - new Date(_draft.savedAt)) / 60000) : 0;
+                        const _recover = confirm(
+                            `⚠️ UNSAVED DRAFT FOUND\n\n` +
+                            `${_draft.partCount} parts for job #${_draft.jobNum || '?'} (${_draft.client || 'no client'}) ` +
+                            `were not saved (${_age} min ago).\n\n` +
+                            `Tap OK to RECOVER these parts\n` +
+                            `Tap Cancel to discard the draft`
+                        );
+                        if (_recover) {
+                            items = (_draft.items || []).map(it => ({
+                                ...it,
+                                e: Array.isArray(it.e) ? it.e : [it.e1||false,it.e2||false,it.e3||false,it.e4||false],
+                                mode: it.mode || 'SS', fm: it.fm || 'Flat',
+                                type: it.type || 'Door', qty: it.qty || 1,
+                                prof: it.prof || 'Plain (101)'
+                            }));
+                            if (_draft.client)       { const el = document.getElementById('cli');    if (el) el.value = _draft.client; }
+                            if (_draft.jobNum)       { const el = document.getElementById('jN');     if (el) el.value = _draft.jobNum; }
+                            if (_draft.jobName)      { const el = document.getElementById('jNm');    if (el) el.value = _draft.jobName; }
+                            if (_draft.dateReceived) { const el = document.getElementById('dRec');   if (el) el.value = _draft.dateReceived; }
+                            if (_draft.color)        { const el = document.getElementById('p-color'); if (el) el.value = _draft.color; }
+                            if (_draft.brand)        { const el = document.getElementById('p-brand'); if (el) el.value = _draft.brand; }
+                            if (_draft.finish)       { const el = document.getElementById('p-finish'); if (el) el.value = _draft.finish; }
+                            render();
+                            notify(`✅ ${_draft.partCount} parts recovered — fill in any missing fields and save`);
+                        } else {
+                            localStorage.removeItem('pwUnsavedDraft');
+                        }
+                    }
+                } catch(e) {}
+            }, 400);
+            // ── END DRAFT RECOVERY ───────────────────────────────────────────
             // CRITICAL: Reload photos for current job - don't trust in-memory array
             try {
                 const jobNum = document.getElementById('jN')?.value;
@@ -15539,6 +15582,29 @@ const firebaseConfig = {
         console.log('RENDER() called - items.length: ' + items.length);
         const l = document.getElementById('list');
         if (!l) return; // Exit if list doesn't exist (not on measure tab)
+        
+        // ── AUTO-DRAFT SAVE ───────────────────────────────────────────────────
+        // Every render saves current items to a draft key so parts are never lost
+        // even if validation fails or the form is accidentally cleared
+        try {
+            if (items.length > 0) {
+                const _draftData = {
+                    items: items,
+                    client: document.getElementById('cli')?.value || '',
+                    dateReceived: document.getElementById('dRec')?.value || '',
+                    jobName: document.getElementById('jNm')?.value || '',
+                    jobNum: document.getElementById('jN')?.value || '',
+                    brand: document.getElementById('p-brand')?.value || '',
+                    color: document.getElementById('p-color')?.value || '',
+                    code: document.getElementById('p-code')?.value || '',
+                    finish: document.getElementById('p-finish')?.value || '',
+                    partCount: items.reduce((s,i) => s + (parseInt(i.qty)||1), 0),
+                    savedAt: new Date().toISOString()
+                };
+                localStorage.setItem('pwUnsavedDraft', JSON.stringify(_draftData));
+            }
+        } catch(e) {}
+        // ── END AUTO-DRAFT SAVE ───────────────────────────────────────────────
         
         // Ensure paint brands dropdown is populated
         populatePaintBrandsDropdown();
@@ -22812,6 +22878,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
             currentEditingJobIndex = null; currentEditingJobId = null;
             jobPhotos = [];
             localStorage.removeItem('currentJob');
+            localStorage.removeItem('pwUnsavedDraft');
             document.getElementById('h').value = '';
             document.getElementById('w').value = '';
             document.getElementById('desc').value = '';
