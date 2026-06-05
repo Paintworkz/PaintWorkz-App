@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.378'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.379'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1781,7 +1781,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.378'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.379'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -23147,12 +23147,14 @@ if ('serviceWorker' in navigator && _swAllowed) {
         // Wrap date columns in container with exact calculated width
         ganttHTML += `<div style="width:${timelineWidth}px; min-width:${timelineWidth}px; max-width:${timelineWidth}px; display:flex; gap:0; min-height:28px;">`;
         
-        // Date columns - ALL DAYS (weekends lighter) - EXACT 28px box
+        // Date columns - ALL DAYS (weekends + closures lighter) - EXACT 28px box
         allDays.forEach(({ day, date, isWeekday: isWD }) => {
+            const isClosure = isShopClosure(date);
             const dayName = ['S', 'M', 'T', 'W', 'T', 'F', 'S'][date.getDay()];
-            const bgColor = isWD ? (gc ? (gc.bgCell) : '#f0f0f0') : (gc ? gc.bgWeekend : '#f9f9f9');
-            const textColor = isWD ? (gc ? gc.textMuted : '#666') : (gc ? '#4a4a4c' : '#ccc');
-            ganttHTML += `<div style="width:28px; min-width:28px; max-width:28px; height:28px; text-align:center; font-weight:900; font-size:9px; padding:2px 0; background:${bgColor}; border:1px solid #eee; color:${textColor}; box-sizing:border-box; display:flex; flex-direction:column; align-items:center; justify-content:center; line-height:1.1;">${dayName}<br>${day}</div>`;
+            const bgColor = (!isWD || isClosure) ? (gc ? gc.bgWeekend : '#f9f9f9') : (gc ? (gc.bgCell) : '#f0f0f0');
+            const textColor = (!isWD || isClosure) ? (gc ? '#4a4a4c' : '#ccc') : (gc ? gc.textMuted : '#666');
+            const borderStyle = isClosure ? 'border:1px solid #ff6b6b;' : 'border:1px solid #eee;';
+            ganttHTML += `<div style="width:28px; min-width:28px; max-width:28px; height:28px; text-align:center; font-weight:900; font-size:9px; padding:2px 0; background:${bgColor}; ${borderStyle} color:${textColor}; box-sizing:border-box; display:flex; flex-direction:column; align-items:center; justify-content:center; line-height:1.1;">${dayName}<br>${day}</div>`;
         });
         ganttHTML += '</div>';  // Close date columns container
         ganttHTML += '</div>';  // Close header row
@@ -23226,16 +23228,18 @@ if ('serviceWorker' in navigator && _swAllowed) {
                         <!-- Timeline bars row -->
                         <div style="display:flex; gap:0;">`;
                 
-                // Timeline bars - ALL DAYS but NEVER work on weekends
+                // Timeline bars - ALL DAYS but NEVER work on weekends or closure days
                 allDays.forEach(({ day, date: cellDate, isWeekday: isWD }) => {
                     let barHTML = '';
+                    const isClosure = isShopClosure(cellDate);
                     
-                    // WEEKEND = ALWAYS EMPTY, NO WORK
-                    if (!isWD) {
-                        barHTML = `<div style="width:28px; min-width:28px; max-width:28px; height:28px; background:${gc.bgWeekend}; border:1px solid ${gc.borderLight}; box-sizing:border-box;"></div>`;
+                    // WEEKEND or CLOSURE = ALWAYS EMPTY, NO WORK
+                    if (!isWD || isClosure) {
+                        const _closureBorder = isClosure ? 'border:1px solid rgba(255,107,107,0.4);' : `border:1px solid ${gc.borderLight};`;
+                        barHTML = `<div style="width:28px; min-width:28px; max-width:28px; height:28px; background:${gc.bgWeekend}; ${_closureBorder} box-sizing:border-box;"></div>`;
                     }
-                    // WEEKDAY ONLY = check phase
-                    else if (isWD) {
+                    // WEEKDAY AND NOT A CLOSURE = check phase
+                    else if (isWD && !isClosure) {
                         // Weekday - count which working day this is from job start
                         const workingDayNum = getWorkingDayNumber(jobDate, cellDate);
                         
@@ -23707,14 +23711,34 @@ if ('serviceWorker' in navigator && _swAllowed) {
         const dayOfWeek = date.getDay();
         return dayOfWeek !== 0 && dayOfWeek !== 6; // 0=Sunday, 6=Saturday
     };
+
+    // Helper to check if a date falls within a shop closure period
+    function isShopClosure(date) {
+        try {
+            const closures = JSON.parse(localStorage.getItem('shopClosures') || '[]');
+            const d = new Date(date);
+            d.setHours(0, 0, 0, 0);
+            return closures.some(c => {
+                const start = new Date(c.startDate); start.setHours(0,0,0,0);
+                const end = new Date(c.endDate || c.startDate); end.setHours(23,59,59,999);
+                return d >= start && d <= end;
+            });
+        } catch(e) { return false; }
+    }
+
+    // A working day is a weekday that is NOT a shop closure
+    function isWorkingDayFull(date) {
+        return isWeekday(date) && !isShopClosure(date);
+    }
     
     // Helper to count working days from start date to a calendar date
+    // Skips weekends AND shop closures
     function getWorkingDayNumber(startDate, targetDate) {
         let count = 0;
         let currentDate = new Date(startDate);
         
         while (currentDate <= targetDate) {
-            if (isWeekday(currentDate)) {
+            if (isWorkingDayFull(currentDate)) {
                 count++;
             }
             if (currentDate.toDateString() === targetDate.toDateString()) {
@@ -27349,7 +27373,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
         // MATCH GANTT CHART LOGIC: Only exclude weekends (not public holidays)
         function isWorkingDay(date) {
             const day = date.getDay();
-            return day !== 0 && day !== 6; // Monday-Friday only
+            return day !== 0 && day !== 6 && !isShopClosure(date); // Mon-Fri, not a closure
         }
         
         // Sum all timeline days
