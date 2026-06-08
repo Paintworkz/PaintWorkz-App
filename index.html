@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.380'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.381'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1781,7 +1781,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.380'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.381'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -3278,7 +3278,7 @@ const firebaseConfig = {
                                 setTimeout(() => tryLoad(attempts - 1), 400);
                             }
                         };
-                        setTimeout(() => tryLoad(10), 500);
+                        setTimeout(() => tryLoad(10), 2500); // 2500ms delay — allows Firebase auth token to fully propagate before first sync
                     });
                 } else {
                     // DOM already loaded - call once
@@ -3298,7 +3298,7 @@ const firebaseConfig = {
                             console.warn('⚠️ loadAllDataFromFirebase never became available');
                         }
                     };
-                    setTimeout(() => tryLoad(10), 500);
+                    setTimeout(() => tryLoad(10), 2500); // 2500ms delay — allows Firebase auth token to fully propagate before first sync
                 }
                 
                 // Set up real-time sync so changes on one device appear on all others instantly
@@ -30453,6 +30453,21 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                 // CRITICAL: Do NOT reset plan on load failure — preserve existing plan
                 // Background refresh permission-denied would otherwise reset Pro → Free and lock save button
                 console.warn('Plan load error (keeping existing plan:', window.currentPlan, '):', planErr.message);
+                // If it's a permissions error, retry once after 3s — token may not have propagated yet
+                if (planErr.message && planErr.message.includes('permission')) {
+                    setTimeout(async () => {
+                        try {
+                            const _retryRef = window.doc(window.firebaseDb, 'users', dataUid);
+                            const _retrySnap = await window.getDoc(_retryRef);
+                            if (_retrySnap.exists()) {
+                                const _retryPlan = _retrySnap.data().plan || 'free';
+                                window.currentPlan = _retryPlan;
+                                if (typeof applyProLocks === 'function') applyProLocks(_retryPlan);
+                                console.log('✅ Plan retry success:', _retryPlan);
+                            }
+                        } catch(e) { console.warn('Plan retry also failed:', e.message); }
+                    }, 3000);
+                }
             }
 
             //        1. Jobs                                                                                                                                     
