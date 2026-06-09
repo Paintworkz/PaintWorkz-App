@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.382'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.383'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1781,7 +1781,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.382'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.383'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -30073,8 +30073,14 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
 
         // If a Firebase session is already alive AND it was a user-initiated lock
         // (not a forced signout from our security guard), reauthenticate.
+        // BUT only if the entered email matches the currently logged-in user —
+        // otherwise this is an ACCOUNT SWITCH (e.g. staff logging in while the
+        // owner is still signed in), which must be a clean sign-in, not a reauth
+        // of the wrong identity (reauth would fail with the other account's creds).
         const wasForcedSignout = sessionStorage.getItem('pw_forced_signout');
-        if (window.currentUser && !wasForcedSignout) {
+        const _sameUser = window.currentUser && window.currentUser.email
+            && window.currentUser.email.toLowerCase() === email.toLowerCase();
+        if (window.currentUser && !wasForcedSignout && _sameUser) {
             const credential = window.EmailAuthProvider.credential(email, password);
             window.reauthenticateWithCredential(window.currentUser, credential)
                 .then(() => { showApp(); })
@@ -30086,14 +30092,23 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             return;
         }
 
-        // Normal sign-in (no active session)
-        window.signInWithEmailAndPassword(email, password)
-            .then(() => { showApp(); })
-            .catch(error => {
-                localStorage.removeItem('pw_explicit_login'); // clear flag on failure
-                errorDiv.textContent = error.message;
-                errorDiv.style.display = 'block';
-            });
+        // Account switch or no active session: sign out any existing user first,
+        // then do a clean sign-in as the entered account (staff or owner).
+        const _doSignIn = () => {
+            window.signInWithEmailAndPassword(email, password)
+                .then(() => { showApp(); })
+                .catch(error => {
+                    localStorage.removeItem('pw_explicit_login'); // clear flag on failure
+                    errorDiv.textContent = error.message;
+                    errorDiv.style.display = 'block';
+                });
+        };
+        if (window.currentUser && !_sameUser && window.signOut) {
+            // Different account is currently signed in — sign it out cleanly first
+            window.signOut().then(_doSignIn).catch(_doSignIn);
+        } else {
+            _doSignIn();
+        }
     }
 
     // Signup wrapper function  
