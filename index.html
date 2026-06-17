@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.385'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.386'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1781,7 +1781,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.385'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.386'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -21376,9 +21376,16 @@ const firebaseConfig = {
         if (window._jbSort && window._jbSort.key) {
             const k = window._jbSort.key;
             const dir = window._jbSort.dir === 'asc' ? 1 : -1;
-            const numKeys = ['totalParts','_estValue','totalSqm','_cts','jobNum'];
+            const numKeys = ['totalParts','_estValue','totalSqm','_cts','jobNum','_workDays'];
             jobs.forEach(j => {
                 if (k === '_cts') j._cts = (j.items||[]).reduce((s,it)=>{ if(!it.cts) return s; const p=getCtsPriceForPart(it); return s+(p?p.total:0); },0);
+                if (k === '_workDays') {
+                    // Incomplete jobs sort as -1 so completed jobs rank by their real day count
+                    if (j.completed && j.completedDate && j.dateReceived) {
+                        const _st = parseReportDate(j.dateReceived) || new Date(j.timestamp || 0);
+                        j._workDays = calculateWorkingDays(_st, new Date(j.completedDate));
+                    } else { j._workDays = -1; }
+                }
             });
             jobs.sort((a,b) => {
                 let av = a[k], bv = b[k];
@@ -21588,10 +21595,23 @@ const firebaseConfig = {
                     <th onclick="sortJobBreakdown('_cts')" style="padding:7px 8px; text-align:right; cursor:pointer; user-select:none;" title="Sort by CTS">CTS ${_jbSortArrow('_cts')}</th>
                     <th onclick="sortJobBreakdown('totalSqm')" style="padding:7px 8px; text-align:right; cursor:pointer; user-select:none;" title="Sort by SQM">SQM ${_jbSortArrow('totalSqm')}</th>
                     <th onclick="sortJobBreakdown('dateReceived')" style="padding:7px 8px; text-align:left; cursor:pointer; user-select:none;" title="Sort by Date">Date ${_jbSortArrow('dateReceived')}</th>
+                    <th onclick="sortJobBreakdown('_workDays')" style="padding:7px 8px; text-align:right; cursor:pointer; user-select:none;" title="Working days from received to completed (excludes shop closures). Sort to find jobs that blew out the average.">Days ${_jbSortArrow('_workDays')}</th>
                 </tr></thead>
                 <tbody>
                 ${jobs.map((j,i)=>{
                     const jCts = (j.items||[]).reduce((s,it)=>{ if(!it.cts) return s; const p=getCtsPriceForPart(it); return s+(p?p.total:0); },0);
+                    // Working days to complete (same logic as the Avg Days KPI)
+                    let _wd = null;
+                    if (j.completed && j.completedDate && j.dateReceived) {
+                        const _st = parseReportDate(j.dateReceived) || new Date(j.timestamp || 0);
+                        const _en = new Date(j.completedDate);
+                        _wd = calculateWorkingDays(_st, _en);
+                    }
+                    // Highlight jobs that took longer than the average (the ones dragging it up)
+                    const _slow = (_wd !== null && _avgDays !== null && _wd > _avgDays);
+                    const _daysCell = _wd === null
+                        ? '<span style="color:#bbb;">—</span>'
+                        : `<span style="font-weight:900; color:${_slow ? '#c62828' : '#2e7d32'};">${_wd}d</span>`;
                     return `<tr style="background:${i%2?'#f9f9f9':'#fff'}; color:#000; border-bottom:1px solid #eee;">
                     <td style="padding:6px 8px; font-weight:900; color:#000;">${j.jobNum||'   '}</td>
                     <td style="padding:6px 8px; color:#000;">${j.client||'   '}</td>
@@ -21603,6 +21623,7 @@ const firebaseConfig = {
                     <td style="padding:6px 8px; text-align:right; font-weight:900; color:#2c3e50;">${jCts>0?'$'+jCts.toFixed(0):'-'}</td>
                     <td style="padding:6px 8px; text-align:right; font-weight:900; color:#000;">${parseFloat(j.totalSqm||0).toFixed(2)}</td>
                     <td style="padding:6px 8px; color:#000;">${j.dateReceived||'   '}</td>
+                    <td style="padding:6px 8px; text-align:right;">${_daysCell}</td>
                 </tr>`;}).join('')}
                 </tbody>
                 <tfoot><tr style="background:#e3f2fd; font-weight:900; color:#000;">
@@ -21611,7 +21632,8 @@ const firebaseConfig = {
                     <td style="padding:7px 8px; text-align:right; font-weight:900; color:#2196f3;">${totalValue.toFixed(0)}</td>
                     <td style="padding:7px 8px; text-align:right; font-weight:900; color:#2c3e50;">${totalCtsRevenue>0?'$'+totalCtsRevenue.toFixed(0):'-'}</td>
                     <td style="padding:7px 8px; text-align:right; color:#000;">${totalSqm.toFixed(2)}</td>
-                    <td></td>
+                    <td style="padding:7px 8px; text-align:right; font-size:9px; color:#00838f;">avg</td>
+                    <td style="padding:7px 8px; text-align:right; font-weight:900; color:#00838f;">${_avgDays !== null ? _avgDays + 'd' : '—'}</td>
                 </tr></tfoot>
             </table>
             </div>
