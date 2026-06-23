@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.388'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.389'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1781,7 +1781,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.388'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.389'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -11617,9 +11617,17 @@ const firebaseConfig = {
                 window.setDoc(_jref,_jfc,{merge:false}).then(function(){console.log('Job pushed to Firestore:',jobData.jobNum);if(window.debouncedFirebaseSync)window.debouncedFirebaseSync();}).catch(function(e){console.error('Direct job push failed:',e);});
             }catch(_dpe){console.error('Direct push error:',_dpe);}
         }
-        // Deduct paint from stocktake when job is saved
-        try { deductStockForJob(jobData); } catch(e) { console.warn('Stock deduct error:', e); }
-        try { deductTinterStockForJob(jobData); } catch(e) { console.warn('Tinter deduct error:', e); }
+        // Deduct paint from stocktake ONLY for actual jobs — never for quotes or on-hold.
+        // Stock should leave the shelf when work is committed, not when quoting/parking.
+        // (If a quote later converts to a job, the deduct-once guard lets it deduct then,
+        //  since it was never deducted while it was a quote.)
+        const _jStat = jobData.jobStatus || 'job';
+        if (_jStat === 'job') {
+            try { deductStockForJob(jobData); } catch(e) { console.warn('Stock deduct error:', e); }
+            try { deductTinterStockForJob(jobData); } catch(e) { console.warn('Tinter deduct error:', e); }
+        } else {
+            console.log('⏭️ Skipping stock deduction — job status is "' + _jStat + '" (quote/hold)');
+        }
         // Also persist to IndexedDB for full history
         try { pwDB.saveJob(jobData); } catch(e) { console.warn('IndexedDB save error:', e); }
         // Clear parked charges     don't bleed into next job
@@ -22346,6 +22354,9 @@ const firebaseConfig = {
         history.forEach(job => {
             const jobKey = String(job.jobNum || job.id || '');
             if (!jobKey) { skipCount++; return; }
+            // Only real jobs consume stock — skip quotes and on-hold (matches save-time rule)
+            const _js = job.jobStatus || 'job';
+            if (_js !== 'job') { skipCount++; return; }
 
             // Process base paint
             const jobItems = job.items || [];
@@ -24095,6 +24106,23 @@ if ('serviceWorker' in navigator && _swAllowed) {
             } else if (tab === 'reports') {
                 initReportsTab();
                 setTimeout(loadLoginHistory, 300); // Auto-load login activity
+                // Re-assert full width AFTER the tab is visible and laid out.
+                // On first entry the width was being set while the panel was still
+                // hidden/zero-width, so it didn't take until a tab toggle forced a
+                // reflow. Re-applying on the next frames makes it stick immediately.
+                const _applyReportsWidth = () => {
+                    if (window.innerWidth < 768) return;
+                    const mc = document.querySelector('.container');
+                    const ac = document.querySelector('#admin > .card');
+                    if (mc) {
+                        mc.style.maxWidth = '100%';
+                        mc.style.width = '100%';
+                        mc.style.padding = '0';
+                    }
+                    if (ac) ac.style.padding = '0 8px 150px 8px';
+                };
+                requestAnimationFrame(() => { _applyReportsWidth(); requestAnimationFrame(_applyReportsWidth); });
+                setTimeout(_applyReportsWidth, 120);
             }
         }, 50);
     }
