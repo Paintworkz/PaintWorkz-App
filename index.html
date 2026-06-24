@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.390'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.391'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1781,7 +1781,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.390'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.391'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -21214,6 +21214,31 @@ const firebaseConfig = {
                 _oddFin.forEach(s => console.log('   ' + s));
             } else {
                 console.log('🪣 No matt/gloss items found in this report period.');
+            }
+            // ALSO trace which COLOURS feed the matt/gloss base buckets via their FORMULA
+            // base code (e.g. a formula whose white-base is entered as XB6910/XB6911 directly),
+            // which lands litres in Matt even when the job finish is satin.
+            const _mattCodes = ['XB6910','XB6911','XB6960','XB6961'];
+            const _byCode = {};
+            jobs.forEach(j => {
+                (j.items || []).forEach(it => {
+                    const col = it.color || j.color || '';
+                    if (!col || col.toLowerCase().includes('clear')) return;
+                    const f = (typeof getFormula === 'function') ? getFormula(col) : null;
+                    const wb = f ? (f.whiteBase || f.baseTinters || []) : [];
+                    const be = wb.find(b => (b.code||'').toUpperCase().startsWith('XB')) || wb.find(b => (b.altCode||'').toUpperCase().startsWith('XB'));
+                    const raw = be ? ((be.code||'').toUpperCase().startsWith('XB') ? be.code : be.altCode) : null;
+                    if (raw && _mattCodes.includes(raw.toUpperCase())) {
+                        const key = raw.toUpperCase() + ' ← ' + col + ' (#' + (j.jobNum||'?') + ')';
+                        _byCode[key] = (_byCode[key] || 0) + (parseFloat(it.sqm)||0);
+                    }
+                });
+            });
+            const _codeKeys = Object.keys(_byCode);
+            if (_codeKeys.length) {
+                console.log('%c⚠ Colours whose FORMULA base code is a matt/gloss code (likely the cause):', 'background:#e65100;color:#fff;font-weight:900;padding:3px;');
+                _codeKeys.forEach(k => console.log('   ' + k + ' — ' + _byCode[k].toFixed(2) + ' m²'));
+                console.log('   → Open Database → Paint, find that colour, and check its base/white-base code. A satin colour should use XB6930 (white) or XB6931 (deep), not 69x0/69x1.');
             }
         } catch(e) {}
 
