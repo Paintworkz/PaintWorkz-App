@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.389'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.390'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1781,7 +1781,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.389'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.390'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -21190,6 +21190,32 @@ const firebaseConfig = {
         let clearSqm = 0;
         let totalCtsRevenue = 0;
         const ctsMonthlyData = {};
+
+        // ── DIAGNOSTIC: list every job/item whose finish is matt/gloss ─────────
+        // Lets you trace an unexpected "Matt" (or Gloss) figure in Paint Used back
+        // to the exact job + part, even when the job's header finish reads Satin.
+        try {
+            const _oddFin = [];
+            jobs.forEach(j => {
+                (j.items || []).forEach(it => {
+                    const f = (it.finish || j.finish || '').toLowerCase();
+                    if (f === 'matt' || f === 'gloss') {
+                        _oddFin.push('#' + (j.jobNum||'?') + ' ' + (j.client||'') +
+                            ' — ' + (it.desc || it.prof || 'part') + ' [' + f + ', ' +
+                            (parseFloat(it.sqm)||0).toFixed(3) + ' m²]');
+                    }
+                });
+                if ((!j.items || !j.items.length) && (j.finish||'').toLowerCase() === 'matt') {
+                    _oddFin.push('#' + (j.jobNum||'?') + ' ' + (j.client||'') + ' — whole job [matt]');
+                }
+            });
+            if (_oddFin.length) {
+                console.log('%c🪣 Matt/Gloss items in this report period:', 'background:#9c27b0;color:#fff;font-weight:900;padding:3px;');
+                _oddFin.forEach(s => console.log('   ' + s));
+            } else {
+                console.log('🪣 No matt/gloss items found in this report period.');
+            }
+        } catch(e) {}
 
         jobs.forEach(job => {
             const sqm = parseFloat(job.totalSqm) || 0;
