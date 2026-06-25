@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.391'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.392'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1781,7 +1781,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.391'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.392'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -5451,6 +5451,17 @@ const firebaseConfig = {
                                 </div>
                             </label>
                         </div>
+
+                        <!-- Job Label -->
+                        <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:12px;">
+                            <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+                                <input type="checkbox" id="batchIncludeJobLabel" onchange="saveBatchPrintSettings(true)" style="width:18px; height:18px; cursor:pointer; accent-color:#34c759;">
+                                <div style="flex:1;">
+                                    <div style="font-size:13px; font-weight:700; color:#fff; margin-bottom:2px;">🏷 Job Label (Full A4)</div>
+                                    <div style="font-size:10px; color:#888;">Full A4 job label sheet</div>
+                                </div>
+                            </label>
+                        </div>
                         
                         <!-- Paint Order -->
                         <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:12px;">
@@ -5459,6 +5470,17 @@ const firebaseConfig = {
                                 <div style="flex:1;">
                                     <div style="font-size:13px; font-weight:700; color:#fff; margin-bottom:2px;">🪣 Paint Order</div>
                                     <div style="font-size:10px; color:#888;">Paint supplier order form</div>
+                                </div>
+                            </label>
+                        </div>
+
+                        <!-- Estimate -->
+                        <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:12px;">
+                            <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+                                <input type="checkbox" id="batchIncludeEstimate" onchange="saveBatchPrintSettings(true)" style="width:18px; height:18px; cursor:pointer; accent-color:#34c759;">
+                                <div style="flex:1;">
+                                    <div style="font-size:13px; font-weight:700; color:#fff; margin-bottom:2px;">📋 Estimate</div>
+                                    <div style="font-size:10px; color:#888;">Job breakdown estimate</div>
                                 </div>
                             </label>
                         </div>
@@ -12979,13 +13001,19 @@ const firebaseConfig = {
                     await new Promise(r => { setTimeout(() => { try { genMixingCard(); } catch(e){} setTimeout(r, 400); }, 0); });
                 }
                 if (settings.includePartLabels) {
-                    await new Promise(r => { setTimeout(() => { try { genPartLabels(); } catch(e){} setTimeout(r, 400); }, 0); });
+                    await new Promise(r => { setTimeout(() => { try { genPartLabelsPDF(); } catch(e){} setTimeout(r, 400); }, 0); });
+                }
+                if (settings.includeJobLabel) {
+                    await new Promise(r => { setTimeout(() => { try { genJobLabel(false); } catch(e){} setTimeout(r, 400); }, 0); });
                 }
                 if (settings.includePaintOrder) {
                     await new Promise(r => { setTimeout(() => { try { genPaintOrder(); } catch(e){} setTimeout(r, 400); }, 0); });
                 }
+                if (settings.includeEstimate) {
+                    await new Promise(r => { setTimeout(() => { try { genEstimate(); } catch(e){} setTimeout(r, 400); }, 0); });
+                }
                 if (settings.includeQuote) {
-                    await new Promise(r => { setTimeout(() => { try { genQuote(); } catch(e){} setTimeout(r, 400); }, 0); });
+                    await new Promise(r => { setTimeout(() => { try { genQuoteForm(); } catch(e){} setTimeout(r, 400); }, 0); });
                 }
                 if (settings.includeInvoice) {
                     await new Promise(r => { setTimeout(() => { try { genInvoice(); } catch(e){} setTimeout(r, 400); }, 0); });
@@ -20686,11 +20714,14 @@ const firebaseConfig = {
         modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:5000;';
         
         const content = document.createElement('div');
-        content.style.cssText = 'background:var(--modal-bg,#fff); border-radius:12px; padding:20px; max-width:450px; width:90%; max-height:80vh; color:var(--modal-text,inherit); overflow-y:auto; box-shadow:0 10px 40px rgba(0,0,0,0.3);';
+        content.style.cssText = 'background:var(--modal-bg,#fff); border-radius:12px; max-width:450px; width:90%; max-height:85vh; color:var(--modal-text,inherit); display:flex; flex-direction:column; box-shadow:0 10px 40px rgba(0,0,0,0.3); overflow:hidden;';
         
         content.innerHTML = `
-            <h3 style="margin-top:0; margin-bottom:15px; font-weight:900;">     Batch Print - Shop/Floor Forms</h3>
-            
+            <div style="padding:20px 20px 12px 20px; flex:0 0 auto;">
+                <h3 style="margin:0; font-weight:900;">🖨 Batch Print - Shop/Floor Forms</h3>
+            </div>
+
+            <div style="padding:0 20px; flex:1 1 auto; overflow-y:auto;">
             <div style="margin-bottom:20px; padding:15px; background:var(--card-bg,#f5f5f5); border-radius:6px;">
                 <p style="margin:0 0 12px 0; font-weight:900; font-size:12px; color:var(--text-primary,#333);">Select Forms & Quantity:</p>
                 
@@ -20712,10 +20743,22 @@ const firebaseConfig = {
                     <input type="number" inputmode="decimal" id="qty-cover" value="1" min="1" max="50" style="width:50px; padding:6px; border:1px solid var(--border-color,#ccc); border-radius:4px; font-size:12px; text-align:center; background:var(--input-bg,#fff); color:var(--text-primary,#333);">
                 </div>
                 
-                <div style="display:flex; align-items:center; gap:10px; margin-bottom:0; padding:10px; background:var(--modal-bg,#fff); border-radius:4px; border:1px solid var(--border-color,#ddd);">
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px; padding:10px; background:var(--modal-bg,#fff); border-radius:4px; border:1px solid var(--border-color,#ddd);">
                     <input type="checkbox" id="batch-label" class="batch-form-check" style="width:18px; height:18px; cursor:pointer;">
                     <label for="batch-label" style="flex:1; cursor:pointer; font-size:12px; margin:0; font-weight:900; color:var(--text-primary,#333);">        Shop Label</label>
                     <input type="number" inputmode="decimal" id="qty-label" value="1" min="1" max="50" style="width:50px; padding:6px; border:1px solid var(--border-color,#ccc); border-radius:4px; font-size:12px; text-align:center; background:var(--input-bg,#fff); color:var(--text-primary,#333);">
+                </div>
+
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px; padding:10px; background:var(--modal-bg,#fff); border-radius:4px; border:1px solid var(--border-color,#ddd);">
+                    <input type="checkbox" id="batch-joblabel" class="batch-form-check" style="width:18px; height:18px; cursor:pointer;">
+                    <label for="batch-joblabel" style="flex:1; cursor:pointer; font-size:12px; margin:0; font-weight:900; color:var(--text-primary,#333);">🏷 Job Label (Full A4)</label>
+                    <input type="number" inputmode="decimal" id="qty-joblabel" value="1" min="1" max="50" style="width:50px; padding:6px; border:1px solid var(--border-color,#ccc); border-radius:4px; font-size:12px; text-align:center; background:var(--input-bg,#fff); color:var(--text-primary,#333);">
+                </div>
+
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px; padding:10px; background:var(--modal-bg,#fff); border-radius:4px; border:1px solid var(--border-color,#ddd);">
+                    <input type="checkbox" id="batch-partlabels" class="batch-form-check" style="width:18px; height:18px; cursor:pointer;">
+                    <label for="batch-partlabels" style="flex:1; cursor:pointer; font-size:12px; margin:0; font-weight:900; color:var(--text-primary,#333);">🏭 Part Labels</label>
+                    <input type="number" inputmode="decimal" id="qty-partlabels" value="1" min="1" max="50" style="width:50px; padding:6px; border:1px solid var(--border-color,#ccc); border-radius:4px; font-size:12px; text-align:center; background:var(--input-bg,#fff); color:var(--text-primary,#333);">
                 </div>
                 
                 <div style="display:flex; align-items:center; gap:10px; margin-bottom:0; padding:10px; background:var(--modal-bg,#fff); border-radius:4px; border:1px solid var(--border-color,#ddd);">
@@ -20746,10 +20789,11 @@ const firebaseConfig = {
                     <input type="number" inputmode="decimal" id="qty-invoice" value="1" min="1" max="50" style="width:50px; padding:6px; border:1px solid var(--border-color,#ccc); border-radius:4px; font-size:12px; text-align:center; background:var(--input-bg,#fff); color:var(--text-primary,#333);">
                 </div>
             </div>
+            </div>
             
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <div style="flex:0 0 auto; padding:14px 20px; border-top:1px solid var(--border-color,#e0e0e0); background:var(--modal-bg,#fff); display:grid; grid-template-columns:1fr 1fr; gap:10px;">
                 <button onclick="this.closest('div').parentElement.parentElement.remove();" style="padding:12px; background:#e0e0e0; color:#333; border:none; border-radius:6px; font-weight:900; cursor:pointer; font-size:13px;">CANCEL</button>
-                <button onclick="executeBatchPrint()" style="padding:12px; background:#4caf50; color:#fff; border:none; border-radius:6px; font-weight:900; cursor:pointer; font-size:13px;">     PRINT</button>
+                <button onclick="executeBatchPrint()" style="padding:12px; background:#4caf50; color:#fff; border:none; border-radius:6px; font-weight:900; cursor:pointer; font-size:13px;">🖨 PRINT</button>
             </div>
         `;
         
@@ -20758,8 +20802,8 @@ const firebaseConfig = {
     }
     
     function selectBatchCategory(category) {
-        const shopForms = ['batch-estimate', 'batch-supply', 'batch-mixing', 'batch-cover', 'batch-label', 'batch-paintorder'];
-        const adminForms = ['batch-quote', 'batch-invoice'];
+        const shopForms = ['batch-supply', 'batch-mixing', 'batch-cover', 'batch-label', 'batch-joblabel', 'batch-partlabels', 'batch-paintorder'];
+        const adminForms = ['batch-estimate', 'batch-quote', 'batch-invoice'];
         
         const allForms = document.querySelectorAll('.batch-form-check');
         allForms.forEach(check => check.checked = false);
@@ -20784,6 +20828,8 @@ const firebaseConfig = {
             'batch-mixing': { name: 'Mixing Card', qty: parseInt(document.getElementById('qty-mixing')?.value || '1') || 1, func: 'genMixingCard' },
             'batch-cover': { name: 'Cover Sheet', qty: parseInt(document.getElementById('qty-cover')?.value || '1') || 1, func: 'genCoverSheet' },
             'batch-label': { name: 'Shop Label', qty: parseInt(document.getElementById('qty-label')?.value || '1') || 1, func: 'genShopLabel' },
+            'batch-joblabel': { name: 'Job Label', qty: parseInt(document.getElementById('qty-joblabel')?.value || '1') || 1, func: 'genJobLabel' },
+            'batch-partlabels': { name: 'Part Labels', qty: parseInt(document.getElementById('qty-partlabels')?.value || '1') || 1, func: 'genPartLabelsPDF' },
             'batch-paintorder': { name: 'Paint Order', qty: parseInt(document.getElementById('qty-paintorder')?.value || '1') || 1, func: 'genPaintOrder' },
             'batch-estimate': { name: 'Estimate', qty: parseInt(document.getElementById('qty-estimate')?.value || '1') || 1, func: 'genEstimate' },
             'batch-quote': { name: 'Quote', qty: parseInt(document.getElementById('qty-quote')?.value || '1') || 1, func: 'genQuoteForm' },
@@ -20807,6 +20853,30 @@ const firebaseConfig = {
         document.querySelectorAll('div[style*="z-index:5000"]').forEach(el => {
             if (el.textContent.includes('Batch Print')) el.remove();
         });
+
+        // If the batch includes any financial form, show the Additional Charges
+        // popup ONCE before the batch runs. The user sets charges (or clicks through
+        // with none); those land in the global appliedCharges and every financial
+        // form in the batch then uses them. We stash the form list and resume the
+        // batch from the charges "Apply" handler.
+        const _hasFinancial = forms.some(f =>
+            f.func === 'genEstimate' || f.func === 'genQuoteForm' || f.func === 'genInvoice');
+        if (_hasFinancial && typeof showChargesModal === 'function') {
+            window._batchPendingForms = forms;
+            window._batchChargesMode = true;
+            // Show charges modal in batch mode — Apply will call _runBatchPrint(forms)
+            showChargesModal('__batch__');
+            return;
+        }
+
+        _runBatchPrint(forms);
+    }
+
+    // Runs the actual batch generation + merge. Split out so the charges-first
+    // flow can call it after the user applies (or skips) additional charges.
+    function _runBatchPrint(forms) {
+        window._batchChargesMode = false;
+        window._batchPendingForms = null;
         
         // Generate all forms into a single merged PDF
         const totalForms = forms.length;
@@ -20828,6 +20898,8 @@ const firebaseConfig = {
                         else if (formData.func === 'genMixingCard') genMixingCard();
                         else if (formData.func === 'genCoverSheet') genCoverSheet();
                         else if (formData.func === 'genShopLabel') genShopLabel();
+                        else if (formData.func === 'genJobLabel') genJobLabel(false);
+                        else if (formData.func === 'genPartLabelsPDF') genPartLabelsPDF();
                         else if (formData.func === 'genPaintOrder') genPaintOrder();
                         else if (formData.func === 'genEstimate') genEstimate();
                         else if (formData.func === 'genQuoteForm') genQuoteForm();
@@ -25351,6 +25423,10 @@ if ('serviceWorker' in navigator && _swAllowed) {
             modal.style.visibility = 'hidden';
         }
         pendingFormType = null;
+        // Clear any batch-print pending state. The Apply path captures the forms
+        // into a local before calling this, so clearing here only affects Cancel.
+        window._batchChargesMode = false;
+        window._batchPendingForms = null;
     }
     
     function updateChargesSummary() {
@@ -25537,11 +25613,23 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 }
             } catch(saveErr) { console.warn('Could not save charges:', saveErr); }
 
+            // Capture batch state BEFORE closing modal (close clears pendingFormType)
+            const _wasBatch = (formType === '__batch__' || window._batchChargesMode);
+            const _batchForms = window._batchPendingForms;
+
             // Close modal immediately so UI feels instant
             closeChargesModal();
             
             // Small delay to ensure modal is fully closed before PDF generation
             setTimeout(() => {
+                // BATCH MODE: charges were collected for a batch print — run the whole
+                // batch now (financial forms will read the appliedCharges we just set).
+                if (_wasBatch) {
+                    if (_batchForms && _batchForms.length && typeof _runBatchPrint === 'function') {
+                        _runBatchPrint(_batchForms);
+                    }
+                    return;
+                }
                 notify('⏳ Generating PDF...');
                 // Defer actual generation one more frame so notify renders first
                 setTimeout(() => {
@@ -29543,7 +29631,9 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             includeShopLabel: document.getElementById('batchIncludeShopLabel')?.checked ?? true,
             includeMixingCard: document.getElementById('batchIncludeMixingCard')?.checked ?? false,
             includePartLabels: document.getElementById('batchIncludePartLabels')?.checked ?? false,
+            includeJobLabel: document.getElementById('batchIncludeJobLabel')?.checked ?? false,
             includePaintOrder: document.getElementById('batchIncludePaintOrder')?.checked ?? false,
+            includeEstimate: document.getElementById('batchIncludeEstimate')?.checked ?? false,
             includeQuote: document.getElementById('batchIncludeQuote')?.checked ?? false,
             includeInvoice: document.getElementById('batchIncludeInvoice')?.checked ?? false
         };
@@ -29573,7 +29663,9 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             includeShopLabel: true,
             includeMixingCard: false,
             includePartLabels: false,
+            includeJobLabel: false,
             includePaintOrder: false,
+            includeEstimate: false,
             includeQuote: false,
             includeInvoice: false
         };
@@ -29596,8 +29688,12 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                 document.getElementById('batchIncludeMixingCard').checked = settings.includeMixingCard;
             if (document.getElementById('batchIncludePartLabels')) 
                 document.getElementById('batchIncludePartLabels').checked = settings.includePartLabels;
+            if (document.getElementById('batchIncludeJobLabel')) 
+                document.getElementById('batchIncludeJobLabel').checked = settings.includeJobLabel;
             if (document.getElementById('batchIncludePaintOrder')) 
                 document.getElementById('batchIncludePaintOrder').checked = settings.includePaintOrder;
+            if (document.getElementById('batchIncludeEstimate')) 
+                document.getElementById('batchIncludeEstimate').checked = settings.includeEstimate;
             if (document.getElementById('batchIncludeQuote')) 
                 document.getElementById('batchIncludeQuote').checked = settings.includeQuote;
             if (document.getElementById('batchIncludeInvoice')) 
