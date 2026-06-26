@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.392'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.393'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1781,7 +1781,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.392'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.393'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -11620,6 +11620,23 @@ const firebaseConfig = {
         // Set a flag to prevent onSnapshot from overwriting the just-saved data
         // for a few seconds while the Firestore push propagates
         window._lastLocalSaveTime = Date.now();
+        // Record WHAT we just saved (id, jobNum, part count) so the snapshot handler
+        // can protect this job even after the measure sheet clears (items = []).
+        // Without this, a stale cloud copy with fewer parts could overwrite a
+        // just-saved job once the sheet was empty — e.g. while adding photos.
+        try {
+            window._lastSavedJobGuard = {
+                id: jobData.id,
+                jobNum: String(jobData.jobNum),
+                client: jobData.client,
+                parts: parseInt(jobData.totalParts) || 0,
+                items: Array.isArray(jobData.items) ? jobData.items.slice() : [],
+                totalSqm: jobData.totalSqm,
+                color: jobData.color, colors: jobData.colors,
+                brand: jobData.brand, code: jobData.code, finish: jobData.finish,
+                at: Date.now()
+            };
+        } catch(e) {}
         // Direct Firestore push for the saved job - ensures cross-device sync immediately
         if(window.currentUser&&window.firebaseDb&&window.doc&&window.setDoc&&jobData.id){
             try{
@@ -31988,6 +32005,52 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                         const _msSinceSave = window._lastLocalSaveTime ? Date.now() - window._lastLocalSaveTime : 99999;
                         const _activeJobNum = document.getElementById('jN')?.value;
                         const _hasActiveItems = Array.isArray(items) && items.length > 0 && _activeJobNum;
+
+                        // ── DATA-LOSS FIX: protect a JUST-SAVED job even after the measure
+                        // sheet has cleared (items=[]). Previously protection required items
+                        // on screen, so a save followed by adding photos left the job exposed:
+                        // a stale cloud copy with fewer parts could overwrite it. Here, for a
+                        // short window after a save, if the incoming cloud copy of that job has
+                        // FEWER parts than what we just saved, we keep our version and re-push.
+                        try {
+                            const _g = window._lastSavedJobGuard;
+                            if (_g && (Date.now() - _g.at) < 30000) {
+                                const _cloudCopy = jobs.find(function(cj){
+                                    return (_g.id && cj.id === _g.id) ||
+                                           (String(cj.jobNum) === _g.jobNum && (cj.client||'') === (_g.client||''));
+                                });
+                                if (_cloudCopy) {
+                                    const _cloudParts = parseInt(_cloudCopy.totalParts) || (_cloudCopy.items ? _cloudCopy.items.length : 0);
+                                    if (_cloudParts < _g.parts) {
+                                        // Cloud regressed — restore our saved version into the snapshot
+                                        _cloudCopy.items = _g.items;
+                                        _cloudCopy.totalParts = String(_g.parts);
+                                        if (_g.totalSqm) _cloudCopy.totalSqm = _g.totalSqm;
+                                        if (_g.color)  _cloudCopy.color  = _g.color;
+                                        if (_g.colors) _cloudCopy.colors = _g.colors;
+                                        if (_g.brand)  _cloudCopy.brand  = _g.brand;
+                                        if (_g.code)   _cloudCopy.code   = _g.code;
+                                        if (_g.finish) _cloudCopy.finish = _g.finish;
+                                        console.warn('🛟 Protected just-saved job #' + _g.jobNum +
+                                            ' — cloud had ' + _cloudParts + ' parts, restored ' + _g.parts + '. Re-pushing.');
+                                        // Re-push the correct version to Firestore so it sticks
+                                        try {
+                                            const _uid2 = window.staffModeOwnerUid || window.currentUser.uid;
+                                            if (_uid2 && _g.id) {
+                                                const _rref = window.doc(window.firebaseDb, 'users', _uid2, 'jobs', _g.id);
+                                                const _push = Object.assign({}, _cloudCopy); delete _push.photos;
+                                                _push.lastModified = new Date().toISOString();
+                                                window.setDoc(_rref, _push, { merge: false }).catch(function(e){ console.warn('Re-push failed:', e); });
+                                            }
+                                        } catch(e) {}
+                                    } else if (_cloudParts >= _g.parts) {
+                                        // Cloud caught up — our save propagated, stop guarding
+                                        window._lastSavedJobGuard = null;
+                                    }
+                                }
+                            }
+                        } catch(e) { console.warn('Just-saved guard error:', e); }
+
                         if (_msSinceSave < 15000 && _hasActiveItems) {
                             try { if (typeof renderHistory === 'function') renderHistory(); } catch(e) {}
                             try { if (typeof renderScheduleCalendar === 'function') renderScheduleCalendarDebounced(); } catch(e) {}
