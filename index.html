@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.395'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.396'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1781,7 +1781,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.395'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.396'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -14988,28 +14988,110 @@ const firebaseConfig = {
             notify(`📷 Photo will be saved as GENERAL (no part specified)`);
         }
         
-        // Always use file input — works on all devices (phone, tablet, desktop).
-        // Android: capture="environment" forces camera to open directly (Samsung tablets
-        //   skip the chooser and go straight to Gallery without it).
-        // iOS: no capture attribute — shows "Take Photo / Photo Library / Browse" action sheet.
-        //   capture="environment" on iOS locks to camera-only which removes the Gallery option.
-        // Desktop: no capture, OS file picker opens normally.
+        // Android Samsung tablets ignore capture="environment" and route through their
+        // own file manager (Google Drive / Samsung Files) instead of the camera.
+        // Fix: show a small modal with two buttons — Camera (getUserMedia rear camera)
+        // and Gallery (plain file input). iOS gets the native action sheet directly.
         const isAndroid = /Android/i.test(navigator.userAgent);
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = 'image/*';
-        if (isAndroid) input.capture = 'environment';
-        input.multiple = !isAndroid; // capture + multiple is unreliable on Android
-        input.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;';
-        input.onchange = async (e) => {
-            const files = Array.from(e.target.files || []);
-            for (const f of files) {
-                await new Promise(res => { snapHandleFile(f); setTimeout(res, 400); });
-            }
-            try { document.body.removeChild(input); } catch(err) {}
-        };
-        document.body.appendChild(input);
-        input.click();
+        const isiOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+        if (isAndroid) {
+            // Show Camera / Gallery choice modal
+            const existingM = document.getElementById('snapAndroidModal');
+            if (existingM) existingM.remove();
+            const am = document.createElement('div');
+            am.id = 'snapAndroidModal';
+            am.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.65);z-index:9999;display:flex;align-items:center;justify-content:center;';
+            am.innerHTML = `
+                <div style="background:#1c1c1e;border-radius:16px;padding:24px;width:88%;max-width:320px;box-shadow:0 10px 40px rgba(0,0,0,0.5);">
+                    <div style="font-size:13px;font-weight:900;color:#d4af37;text-align:center;margin-bottom:18px;letter-spacing:1px;">ADD PHOTO</div>
+                    <div style="display:flex;flex-direction:column;gap:10px;">
+                        <button id="snapCamBtn" style="padding:16px;background:#2196f3;color:#fff;border:none;border-radius:10px;font-weight:900;font-size:15px;cursor:pointer;">📷 Take Photo</button>
+                        <button id="snapGalBtn" style="padding:16px;background:#4caf50;color:#fff;border:none;border-radius:10px;font-weight:900;font-size:15px;cursor:pointer;">🖼️ Choose from Gallery</button>
+                        <button onclick="document.getElementById('snapAndroidModal').remove()" style="padding:14px;background:rgba(255,255,255,0.08);color:#999;border:none;border-radius:10px;font-weight:900;font-size:14px;cursor:pointer;">Cancel</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(am);
+
+            // Camera button — getUserMedia rear camera, draw to canvas, pass to snapHandleFile
+            document.getElementById('snapCamBtn').onclick = () => {
+                am.remove();
+                const camModal = document.createElement('div');
+                camModal.id = 'snapCamModal';
+                camModal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:#000;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;';
+                camModal.innerHTML = `
+                    <video id="snapCamVideo" autoplay playsinline style="width:100%;max-height:70vh;object-fit:cover;background:#000;"></video>
+                    <div style="display:flex;gap:16px;padding-bottom:20px;">
+                        <button id="snapCamCapture" style="width:72px;height:72px;border-radius:50%;background:#fff;border:4px solid #d4af37;font-size:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;">📷</button>
+                        <button onclick="snapAndroidCamClose()" style="padding:16px 24px;background:#ff3b30;color:#fff;border:none;border-radius:10px;font-weight:900;font-size:15px;cursor:pointer;">Cancel</button>
+                    </div>
+                    <canvas id="snapCamCanvas" style="display:none;"></canvas>`;
+                document.body.appendChild(camModal);
+                navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false })
+                    .then(stream => {
+                        window._snapCamStream = stream;
+                        document.getElementById('snapCamVideo').srcObject = stream;
+                    })
+                    .catch(err => { notify('Camera error: ' + err.message); snapAndroidCamClose(); });
+                document.getElementById('snapCamCapture').onclick = () => {
+                    const video = document.getElementById('snapCamVideo');
+                    const canvas = document.getElementById('snapCamCanvas');
+                    if (!video || !canvas) return;
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    canvas.getContext('2d').drawImage(video, 0, 0);
+                    canvas.toBlob(blob => {
+                        if (blob) snapHandleFile(new File([blob], 'photo_' + Date.now() + '.jpg', { type: 'image/jpeg' }));
+                        snapAndroidCamClose();
+                    }, 'image/jpeg', 0.92);
+                };
+            };
+
+            // Gallery button — plain file input, no capture attribute
+            document.getElementById('snapGalBtn').onclick = () => {
+                am.remove();
+                const gi = document.createElement('input');
+                gi.type = 'file';
+                gi.accept = 'image/*';
+                gi.multiple = true;
+                gi.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;';
+                gi.onchange = async (e) => {
+                    const files = Array.from(e.target.files || []);
+                    for (const f of files) {
+                        await new Promise(res => { snapHandleFile(f); setTimeout(res, 400); });
+                    }
+                    try { document.body.removeChild(gi); } catch(e) {}
+                };
+                document.body.appendChild(gi);
+                gi.click();
+            };
+
+        } else {
+            // iOS / desktop — plain file input, no capture, shows native chooser
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.multiple = true;
+            input.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;';
+            input.onchange = async (e) => {
+                const files = Array.from(e.target.files || []);
+                for (const f of files) {
+                    await new Promise(res => { snapHandleFile(f); setTimeout(res, 400); });
+                }
+                try { document.body.removeChild(input); } catch(err) {}
+            };
+            document.body.appendChild(input);
+            input.click();
+        }
+    }
+
+    function snapAndroidCamClose() {
+        if (window._snapCamStream) {
+            window._snapCamStream.getTracks().forEach(t => t.stop());
+            window._snapCamStream = null;
+        }
+        const m = document.getElementById('snapCamModal');
+        if (m) m.remove();
     }
 
     // ── PHOTO FIREBASE SYNC ──────────────────────────────────────────────────
