@@ -15122,6 +15122,7 @@ const firebaseConfig = {
         }
         if (!jobNum || jobNum === '_pending') return;
         const uid = window.resolvedDataUid || window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid;
+        let synced = 0;
         let failed = 0;
         for (const photo of photosArray) {
             if (!photo.data || !photo.data.startsWith('data:image')) continue;
@@ -15307,9 +15308,13 @@ const firebaseConfig = {
         // Show dedup button if duplicates detected
         const uniqueIds = new Set(jobPhotos.map(p => String(p.id)));
         const hasDups = uniqueIds.size < jobPhotos.length;
-        html += `<div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
+        const unsynced = jobPhotos.filter(p => !p.firestoreSynced).length;
+        html += `<div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px; flex-wrap:wrap; gap:6px;">
             <p style="font-size:9px; color:#666; margin:0;">${jobPhotos.length} photo${jobPhotos.length !== 1 ? 's' : ''} | ${jobPhotos[jobPhotos.length-1]?.timestamp}</p>
-            ${hasDups ? `<button onclick="deduplicatePhotos()" style="background:#ff9500;color:#fff;border:none;padding:4px 10px;border-radius:5px;font-size:10px;font-weight:900;cursor:pointer;">⚠️ ${jobPhotos.length - uniqueIds.size} duplicates — Clean Up</button>` : ''}
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                ${unsynced > 0 ? `<button onclick="forceSyncPhotos()" style="background:#2196f3;color:#fff;border:none;padding:4px 10px;border-radius:5px;font-size:10px;font-weight:900;cursor:pointer;">☁️ Sync ${unsynced} to Cloud</button>` : '<span style="font-size:9px;color:#4caf50;font-weight:900;">☁️ Synced</span>'}
+                ${hasDups ? `<button onclick="deduplicatePhotos()" style="background:#ff9500;color:#fff;border:none;padding:4px 10px;border-radius:5px;font-size:10px;font-weight:900;cursor:pointer;">⚠️ ${jobPhotos.length - uniqueIds.size} duplicates — Clean Up</button>` : ''}
+            </div>
         </div>`;
         
         container.innerHTML = html;
@@ -15336,6 +15341,17 @@ const firebaseConfig = {
         document.body.appendChild(modal);
     }
     
+    async function forceSyncPhotos() {
+        const jobNum = document.getElementById('jN')?.value;
+        if (!jobNum) { notify('Save the job first before syncing photos'); return; }
+        if (!window.currentUser || !window.firebaseDb) { notify('Not connected to cloud'); return; }
+        notify('☁️ Syncing photos to cloud...');
+        // Mark all as unsynced to force a full re-upload
+        jobPhotos.forEach(p => { p.firestoreSynced = false; });
+        await syncPhotosToFirebase(jobNum, jobPhotos);
+        renderPhotoGallery();
+    }
+
     async function deduplicatePhotos() {
         const before = jobPhotos.length;
         const seen = new Set();
