@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.398'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.399'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1781,7 +1781,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.398'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.399'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -10572,6 +10572,7 @@ const firebaseConfig = {
         // ── ROLLING PART BACKUP ───────────────────────────────────────────────
         // Written separately from jobHistory — onSnapshot NEVER touches this key.
         // Survives concurrent session overwrites. Used for recovery if parts disappear.
+        // Also synced to Firestore so it survives across devices.
         try {
             const _jn = jobData.jobNum;
             if (_jn && items.length > 0) {
@@ -10579,7 +10580,7 @@ const firebaseConfig = {
                 const _existing = JSON.parse(localStorage.getItem('pwPartBackup_' + _jn) || 'null');
                 // Only overwrite backup if current count is HIGHER than stored backup
                 if (!_existing || _partCount >= (_existing.partCount || 0)) {
-                    localStorage.setItem('pwPartBackup_' + _jn, JSON.stringify({
+                    const _backupPayload = {
                         jobNum: _jn,
                         client: jobData.client,
                         jobName: jobData.jobName,
@@ -10587,7 +10588,14 @@ const firebaseConfig = {
                         partCount: _partCount,
                         lineCount: items.length,
                         savedAt: new Date().toISOString()
-                    }));
+                    };
+                    localStorage.setItem('pwPartBackup_' + _jn, JSON.stringify(_backupPayload));
+                    // Also push to Firestore so backup survives across devices
+                    if (window.firebaseDb && window.doc && window.setDoc && window.currentUser) {
+                        const _buid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid;
+                        const _bref = window.doc(window.firebaseDb, 'users', _buid, 'partBackups', String(_jn));
+                        window.setDoc(_bref, _backupPayload, { merge: false }).catch(e => console.warn('Part backup Firestore write failed:', e));
+                    }
                 }
             }
         } catch(e) {}
@@ -12414,21 +12422,44 @@ const firebaseConfig = {
         const _jsEl = document.getElementById('jobStatus');
         if (_jsEl) { _jsEl.value = job.jobStatus || 'job'; updateJobStatusStyle(); }
         // Show part count immediately on load. If backup has more parts, warn user.
-        try {
-            const _loadedParts = items.reduce((s,i) => s + (parseInt(i.qty)||1), 0);
-            const _backup = JSON.parse(localStorage.getItem('pwPartBackup_' + job.jobNum) || 'null');
-            if (_backup && _backup.partCount > _loadedParts * 1.1) {
-                // Backup has significantly more parts — warn immediately
-                setTimeout(() => {
-                    const _warn = document.createElement('div');
-                    _warn.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);background:#ff3b30;color:#fff;padding:14px 20px;border-radius:10px;font-weight:900;z-index:99999;box-shadow:0 4px 16px rgba(0,0,0,0.4);max-width:340px;text-align:center;';
-                    _warn.innerHTML = `⚠️ PART COUNT MISMATCH<br><span style="font-size:12px;font-weight:700;">Loaded: ${_loadedParts} parts (${items.length} lines)<br>Backup has: ${_backup.partCount} parts (${_backup.lineCount} lines)<br><br>Tap RESTORE BACKUP to recover missing parts</span><br><br><button onclick="window._restorePartBackup('${job.jobNum}');this.closest('div').remove();" style="background:#fff;color:#ff3b30;border:none;padding:8px 18px;border-radius:6px;font-weight:900;cursor:pointer;margin-right:8px;">RESTORE BACKUP</button><button onclick="this.closest('div').remove();" style="background:rgba(255,255,255,0.2);color:#fff;border:none;padding:8px 14px;border-radius:6px;font-weight:900;cursor:pointer;">Dismiss</button>`;
-                    document.body.appendChild(_warn);
-                }, 800);
-            } else {
-                notify('✅ Loaded ' + items.length + ' lines / ' + _loadedParts + ' parts');
-            }
-        } catch(e) {}
+        // Also checks Firestore part backup in case localStorage was wiped on this device.
+        (async () => {
+            try {
+                const _loadedParts = items.reduce((s,i) => s + (parseInt(i.qty)||1), 0);
+                let _backup = JSON.parse(localStorage.getItem('pwPartBackup_' + job.jobNum) || 'null');
+
+                // If no local backup or cloud might have more — check Firestore
+                if ((!_backup || _backup.partCount <= _loadedParts) && window.firebaseDb && window.doc && window.getDoc && window.currentUser) {
+                    try {
+                        const _buid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid;
+                        const _bref = window.doc(window.firebaseDb, 'users', _buid, 'partBackups', String(job.jobNum));
+                        const _bsnap = await window.getDoc(_bref);
+                        if (_bsnap.exists()) {
+                            const _cloudBackup = _bsnap.data();
+                            // Use cloud backup if it has more parts than local backup
+                            if (!_backup || (_cloudBackup.partCount || 0) > (_backup.partCount || 0)) {
+                                _backup = _cloudBackup;
+                                // Cache to localStorage for next time
+                                localStorage.setItem('pwPartBackup_' + job.jobNum, JSON.stringify(_backup));
+                                console.log('✅ Loaded part backup from Firestore: ' + _backup.partCount + ' parts for job ' + job.jobNum);
+                            }
+                        }
+                    } catch(fbErr) { console.warn('Firestore part backup check failed:', fbErr); }
+                }
+
+                if (_backup && _backup.partCount > _loadedParts * 1.1) {
+                    // Backup has significantly more parts — warn immediately
+                    setTimeout(() => {
+                        const _warn = document.createElement('div');
+                        _warn.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);background:#ff3b30;color:#fff;padding:14px 20px;border-radius:10px;font-weight:900;z-index:99999;box-shadow:0 4px 16px rgba(0,0,0,0.4);max-width:340px;text-align:center;';
+                        _warn.innerHTML = `⚠️ PART COUNT MISMATCH<br><span style="font-size:12px;font-weight:700;">Loaded: ${_loadedParts} parts (${items.length} lines)<br>Backup has: ${_backup.partCount} parts (${_backup.lineCount} lines)<br><br>Tap RESTORE BACKUP to recover missing parts</span><br><br><button onclick="window._restorePartBackup('${job.jobNum}');this.closest('div').remove();" style="background:#fff;color:#ff3b30;border:none;padding:8px 18px;border-radius:6px;font-weight:900;cursor:pointer;margin-right:8px;">RESTORE BACKUP</button><button onclick="this.closest('div').remove();" style="background:rgba(255,255,255,0.2);color:#fff;border:none;padding:8px 14px;border-radius:6px;font-weight:900;cursor:pointer;">Dismiss</button>`;
+                        document.body.appendChild(_warn);
+                    }, 800);
+                } else {
+                    notify('✅ Loaded ' + items.length + ' lines / ' + _loadedParts + ' parts');
+                }
+            } catch(e) { console.warn('Part backup check error:', e); }
+        })();
 
         // Restore backup function — available globally for the warning button
         window._restorePartBackup = function(jobNum) {
@@ -31939,13 +31970,11 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                             } else if (localMatch && Array.isArray(localMatch.items) &&
                                 Array.isArray(cloudJob.items) &&
                                 localMatch.items.length > cloudJob.items.length) {
-                                // Keep local items ONLY if cloud has fewer AND local is newer
-                                const localTime = localMatch.lastModified ? new Date(localMatch.lastModified).getTime() : 0;
-                                const cloudTime = cloudJob.lastModified ? new Date(cloudJob.lastModified).getTime() : 0;
-                                if (localTime > cloudTime) {
-                                    console.log('✓ Snap: keeping local items (' + localMatch.items.length + ' vs ' + cloudJob.items.length + ') for #' + cloudJob.jobNum);
-                                    cloudJob.items = localMatch.items;
-                                }
+                                // ALWAYS keep local if it has more items — never let a smaller
+                                // cloud snapshot overwrite a larger local version. Lost parts
+                                // are unrecoverable; a timestamp race is not worth the risk.
+                                console.log('✓ Snap: keeping local items (' + localMatch.items.length + ' vs ' + cloudJob.items.length + ') for #' + cloudJob.jobNum);
+                                cloudJob.items = localMatch.items;
                             }
                         });
 
