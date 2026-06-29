@@ -3658,7 +3658,7 @@ const firebaseConfig = {
             <p style="color:#666; margin:10px 0 0; font-size:14px;">Live Sync &#x2022; All Devices</p>
         </div>
         <div id="loginPanelAdmin">
-            <input type="email" id="loginEmail" placeholder="Email" style="margin-bottom:12px; padding:15px; background:rgba(255,255,255,0.08); border:1px solid rgba(212,175,55,0.3); border-radius:10px; color:#f2f2f7; width:100%; box-sizing:border-box; font-size:15px;">
+            <input type="email" id="loginEmail" placeholder="Email" inputmode="none" style="margin-bottom:12px; padding:15px; background:rgba(255,255,255,0.08); border:1px solid rgba(212,175,55,0.3); border-radius:10px; color:#f2f2f7; width:100%; box-sizing:border-box; font-size:15px;">
             <input type="password" id="loginPassword" placeholder="Password (or 4-digit PIN for staff)" style="margin-bottom:20px; padding:15px; background:rgba(255,255,255,0.08); border:1px solid rgba(212,175,55,0.3); border-radius:10px; color:#f2f2f7; width:100%; box-sizing:border-box; font-size:15px;">
             <button onclick="handleLogin()" style="width:100%; background:#d4af37; border:none; padding:15px; border-radius:10px; font-weight:900; font-size:16px; cursor:pointer; margin-bottom:10px; color:#000; letter-spacing:0.5px;">SIGN IN</button>
             <button onclick="trySignup()" style="width:100%; background:transparent; color:#d4af37; border:2px solid rgba(212,175,55,0.5); padding:15px; border-radius:10px; font-weight:900; font-size:16px; cursor:pointer; margin-bottom:10px;">CREATE ACCOUNT</button>
@@ -14988,48 +14988,23 @@ const firebaseConfig = {
             notify(`📷 Photo will be saved as GENERAL (no part specified)`);
         }
         
-        // Touch-first detection: maxTouchPoints > 1 catches tablets/phones that may not
-        // match the UA regex (e.g. Samsung Galaxy tablets reporting as Linux/desktop).
-        // Windows touchscreen laptops excluded via userAgent check.
-        const isMobile = navigator.maxTouchPoints > 1
-            ? !/Windows NT/i.test(navigator.userAgent)
-            : /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        if (isMobile) {
-            // Touch device: plain file input with no capture attribute — Android shows
-            // native media chooser (Camera / Gallery), iOS shows action sheet.
-            // MUST be clicked synchronously during user gesture — no setTimeout allowed
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = 'image/*';
-            input.multiple = true;
-            input.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;';
-            input.onchange = async (e) => {
-                const files = Array.from(e.target.files || []);
-                for (const f of files) {
-                    await new Promise(res => { snapHandleFile(f); setTimeout(res, 400); });
-                }
-                try { document.body.removeChild(input); } catch(err) {}
-            };
-            document.body.appendChild(input);
-            input.click(); // synchronous — keeps trusted gesture chain intact
-        } else {
-            // Desktop: show choice     webcam or file upload
-            const existingModal = document.getElementById('snapChoiceModal');
-            if (existingModal) existingModal.remove();
-            const modal = document.createElement('div');
-            modal.id = 'snapChoiceModal';
-            modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;';
-            modal.innerHTML = `
-                <div style="background:var(--modal-bg,#fff);border-radius:12px;padding:24px;width:88%;max-width:360px;box-shadow:0 10px 40px rgba(0,0,0,0.3); color:var(--modal-text,inherit);">
-                    <h3 style="margin:0 0 16px 0;font-size:16px;">Add Photo</h3>
-                    <div style="display:flex;flex-direction:column;gap:10px;">
-                        <button onclick="snapWebcam()" style="padding:14px;background:#2196f3;color:#fff;border:none;border-radius:8px;font-weight:900;font-size:14px;cursor:pointer;">     Use Webcam</button>
-                        <button onclick="snapFile()" style="padding:14px;background:#4caf50;color:#fff;border:none;border-radius:8px;font-weight:900;font-size:14px;cursor:pointer;">     Choose File</button>
-                        <button onclick="document.getElementById('snapChoiceModal').remove()" style="padding:14px;background:#f0f0f0;color:#333;border:none;border-radius:8px;font-weight:900;font-size:14px;cursor:pointer;">Cancel</button>
-                    </div>
-                </div>`;
-            document.body.appendChild(modal);
-        }
+        // Always use file input — works on all devices (phone, tablet, desktop).
+        // Native OS chooser handles Camera vs Gallery vs Files on mobile/tablet.
+        // Webcam removed — not needed in a spray shop context.
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.multiple = true;
+        input.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;';
+        input.onchange = async (e) => {
+            const files = Array.from(e.target.files || []);
+            for (const f of files) {
+                await new Promise(res => { snapHandleFile(f); setTimeout(res, 400); });
+            }
+            try { document.body.removeChild(input); } catch(err) {}
+        };
+        document.body.appendChild(input);
+        input.click();
     }
 
     // ── PHOTO FIREBASE SYNC ──────────────────────────────────────────────────
@@ -15206,97 +15181,9 @@ const firebaseConfig = {
         reader.readAsDataURL(file);
     }
 
-    function snapFile() {
-        const m = document.getElementById('snapChoiceModal');
-        if (m) m.remove();
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = 'image/*';
-        input.multiple = true; // allow multi-select on desktop too
-        input.onchange = async (e) => {
-            const files = Array.from(e.target.files || []);
-            for (const f of files) {
-                await new Promise(res => { snapHandleFile(f); setTimeout(res, 400); });
-            }
-        };
-        input.click();
-    }
+    // snapFile removed — snap() now handles all devices directly
 
-    function snapWebcam() {
-        const m = document.getElementById('snapChoiceModal');
-        if (m) m.remove();
-        const modal = document.createElement('div');
-        modal.id = 'webcamModal';
-        modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;';
-        modal.innerHTML = `
-            <video id="webcamVideo" autoplay playsinline style="width:90%;max-width:600px;border-radius:10px;background:#000;"></video>
-            <div style="display:flex;gap:12px;">
-                <button onclick="snapWebcamCapture()" style="padding:16px 28px;background:#2196f3;color:#fff;border:none;border-radius:8px;font-weight:900;font-size:16px;cursor:pointer;">     Capture</button>
-                <button onclick="snapWebcamClose()" style="padding:16px 28px;background:#ff3b30;color:#fff;border:none;border-radius:8px;font-weight:900;font-size:16px;cursor:pointer;">    Cancel</button>
-            </div>
-            <canvas id="webcamCanvas" style="display:none;"></canvas>`;
-        document.body.appendChild(modal);
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-            .then(stream => {
-                window._webcamStream = stream;
-                document.getElementById('webcamVideo').srcObject = stream;
-            })
-            .catch(() => {
-                navigator.mediaDevices.getUserMedia({ video: true })
-                .then(stream => { window._webcamStream = stream; document.getElementById('webcamVideo').srcObject = stream; })
-                .catch(err => { notify('Camera not available: ' + err.message); snapWebcamClose(); });
-            });
-    }
-
-    function snapWebcamCapture() {
-        const video = document.getElementById('webcamVideo');
-        const canvas = document.getElementById('webcamCanvas');
-        if (!video || !canvas) return;
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        canvas.getContext('2d').drawImage(video, 0, 0);
-        const imgData = canvas.toDataURL('image/jpeg', 0.9);
-        const timestamp = new Date().toLocaleString('en-AU');
-        var _linkedPart = window._snapForPart||null;
-        var _np2={id:Date.now(),data:imgData,timestamp:timestamp,linkedPart:_linkedPart};
-        window._snapForPart=null;
-        jobPhotos.push(_np2);
-        
-        console.log('%c📸 WEBCAM CAPTURED', 'background:#34c759;color:#fff;font-weight:900;padding:4px;', 'ID:', _np2.id, 'Linked to:', _linkedPart || 'GENERAL', 'Total in memory:', jobPhotos.length);
-        
-        // CRITICAL: Immediately persist to IndexedDB
-        (async () => {
-            try{
-                var _jn2=document.getElementById("jN")?document.getElementById("jN").value:"";
-                console.log('%c💾 SAVING', 'background:#2196f3;color:#fff;font-weight:900;padding:4px;', 'Job#:', _jn2 || 'NONE');
-                
-                if(!_jn2 || _jn2 === '_pending') {
-                    await photoDB.savePhotos('_pending', jobPhotos);
-                } else {
-                    await photoDB.savePhotos(_jn2, jobPhotos);
-                }
-            }catch(e){
-                console.error('%c❌ SAVE ERROR', 'background:#ff3b30;color:#fff;font-weight:900;padding:4px;', e.message);
-            }
-        })();
-        
-        renderPhotoGallery();
-        if (_linkedPart) {
-            notify(`✅ Photo captured and linked to: ${_linkedPart}`);
-        } else {
-            notify(`✅ Photo captured as GENERAL`);
-        }
-        snapWebcamClose();
-    }
-
-    function snapWebcamClose() {
-        if (window._webcamStream) {
-            window._webcamStream.getTracks().forEach(t => t.stop());
-            window._webcamStream = null;
-        }
-        const m = document.getElementById('webcamModal');
-        if (m) m.remove();
-    }
+    // snapWebcam / snapWebcamCapture / snapWebcamClose removed — webcam not needed in spray shop context
     
     function renderPhotoGallery() {
         // NOTE: Do NOT read from localStorage here - jobPhotos is managed by loadJobFromHistory
