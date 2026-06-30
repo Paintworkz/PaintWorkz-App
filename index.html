@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.399'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.400'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1781,7 +1781,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.399'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.400'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -11677,10 +11677,16 @@ const firebaseConfig = {
         }
         // Also persist to IndexedDB for full history
         try { pwDB.saveJob(jobData); } catch(e) { console.warn('IndexedDB save error:', e); }
-        // Clear parked charges     don't bleed into next job
+        // Clear parked charges — don't bleed into next job
         window._lastChargesSnapshot = null;
-        // Photos kept until new job started
-        try{if(typeof renderPhotoGallery==='function')renderPhotoGallery();}catch(e){}
+        // Clear photos from memory after save — loadJobPhotosForCurrentJobNum reloads
+        // from IndexedDB by job number so they still show for THIS job, but won't
+        // bleed into the next job when the job number field changes.
+        try {
+            const _savedJobNum = jobData.jobNum;
+            jobPhotos = [];
+            if (typeof loadJobPhotosForCurrentJobNum === 'function') loadJobPhotosForCurrentJobNum();
+        } catch(e) {}
         if (window.appliedCharges) window.appliedCharges.lastSnapshot = null;
         
         // Send appropriate notification based on what happened
