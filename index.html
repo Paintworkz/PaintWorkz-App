@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.400'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.402'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1781,7 +1781,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.400'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.402'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -15987,13 +15987,20 @@ const firebaseConfig = {
 
     function _checkDuplicateJobNum(val) {
         if (!val) return;
-        const history = JSON.parse(localStorage.getItem('jobHistory') || '[]');
-        const current = items.length > 0 || document.getElementById('jNm')?.value; // has data = editing existing
-        const match = history.find(j => String(j.jobNum) === String(val));
+        // Check both localStorage AND in-memory jobs (Firestore may not have synced to localStorage yet)
+        const localHistory = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+        const memoryJobs = window._reportJobs || [];
+        const allJobs = localHistory.length >= memoryJobs.length ? localHistory : memoryJobs;
+        // Only warn if this is NOT the job currently being edited
+        const isEditingThisJob = String(currentEditingJobId || '') !== '' &&
+            allJobs.find(j => String(j.jobNum) === String(val) && (j.id === currentEditingJobId || j.jobNum === currentEditingJobId));
+        const match = allJobs.find(j => String(j.jobNum) === String(val));
         const indicator = document.getElementById('jNDuplicateWarning');
         if (indicator) {
-            if (match && !current) {
-                indicator.textContent = '⚠️ Job #' + val + ' already exists (' + match.client + ')';
+            if (match && !isEditingThisJob) {
+                indicator.textContent = '⚠️ Job #' + val + ' already exists — ' + match.client + '. Use a different number or you will overwrite it.';
+                indicator.style.color = '#ff3b30';
+                indicator.style.fontWeight = '900';
                 indicator.style.display = 'block';
             } else {
                 indicator.style.display = 'none';
@@ -23018,11 +23025,29 @@ if ('serviceWorker' in navigator && _swAllowed) {
 
 
         function saveJob() { 
-        // FREE PLAN GATE     check job limit
+        // FREE PLAN GATE — check job limit
         if (freeJobLimitReached()) {
             showUpgradePrompt('job-limit');
             return;
         }
+        // DUPLICATE JOB NUMBER GUARD — block save if job number already exists as a different job
+        try {
+            const _saveJobNum = document.getElementById('jN')?.value;
+            if (_saveJobNum) {
+                const _localH = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+                const _memH = window._reportJobs || [];
+                const _allH = _localH.length >= _memH.length ? _localH : _memH;
+                const _dup = _allH.find(j => String(j.jobNum) === String(_saveJobNum));
+                const _isEditing = _dup && (
+                    (_dup.id && _dup.id === currentEditingJobId) ||
+                    (currentEditingJobIndex !== null && _allH[currentEditingJobIndex]?.jobNum === _saveJobNum)
+                );
+                if (_dup && !_isEditing) {
+                    const _proceed = confirm('WARNING: Job #' + _saveJobNum + ' already exists for ' + _dup.client + '. Saving will OVERWRITE that job and lose its parts. Continue anyway?');
+                    if (!_proceed) return;
+                }
+            }
+        } catch(e) { console.warn('Duplicate check error:', e); }
         try {
             saveData();
             saveJobToHistory(); // This will show its own notification
