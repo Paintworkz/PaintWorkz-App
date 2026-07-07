@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.402'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.403'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1781,7 +1781,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.402'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.403'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -20477,7 +20477,7 @@ const firebaseConfig = {
             const rh      = 10;  // row height — increased for readability
 
             // Column widths (must add to tblW)
-            const cw = { num:28, client:62, name:65, paint:110, sqm:25, due:40 };
+            const cw = { num:25, client:55, name:55, paint:95, parts:18, sqm:22, due:60 };
             // calc positions
             let cx = tblLeft;
             const col = {};
@@ -20487,9 +20487,9 @@ const firebaseConfig = {
             doc.setFillColor(30,30,30);
             doc.rect(tblLeft, y, tblW, rh, 'F');
             doc.setFont(undefined, 'bold');
-            doc.setFontSize(8.5);  // larger header text
+            doc.setFontSize(8.5);
             doc.setTextColor(255,255,255);
-            const headers = { num:'JOB #', client:'CLIENT', name:'JOB NAME', paint:'PAINT (Brand    Colour    Finish)', sqm:'SQM', due:'DUE DATE' };
+            const headers = { num:'JOB #', client:'CLIENT', name:'JOB NAME', paint:'PAINT (Brand / Colour / Finish)', parts:'PCS', sqm:'SQM', due:'DUE DATE' };
             for (const [k,label] of Object.entries(headers)) {
                 doc.text(label, col[k]+2, y+6.5);
             }
@@ -20524,24 +20524,32 @@ const firebaseConfig = {
                 // Job name
                 doc.text((job.jobName||job.name||'').substring(0,22), col.name+2, y+6.5);
 
-                // Paint: brand    colour    finish (from first item with colour, or job-level fields)
+                // Paint: show ALL unique brand/colour/finish combos across all items
                 let paintStr = '';
-                if (job.brand || job.color || job.finish) {
-                    const parts = [job.brand, job.color, job.finish].filter(Boolean);
-                    paintStr = parts.join('    ');
-                } else if (job.items && job.items.length > 0) {
+                if (job.items && job.items.length > 0) {
                     const uniquePaints = [];
                     const seen = new Set();
                     for (const item of job.items) {
-                        const key = [item.brand||item.paintBrand, item.color||item.colour, item.finish].filter(Boolean).join('  ');
-                        if (key && !seen.has(key)) { seen.add(key); uniquePaints.push(key.replace(/  /g,'    ')); }
+                        const key = [item.brand||item.paintBrand, item.color||item.colour, item.finish].filter(Boolean).join(' / ');
+                        if (key && !seen.has(key)) { seen.add(key); uniquePaints.push(key); }
                     }
-                    paintStr = uniquePaints.join(' / ');
+                    paintStr = uniquePaints.join('  |  ');
+                } else if (job.brand || job.color || job.finish) {
+                    paintStr = [job.brand, job.color, job.finish].filter(Boolean).join(' / ');
                 }
-                doc.text(paintStr.substring(0,42), col.paint+2, y+6.5);
+                // Draw each colour combo on its own line if multiple
+                const paintCombos = paintStr ? paintStr.split('  |  ') : [''];
+                const lineH = paintCombos.length > 1 ? (rh / paintCombos.length) : rh;
+                paintCombos.forEach((combo, ci) => {
+                    doc.text(combo.substring(0, 38), col.paint+2, y + 3.5 + (ci * lineH));
+                });
+
+                // Parts count
+                const partsCount = job.items ? job.items.reduce((s,i) => s + (parseInt(i.qty)||1), 0) : 0;
+                doc.text(partsCount > 0 ? String(partsCount) : '', col.parts+2, y+6.5);
 
                 // SQM
-                const sqmVal = job.totalSqm || job.totalSQM; doc.text(sqmVal ? parseFloat(sqmVal).toFixed(1) : '   ', col.sqm+2, y+6.5);
+                const sqmVal = job.totalSqm || job.totalSQM; doc.text(sqmVal ? parseFloat(sqmVal).toFixed(1) : '', col.sqm+2, y+6.5);
 
                 // Due date — bold green, bigger for visibility
                 const dueDate = job._dueDate || getCompletionDate(job);
@@ -20950,6 +20958,8 @@ const firebaseConfig = {
         // Run generators sequentially using promises
         (async () => {
             for (const formData of forms) {
+                // Complex PDFs (job label, estimate, quote, invoice) need longer to render
+                const isComplex = ['genJobLabel','genEstimate','genQuoteForm','genInvoice'].includes(formData.func);
                 await new Promise(resolve => {
                     setTimeout(() => {
                         if (formData.func === 'genSupplyDocket') genSupplyDocket();
@@ -20962,7 +20972,7 @@ const firebaseConfig = {
                         else if (formData.func === 'genEstimate') genEstimate();
                         else if (formData.func === 'genQuoteForm') genQuoteForm();
                         else if (formData.func === 'genInvoice') genInvoice();
-                        setTimeout(resolve, 400);
+                        setTimeout(resolve, isComplex ? 1200 : 400);
                     }, 0);
                 });
             }
@@ -23122,7 +23132,15 @@ if ('serviceWorker' in navigator && _swAllowed) {
             document.getElementById('desc').value = '';
             document.getElementById('dRec').value = '';
             document.getElementById('jNm').value = '';
-            document.getElementById('jN').value = '';
+            // Auto-preset next job number from highest in history
+            try {
+                const _hist = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+                const _memH = window._reportJobs || [];
+                const _allH = _hist.length >= _memH.length ? _hist : _memH;
+                const _nums = _allH.map(j => parseInt(j.jobNum)).filter(n => !isNaN(n));
+                const _nextNum = _nums.length > 0 ? Math.max(..._nums) + 1 : '';
+                document.getElementById('jN').value = _nextNum ? String(_nextNum) : '';
+            } catch(e) { document.getElementById('jN').value = ''; }
             updatePhotoTargetIndicator();
             renderPhotoGallery();
             render();
@@ -28323,7 +28341,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
 
         const filename = isBlank ? `BlankJobLabel_${new Date().toISOString().split('T')[0]}` : `JobLabel_${jobNum}_${client.replace(/\s+/g,'_')}`;
         const pdfDataUri = doc.output('datauristring');
-        setTimeout(() => showPDFPreview(pdfDataUri, filename, isBlank ? '📦 Blank Job Label Preview' : '📦 Job Label Preview'), 100);
+        showPDFPreview(pdfDataUri, filename, isBlank ? '📦 Blank Job Label Preview' : '📦 Job Label Preview');
     }
 
     // ── PART LABELS ──────────────────────────────────────────────────────────
