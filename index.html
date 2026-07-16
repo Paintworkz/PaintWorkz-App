@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.405'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.406'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1781,7 +1781,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.405'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.406'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -19809,7 +19809,31 @@ const firebaseConfig = {
                 doc.setTextColor(0, 0, 0);
                 const paintDetailsWidth = doc.getTextWidth(paintDetailsText);
                 doc.text(paintDetailsText, (pageWidth - paintDetailsWidth) / 2, y);
-                y += 12;
+                y += 7;
+
+                // ===== BASE COLOUR - from paint formula DB, only if non-white/non-clear =====
+                try {
+                    const _formulas = JSON.parse(localStorage.getItem('paintFormulas') || '[]');
+                    const _matchFormula = _formulas.find(f =>
+                        (f.color || '').toLowerCase().trim() === color.toLowerCase().trim()
+                    );
+                    if (_matchFormula) {
+                        const _baseTinters = _matchFormula.whiteBase || _matchFormula.baseTinters || [];
+                        const _baseCode = (_baseTinters[0]?.code || '').trim();
+                        // Only show if base is not white/clear/standard (non-tinted)
+                        const _isWhiteClear = /white|clear|standard|w/i.test(_baseCode) || _baseCode === '';
+                        if (_baseCode && !_isWhiteClear) {
+                            doc.setFontSize(9);
+                            doc.setFont(undefined, 'normal');
+                            doc.setTextColor(180, 0, 0);
+                            const _baseText = `UC Base: ${_baseCode} (tint required)`;
+                            const _baseWidth = doc.getTextWidth(_baseText);
+                            doc.text(_baseText, (pageWidth - _baseWidth) / 2, y);
+                            y += 6;
+                        }
+                    }
+                } catch(e) { console.warn('Base lookup error:', e); }
+                y += 5;
                 
                 // ===== DOOR PROFILES - SEPARATE MOULDED, FLAT & CUSTOM =====
                 console.log('     Shop Label Debug:', {
