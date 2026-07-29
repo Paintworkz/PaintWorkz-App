@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.418'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.419'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1782,7 +1782,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.418'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.419'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -17016,8 +17016,10 @@ const firebaseConfig = {
             const _desc = `Pencil Edges — ${_pencilCount} parts / ${_totalLm} lm @ $${_pencilRate.toFixed(2)}/lm`;
 
             if (!appliedCharges.otherRows) appliedCharges.otherRows = [];
-            // Remove stale auto-pencil then re-add fresh
-            appliedCharges.otherRows = appliedCharges.otherRows.filter(r => !r._autoPencil);
+            // Remove stale pencil rows by flag OR by description text (catches old /part format)
+            appliedCharges.otherRows = appliedCharges.otherRows.filter(r =>
+                !r._autoPencil && !/^Pencil Edges/i.test(r.desc || '')
+            );
             appliedCharges.otherRows.push({ desc: _desc, amount: _pencilTotal, _autoPencil: true });
             appliedCharges.otherChargeAmount = appliedCharges.otherRows.reduce((s,r) => s + (r.amount||0), 0);
             appliedCharges.otherChargeDesc = appliedCharges.otherRows.map(r=>r.desc).filter(Boolean).join(', ');
@@ -18718,11 +18720,11 @@ const firebaseConfig = {
             const itemColor = item.color || '';
             const colourDisplay = itemBrand && itemColor ? `${itemBrand} ${itemColor}` : itemColor;
             
-            // Description — append [P] for pencil, [P2] for SE pencil (double). ASCII safe for jsPDF.
+            // Description — keep clean, pencil tag handled separately in render
             const _hasPencil = (item.processes||[]).includes('pencil');
             const _isSEPencil = _hasPencil && (item.mode||'').toUpperCase() === 'SE';
-            const _pencilSuffix = _hasPencil ? (_isSEPencil ? ' [P2]' : ' [P]') : '';
-            const description = (item.desc || '').substring(0, 22) + _pencilSuffix;
+            const _pencilTag = _hasPencil ? (_isSEPencil ? '[P2]' : '[P]') : '';
+            const description = (item.desc || '').substring(0, 16); // tight to leave room for [P]
             
             const data = [qty, displayHeight, displayWidth, displayThickness, isMouldedValue, edgesDisplay, paintMode, panelType, profile, colourDisplay, description];
             
@@ -18743,29 +18745,22 @@ const firebaseConfig = {
                     });
                     doc.setFontSize(8);
                 } else if (i === 10) {
-                    // Description column — bold [P] or [P2] suffix if pencil flagged
-                    const _dText = value.toString();
-                    const _pIdx = _dText.lastIndexOf(' [P');
-                    if (_pIdx > -1) {
-                        const _mainText = _dText.substring(0, _pIdx);
-                        const _pTag = _dText.substring(_pIdx);
-                        // Draw main desc text
-                        doc.setFont(undefined, 'normal');
-                        doc.setTextColor(0,0,0);
-                        doc.text(_mainText, startX + 2, y + cellHeight/2 + 0.8, { maxWidth: colWidths[i] - 16 });
-                        // Draw [P] tag bold at right
+                    // Description column — desc text left-aligned, [P]/[P2] right-aligned in bold purple
+                    const _descText = value.toString();
+                    doc.setFont(undefined, 'normal');
+                    doc.setTextColor(0,0,0);
+                    // Main description left-aligned, truncated to leave room for tag
+                    const _tagW = _pencilTag ? 12 : 0;
+                    doc.text(_descText, startX + 2, y + cellHeight/2 + 0.8, { maxWidth: colWidths[i] - _tagW - 3 });
+                    if (_pencilTag) {
                         doc.setFont(undefined, 'bold');
                         doc.setTextColor(100, 0, 160);
-                        doc.text(_pTag, startX + colWidths[i] - 2, y + cellHeight/2 + 0.8, { align: 'right' });
+                        doc.text(_pencilTag, startX + colWidths[i] - 2, y + cellHeight/2 + 0.8, { align: 'right' });
                         doc.setFont(undefined, 'normal');
                         doc.setTextColor(0,0,0);
-                    } else {
-                        doc.text(_dText, startX + colWidths[i]/2, y + cellHeight/2 + 0.8, { 
-                            align: 'center', valign: 'middle', maxWidth: colWidths[i] - 0.5
-                        });
                     }
                 } else {
-                    // All other columns - normal font
+                    // All other columns - normal font centered
                     const displayText = value.toString().substring(0, 30);
                     doc.text(displayText, startX + colWidths[i]/2, y + cellHeight/2 + 0.8, { 
                         align: 'center', valign: 'middle', maxWidth: colWidths[i] - 0.5
@@ -18773,6 +18768,14 @@ const firebaseConfig = {
                 }
                 startX += colWidths[i];
             });
+            // Purple left bar for pencil rows — matches estimate style
+            if (_hasPencil) {
+                doc.setDrawColor(120, 0, 160);
+                doc.setLineWidth(1.5);
+                doc.line(margin, y - cellHeight, margin, y);
+                doc.setDrawColor(150, 150, 150);
+                doc.setLineWidth(0.2);
+            }
             y += cellHeight;
             
             // Page break - leave room for footer
@@ -25462,6 +25465,12 @@ if ('serviceWorker' in navigator && _swAllowed) {
     
     function showChargesModal(formType) {
         pendingFormType = formType;
+        // Clean stale pencil rows from appliedCharges before modal opens
+        if (appliedCharges && appliedCharges.otherRows) {
+            appliedCharges.otherRows = appliedCharges.otherRows.filter(r =>
+                !r._autoPencil && !/^Pencil Edges/i.test(r.desc || '')
+            );
+        }
         const modal = document.getElementById('chargesModal');
         if (modal) {
             modal.style.display = 'flex';
@@ -25633,7 +25642,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
                     let _pLm = 0;
                     _pPencilItems.forEach(it => { const _q=parseInt(it.qty)||1,_h=parseFloat(it.h)||0,_w=parseFloat(it.w)||0,_isSE=(it.mode||'').toUpperCase()==='SE'; _pLm+=(_h+_w)*2/1000*_q*(_isSE?2:1); });
                     _pLm = Math.round(_pLm*10)/10;
-                    lastC.otherRows = lastC.otherRows.filter(r => !r._autoPencil);
+                    lastC.otherRows = lastC.otherRows.filter(r => !r._autoPencil && !/^Pencil Edges/i.test(r.desc||''));
                     lastC.otherRows.push({ desc: `Pencil Edges — ${_pCount} parts / ${_pLm} lm @ $${_pRate.toFixed(2)}/lm`, amount: _pRate * _pCount, _autoPencil: true });
                 }
             } catch(e) {}
