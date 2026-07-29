@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.414'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.415'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1782,7 +1782,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.414'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.415'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -25531,7 +25531,16 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 var freightEl = document.getElementById('freightChargeInput');
                 if (freightEl) freightEl.value = lastC.courierCost;
             }
-            // Pre-fill other charge rows
+            // Pre-fill other charge rows — auto-inject pencil charge if applicable
+            try {
+                const _pRate = loadAdditionalCharges().pencilRate || 0;
+                const _pCount = items.filter(it => (it.processes||[]).includes('pencil')).reduce((s,it) => s + (parseInt(it.qty)||1), 0);
+                if (_pRate > 0 && _pCount > 0) {
+                    if (!lastC.otherRows) lastC.otherRows = [];
+                    lastC.otherRows = lastC.otherRows.filter(r => !r._autoPencil);
+                    lastC.otherRows.push({ desc: `Pencil Edges (${_pCount} parts)`, amount: _pRate * _pCount, _autoPencil: true });
+                }
+            } catch(e) {}
             if (lastC.otherRows && lastC.otherRows.length > 0) {
                 var ocRows2 = document.getElementById('otherChargesRows');
                 if (ocRows2) {
@@ -27328,7 +27337,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
             doc.text('COLOUR NAME / CODE:',lm+3,y+5);
             doc.setDrawColor(150,150,150);doc.setLineWidth(0.3);doc.line(lm+47,y+5.5,rm-3,y+5.5);
             y+=12;
-            const fC=[{label:'#',w:7},{label:'Qty',w:11},{label:'Part Type',w:28},{label:'H (mm)',w:16},{label:'W (mm)',w:16},{label:'Thk',w:11}];
+            const fC=[{label:'#',w:7},{label:'Qty',w:11},{label:'Part Type',w:28},{label:'H (mm)',w:16},{label:'W (mm)',w:16},{label:'Mould',w:11}];
             const mC=['SS','DS','SE'],eC=['L1','L2','S1','S2','ALL'],mW=9,eW=9,cmW=40;
             const fT=fC.reduce((s,c)=>s+c.w,0),tT=mC.length*mW+eC.length*eW,pW=rm-lm;
             const sF=(pW-tT)/(fT+cmW);fC.forEach(c=>c.w=c.w*sF);const sCW=cmW*sF;
@@ -27344,9 +27353,10 @@ if ('serviceWorker' in navigator && _swAllowed) {
             cx=lm;fC.forEach(c=>{cx+=c.w;});
             mC.forEach(m=>{doc.text(m,cx+mW/2,y+3.6,{align:'center'});cx+=mW;});
             eC.forEach(e=>{doc.text(e,cx+eW/2,y+3.6,{align:'center'});cx+=eW;});y+=5;
+            const _poItems = window.pdfItemsToUse && window.pdfItemsToUse.length > 0 ? window.pdfItemsToUse : (window.items || []);
             for(let r=0;r<44;r++){
-                // Page break at row 22 - redraw headers on page 2
-                if(r===22){
+                // Page break at row 25 — gives 25 rows on p1, 19 on p2
+                if(r===25){
                     y+=3;
                     doc.addPage(); y=12;
                     doc.setFillColor(26,26,26);doc.rect(lm,y,pW,6,'F');
@@ -27366,7 +27376,29 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 doc.setDrawColor(215,215,215);doc.setLineWidth(0.18);doc.rect(lm,y,pW,rH);
                 cx=lm;doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor(60,60,60);
                 doc.text(String(r+1),cx+fC[0].w/2,y+5.5,{align:'center'});cx+=fC[0].w;
-                for(let i=1;i<fC.length;i++){doc.setDrawColor(215,215,215);doc.line(cx,y,cx,y+rH);cx+=fC[i].w;}
+                // Pre-fill item data if available
+                const _pit = _poItems[r];
+                doc.setFont('helvetica','normal');doc.setFontSize(6.5);doc.setTextColor(30,30,30);
+                // Qty
+                doc.setDrawColor(215,215,215);doc.line(cx,y,cx,y+rH);
+                if(_pit) doc.text(String(_pit.qty||1),cx+fC[1].w/2,y+5.5,{align:'center',maxWidth:fC[1].w-1});
+                cx+=fC[1].w;
+                // Part Type
+                doc.line(cx,y,cx,y+rH);
+                if(_pit) doc.text((_pit.desc||'').substring(0,14),cx+2,y+5.5,{maxWidth:fC[2].w-2});
+                cx+=fC[2].w;
+                // H
+                doc.line(cx,y,cx,y+rH);
+                if(_pit) doc.text(String(isImperial?((parseFloat(_pit.h||0)/25.4).toFixed(2)):(_pit.h||'')),cx+fC[3].w/2,y+5.5,{align:'center',maxWidth:fC[3].w-1});
+                cx+=fC[3].w;
+                // W
+                doc.line(cx,y,cx,y+rH);
+                if(_pit) doc.text(String(isImperial?((parseFloat(_pit.w||0)/25.4).toFixed(2)):(_pit.w||'')),cx+fC[4].w/2,y+5.5,{align:'center',maxWidth:fC[4].w-1});
+                cx+=fC[4].w;
+                // Mould — Y for Door/moulded types, N for Panel/flat
+                doc.line(cx,y,cx,y+rH);
+                if(_pit){const _isMould=(_pit.type==='Door'||(_pit.prof&&_pit.prof!=='Plain'&&_pit.prof!=='101'));doc.setFont('helvetica','bold');doc.setTextColor(_isMould?[0,120,0]:[180,0,0]);doc.text(_isMould?'Y':'N',cx+fC[5].w/2,y+5.5,{align:'center'});doc.setTextColor(30,30,30);doc.setFont('helvetica','normal');}
+                cx+=fC[5].w;
                 doc.setDrawColor(140,140,140);doc.setLineWidth(0.4);doc.line(cx,y,cx,y+rH);
                 mC.forEach(()=>{doc.setFillColor(255,255,255);doc.setDrawColor(140,140,140);doc.setLineWidth(0.5);doc.rect(cx+(mW-cbS)/2,y+(rH-cbS)/2,cbS,cbS,'FD');doc.setDrawColor(215,215,215);doc.setLineWidth(0.18);cx+=mW;doc.line(cx,y,cx,y+rH);});
                 doc.setDrawColor(140,140,140);doc.setLineWidth(0.4);doc.line(cx,y,cx,y+rH);
