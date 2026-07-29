@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.412'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.413'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1153,9 +1153,10 @@
         body[data-theme="dark"] #admin-cts-matrix input { background:#3a3a3c !important; color:#f2f2f7 !important; }
 
         /* CTS checkbox label dark mode */
-        @media (prefers-color-scheme: dark) { body:not([data-theme="light"]) #ctsCheckLabel { background:#2c2c2e !important; color:#f2f2f7 !important; border-color:#48484a !important; } body:not([data-theme="light"]) #editCtsLabel { background:#2c2c2e !important; color:#f2f2f7 !important; border-color:#48484a !important; } }
+        @media (prefers-color-scheme: dark) { body:not([data-theme="light"]) #ctsCheckLabel { background:#2c2c2e !important; color:#f2f2f7 !important; border-color:#48484a !important; } body:not([data-theme="light"]) #editCtsLabel { background:#2c2c2e !important; color:#f2f2f7 !important; border-color:#48484a !important; } body:not([data-theme="light"]) #editPencilLabel { background:#2c2c2e !important; color:#f2f2f7 !important; border-color:#9c27b0 !important; } }
         body[data-theme="dark"] #ctsCheckLabel { background:#2c2c2e !important; color:#f2f2f7 !important; border-color:#48484a !important; }
         body[data-theme="dark"] #editCtsLabel { background:#2c2c2e !important; color:#f2f2f7 !important; border-color:#48484a !important; }
+        body[data-theme="dark"] #editPencilLabel { background:#2c2c2e !important; color:#f2f2f7 !important; border-color:#9c27b0 !important; }
         body[data-theme="dark"] #admin-pricing-matrix tr[style*="background:#fffaf0"] { background:#2c2c2e !important; }
         body[data-theme="dark"] #admin-pricing-matrix input[type="number"] { background:#3a3a3c !important; color:#f2f2f7 !important; border-color:#555 !important; }
 
@@ -1781,7 +1782,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.412'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.413'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -2806,9 +2807,10 @@ const firebaseConfig = {
         body[data-theme="dark"] #admin-cts-matrix input { background:#3a3a3c !important; color:#f2f2f7 !important; }
 
         /* CTS checkbox label dark mode */
-        @media (prefers-color-scheme: dark) { body:not([data-theme="light"]) #ctsCheckLabel { background:#2c2c2e !important; color:#f2f2f7 !important; border-color:#48484a !important; } body:not([data-theme="light"]) #editCtsLabel { background:#2c2c2e !important; color:#f2f2f7 !important; border-color:#48484a !important; } }
+        @media (prefers-color-scheme: dark) { body:not([data-theme="light"]) #ctsCheckLabel { background:#2c2c2e !important; color:#f2f2f7 !important; border-color:#48484a !important; } body:not([data-theme="light"]) #editCtsLabel { background:#2c2c2e !important; color:#f2f2f7 !important; border-color:#48484a !important; } body:not([data-theme="light"]) #editPencilLabel { background:#2c2c2e !important; color:#f2f2f7 !important; border-color:#9c27b0 !important; } }
         body[data-theme="dark"] #ctsCheckLabel { background:#2c2c2e !important; color:#f2f2f7 !important; border-color:#48484a !important; }
         body[data-theme="dark"] #editCtsLabel { background:#2c2c2e !important; color:#f2f2f7 !important; border-color:#48484a !important; }
+        body[data-theme="dark"] #editPencilLabel { background:#2c2c2e !important; color:#f2f2f7 !important; border-color:#9c27b0 !important; }
         body[data-theme="dark"] #admin-pricing-matrix tr[style*="background:#fffaf0"] { background:#2c2c2e !important; }
         body[data-theme="dark"] #admin-pricing-matrix input[type="number"] { background:#3a3a3c !important; color:#f2f2f7 !important; border-color:#555 !important; }
 
@@ -16981,13 +16983,32 @@ const firebaseConfig = {
     // ===== SUPPLY DOCKET =====
 
     // ===== INVOICE (stub) =====
+    // ── AUTO-INJECT PENCIL CHARGE INTO appliedCharges BEFORE PDF GEN ─────────
+    function _injectPencilCharge() {
+        try {
+            const _charges = loadAdditionalCharges();
+            const _pencilRate = _charges.pencilRate || 0;
+            if (_pencilRate <= 0) return;
+            const _pencilCount = items.filter(it => (it.processes||[]).includes('pencil')).reduce((s,it) => s + (parseInt(it.qty)||1), 0);
+            if (_pencilCount <= 0) return;
+            const _pencilTotal = _pencilRate * _pencilCount;
+            if (!appliedCharges.otherRows) appliedCharges.otherRows = [];
+            // Remove stale auto-pencil then re-add
+            appliedCharges.otherRows = appliedCharges.otherRows.filter(r => !r._autoPencil);
+            appliedCharges.otherRows.push({ desc: `Pencil Edges (${_pencilCount} parts)`, amount: _pencilTotal, _autoPencil: true });
+            appliedCharges.otherChargeAmount = appliedCharges.otherRows.reduce((s,r) => s + (r.amount||0), 0);
+            appliedCharges.otherChargeDesc = appliedCharges.otherRows.map(r=>r.desc).filter(Boolean).join(', ');
+        } catch(e) { console.warn('_injectPencilCharge error:', e); }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     function genEstimate() {
         try {
             if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) {
                 notify('    PDF library not loaded');
                 return;
             }
-            
+                        _injectPencilCharge(); // ensure pencil charge is in appliedCharges before PDF build
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('p', 'mm', 'a4');
             const itemsForPDF = window.pdfItemsToUse || items;
@@ -17469,6 +17490,8 @@ const firebaseConfig = {
                 notify('    PDF library not loaded');
                 return;
             }
+                        _injectPencilCharge(); // ensure pencil charge is in appliedCharges before PDF build
+
             
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('p', 'mm', 'a4');
@@ -17946,6 +17969,7 @@ const firebaseConfig = {
 
 
     function genQuoteForm() {
+        _injectPencilCharge();
         try {
             if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) {
                 notify('    PDF library not loaded');
@@ -18623,7 +18647,9 @@ const firebaseConfig = {
             const colourDisplay = itemBrand && itemColor ? `${itemBrand} ${itemColor}` : itemColor;
             
             // Description - only if filled out (not empty)
-            const description = item.desc || '';
+            // Append pencil tag if this part has pencil process flagged
+            const _hasPencil = (item.processes||[]).includes('pencil');
+            const description = (item.desc || '') + (_hasPencil ? ' [PENCIL]' : '');
             
             const data = [qty, displayHeight, displayWidth, displayThickness, isMouldedValue, edgesDisplay, paintMode, panelType, profile, colourDisplay, description];
             
