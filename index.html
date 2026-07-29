@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.411'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.412'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1781,7 +1781,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.411'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.412'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -5352,6 +5352,13 @@ const firebaseConfig = {
                             <div style="display:flex; gap:8px;">
                                 <input type="number" inputmode="decimal" id="chargeColourMatch" value="85" min="0" max="500" step="1" style="flex:1; padding:8px; border:1px solid #ccc; border-radius:4px; font-size:11px; box-sizing:border-box;">
                                 <button onclick="document.getElementById('chargeColourMatch').value = 85; notify('✓ Reset to $85');" style="border:none; background:#666; color:#fff; padding:8px 12px; border-radius:4px; font-weight:900; font-size:10px; cursor:pointer; white-space:nowrap;">Reset</button>
+                            </div>
+                        </div>
+                        <div>
+                            <label style="display:block; font-weight:900; font-size:10px; color:#9c27b0; margin-bottom:4px;">✏️ Pencil Edges ($ per part)</label>
+                            <div style="display:flex; gap:8px;">
+                                <input type="number" inputmode="decimal" id="chargePencilRate" value="0" min="0" max="500" step="0.50" style="flex:1; padding:8px; border:1px solid #9c27b0; border-radius:4px; font-size:11px; box-sizing:border-box;">
+                                <button onclick="document.getElementById('chargePencilRate').value = 0; notify('✓ Reset to $0');" style="border:none; background:#9c27b0; color:#fff; padding:8px 12px; border-radius:4px; font-weight:900; font-size:10px; cursor:pointer; white-space:nowrap;">Reset</button>
                             </div>
                         </div>
                     </div>
@@ -15824,7 +15831,7 @@ const firebaseConfig = {
                     <button class="qty-btn" style="border-radius:0 0 4px 4px;" onclick="changeQty(${originalIndex}, -1)">-</button>
                 </div>
                 <div class="pl-center">
-                    <div style="font-size:10px; font-weight:900; color:${clr}; text-transform:uppercase; line-height:1;">${it.desc} (${it.fm})${it.cts ? '<span style="background:#2c3e50; color:#d4af37; font-size:9px; font-weight:900; padding:2px 6px; border-radius:3px; margin-left:4px;">CTS</span>' : ''}</div>
+                    <div style="font-size:10px; font-weight:900; color:${clr}; text-transform:uppercase; line-height:1;">${it.desc} (${it.fm})${it.cts ? '<span style="background:#2c3e50; color:#d4af37; font-size:9px; font-weight:900; padding:2px 6px; border-radius:3px; margin-left:4px;">CTS</span>' : ''}${(it.processes||[]).includes('pencil') ? '<span style="background:#9c27b0; color:#fff; font-size:9px; font-weight:900; padding:2px 6px; border-radius:3px; margin-left:4px;">✏️ PENCIL</span>' : ''}</div>
                     <div class="pl-brand">${it.brand} · ${it.color} · ${it.finish}</div>
                     <div class="pl-dims">${mmToDisplay(it.h)} x ${mmToDisplay(it.w)} x ${mmToDisplay(it.thk)} ${getUnitLabel()}</div>
                     <div class="pl-meta">
@@ -16212,10 +16219,16 @@ const firebaseConfig = {
                         </div>
                     </div>
                     
-                    <div style="margin-bottom:15px;">
+                    <div style="margin-bottom:10px;">
                         <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:900; font-size:12px; color:#2c3e50; background:#f0f0f0; padding:10px; border-radius:6px; border:2px solid ${item.cts ? '#d4af37' : '#ddd'}; user-select:none;" id="editCtsLabel">
                             <input type="checkbox" id="editCtsInput" ${item.cts ? 'checked' : ''} onchange="document.getElementById('editCtsLabel').style.borderColor=this.checked?'#d4af37':'#ddd'" style="width:16px; height:16px; cursor:pointer; accent-color:#2c3e50;">
                             CTS — Cut To Size (charge board supply price)
+                        </label>
+                    </div>
+                    <div style="margin-bottom:15px;">
+                        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:900; font-size:12px; color:#2c3e50; background:#f0f0f0; padding:10px; border-radius:6px; border:2px solid ${(item.processes||[]).includes('pencil') ? '#9c27b0' : '#ddd'}; user-select:none;" id="editPencilLabel">
+                            <input type="checkbox" id="editPencilInput" ${(item.processes||[]).includes('pencil') ? 'checked' : ''} onchange="document.getElementById('editPencilLabel').style.borderColor=this.checked?'#9c27b0':'#ddd'" style="width:16px; height:16px; cursor:pointer; accent-color:#9c27b0;">
+                            ✏️ Pencil Edges (special process charge per part)
                         </label>
                     </div>
                     
@@ -16328,6 +16341,13 @@ const firebaseConfig = {
             items[index].finish = newFinish;
             const editCtsInput = document.getElementById('editCtsInput');
             items[index].cts = editCtsInput ? editCtsInput.checked : false;
+            // Pencil edges process flag
+            const editPencilInput = document.getElementById('editPencilInput');
+            if (editPencilInput) {
+                const procs = (items[index].processes || []).filter(p => p !== 'pencil');
+                if (editPencilInput.checked) procs.push('pencil');
+                items[index].processes = procs;
+            }
             // type, panelType, edgeConfig are updated live by their setEdit* functions
             
             render();
@@ -25661,6 +25681,20 @@ if ('serviceWorker' in navigator && _swAllowed) {
             const amt = parseFloat(row.querySelector('.otherChargeAmount')?.value) || 0;
             if (desc || amt > 0) otherRows.push({ desc: desc || 'Other', amount: amt });
         });
+        // Auto-inject pencil edges charge based on flagged parts
+        try {
+            const _pencilRate = chargesData.pencilRate || 0;
+            const _pencilCount = items.filter(it => (it.processes||[]).includes('pencil')).reduce((s,it) => s + (parseInt(it.qty)||1), 0);
+            if (_pencilRate > 0 && _pencilCount > 0) {
+                const _pencilTotal = _pencilRate * _pencilCount;
+                // Remove any existing auto-pencil row then re-add fresh
+                const _filtered = otherRows.filter(r => !r._autoPencil);
+                _filtered.push({ desc: `Pencil Edges (${_pencilCount} parts)`, amount: _pencilTotal, _autoPencil: true });
+                otherRows.length = 0;
+                _filtered.forEach(r => otherRows.push(r));
+                otherChargeAmount = otherRows.reduce((s,r) => s + (r.amount||0), 0);
+            }
+        } catch(e) { console.warn('Pencil charge calc error:', e); }
         appliedCharges.otherRows = otherRows;
         // Keep legacy fields for backward compat with PDF generators
         appliedCharges.otherChargeDesc = otherRows.map(r=>r.desc).filter(Boolean).join(', ') || '';
@@ -29649,6 +29683,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             },
             clearFlatRate: document.getElementById('chargeClearFlat')?.value !== undefined && document.getElementById('chargeClearFlat')?.value !== '' ? parseFloat(document.getElementById('chargeClearFlat').value) : 110,
             colourMatchFlatRate: parseFloat(document.getElementById('chargeColourMatch')?.value || 85),
+            pencilRate: parseFloat(document.getElementById('chargePencilRate')?.value || 0),
             deliveryRegions: finalRegions,
             gstRate: parseFloat(document.getElementById('gstRate')?.value || 10) / 100,
             lastSavedAt: new Date().toISOString() // Track when saved locally
@@ -29850,6 +29885,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         try { document.getElementById('chargeExtraTint').value = (charges.colourMultipliers['Extra Tint'] * 100).toFixed(1); } catch(e){}
         try { document.getElementById('chargeUndercoat').value = (charges.colourMultipliers.Undercoat * 100).toFixed(1); } catch(e){}
         try { document.getElementById('chargeColourMatch').value = charges.colourMatchFlatRate; } catch(e){}
+        try { document.getElementById('chargePencilRate').value = charges.pencilRate || 0; } catch(e){}
         
         console.log('🔧 Form values set:', {
             clearInput: document.getElementById('chargeClearFlat')?.value,
