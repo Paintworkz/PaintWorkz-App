@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.420'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.421'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1782,7 +1782,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.420'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.421'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -6382,7 +6382,16 @@ const firebaseConfig = {
 
     function getFreeJobCount() {
         const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
-        return history.filter(j => !j.id || !j.id.startsWith('demo-')).length;
+        return history.filter(j => {
+            // Exclude demo jobs by ID prefix
+            if (j.id && j.id.startsWith('demo-')) return false;
+            // Exclude demo jobs by jobNum (1001-1003 are reserved for demo)
+            const jn = String(j.jobNum || '');
+            if (jn === '1001' || jn === '1002' || jn === '1003') return false;
+            // Exclude jobs with no jobNum and no meaningful data (empty placeholder jobs)
+            if (!j.jobNum && !j.client && !j.jobName) return false;
+            return true;
+        }).length;
     }
 
     function freeJobLimitReached() {
@@ -11925,6 +11934,10 @@ const firebaseConfig = {
             let pushed = 0;
             for (const job of jobs) {
                 try {
+                    // Never push demo jobs to Firestore — they'd come back with real IDs
+                    if (job.id && job.id.startsWith('demo-')) continue;
+                    const jn = String(job.jobNum || '');
+                    if (jn === '1001' || jn === '1002' || jn === '1003') continue;
                     const jobId = job.id || String(job.jobNum) || `job_${Date.now()}_${pushed}`;
                     if (!job.id) job.id = jobId;
                     const targetUid = getTargetUid();
