@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.426'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.427'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1782,7 +1782,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.426'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.427'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -4391,7 +4391,7 @@ const firebaseConfig = {
                 <div id="currentPartSqmLabel" style="font-size: 10px; font-weight: 900; color: #aaa;">CURRENT PART SQM</div>
             </div>
 
-            <button class="add-main-btn" onclick="addPart()">ADD PART +</button>
+            <button class="add-main-btn" onclick="addPart()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();addPart();}">ADD PART +</button>
             
             <!-- CTS EDGE TYPE SELECTOR -->
             <div id="ctsEdgePanel" style="display:none; margin-top:12px; background:#2c3e50; border-radius:10px; padding:12px;">
@@ -14892,6 +14892,10 @@ const firebaseConfig = {
 
             // Stamp local version so Firestore loads don't overwrite newer local state
             window._localProfilesTimestamp = Date.now();
+            // Sync profiles from matrix immediately — deduplicates and sorts by tier order
+            // This removes the bare name (no code) that was pushed above and replaces it
+            // with the correct "Name (code)" version, matching price matrix tier order
+            syncProfilesFromMatrix();
             syncProfilesToFirebase();
             
             document.getElementById('new-profile').value=''; 
@@ -23076,17 +23080,19 @@ const firebaseConfig = {
             });
 
             // Filter sections based on _rptSections settings
+            // Keywords must match the actual report-card-title text (case-insensitive via .toUpperCase())
             const sectionKeywords = {
-                kpi: ['KPI', 'JOBS', 'TOTAL SQM', 'EST. REVENUE'],
+                kpi: ['KPI', 'TOTAL JOBS', 'TOTAL SQM', 'EST. REVENUE', 'AVG DAYS'],
                 monthly: ['MONTHLY SQM'],
-                finish: ['BY FINISH'],
-                colours: ['TOP COLOURS', 'TINTER'],
+                finish: ['BY FINISH TYPE', 'BY FINISH'],
+                colours: ['TOP COLOURS', 'TINTER USAGE'],
                 colourChart: ['TOP COLOURS BY SQM', 'TOP DOOR PROFILES'],
-                paint: ['PAINT USED', 'STOCK ON HAND'],
+                paint: ['PAINT USED', 'STOCK ON HAND', 'PAINT BASE COST', 'PAINT COVERAGE'],
                 clients: ['SQM BY CLIENT'],
                 finishChart: ['JOBS BY FINISH', 'JOBS BY CLIENT', 'JOBS PER MONTH'],
-                profit: ['ESTIMATED JOB VALUE', 'ESTIMATED VALUE VS', 'PAINT BASE COST'],
+                profit: ['ESTIMATED JOB VALUE', 'ESTIMATED VALUE VS'],
                 cts: ['CUT TO SIZE'],
+                avgdays: [], // included in KPI card — no standalone card, always visible with KPI
                 jobs: ['JOB BREAKDOWN'],
             };
             clone.querySelectorAll('.report-card').forEach(card => {
@@ -26764,6 +26770,8 @@ if ('serviceWorker' in navigator && _swAllowed) {
             
             addAdminAlert('NEW_CLIENT', ` NEW CLIENT ADDED: "${name}"`, {clientName: name});
             renderClientsList();
+            // Update measure sheet client dropdown immediately — no refresh needed
+            try { if (typeof populateClientDropdown === 'function') populateClientDropdown(); } catch(e) {}
             notify(` Client Saved: ${name}`);
             
         } catch(err) {
@@ -27846,7 +27854,8 @@ if ('serviceWorker' in navigator && _swAllowed) {
         }
         
         localStorage.setItem('masterMatrix', JSON.stringify(masterMatrix));
-        
+        // Sync profiles array from updated matrix — fixes duplicate/wrong-code in dropdown
+        syncProfilesFromMatrix();
         renderPricingMatrix();
         notify(` Moved to ${trimmedTier}`);
     }
