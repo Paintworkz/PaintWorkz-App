@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.428'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.429'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1782,7 +1782,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.428'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.429'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -6179,14 +6179,21 @@ const firebaseConfig = {
                                 </select>
                             </div>
                             <div>
-                                <label style="font-size:9px; font-weight:900; color:#999; text-transform:uppercase; display:block; margin-bottom:3px;">📐 Min Job SQM</label>
+                                <label style="font-size:9px; font-weight:900; color:#999; text-transform:uppercase; display:block; margin-bottom:3px;">📐 Job SQM Filter</label>
                                 <select id="rMinSqmFilter" style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:5px; font-size:11px; font-weight:700; color:#333; background:#fff;">
                                     <option value="0">— All Sizes —</option>
-                                    <option value="10" data-sqmopt>10 +</option>
-                                    <option value="20" data-sqmopt>20 +</option>
-                                    <option value="30" data-sqmopt>30 +</option>
-                                    <option value="50" data-sqmopt>50 +</option>
-                                    <option value="100" data-sqmopt>100 +</option>
+                                    <option value="u2" data-sqmopt data-under>Under 2 m²</option>
+                                    <option value="u3" data-sqmopt data-under>Under 3 m²</option>
+                                    <option value="u4" data-sqmopt data-under>Under 4 m²</option>
+                                    <option value="u5" id="rSmallJobOption" data-sqmopt data-under>Under 5 m² ★ Small Job</option>
+                                    <option value="u6" data-sqmopt data-under>Under 6 m²</option>
+                                    <option value="u8" data-sqmopt data-under>Under 8 m²</option>
+                                    <option value="u10" data-sqmopt data-under>Under 10 m²</option>
+                                    <option value="10" data-sqmopt>10 m² +</option>
+                                    <option value="20" data-sqmopt>20 m² +</option>
+                                    <option value="30" data-sqmopt>30 m² +</option>
+                                    <option value="50" data-sqmopt>50 m² +</option>
+                                    <option value="100" data-sqmopt>100 m² +</option>
                                 </select>
                             </div>
                             <div style="display:flex; gap:5px;">
@@ -21521,7 +21528,9 @@ const firebaseConfig = {
         // Filter jobs in range + status + client
         populateClientFilter();
         const _clientFilter = (document.getElementById('rClientFilter')?.value || '').trim();
-        const _minSqm = parseFloat(document.getElementById('rMinSqmFilter')?.value || 0);
+        const _sqmFilterRaw = document.getElementById('rMinSqmFilter')?.value || '0';
+        const _sqmUnder = typeof _sqmFilterRaw === 'string' && _sqmFilterRaw.startsWith('u');
+        const _sqmThresh = _sqmUnder ? parseFloat(_sqmFilterRaw.substring(1)) : parseFloat(_sqmFilterRaw);
         const jobs = history.filter(j => {
             const d = parseReportDate(j.dateReceived) || new Date(j.timestamp || 0);
             if (d < fromDate || d > toDate) return false;
@@ -21529,9 +21538,10 @@ const firebaseConfig = {
             if (_reportStatusFilter === 'completed' && !j.completed) return false;
             if (_clientFilter && (j.client || '') !== _clientFilter) return false;
             if (j.jobStatus === 'quote' || j.jobStatus === 'hold') return false; // exclude non-jobs
-            if (_minSqm > 0) {
+            if (_sqmThresh > 0) {
                 const jobSqm = (j.items || []).reduce((s, it) => s + (parseFloat(it.sqm) || 0), 0);
-                if (jobSqm < _minSqm) return false;
+                if (_sqmUnder && jobSqm >= _sqmThresh) return false; // UNDER filter
+                if (!_sqmUnder && jobSqm < _sqmThresh) return false; // OVER filter
             }
             return true;
         });
