@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.430'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.431'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1782,7 +1782,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.430'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.431'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -11443,8 +11443,18 @@ const firebaseConfig = {
             timestamp: new Date().toISOString(),
             savedDate: new Date().toLocaleString('en-AU'),
             jobStatus: document.getElementById('jobStatus')?.value || 'job', // 'job', 'quote', or 'hold'
-            timeline: getDefaultTimeline(),
-            scheduledFinish: getScheduledFinishDate(document.getElementById('dRec').value, getDefaultTimeline()),
+            timeline: (function(){
+                // Calculate total SQM for timeline trigger
+                const _tlSqm = items.reduce((s,it) => s + (parseFloat(it.sqm)||0), 0);
+                const _tlClient = document.getElementById('cli')?.value || '';
+                return getDefaultTimeline(_tlSqm, _tlClient);
+            })(),
+            scheduledFinish: (function(){
+                const _tlSqm2 = items.reduce((s,it) => s + (parseFloat(it.sqm)||0), 0);
+                const _tlClient2 = document.getElementById('cli')?.value || '';
+                const _tl = getDefaultTimeline(_tlSqm2, _tlClient2);
+                return getScheduledFinishDate(document.getElementById('dRec').value, _tl);
+            })(),
             _hasPhotos:(typeof jobPhotos!=="undefined"&&jobPhotos.length>0)
         };
         
@@ -26508,7 +26518,21 @@ if ('serviceWorker' in navigator && _swAllowed) {
                     <option value="ACT" ${client.state === 'ACT' ? 'selected' : ''}>ACT</option>
                 </select>
                 
-                <div style="display:flex; gap:10px; margin-top:20px;">
+                <div style="margin-top:15px; padding:12px; background:#f0f7ff; border:1px solid #bbdefb; border-radius:8px;">
+                    <label style="font-weight:900; font-size:11px; color:#1565c0; display:block; margin-bottom:8px;">📅 DEFAULT JOB TIMELINE</label>
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;">
+                            <input type="radio" name="clientDefaultDays" id="clientDays15" value="15" ${(client.defaultDays||15) === 15 ? 'checked' : ''}>
+                            15 days (standard)
+                        </label>
+                        <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;">
+                            <input type="radio" name="clientDefaultDays" id="clientDays20" value="20" ${client.defaultDays === 20 ? 'checked' : ''}>
+                            20 days (always — overrides SQM trigger)
+                        </label>
+                    </div>
+                    <p style="font-size:10px; color:#666; margin:6px 0 0 0;">Note: all jobs over 30 m² auto-trigger 20 days regardless of this setting.</p>
+                </div>
+                <div style="display:flex; gap:10px; margin-top:15px;">
                     <button onclick="saveNewClient('${clientId}', '${modalId}', '${overlayId}')" style="flex:1; background:#2196f3; color:#fff; border:none; padding:12px; border-radius:6px; font-weight:900; font-size:12px; cursor:pointer;">    Save</button>
                     <button onclick="document.getElementById('${modalId}').remove(); document.getElementById('${overlayId}').remove();" style="flex:1; background:#e0e0e0; color:#333; border:none; padding:12px; border-radius:6px; font-weight:900; font-size:12px; cursor:pointer;">Cancel</button>
                 </div>
@@ -26816,6 +26840,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
             const town = document.getElementById('modalClientTown').value.trim();
             const postcode = document.getElementById('modalClientPostcode').value.trim();
             const state = document.getElementById('modalClientState').value.trim();
+            const defaultDays = parseInt(document.querySelector('input[name="clientDefaultDays"]:checked')?.value || 15);
             
             if (!name) {
                 alert('Client name is required!');
@@ -26834,6 +26859,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 address, 
                 town, 
                 postcode,
+                defaultDays,
                 state,
                 createdDate: new Date().toISOString()
             };
@@ -28009,8 +28035,8 @@ if ('serviceWorker' in navigator && _swAllowed) {
         return `${day}/${month}/${year}`;
     }
 
-    function getDefaultTimeline() {
-        const defaults = JSON.parse(localStorage.getItem('defaultTimeline')) || {
+    function getDefaultTimeline(totalSqm, clientName) {
+        const base = JSON.parse(localStorage.getItem('defaultTimeline')) || {
             measuring: 1,
             sanding1: 4,
             undercoat: 2,
@@ -28019,7 +28045,28 @@ if ('serviceWorker' in navigator && _swAllowed) {
             inspect: 2,
             complete: 1
         };
-        return defaults;
+        // Check for per-client timeline override
+        try {
+            const _cdb = JSON.parse(localStorage.getItem('clientDatabase') || '{}');
+            const _cEntry = Object.values(_cdb).find(c => c.name && c.name.toLowerCase() === (clientName||'').toLowerCase());
+            if (_cEntry && _cEntry.defaultDays === 20) {
+                // Scale up to 20 days: add 5 days spread across sanding1, sanding2, topcoat
+                return Object.assign({}, base, {
+                    sanding1: (base.sanding1 || 4) + 2,
+                    sanding2: (base.sanding2 || 3) + 2,
+                    topcoat:  (base.topcoat  || 2) + 1,
+                });
+            }
+        } catch(e) {}
+        // SQM trigger — jobs over 30m² get 20-day timeline
+        if ((totalSqm || 0) > 30) {
+            return Object.assign({}, base, {
+                sanding1: (base.sanding1 || 4) + 2,
+                sanding2: (base.sanding2 || 3) + 2,
+                topcoat:  (base.topcoat  || 2) + 1,
+            });
+        }
+        return base;
     }
 
     function editDefaultTimeline() {
