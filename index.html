@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.432'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.433'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1782,7 +1782,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.432'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.433'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -26025,6 +26025,29 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 // BATCH MODE: charges were collected for a batch print — run the whole
                 // batch now (financial forms will read the appliedCharges we just set).
                 if (_wasBatch) {
+                    // Save charges history for batch print jobs — same as regular forms
+                    try {
+                        var _bHistory = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+                        var _bJobNum = document.getElementById('jN') ? document.getElementById('jN').value : '';
+                        var _bIdx = -1;
+                        if (currentEditingJobIndex !== null && currentEditingJobIndex >= 0 && currentEditingJobIndex < _bHistory.length) {
+                            _bIdx = currentEditingJobIndex;
+                        } else if (_bJobNum) {
+                            _bIdx = _bHistory.findIndex(function(j) { return String(j.jobNum) === String(_bJobNum); });
+                        }
+                        if (_bIdx >= 0 && window._lastChargesSnapshot) {
+                            if (!_bHistory[_bIdx].chargesHistory) _bHistory[_bIdx].chargesHistory = [];
+                            var _bSnap = window._lastChargesSnapshot;
+                            var _bAlready = _bHistory[_bIdx].chargesHistory.some(function(c) { return c.appliedAt === _bSnap.appliedAt; });
+                            if (!_bAlready) {
+                                _bHistory[_bIdx].chargesHistory.push(_bSnap);
+                                _bHistory[_bIdx].lastCharges = _bSnap;
+                                safeStorage.setJSON('jobHistory', _bHistory);
+                                try { if (window.pwDB) window.pwDB.saveJob(_bHistory[_bIdx]); } catch(e) {}
+                                console.log('Batch print charges saved to job #' + _bJobNum);
+                            }
+                        }
+                    } catch(e) { console.warn('Batch charges history save error:', e); }
                     if (_batchForms && _batchForms.length && typeof _runBatchPrint === 'function') {
                         _runBatchPrint(_batchForms);
                     }
