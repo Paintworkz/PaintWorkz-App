@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.437'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.438'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1782,7 +1782,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.437'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.438'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -17001,26 +17001,38 @@ const firebaseConfig = {
         noteLines.forEach((line,i)=>doc.text('* '+line,lm+3,y+4+i*4.5));
         y += noteH+2;
 
-        //        Delivery                                                                                                                                                       
-        const dLines=['Warrnambool Region     $110 + GST','Geelong & Mt Gambier Region     $135 + GST','Ballarat Region     $230 + GST','Multiple drops in a region — split cartage cost applies.'];
-        const dH=6+dLines.length*4.2;
+        //        Delivery — single line format, fixed to bottom of LAST page so it never overlaps footer
+        // Add a new page if content is too close to bottom
+        const totalPages = doc.internal.getNumberOfPages();
+        const lastPh = doc.internal.pageSize.getHeight ? doc.internal.pageSize.getHeight() : ph;
+        const footerReserve = 22; // mm reserved at bottom for delivery + footer
+        if (y > lastPh - footerReserve - 5) {
+            doc.addPage();
+            y = 12;
+        }
+        // Single-line delivery box
+        const dBoxH = 8;
         doc.setFillColor(250,250,250); doc.setDrawColor(210,210,210); doc.setLineWidth(0.22);
-        doc.roundedRect(lm,y,rm-lm,dH,1.5,1.5,'FD');
+        doc.roundedRect(lm, y, rm-lm, dBoxH, 1.5, 1.5, 'FD');
         doc.setFont('helvetica','bold'); doc.setFontSize(7); doc.setTextColor(28,28,28);
-        doc.text('PICK UP / DELIVERY',lm+3,y+4.5);
+        doc.text('PICK UP / DELIVERY', lm+3, y+3.5);
         doc.setFont('helvetica','normal'); doc.setFontSize(6.8); doc.setTextColor(52,52,52);
-        dLines.forEach((line,i)=>doc.text('   '+line,lm+3,y+9+i*4.2));
-        y += dH+2;
+        doc.text('Warrnambool $110 + GST   |   Geelong & Mt Gambier $135 + GST   |   Ballarat $230 + GST   |   Multiple drops — split cartage applies', lm+3, y+6.8);
+        y += dBoxH + 2;
 
-        //        Footer                                                                                                                                                             
-        doc.setDrawColor(200,200,200); doc.setLineWidth(0.22);
-        doc.line(lm,ph-11,rm,ph-11);
-        doc.setFont('helvetica','normal'); doc.setFontSize(6.5); doc.setTextColor(140,140,140);
-        doc.text('All prices per m   excl. GST. Prices subject to change without notice.',lm,ph-6.5);
-        doc.setFont('helvetica','bold'); doc.setTextColor(95,108,195);
-        doc.text('paintworkzpro.com.au',rm,ph-6.5,{align:'right'});
-        doc.setFont('helvetica','normal'); doc.setFontSize(5.5); doc.setTextColor(185,185,185);
-        doc.text('Created by paintworkzpro.com.au',pw/2,ph-2.5,{align:'center'});
+        //        Footer — fixed to bottom of every page
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let pg = 1; pg <= pageCount; pg++) {
+            doc.setPage(pg);
+            doc.setDrawColor(200,200,200); doc.setLineWidth(0.22);
+            doc.line(lm, lastPh-11, rm, lastPh-11);
+            doc.setFont('helvetica','normal'); doc.setFontSize(6.5); doc.setTextColor(140,140,140);
+            doc.text('All prices per m² excl. GST. Prices subject to change without notice.', lm, lastPh-6.5);
+            doc.setFont('helvetica','bold'); doc.setTextColor(95,108,195);
+            doc.text('paintworkzpro.com.au', rm, lastPh-6.5, {align:'right'});
+            doc.setFont('helvetica','normal'); doc.setFontSize(5.5); doc.setTextColor(185,185,185);
+            doc.text('Created by paintworkzpro.com.au', pw/2, lastPh-2.5, {align:'center'});
+        }
 
         console.log('Price list y:', y, 'pages:', doc.internal.getNumberOfPages());
         const pdfDataUri = doc.output('datauristring'); // datauristring stays valid for SEND/email
