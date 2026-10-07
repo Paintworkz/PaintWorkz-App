@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.441'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.442'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1782,7 +1782,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.441'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.442'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -17069,18 +17069,31 @@ const firebaseConfig = {
     function _injectSmallJobFee() {
         try {
             const _charges = loadAdditionalCharges();
-            const _threshold = _charges.smallJobSqm !== undefined ? _charges.smallJobSqm : 5;
+            const _threshold = _charges.smallJobSqm !== undefined ? _charges.smallJobSqm : 3;
             const _fee = _charges.smallJobFee !== undefined ? _charges.smallJobFee : 0;
             if (_fee <= 0 || _threshold <= 0) return;
-            // Get total SQM from current job items or pdfItemsToUse
-            const _itemSrc = (window.pdfItemsToUse && window.pdfItemsToUse.length > 0) ? window.pdfItemsToUse : items;
-            const _totalSqm = _itemSrc.reduce((s, it) => {
-                const _qty = parseInt(it.qty) || 1;
-                const _h = parseFloat(it.h) || 0;
-                const _w = parseFloat(it.w) || 0;
-                const _sqm = (_h * _w / 1000000) * _qty;
-                return s + _sqm;
-            }, 0);
+            // Use the job's stored totalSqm as authoritative — avoids partial-load issues
+            // at batch print time where pdfItemsToUse may only contain one colour group
+            let _totalSqm = 0;
+            const _storedSqm = parseFloat(
+                (window.currentJob && window.currentJob.totalSqm) ||
+                document.querySelector('[data-total-sqm]')?.dataset?.totalSqm ||
+                0
+            );
+            if (_storedSqm > 0) {
+                // Use the job's stored total — covers all colour groups
+                _totalSqm = _storedSqm;
+            } else {
+                // Fallback: sum all available items
+                const _allItems = (window.pdfItemsToUse && window.pdfItemsToUse.length > 0)
+                    ? window.pdfItemsToUse : items;
+                _totalSqm = _allItems.reduce((s, it) => {
+                    const _qty = parseInt(it.qty) || 1;
+                    const _h = parseFloat(it.h) || 0;
+                    const _w = parseFloat(it.w) || 0;
+                    return s + (_h * _w / 1000000) * _qty;
+                }, 0);
+            }
             if (!appliedCharges.otherRows) appliedCharges.otherRows = [];
             // Remove any existing small job fee row
             appliedCharges.otherRows = appliedCharges.otherRows.filter(r => !r._autoSmallJob);
@@ -25773,11 +25786,17 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 const _sjThreshold = _sjCharges.smallJobSqm !== undefined ? _sjCharges.smallJobSqm : 5;
                 const _sjFee = _sjCharges.smallJobFee !== undefined ? _sjCharges.smallJobFee : 0;
                 if (_sjFee > 0 && _sjThreshold > 0) {
-                    const _sjItemSrc = (window.pdfItemsToUse && window.pdfItemsToUse.length > 0) ? window.pdfItemsToUse : items;
-                    const _sjSqm = _sjItemSrc.reduce((s, it) => {
-                        const _q = parseInt(it.qty) || 1;
-                        return s + ((parseFloat(it.h)||0) * (parseFloat(it.w)||0) / 1000000) * _q;
-                    }, 0);
+                    // Use stored totalSqm — authoritative across all colour groups
+                    let _sjSqm = parseFloat(
+                        (window.currentJob && window.currentJob.totalSqm) || 0
+                    );
+                    if (_sjSqm <= 0) {
+                        const _sjItemSrc = (window.pdfItemsToUse && window.pdfItemsToUse.length > 0) ? window.pdfItemsToUse : items;
+                        _sjSqm = _sjItemSrc.reduce((s, it) => {
+                            const _q = parseInt(it.qty) || 1;
+                            return s + ((parseFloat(it.h)||0) * (parseFloat(it.w)||0) / 1000000) * _q;
+                        }, 0);
+                    }
                     if (!lastC.otherRows) lastC.otherRows = [];
                     lastC.otherRows = lastC.otherRows.filter(r => !r._autoSmallJob && !/^Small Job Setup Fee/i.test(r.desc||''));
                     if (_sjSqm < _sjThreshold) {
