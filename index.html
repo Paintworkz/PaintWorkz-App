@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.442'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.443'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1782,7 +1782,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.442'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.443'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -17072,21 +17072,22 @@ const firebaseConfig = {
             const _threshold = _charges.smallJobSqm !== undefined ? _charges.smallJobSqm : 3;
             const _fee = _charges.smallJobFee !== undefined ? _charges.smallJobFee : 0;
             if (_fee <= 0 || _threshold <= 0) return;
-            // Use the job's stored totalSqm as authoritative — avoids partial-load issues
-            // at batch print time where pdfItemsToUse may only contain one colour group
+            // Read totalSqm from the job record — check every possible source
+            // This must cover ALL colour groups, not just pdfItemsToUse which is one group
             let _totalSqm = 0;
             const _storedSqm = parseFloat(
+                (window.currentLoadedJob && window.currentLoadedJob.totalSqm) ||
                 (window.currentJob && window.currentJob.totalSqm) ||
-                document.querySelector('[data-total-sqm]')?.dataset?.totalSqm ||
+                (window.pdfJobMeta && window.pdfJobMeta.totalSqm) ||
+                JSON.parse(localStorage.getItem('currentJob') || '{}').totalSqm ||
                 0
             );
             if (_storedSqm > 0) {
-                // Use the job's stored total — covers all colour groups
                 _totalSqm = _storedSqm;
             } else {
-                // Fallback: sum all available items
-                const _allItems = (window.pdfItemsToUse && window.pdfItemsToUse.length > 0)
-                    ? window.pdfItemsToUse : items;
+                // Last resort: sum all items (may be partial for multi-colour jobs)
+                const _allItems = items && items.length > 0 ? items :
+                    (window.pdfItemsToUse || []);
                 _totalSqm = _allItems.reduce((s, it) => {
                     const _qty = parseInt(it.qty) || 1;
                     const _h = parseFloat(it.h) || 0;
@@ -21268,6 +21269,14 @@ const firebaseConfig = {
     function _runBatchPrint(forms) {
         window._batchChargesMode = false;
         window._batchPendingForms = null;
+        
+        // Snapshot the job's totalSqm now so _injectSmallJobFee can always find it
+        // even when pdfItemsToUse is only loaded for one colour group at a time
+        try {
+            const _bpJob = window.currentLoadedJob ||
+                JSON.parse(localStorage.getItem('currentJob') || '{}');
+            window.pdfJobMeta = { totalSqm: parseFloat(_bpJob.totalSqm || 0) };
+        } catch(e) { window.pdfJobMeta = { totalSqm: 0 }; }
         
         // Generate all forms into a single merged PDF
         const totalForms = forms.length;
@@ -25788,10 +25797,15 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 if (_sjFee > 0 && _sjThreshold > 0) {
                     // Use stored totalSqm — authoritative across all colour groups
                     let _sjSqm = parseFloat(
-                        (window.currentJob && window.currentJob.totalSqm) || 0
+                        (window.currentLoadedJob && window.currentLoadedJob.totalSqm) ||
+                        (window.currentJob && window.currentJob.totalSqm) ||
+                        (window.pdfJobMeta && window.pdfJobMeta.totalSqm) ||
+                        JSON.parse(localStorage.getItem('currentJob') || '{}').totalSqm ||
+                        0
                     );
                     if (_sjSqm <= 0) {
-                        const _sjItemSrc = (window.pdfItemsToUse && window.pdfItemsToUse.length > 0) ? window.pdfItemsToUse : items;
+                        const _sjItemSrc = items && items.length > 0 ? items :
+                            (window.pdfItemsToUse || []);
                         _sjSqm = _sjItemSrc.reduce((s, it) => {
                             const _q = parseInt(it.qty) || 1;
                             return s + ((parseFloat(it.h)||0) * (parseFloat(it.w)||0) / 1000000) * _q;
