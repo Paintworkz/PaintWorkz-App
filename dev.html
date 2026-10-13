@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.444-dev2'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.444-dev3'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1487,7 +1487,7 @@ window.getTooltipKey = getTooltipKey;
 </head>
 <body>
 <style>#devBanner { position:fixed;top:0;left:0;right:0;z-index:99999;background:repeating-linear-gradient(-45deg,#ff3b30,#ff3b30 10px,#ff9500 10px,#ff9500 20px);color:#fff;text-align:center;font-weight:900;font-size:11px;letter-spacing:1px;padding:4px 8px;text-shadow:0 1px 2px rgba(0,0,0,0.5);pointer-events:none;}</style>
-<div id="devBanner">🚧 DEVELOPMENT VERSION — LIVE DATA — v1.16.444-dev2 🚧</div>
+<div id="devBanner">🚧 DEVELOPMENT VERSION — LIVE DATA — v1.16.444-dev3 🚧</div>
 
 <!-- COPYRIGHT NOTICE -->
 <div id="copyrightBanner" style="display:none;">
@@ -1784,7 +1784,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.444-dev2'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.444-dev3'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -3168,7 +3168,7 @@ const firebaseConfig = {
 
                 if (!isOwnerLogin && (lastUid !== user.uid || _freshSession)) {
                     console.log('Non-owner login — wiping localStorage for clean slate:', user.email);
-                    const keepGlobal = ['paintworkz_version', 'app_theme', 'pw_tooltips'];
+                    const keepGlobal = ['paintworkz_version', 'app_theme', 'pw_tooltips', 'pw_device_id'];
                     for (let i = localStorage.length - 1; i >= 0; i--) {
                         const k = localStorage.key(i);
                         // Preserve per-user tooltip + tour prefs so help-icon toggle survives login
@@ -7058,7 +7058,7 @@ const firebaseConfig = {
         window.realtimeSyncActive = false;
         // Nuclear wipe on logout - preserve only app-global prefs
         const uid = window.currentUser ? window.currentUser.uid : null;
-        const keepOnLogout = ['paintworkz_version'];
+        const keepOnLogout = ['paintworkz_version', 'pw_device_id'];
         if (uid) { keepOnLogout.push('pw_tooltips_' + uid); keepOnLogout.push('pw_tour_done_' + uid); }
         keepOnLogout.push('doorProfiles', 'masterMatrix', 'paintBrands');
         const logoutKeys = [];
@@ -7105,6 +7105,14 @@ const firebaseConfig = {
 
         const sessionId = _generateSessionId();
         window._sessionId = sessionId;
+        // v1.16.444: one ID per browser on this computer. All tabs/windows of the app in the
+        // same browser share ONE Firebase login, so they must count as ONE device — otherwise a
+        // second window "kicks" the first, and that sign-out kills the login for both.
+        let _pwDeviceId = null;
+        try {
+            _pwDeviceId = localStorage.getItem('pw_device_id');
+            if (!_pwDeviceId) { _pwDeviceId = 'dev_' + _generateSessionId(); localStorage.setItem('pw_device_id', _pwDeviceId); }
+        } catch(e) {}
 
         const isAdmin = (user.email === 'ckbedford@outlook.com');
         const isPaintWorkz = (user.email === 'paint_workz@outlook.com');
@@ -7122,7 +7130,8 @@ const firebaseConfig = {
             userAgent: navigator.userAgent.substring(0, 250),
             device: /Mobile|iPad|iPhone|Android/.test(navigator.userAgent) ? 'mobile' : 'desktop',
             isOwner: isAdmin,
-            isPaintWorkz
+            isPaintWorkz,
+            deviceId: _pwDeviceId
         };
 
         try {
@@ -7168,6 +7177,12 @@ const firebaseConfig = {
         window._sessionGuardUnsubscribe = window.onSnapshot(sessionRef, (snap) => {
             if (!snap.exists()) return;
             const remoteId = snap.data().sessionId;
+            // v1.16.444: another window on THIS computer/browser logged in — same device, never kick
+            if (remoteId && remoteId !== window._sessionId && _pwDeviceId && snap.data().deviceId === _pwDeviceId) {
+                console.log('[SessionGuard] Another window on this computer logged in — same device, no kick');
+                window._sessionId = remoteId;
+                return;
+            }
             if (remoteId && remoteId !== window._sessionId) {
                 // DEBOUNCE: wait 3s then re-verify before kicking.
                 // Prevents false kicks from _onStorageEvent auth flicker
@@ -7182,6 +7197,11 @@ const firebaseConfig = {
                     try {
                         const _vs = await window.getDoc(sessionRef);
                         const _vid = _vs.exists() ? _vs.data().sessionId : null;
+                        if (_vs.exists() && _pwDeviceId && _vs.data().deviceId === _pwDeviceId) {
+                            window._sessionId = _vid;
+                            console.log('[SessionGuard] Same computer — no kick');
+                            return;
+                        }
                         if (!_vid || _vid === window._sessionId) {
                             console.log('[SessionGuard] Mismatch resolved — same session, no kick');
                             return; // False alarm
