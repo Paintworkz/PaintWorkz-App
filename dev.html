@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.444-dev'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.444-dev2'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1487,7 +1487,7 @@ window.getTooltipKey = getTooltipKey;
 </head>
 <body>
 <style>#devBanner { position:fixed;top:0;left:0;right:0;z-index:99999;background:repeating-linear-gradient(-45deg,#ff3b30,#ff3b30 10px,#ff9500 10px,#ff9500 20px);color:#fff;text-align:center;font-weight:900;font-size:11px;letter-spacing:1px;padding:4px 8px;text-shadow:0 1px 2px rgba(0,0,0,0.5);pointer-events:none;}</style>
-<div id="devBanner">🚧 DEVELOPMENT VERSION — LIVE DATA — v1.16.444-dev 🚧</div>
+<div id="devBanner">🚧 DEVELOPMENT VERSION — LIVE DATA — v1.16.444-dev2 🚧</div>
 
 <!-- COPYRIGHT NOTICE -->
 <div id="copyrightBanner" style="display:none;">
@@ -1784,7 +1784,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.444-dev'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.444-dev2'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -3137,6 +3137,9 @@ const firebaseConfig = {
                 }
                 // Cancel any pending logout timer
                 if (window._authNullTimer) { clearTimeout(window._authNullTimer); window._authNullTimer = null; }
+                // v1.16.444: signed back in — remove the "not connected" warning
+                clearTimeout(window._authLostTimer);
+                try { var _alb = document.getElementById('pwAuthLostBar'); if (_alb) _alb.remove(); } catch(e) {}
 
                 // DATA ISOLATION: non-owner accounts get clean slate on every fresh login
                 const lastUid = localStorage.getItem('pw_last_uid');
@@ -3338,6 +3341,20 @@ const firebaseConfig = {
                 } else if (_prevEmail === 'paint_workz@outlook.com' || _prevEmail === 'ckbedford@outlook.com') {
                     console.log('[Auth] Multi-device account — ignoring auth null for', _prevEmail);
                     window.currentUser = window._cachedFullUser || window.currentUser; // Restore full user object
+                    // v1.16.444: the app keeps running, but Firebase is NOT signed in, so nothing
+                    // saves to the cloud. If it hasn't recovered in 5s, warn loudly instead of hiding it.
+                    clearTimeout(window._authLostTimer);
+                    window._authLostTimer = setTimeout(function() {
+                        if (auth.currentUser) return; // recovered on its own
+                        if (document.getElementById('pwAuthLostBar')) return;
+                        console.error('⚠️ Firebase session lost — cloud saves are being refused');
+                        var bar = document.createElement('div');
+                        bar.id = 'pwAuthLostBar';
+                        bar.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:1000000;background:#ff3b30;color:#fff;font-weight:900;font-size:14px;text-align:center;padding:14px 12px;cursor:pointer;box-shadow:0 -4px 16px rgba(0,0,0,0.4);';
+                        bar.innerHTML = '⚠️ NOT CONNECTED TO CLOUD — changes are NOT being saved.<br><span style="font-size:12px;font-weight:700;">Tap here to reload and log in again.</span>';
+                        bar.onclick = function() { location.reload(); };
+                        document.body.appendChild(bar);
+                    }, 5000);
                     return;
                 }
                 if (window.realtimeSyncUnsubscribe) {
@@ -12809,7 +12826,11 @@ const firebaseConfig = {
         };
         window.setDoc(window.doc(window.firebaseDb, 'users', uid, 'jobs', canonId), full, { merge: true })
             .then(function() { console.log('✅ Completion status saved to cloud:', job.jobNum, fields.completed ? 'COMPLETED' : 'REOPENED'); })
-            .catch(function(e) { console.error('Completion cloud write failed:', e); if (window.debouncedFirebaseSync) window.debouncedFirebaseSync(); });
+            .catch(function(e) {
+                console.error('Completion cloud write failed:', e);
+                alert('⚠️ Job #' + job.jobNum + ' was ' + (fields.completed ? 'completed' : 'reopened') + ' on this device but did NOT save to the cloud.\n\nReason: ' + ((e && e.code) || (e && e.message) || 'unknown') + '\n\nReload the app, log in again, then redo it.');
+                if (window.debouncedFirebaseSync) window.debouncedFirebaseSync();
+            });
         if (job.id && job.id !== canonId && window.getDoc && window.updateDoc) {
             const aliasRef = window.doc(window.firebaseDb, 'users', uid, 'jobs', job.id);
             window.getDoc(aliasRef).then(function(snap) {
