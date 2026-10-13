@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.443'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.444'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1735,7 +1735,17 @@ const firebaseConfig = {
         window.createUserWithEmailAndPassword = (email, password) => createUserWithEmailAndPassword(auth, email, password);
         window.signInWithEmailAndPassword = (email, password) => signInWithEmailAndPassword(auth, email, password);
         window.signOut = (authInstance) => signOut(authInstance || auth);
-        window.signOut = () => signOut(auth);
+        window.signOut = () => {
+            // v1.16.444: record WHAT signed us out, so a silent sign-out can be traced
+            try {
+                var _st = (new Error().stack || '').split('\n').slice(2, 5).map(function(x){ return x.trim(); }).join(' <- ');
+                var _why = localStorage.getItem('pw_last_signout_reason') || 'App sign-out';
+                localStorage.setItem('pw_last_signout', new Date().toLocaleTimeString('en-AU') + ' | ' + _why + ' | ' + _st);
+                localStorage.removeItem('pw_last_signout_reason');
+                console.warn('🔓 App called signOut:', _why, '|', _st);
+            } catch(e) {}
+            return signOut(auth);
+        };
         window.sendPasswordResetEmail = (email) => sendPasswordResetEmail(auth, email, {
             url: 'https://app.paintworkzpro.com.au/'
         });
@@ -1782,7 +1792,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.443'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.444'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -3107,7 +3117,17 @@ const firebaseConfig = {
         window.createUserWithEmailAndPassword = (email, password) => createUserWithEmailAndPassword(auth, email, password);
         window.signInWithEmailAndPassword = (email, password) => signInWithEmailAndPassword(auth, email, password);
         window.signOut = (authInstance) => signOut(authInstance || auth);
-        window.signOut = () => signOut(auth);
+        window.signOut = () => {
+            // v1.16.444: record WHAT signed us out, so a silent sign-out can be traced
+            try {
+                var _st = (new Error().stack || '').split('\n').slice(2, 5).map(function(x){ return x.trim(); }).join(' <- ');
+                var _why = localStorage.getItem('pw_last_signout_reason') || 'App sign-out';
+                localStorage.setItem('pw_last_signout', new Date().toLocaleTimeString('en-AU') + ' | ' + _why + ' | ' + _st);
+                localStorage.removeItem('pw_last_signout_reason');
+                console.warn('🔓 App called signOut:', _why, '|', _st);
+            } catch(e) {}
+            return signOut(auth);
+        };
         window.sendPasswordResetEmail = (email) => sendPasswordResetEmail(auth, email, {
             url: 'https://app.paintworkzpro.com.au/'
         });
@@ -3129,12 +3149,17 @@ const firebaseConfig = {
                 // Check for explicit login flag (sessionStorage = same tab only)
                 const explicitLogin = sessionStorage.getItem('pw_explicit_login') || localStorage.getItem('pw_explicit_login');
                 if (!explicitLogin) {
+                    console.warn('🔓 Signing out: no explicit-login flag found for', user.email);
+                    try { localStorage.setItem('pw_last_signout_reason', 'No explicit-login flag (auto sign-out check)'); } catch(e) {}
                     sessionStorage.setItem('pw_forced_signout', '1');
                     window.signOut(auth).catch(() => {});
                     return;
                 }
                 // Cancel any pending logout timer
                 if (window._authNullTimer) { clearTimeout(window._authNullTimer); window._authNullTimer = null; }
+                // v1.16.444: signed back in — remove the "not connected" warning
+                clearTimeout(window._authLostTimer);
+                try { var _alb = document.getElementById('pwAuthLostBar'); if (_alb) _alb.remove(); } catch(e) {}
 
                 // DATA ISOLATION: non-owner accounts get clean slate on every fresh login
                 const lastUid = localStorage.getItem('pw_last_uid');
@@ -3163,7 +3188,7 @@ const firebaseConfig = {
 
                 if (!isOwnerLogin && (lastUid !== user.uid || _freshSession)) {
                     console.log('Non-owner login — wiping localStorage for clean slate:', user.email);
-                    const keepGlobal = ['paintworkz_version', 'app_theme', 'pw_tooltips'];
+                    const keepGlobal = ['paintworkz_version', 'app_theme', 'pw_tooltips', 'pw_device_id', 'pw_explicit_login']; // v1.16.444: explicit-login flag must survive or the next auth fire silently signs out
                     for (let i = localStorage.length - 1; i >= 0; i--) {
                         const k = localStorage.key(i);
                         // Preserve per-user tooltip + tour prefs so help-icon toggle survives login
@@ -3336,6 +3361,23 @@ const firebaseConfig = {
                 } else if (_prevEmail === 'paint_workz@outlook.com' || _prevEmail === 'ckbedford@outlook.com') {
                     console.log('[Auth] Multi-device account — ignoring auth null for', _prevEmail);
                     window.currentUser = window._cachedFullUser || window.currentUser; // Restore full user object
+                    // v1.16.444: the app keeps running, but Firebase is NOT signed in, so nothing
+                    // saves to the cloud. If it hasn't recovered in 5s, warn loudly instead of hiding it.
+                    clearTimeout(window._authLostTimer);
+                    window._authLostTimer = setTimeout(function() {
+                        if (auth.currentUser) return; // recovered on its own
+                        if (document.getElementById('pwAuthLostBar')) return;
+                        var _cause = '';
+                        try { _cause = localStorage.getItem('pw_last_signout') || ''; } catch(e) {}
+                        if (!_cause) _cause = 'Firebase ended the session itself — the app did not call sign-out';
+                        console.error('⚠️ Firebase session lost — cloud saves are being refused. Cause:', _cause);
+                        var bar = document.createElement('div');
+                        bar.id = 'pwAuthLostBar';
+                        bar.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:1000000;background:#ff3b30;color:#fff;font-weight:900;font-size:14px;text-align:center;padding:14px 12px;cursor:pointer;box-shadow:0 -4px 16px rgba(0,0,0,0.4);';
+                        bar.innerHTML = '⚠️ NOT CONNECTED TO CLOUD — changes are NOT being saved.<br><span style="font-size:12px;font-weight:700;">Tap here to reload and log in again.</span><br><span style="font-size:10px;font-weight:600;opacity:0.85;">Cause: ' + String(_cause).replace(/</g,'&lt;').slice(0, 220) + '</span>';
+                        bar.onclick = function() { location.reload(); };
+                        document.body.appendChild(bar);
+                    }, 5000);
                     return;
                 }
                 if (window.realtimeSyncUnsubscribe) {
@@ -4859,7 +4901,6 @@ const firebaseConfig = {
             <input type="text" id="historySearchInput" placeholder="🔍 Search by client, job #, job name or colour..." oninput="renderHistory()" style="width:100%; padding:9px 12px; border:1px solid #ddd; border-radius:6px; font-size:12px; margin-bottom:8px; box-sizing:border-box; -webkit-appearance:none;">
             <div style="display:flex; gap:8px; margin-bottom:15px;">
                 <button onclick="forceCloudSync()" id="historyCloudSyncBtn" style="flex:1; background:#2196f3; color:#fff; border:none; padding:8px 0; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">☁️ Sync from Cloud</button>
-                <button onclick="forcePushJobsToCloud()" id="historyPushBtn" style="flex:1; background:#34c759; color:#fff; border:none; padding:8px 0; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">⬆️ Push to Cloud</button>
                 <button onclick="mergeDuplicateJobs()" style="flex:1; background:#ff3b30; color:#fff; border:none; padding:8px 0; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">🧹 Merge Dupes</button>
             </div>
         </div>
@@ -7040,7 +7081,7 @@ const firebaseConfig = {
         window.realtimeSyncActive = false;
         // Nuclear wipe on logout - preserve only app-global prefs
         const uid = window.currentUser ? window.currentUser.uid : null;
-        const keepOnLogout = ['paintworkz_version'];
+        const keepOnLogout = ['paintworkz_version', 'pw_device_id'];
         if (uid) { keepOnLogout.push('pw_tooltips_' + uid); keepOnLogout.push('pw_tour_done_' + uid); }
         keepOnLogout.push('doorProfiles', 'masterMatrix', 'paintBrands');
         const logoutKeys = [];
@@ -7087,6 +7128,14 @@ const firebaseConfig = {
 
         const sessionId = _generateSessionId();
         window._sessionId = sessionId;
+        // v1.16.444: one ID per browser on this computer. All tabs/windows of the app in the
+        // same browser share ONE Firebase login, so they must count as ONE device — otherwise a
+        // second window "kicks" the first, and that sign-out kills the login for both.
+        let _pwDeviceId = null;
+        try {
+            _pwDeviceId = localStorage.getItem('pw_device_id');
+            if (!_pwDeviceId) { _pwDeviceId = 'dev_' + _generateSessionId(); localStorage.setItem('pw_device_id', _pwDeviceId); }
+        } catch(e) {}
 
         const isAdmin = (user.email === 'ckbedford@outlook.com');
         const isPaintWorkz = (user.email === 'paint_workz@outlook.com');
@@ -7104,7 +7153,8 @@ const firebaseConfig = {
             userAgent: navigator.userAgent.substring(0, 250),
             device: /Mobile|iPad|iPhone|Android/.test(navigator.userAgent) ? 'mobile' : 'desktop',
             isOwner: isAdmin,
-            isPaintWorkz
+            isPaintWorkz,
+            deviceId: _pwDeviceId
         };
 
         try {
@@ -7150,6 +7200,12 @@ const firebaseConfig = {
         window._sessionGuardUnsubscribe = window.onSnapshot(sessionRef, (snap) => {
             if (!snap.exists()) return;
             const remoteId = snap.data().sessionId;
+            // v1.16.444: another window on THIS computer/browser logged in — same device, never kick
+            if (remoteId && remoteId !== window._sessionId && _pwDeviceId && snap.data().deviceId === _pwDeviceId) {
+                console.log('[SessionGuard] Another window on this computer logged in — same device, no kick');
+                window._sessionId = remoteId;
+                return;
+            }
             if (remoteId && remoteId !== window._sessionId) {
                 // DEBOUNCE: wait 3s then re-verify before kicking.
                 // Prevents false kicks from _onStorageEvent auth flicker
@@ -7164,6 +7220,11 @@ const firebaseConfig = {
                     try {
                         const _vs = await window.getDoc(sessionRef);
                         const _vid = _vs.exists() ? _vs.data().sessionId : null;
+                        if (_vs.exists() && _pwDeviceId && _vs.data().deviceId === _pwDeviceId) {
+                            window._sessionId = _vid;
+                            console.log('[SessionGuard] Same computer — no kick');
+                            return;
+                        }
                         if (!_vid || _vid === window._sessionId) {
                             console.log('[SessionGuard] Mismatch resolved — same session, no kick');
                             return; // False alarm
@@ -11907,6 +11968,7 @@ const firebaseConfig = {
         });
 
         const merged = [];
+        const winnersToSave = [];
         let mergedCount = 0;
         Object.values(groups).forEach(function(group) {
             if (group.length === 1) { merged.push(group[0]); return; }
@@ -11917,17 +11979,20 @@ const firebaseConfig = {
                 return bParts - aParts;
             });
             const winner = group[0];
-            // If any version is completed, mark winner completed
-            if (group.some(function(j) { return j.completed; })) {
-                winner.completed = true;
-                winner.completedDate = group.find(function(j) { return j.completedDate; })?.completedDate || winner.completedDate;
-            }
+            // v1.16.444: completion status from the newest deliberate Complete/Reopen;
+            // older data with no stamp keeps the old rule (any completed copy wins)
+            group.slice(1).forEach(function(other) {
+                const _cSrc = pwPickCompletionSource(winner, other, true);
+                if (_cSrc !== winner) pwApplyCompletion(winner, _cSrc);
+            });
             merged.push(winner);
+            winnersToSave.push(winner);
             mergedCount += group.length - 1;
 
-            // Delete the loser Firestore docs
+            // Delete the loser Firestore docs — but NEVER the doc the winner is saved to
+            const _keepIds = new Set([winner.id, pwJobDocId(winner)].filter(Boolean));
             group.slice(1).forEach(function(loser) {
-                if (loser.id && window.firebaseDb && window.deleteDoc && window.doc && window.currentUser) {
+                if (loser.id && !_keepIds.has(loser.id) && window.firebaseDb && window.deleteDoc && window.doc && window.currentUser) {
                     const ref = window.doc(window.firebaseDb, 'users', window.staffModeOwnerUid||window.currentUser.uid, 'jobs', loser.id);
                     window.deleteDoc(ref).catch(function(e) { console.warn('Delete dupe Firestore doc failed:', e); });
                 }
@@ -11940,49 +12005,20 @@ const firebaseConfig = {
         merged.sort(function(a, b) { return new Date(b.timestamp || 0) - new Date(a.timestamp || 0); });
         localStorage.setItem('jobHistory', JSON.stringify(merged));
 
-        // Push clean list to Firestore
-        try { if (typeof forcePushJobsToCloud === 'function') forcePushJobsToCloud(); } catch(e) {}
+        // v1.16.444: save ONLY the merged jobs to the cloud (no full push)
+        winnersToSave.forEach(function(w) { try { pwPushCompletionToCloud(w); } catch(e) { console.warn('Merge save failed:', w.jobNum, e); } });
 
         renderHistory();
         alert('✅ Merged ' + mergedCount + ' duplicate job' + (mergedCount !== 1 ? 's' : '') + '.\n\nHistory now has ' + merged.length + ' jobs (was ' + before + ').\n\nCloud updated.');
     }
     window.mergeDuplicateJobs = mergeDuplicateJobs;
 
+    // v1.16.444: "Push Jobs to Cloud" REMOVED. It overwrote every cloud job with this
+    // device's copy and stamped them all as newest — which wiped completed status.
+    // Normal saves, Complete and Reopen all write to the cloud automatically.
     async function forcePushJobsToCloud() {
-        const btn = document.getElementById('historyPushBtn');
-        const origText = btn ? btn.textContent : '';
-        if (btn) { btn.textContent = '    Pushing...'; btn.disabled = true; }
-        try {
-            if (!window.currentUser) { notify('       Not logged in'); return; }
-            if (!window.firebaseDb || !window.doc || !window.setDoc) { notify('    Firebase not ready'); return; }
-            const jobs = JSON.parse(localStorage.getItem('jobHistory') || '[]');
-            if (jobs.length === 0) { notify('       No jobs to push'); return; }
-            // Force bypass rate limiter and push every job
-            lastSyncTime = 0; lastSyncedData = '';
-            let pushed = 0;
-            for (const job of jobs) {
-                try {
-                    // Never push demo jobs to Firestore — they'd come back with real IDs
-                    if (job.id && job.id.startsWith('demo-')) continue;
-                    const jn = String(job.jobNum || '');
-                    if (jn === '1001' || jn === '1002' || jn === '1003') continue;
-                    const jobId = job.id || String(job.jobNum) || `job_${Date.now()}_${pushed}`;
-                    if (!job.id) job.id = jobId;
-                    const targetUid = getTargetUid();
-                    const jobDoc = window.doc(window.firebaseDb, 'users', targetUid, 'jobs', jobId);
-                    var _pfc={...job}; delete _pfc.photos;
-                    await window.setDoc(jobDoc, { ..._pfc, id: jobId, lastModified: new Date().toISOString(), userId: window.staffModeOwnerUid||window.currentUser.uid }, { merge: false });
-                    pushed++;
-                } catch(e) { console.error('Push error for job', job.jobNum, e); }
-            }
-            // Update local with assigned IDs
-            safeStorage.setJSON('jobHistory', jobs);
-            notify(` Pushed ${pushed} jobs to cloud`);
-        } catch(e) {
-            notify('    Push failed: ' + e.message);
-        } finally {
-            if (btn) { btn.textContent = origText; btn.disabled = false; }
-        }
+        notify('Push Jobs to Cloud has been removed — jobs sync automatically');
+        console.warn('forcePushJobsToCloud called but has been removed in v1.16.444');
     }
 
     // Manual archive trigger with detailed logging
@@ -12141,9 +12177,14 @@ const firebaseConfig = {
         history.forEach(j => {
             const _k = String(j.jobNum) + '|' + (j.client||'') + '|' + (j.dateReceived||'');
             const existing = _dedupMap.get(_k);
-            if (!existing || (j.lastModified||'') > (existing.lastModified||'')) {
-                _dedupMap.set(_k, j);
-            }
+            if (!existing) { _dedupMap.set(_k, j); return; }
+            const _winner = (j.lastModified||'') > (existing.lastModified||'') ? j : existing;
+            const _loser = _winner === j ? existing : j;
+            // v1.16.444: completion status comes from the newest deliberate Complete/Reopen,
+            // not just whichever copy was saved last
+            const _cSrc = pwPickCompletionSource(_winner, _loser, false);
+            if (_cSrc !== _winner) pwApplyCompletion(_winner, _cSrc);
+            _dedupMap.set(_k, _winner);
         });
         if (_dedupMap.size < history.length) {
             history = Array.from(_dedupMap.values());
@@ -12760,6 +12801,93 @@ const firebaseConfig = {
             renderScheduleCalendarDebounced();
     }
 
+    // ══ v1.16.444 SYNC FIX ═══════════════════════════════════════════════════
+    // Completion status rule: the most recent DELIBERATE action (Complete or
+    // Reopen) wins on every device. Each action stamps completedChangedAt.
+    // Background syncs, snapshots and dedupes never let an older copy override it.
+    // Cloud doc ID used by the background sync — kept identical here.
+    function pwJobDocId(job) {
+        if (!job) return '';
+        if (job.jobNum) return String(job.jobNum).replace(/\//g, '-');
+        return String(job.id || '');
+    }
+    function pwCompletionTs(job) {
+        const t = job && job.completedChangedAt ? Date.parse(job.completedChangedAt) : NaN;
+        return isNaN(t) ? 0 : t;
+    }
+    // Which of two copies of the same job holds the correct completion status.
+    // If neither copy has a deliberate-action stamp (older data), fall back to
+    // the caller's previous behaviour so nothing legacy changes.
+    function pwPickCompletionSource(a, b, legacyCompletedWins) {
+        const ta = pwCompletionTs(a), tb = pwCompletionTs(b);
+        if (ta || tb) return ta >= tb ? a : b;
+        if (legacyCompletedWins) {
+            if (a.completed && !b.completed) return a;
+            if (b.completed && !a.completed) return b;
+        }
+        return a;
+    }
+    function pwApplyCompletion(target, src) {
+        if (!target || !src || target === src) return target;
+        target.completed = !!src.completed;
+        target.completedDate = src.completedDate || null;
+        target.dateCompleted = src.dateCompleted || null;
+        if (src.completedChangedAt) target.completedChangedAt = src.completedChangedAt;
+        return target;
+    }
+    // Local "completed jobs" register — add on Complete, remove on Reopen
+    function pwRegistrySet(job, isCompleted, ts) {
+        try {
+            const reg = JSON.parse(localStorage.getItem('pwCompletedJobs') || '{}');
+            [pwJobDocId(job), job.id, job.jobNum != null ? String(job.jobNum) : ''].filter(Boolean).forEach(function(k) {
+                if (isCompleted) reg[k] = ts; else delete reg[k];
+            });
+            localStorage.setItem('pwCompletedJobs', JSON.stringify(reg));
+        } catch(e) {}
+    }
+    // Write a Complete/Reopen straight to the cloud:
+    //  1. the main cloud copy (same doc the background sync uses) — full job
+    //  2. any old-style copy under the job's local ID — completion fields only,
+    //     and only if that doc exists and is the same job number
+    function pwPushCompletionToCloud(job) {
+        if (!window.currentUser || !window.firebaseDb || !window.doc || !window.setDoc) {
+            if (window.debouncedFirebaseSync) window.debouncedFirebaseSync();
+            return;
+        }
+        const uid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid;
+        const canonId = pwJobDocId(job);
+        if (!uid || !canonId) return;
+        const full = { ...job, id: canonId, userId: uid };
+        delete full.photos;
+        try{if(typeof Blob!=='undefined'&&new Blob([JSON.stringify(full)]).size>850000){full.items=(full.items||[]).map(function(it){return{h:it.h,w:it.w,qty:it.qty,desc:it.desc,prof:it.prof,fm:it.fm,mode:it.mode,e:it.e,type:it.type,thk:it.thk,brand:it.brand,color:it.color,finish:it.finish,sqm:it.sqm,cts:it.cts};});}}catch(_se){}
+        const fields = {
+            completed: !!job.completed,
+            completedDate: job.completedDate || null,
+            dateCompleted: job.dateCompleted || null,
+            completedChangedAt: job.completedChangedAt || new Date().toISOString(),
+            lastModified: job.lastModified || new Date().toISOString()
+        };
+        window.setDoc(window.doc(window.firebaseDb, 'users', uid, 'jobs', canonId), full, { merge: true })
+            .then(function() { console.log('✅ Completion status saved to cloud:', job.jobNum, fields.completed ? 'COMPLETED' : 'REOPENED'); })
+            .catch(function(e) {
+                console.error('Completion cloud write failed:', e);
+                alert('⚠️ Job #' + job.jobNum + ' was ' + (fields.completed ? 'completed' : 'reopened') + ' on this device but did NOT save to the cloud.\n\nReason: ' + ((e && e.code) || (e && e.message) || 'unknown') + '\n\nReload the app, log in again, then redo it.');
+                if (window.debouncedFirebaseSync) window.debouncedFirebaseSync();
+            });
+        if (job.id && job.id !== canonId && window.getDoc && window.updateDoc) {
+            const aliasRef = window.doc(window.firebaseDb, 'users', uid, 'jobs', job.id);
+            window.getDoc(aliasRef).then(function(snap) {
+                if (!snap.exists()) return;
+                const d = snap.data() || {};
+                if (String(d.jobNum) !== String(job.jobNum)) return;
+                return window.updateDoc(aliasRef, fields);
+            }).catch(function(e) { console.warn('Old-style copy completion update skipped:', e && e.code); });
+        }
+    }
+    window.pwJobDocId = pwJobDocId;
+    window.pwPushCompletionToCloud = pwPushCompletionToCloud;
+    // ══ end v1.16.444 SYNC FIX helpers ═══════════════════════════════════════
+
     function completeJobById(jobNum, dateReceived, client) {
         const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
         
@@ -12842,12 +12970,10 @@ const firebaseConfig = {
             sqm: job.totalSqm,
             changes: `Marked complete — date: ${job.dateCompleted || chosenDateDisplay || 'today'}`
         });
-        try {
-            const _reg = JSON.parse(localStorage.getItem('pwCompletedJobs') || '{}');
-            const _regId = job.id || String(job.jobNum);
-            _reg[_regId] = job.completedDate || new Date().toISOString();
-            localStorage.setItem('pwCompletedJobs', JSON.stringify(_reg));
-        } catch(e) {}
+        const _completeNow = new Date().toISOString();
+        job.completedChangedAt = _completeNow; // v1.16.444: deliberate action stamp
+        job.lastModified = _completeNow;
+        pwRegistrySet(job, true, _completeNow);
         job.completedDate = chosenDateISOfull;
         job.dateCompleted = chosenDateDisplay;
         history[jobIdx] = job;
@@ -12863,22 +12989,10 @@ const firebaseConfig = {
         }
         
         // Push completion DIRECTLY to Firestore - don't wait for debounced sync
-        if (window.currentUser && window.firebaseDb && window.doc && window.setDoc) {
-            try {
-                const jobId = job.id || job.jobNum;
-                const jobDocRef = window.doc(window.firebaseDb, 'users', window.staffModeOwnerUid||window.currentUser.uid, 'jobs', jobId);
-                var complJob={...job,id:jobId,completed:true,completedDate:job.completedDate,dateCompleted:job.dateCompleted,lastModified:new Date().toISOString(),userId:window.staffModeOwnerUid||window.currentUser.uid};
-                delete complJob.photos;
-                window.setDoc(jobDocRef, complJob, { merge: false }).then(function() {
-                    console.log('Job completion pushed directly to Firestore:', jobId);
-                    // Track this change so snapshot doesn't overwrite it
-                    window._lastCompletedToggleTime = Date.now();
-                    window._lastCompletedToggleJobId = jobId;
-                    // Now also run debounced sync to catch any other changes
-                    if (window.debouncedFirebaseSync) window.debouncedFirebaseSync();
-                }).catch(function(e) { console.error('Direct completion sync error:', e); });
-            } catch(e) { console.error('Firebase completion error:', e); }
-        }
+        // v1.16.444: writes the main cloud copy + updates any old-style copy
+        window._lastCompletedToggleTime = Date.now();
+        window._lastCompletedToggleJobId = pwJobDocId(job);
+        try { pwPushCompletionToCloud(job); } catch(e) { console.error('Firebase completion error:', e); }
         
         // Render UI immediately so completion shows right away
         renderHistory();
@@ -12915,52 +13029,51 @@ const firebaseConfig = {
         const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
         
         // Find job by unique identifiers
-        const jobIdx = history.findIndex(j => j.jobNum === jobNum && j.dateReceived === dateReceived && j.client === client);
-        
+        let jobIdx = history.findIndex(j => j.jobNum === jobNum && j.dateReceived === dateReceived && j.client === client);
+        // Fallback: jobNum + client on a completed job (dateReceived may differ between copies)
+        if (jobIdx < 0) jobIdx = history.findIndex(j => String(j.jobNum).trim() === String(jobNum).trim() && (j.client||'').trim().toLowerCase() === (client||'').trim().toLowerCase() && j.completed);
+
         if (jobIdx < 0) {
             console.error('    Job not found:', jobNum, dateReceived, client);
             notify('       Error: Job not found');
             return;
         }
-        
+
         const job = history[jobIdx];
-        
+
         if (confirm(`Unmark Job #${job.jobNum} as complete?\n\nThis will reopen the job for re-work.`)) {
+            const _reopenNow = new Date().toISOString();
             job.completed = false;
             job.completedDate = null;
             job.dateCompleted = null;
-            job.lastModified = new Date().toISOString();
+            job.completedChangedAt = _reopenNow; // v1.16.444: deliberate action stamp
+            job.lastModified = _reopenNow;
+            if (!job.editHistory) job.editHistory = [];
+            job.editHistory.push({
+                timestamp: _reopenNow,
+                userId: window.resolvedDataUid || window.currentUser?.uid || '',
+                userName: window.currentUserName || (window.isStaffAccount ? window.staffAccountName : (window.currentUser?.email?.split('@')[0] || 'Unknown')),
+                action: 'reopened',
+                parts: job.totalParts,
+                sqm: job.totalSqm,
+                changes: 'Reopened for re-work'
+            });
+            // Remove from this device's completed register so the background sync can't re-complete it
+            pwRegistrySet(job, false, _reopenNow);
             history[jobIdx] = job;
+
+            // Track this change so onSnapshot doesn't overwrite it (set BEFORE local save triggers sync)
+            window._lastCompletedToggleTime = Date.now();
+            window._lastCompletedToggleJobId = pwJobDocId(job);
+
             safeStorage.setJSON('jobHistory', history);
+            try{if(Array.isArray(window.fullHistory)){var _fi=window.fullHistory.findIndex(function(j){return j.jobNum===job.jobNum&&j.client===job.client;});if(_fi>=0)window.fullHistory[_fi]=job;}}catch(e){}
 
             notify('     Job reopened - now active again');
             showGlobalNotification(` JOB REOPENED #${job.jobNum}\n${job.client} - ${job.totalParts} parts`, '#fff3cd', '#ff9800');
 
-            // Track this change so onSnapshot doesn't overwrite it
-            window._lastCompletedToggleTime = Date.now();
-            window._lastCompletedToggleJobId = job.id || String(job.jobNum);
-
-            // Write IMMEDIATELY to Firestore — don't wait for debounce (onSnapshot would re-complete it)
-            if (window.firebaseDb && window.doc && window.updateDoc && job.id) {
-                const syncUid = window.staffModeOwnerUid || window.currentUser?.uid;
-                if (syncUid) {
-                    const jobRef = window.doc(window.firebaseDb, 'users', syncUid, 'jobs', job.id);
-                    window.updateDoc(jobRef, {
-                        completed: false,
-                        completedDate: null,
-                        dateCompleted: null,
-                        lastModified: job.lastModified
-                    }).then(() => {
-                        console.log('✅ Job uncompleted in Firestore:', job.jobNum);
-                    }).catch(e => {
-                        console.warn('Firestore uncomplete failed:', e);
-                        // Fall back to full sync
-                        if (window.debouncedFirebaseSync) window.debouncedFirebaseSync();
-                    });
-                }
-            } else if (window.debouncedFirebaseSync) {
-                window.debouncedFirebaseSync();
-            }
+            // Write IMMEDIATELY to Firestore — main copy + any old-style copy
+            try { pwPushCompletionToCloud(job); } catch(e) { console.warn('Reopen cloud write error:', e); if (window.debouncedFirebaseSync) window.debouncedFirebaseSync(); }
 
             // Refresh the view
             renderHistory();
@@ -24430,20 +24543,23 @@ if ('serviceWorker' in navigator && _swAllowed) {
         
         
         // Mark job as complete
+        const _mjcNow = new Date().toISOString();
         job.completed = true;
-        job.completedDate = new Date().toISOString();
-        
+        job.completedDate = _mjcNow;
+        job.completedChangedAt = _mjcNow; // v1.16.444: deliberate action stamp
+        job.lastModified = _mjcNow;
+        pwRegistrySet(job, true, _mjcNow);
+
         history[jobIdx] = job;
-        safeStorage.setJSON('jobHistory', history);
-        
+
         // Track this change so snapshot doesn't overwrite it
         window._lastCompletedToggleTime = Date.now();
-        window._lastCompletedToggleJobId = job.id || String(job.jobNum);
-        
-        // Sync to Firebase with debouncing
-        if (window.debouncedFirebaseSync) {
-            window.debouncedFirebaseSync();
-        }
+        window._lastCompletedToggleJobId = pwJobDocId(job);
+
+        safeStorage.setJSON('jobHistory', history);
+
+        // Write straight to the cloud (main copy + any old-style copy)
+        try { pwPushCompletionToCloud(job); } catch(e) { if (window.debouncedFirebaseSync) window.debouncedFirebaseSync(); }
         
         // Generate PDFs and alert admins
         try {
@@ -27873,7 +27989,6 @@ if ('serviceWorker' in navigator && _swAllowed) {
         html += `</table>`;
         html += `<div style='margin-top:15px; display:flex; gap:8px; flex-wrap:wrap; padding:10px; background:#f8f8f8; border-radius:8px; border:1px solid #e0e0e0;'>
             <button onclick='clearFirebaseProfilesData()' style='background:#2196f3;color:#fff;border:none;padding:8px 12px;border-radius:6px;font-weight:900;font-size:11px;cursor:pointer;' title='Deletes the doorProfiles Firestore doc then re-uploads current profiles + matrix'>☁️ Reset & Sync Profiles to Firebase</button>
-            <button onclick='forcePushJobsToCloud()' style='background:#34c759;color:#fff;border:none;padding:8px 12px;border-radius:6px;font-weight:900;font-size:11px;cursor:pointer;'>⬆️ PUSH JOBS TO CLOUD</button>
             <button onclick='forceCloudSync()' style='background:#ff9500;color:#fff;border:none;padding:8px 12px;border-radius:6px;font-weight:900;font-size:11px;cursor:pointer;'>🔄 SYNC FROM CLOUD</button>
             <button onclick='dedupMatrixProfiles()' style='background:#ff3b30;color:#fff;border:none;padding:8px 12px;border-radius:6px;font-weight:900;font-size:11px;cursor:pointer;'>🧹 Remove Duplicates & Push to Cloud</button>
             <button onclick='diagnoseStorage()' style='background:#9c27b0;color:#fff;border:none;padding:8px 12px;border-radius:6px;font-weight:900;font-size:11px;cursor:pointer;'>🔍 DIAGNOSE</button>
@@ -30840,6 +30955,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         // Clear forced-signout flag and set explicit login flag
         sessionStorage.removeItem('pw_forced_signout');
         localStorage.setItem('pw_explicit_login', '1');
+        try { localStorage.removeItem('pw_last_signout'); } catch(e) {}
 
         function showApp() {
             if (errorDiv) errorDiv.style.display = 'none';
@@ -32480,11 +32596,13 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                                 cloudJob.completed = localMatch.completed;
                                 cloudJob.completedDate = localMatch.completedDate;
                                 cloudJob.dateCompleted = localMatch.dateCompleted;
-                            } else if (localMatch && localMatch.completed && !cloudJob.completed) {
-                                // Old logic: protect completed=true from being overwritten
-                                cloudJob.completed = true;
-                                cloudJob.completedDate = localMatch.completedDate || cloudJob.completedDate;
-                                cloudJob.dateCompleted = localMatch.dateCompleted || cloudJob.dateCompleted;
+                            } else if (localMatch) {
+                                // v1.16.444: newest deliberate Complete/Reopen wins.
+                                // Older data with no stamp keeps the old rule (completed protected).
+                                const _cSrc = pwPickCompletionSource(localMatch, cloudJob, true);
+                                if (_cSrc === localMatch && (!!localMatch.completed !== !!cloudJob.completed || pwCompletionTs(localMatch) > pwCompletionTs(cloudJob))) {
+                                    pwApplyCompletion(cloudJob, localMatch);
+                                }
                             }
                             if (localMatch && localMatch.phases) {
                                 // Always initialise phases on cloud job
@@ -32850,7 +32968,12 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                     const _existing = _seenNums.get(key);
                     const _existT = _existing.lastModified ? new Date(_existing.lastModified).getTime() : 0;
                     const _thisT  = job.lastModified     ? new Date(job.lastModified).getTime()     : 0;
-                    if (_thisT > _existT) _seenNums.set(key, job);
+                    let _winner = _thisT > _existT ? job : _existing;
+                    const _loser = _winner === job ? _existing : job;
+                    // v1.16.444: completion status comes from the newest deliberate action
+                    const _cSrc = pwPickCompletionSource(_winner, _loser, false);
+                    if (_cSrc !== _winner) _winner = pwApplyCompletion(Object.assign({}, _winner), _cSrc);
+                    _seenNums.set(key, _winner);
                 }
             });
             const dedupedJobs = Array.from(_seenNums.values());
@@ -32874,7 +32997,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                     jobId = jobId.replace(/\//g, '-');
 
                     // Hash: use lastModified + color + completed — cheap change detection
-                    const _jobHash = `${job.lastModified||''}|${job.color||job.colour||''}|${job.colors||''}|${job.completed||false}|${(job.items||[]).length}`;
+                    const _jobHash = `${job.lastModified||''}|${job.color||job.colour||''}|${job.colors||''}|${job.completed||false}|${job.completedChangedAt||''}|${(job.items||[]).length}`;
                     if (window._lastSyncedJobHashes[jobId] === _jobHash) return; // unchanged
                     window._lastSyncedJobHashes[jobId] = _jobHash;
                     _writtenCount++;
@@ -32882,7 +33005,10 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                     const jobDoc = window.doc(window.firebaseDb, 'users', _syncWriteUid, 'jobs', jobId);
                     var jobForCloud = {...job, id: jobId, lastModified: job.lastModified || new Date().toISOString(), userId: _syncWriteUid};
                     delete jobForCloud.photos;
-                    if (_completedRegistry[jobId] && !jobForCloud.completed) {
+                    // v1.16.444: the register can only re-complete a job if no NEWER
+                    // deliberate Reopen exists for it (previously it overrode reopens)
+                    if (_completedRegistry[jobId] && !jobForCloud.completed &&
+                        pwCompletionTs(jobForCloud) <= (Date.parse(_completedRegistry[jobId]) || 0)) {
                         jobForCloud.completed = true;
                         jobForCloud.completedDate = _completedRegistry[jobId];
                     }
@@ -33121,7 +33247,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             notify('    No formulas to push');
             return;
         }
-        const ref = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'paintFormulas');
+        const ref = window.doc(window.firebaseDb, 'users', window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid, 'appData', 'paintFormulas');
         window.setDoc(ref, { formulas: paintDatabase, updated: new Date().toISOString() })
             .then(() => notify(` Pushed ${paintDatabase.length} formulas to cloud `))
             .catch(e => notify('    Push failed: ' + e.message));
@@ -33133,7 +33259,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         const db = getClientDatabase();
         const count = Object.keys(db).length;
         if (count === 0) { notify('    No clients to push'); return; }
-        const ref = window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', 'clientDatabase');
+        const ref = window.doc(window.firebaseDb, 'users', window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid, 'appData', 'clientDatabase');
         window.setDoc(ref, { clients: db, updated: new Date().toISOString() })
             .then(() => notify(` Pushed ${count} clients to cloud `))
             .catch(e => notify('    Push failed: ' + e.message));
@@ -33142,6 +33268,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
     function forcePushPricingToCloud() {
         if (!window.currentUser) { notify('    Not logged in'); return; }
         if (!window.firebaseDb || !window.doc || !window.setDoc) { notify('    Firebase not ready'); return; }
+        const dataUid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid; // v1.16.444: was undefined → button did nothing
         const configDoc = window.doc(window.firebaseDb, 'users', dataUid, 'config', 'doorProfiles');
         window.setDoc(configDoc, {
             doorProfiles: profiles,
