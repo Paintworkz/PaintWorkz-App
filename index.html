@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.452'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.453'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1955,7 +1955,7 @@ const firebaseConfig = {
 
                 if (lastUid !== user.uid || _freshSession) {
                     console.log('Fresh login — wiping localStorage for clean slate:', user.email);
-                    const keepGlobal = ['paintworkz_version', 'app_theme', 'pw_tooltips', 'pw_device_id', 'pw_explicit_login']; // v1.16.444: explicit-login flag must survive or the next auth fire silently signs out
+                    const keepGlobal = ['paintworkz_version', 'app_theme', 'pw_tooltips', 'pw_device_id', 'pw_explicit_login', 'pw_install_dismissed']; // v1.16.444: explicit-login flag must survive or the next auth fire silently signs out
                     for (let i = localStorage.length - 1; i >= 0; i--) {
                         const k = localStorage.key(i);
                         // Preserve per-user tooltip + tour prefs so help-icon toggle survives login
@@ -14042,6 +14042,13 @@ const firebaseConfig = {
         if (t !== 'admin') {
             const mc = document.querySelector('.container');
             if (mc) { mc.style.maxWidth = ''; mc.style.width = ''; mc.style.padding = ''; }
+        } else {
+            // v1.16.453: returning to Admin — re-apply the width for whichever sub-tab is open (Reports = full width)
+            try {
+                const _act = document.querySelector('#admin .admin-tab-content.active');
+                const _sub = _act ? _act.id.replace(/^admin-tab-|-content$/g, '') : 'general';
+                if (typeof window.pwApplyAdminWidth === 'function') window.pwApplyAdminWidth(_sub);
+            } catch(e) {}
         }
         
         // Populate paint brands dropdown when Measure tab is opened
@@ -24008,6 +24015,15 @@ if ('serviceWorker' in navigator && _swAllowed) {
         }
         
         // Widen container on desktop when pricing tab active, restore otherwise
+        pwApplyAdminWidth(tab);
+
+        // Render content
+        _pwAdminRenderTab(tab);
+    }
+
+    // v1.16.453: width rules for Admin sub-tabs, reusable when coming BACK to Admin
+    // (previously only applied when a sub-tab button was clicked → Reports reopened narrow)
+    function pwApplyAdminWidth(tab) {
         const mainContainer = document.querySelector('.container');
         const adminCard = document.querySelector('#admin > .card');
         if (mainContainer) {
@@ -24025,7 +24041,10 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 if (adminCard) adminCard.style.padding = '';
             }
         }
+    }
+    window.pwApplyAdminWidth = pwApplyAdminWidth;
 
+    function _pwAdminRenderTab(tab) {
         // Render content
         setTimeout(() => {
             if (tab === 'general') {
@@ -33140,6 +33159,68 @@ function endTour() {
 
 window.startTour = startTour;
 window.endTour = endTour;
+</script>
+<script>
+// v1.16.453: "Install the app" helper — slim strip, once per device, never inside the installed app, never on the login screen
+(function(){
+    var KEY = 'pw_install_dismissed';
+    var deferred = null, shown = false;
+    function isStandalone() {
+        try { return window.matchMedia('(display-mode: standalone)').matches || window.matchMedia('(display-mode: fullscreen)').matches || window.navigator.standalone === true; } catch(e) { return false; }
+    }
+    function dismissed() { try { return !!localStorage.getItem(KEY); } catch(e) { return true; } }
+    function isIOS() {
+        var ua = navigator.userAgent || '';
+        return /iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    }
+    function appVisible() {
+        var app = document.getElementById('appContainer'), login = document.getElementById('loginScreen');
+        return window.currentUser && app && app.style.display !== 'none' && (!login || login.style.display === 'none');
+    }
+    function close(remember) {
+        var el = document.getElementById('pwInstallStrip'); if (el) el.remove();
+        if (remember) { try { localStorage.setItem(KEY, String(Date.now())); } catch(e) {} }
+    }
+    function show(mode) {
+        if (shown || isStandalone() || dismissed() || document.getElementById('pwInstallStrip')) return;
+        if (!appVisible()) return;
+        shown = true;
+        var foot = document.getElementById('stickyFooter');
+        var bottom = (foot && foot.offsetHeight ? foot.offsetHeight : 0) + 12;
+        var el = document.createElement('div');
+        el.id = 'pwInstallStrip';
+        el.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:' + bottom + 'px;z-index:9000;width:calc(100% - 24px);max-width:520px;box-sizing:border-box;background:#1c1c1e;border:1px solid rgba(212,175,55,0.6);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.45);padding:10px 10px 10px 14px;display:flex;align-items:center;gap:10px;color:#f2f2f7;font-size:13px;line-height:1.35;';
+        var msg = mode === 'ios'
+            ? '<b style="color:#d4af37;">Install PaintWorkz Pro</b><br><span style="color:#ccc;">Tap <b>Share</b> <span style="display:inline-block;border:1px solid #888;border-radius:4px;padding:0 4px;font-size:11px;">⬆</span> then <b>Add to Home Screen</b></span>'
+            : '<b style="color:#d4af37;">Install PaintWorkz Pro</b><br><span style="color:#ccc;">Opens full screen from its own icon</span>';
+        el.innerHTML = '<span style="font-size:22px;">📲</span><div style="flex:1;min-width:0;">' + msg + '</div>' +
+            (mode === 'ios' ? '' : '<button type="button" id="pwInstallBtn" style="background:#d4af37;color:#000;border:none;border-radius:8px;padding:8px 14px;font-weight:900;font-size:13px;cursor:pointer;white-space:nowrap;">Install</button>') +
+            '<button type="button" id="pwInstallX" aria-label="Close" style="background:none;border:none;color:#888;font-size:20px;line-height:1;padding:4px 6px;cursor:pointer;">✕</button>';
+        document.body.appendChild(el);
+        document.getElementById('pwInstallX').onclick = function() { close(true); };
+        var btn = document.getElementById('pwInstallBtn');
+        if (btn) btn.onclick = function() {
+            if (!deferred) { close(true); return; }
+            deferred.prompt();
+            deferred.userChoice.then(function() { deferred = null; close(true); }).catch(function() { close(true); });
+        };
+    }
+    // Android / Windows / Mac (Chrome, Edge): browser says the app can be installed
+    window.addEventListener('beforeinstallprompt', function(e) {
+        e.preventDefault();
+        deferred = e;
+        tryLater('prompt');
+    });
+    window.addEventListener('appinstalled', function() { close(true); });
+    function tryLater(mode, tries) {
+        tries = tries || 0;
+        if (shown || isStandalone() || dismissed()) return;
+        if (appVisible()) { setTimeout(function(){ show(mode); }, 8000); return; }
+        if (tries < 60) setTimeout(function(){ tryLater(mode, tries + 1); }, 5000);  // wait for login (up to ~5 min)
+    }
+    // iPhone / iPad: no install button exists on iOS, so show the one-time Share tip
+    if (isIOS() && !isStandalone()) tryLater('ios');
+})();
 </script>
 </body>
 </html>
