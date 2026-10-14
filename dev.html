@@ -1514,7 +1514,7 @@ window.getTooltipKey = getTooltipKey;
 </head>
 <body>
 <style>#devBanner { position:fixed;top:0;left:0;right:0;z-index:99999;background:repeating-linear-gradient(-45deg,#ff3b30,#ff3b30 10px,#ff9500 10px,#ff9500 20px);color:#fff;text-align:center;font-weight:900;font-size:11px;letter-spacing:1px;padding:4px 8px;text-shadow:0 1px 2px rgba(0,0,0,0.5);pointer-events:none;}</style>
-<div id="devBanner">🚧 DEVELOPMENT VERSION — LIVE DATA — v1.16.446-dev 🚧</div>
+<div id="devBanner">🚧 DEVELOPMENT VERSION — LIVE DATA — v1.16.446-dev (open in Incognito / separate browser) 🚧</div>
 
 <!-- COPYRIGHT NOTICE -->
 <div id="copyrightBanner" style="display:none;">
@@ -20450,6 +20450,17 @@ const firebaseConfig = {
                     job._estFromCharges=true;
                 }
             }catch(_ce){}
+            // v1.16.446: small job setup fee — the PDF adds it automatically for jobs under the
+            // threshold, but older saved totals (and jobs with no charges yet) don't include it
+            try{
+                if(!window._rptSJ){var _ac=(typeof loadAdditionalCharges==='function')?loadAdditionalCharges():{};window._rptSJ={t:parseFloat(_ac.smallJobSqm),f:parseFloat(_ac.smallJobFee)};setTimeout(function(){window._rptSJ=null;},2000);}
+                var _sjT=window._rptSJ.t, _sjF=window._rptSJ.f;
+                if(_sjF>0&&_sjT>0&&sqm>0&&sqm<_sjT){
+                    var _lc2=job.lastCharges||{};
+                    var _hasFee=(parseFloat(_lc2.otherChargeAmount)||0)>=_sjF || (_lc2.otherRows||[]).some(function(r){return r&&(r._autoSmallJob||/^Small Job Setup Fee/i.test(r.desc||''));});
+                    if(!job._estFromCharges||!_hasFee){ _jv+=_sjF; job._estSmallJob=true; }
+                }
+            }catch(_se){}
             job._estValue=_jv;
             totalValue += _jv;
 
@@ -20886,7 +20897,7 @@ const firebaseConfig = {
                 </tr></tfoot>
             </table>
             </div>
-            <div style="font-size:9px; color:#888; margin-top:6px;">Est. Value is ex GST and includes applied charges (surcharges, delivery, courier, other). <span style="color:#ff9500; font-weight:900;">*</span> = no charges applied yet, base price only.</div>
+            <div style="font-size:9px; color:#888; margin-top:6px;">Est. Value is ex GST and includes applied charges (surcharges, delivery, courier, other) and the small job setup fee where it applies. <span style="color:#ff9500; font-weight:900;">*</span> = no charges applied yet, base price only.</div>
         </div>
 
         <!-- Row 7+8: Estimated Job Value + Paint Base Cost — 50/50 -->
@@ -24487,6 +24498,11 @@ if ('serviceWorker' in navigator && _swAllowed) {
             } catch(e) {}
         }
 
+        // v1.16.446: first time charges are applied to a job there is no saved set to copy —
+        // start from an empty set so the auto rows (small job fee, pencil edges) are still added
+        var _freshCharges = false;
+        if (!lastC) { lastC = { otherRows: [] }; _freshCharges = true; }
+
         if (lastC) {
             // Pre-fill delivery
             if (lastC.deliveryCharge > 0) {
@@ -24568,6 +24584,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
                             '<button type="button" onclick="removeOtherChargeRow(this)" style="border:none; background:' + (_isAuto ? '#ccc' : '#ff3b30') + '; color:#fff; border-radius:4px; padding:0 8px; font-size:12px; cursor:pointer; flex-shrink:0;">' + (_isAuto ? '-' : 'X') + '</button>';
                         ocRows2.appendChild(row);
                     });
+                    if (_freshCharges && typeof addOtherChargeRow === 'function') { try { addOtherChargeRow(); } catch(e) {} }
                 }
             } else if (lastC.otherChargeAmount > 0) {
                 var ocRows3 = document.getElementById('otherChargesRows');
