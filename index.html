@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.450'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.452'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -2458,6 +2458,15 @@ const firebaseConfig = {
         /* v1.16.446: login fits on phones — scroll if needed, tighter spacing on small screens */
         #loginScreen { overflow-y:auto !important; justify-content:safe center !important; }
         #loginCard { flex-shrink:0; box-sizing:border-box; }
+        /* v1.16.451: card sits ABOVE the animation (shapes/painter/spray show around it, not through it) */
+        #loginCard { position:relative; z-index:5; background:rgba(15,15,25,0.97) !important; }
+        body[data-theme="dark"] #loginScreen > #loginCard { background:#2c2c2e !important; }
+        /* own show/hide password button; hide the browser's dark built-in one */
+        #loginPassword::-ms-reveal, #loginPassword::-ms-clear { display:none; }
+        #loginPanelAdmin #loginPwWrap { position:relative; margin-bottom:20px; }
+        #loginPanelAdmin #loginPwWrap input { margin-bottom:0 !important; padding-right:52px !important; }
+        #loginPanelAdmin #loginPwEye { position:absolute !important; right:6px !important; top:50% !important; transform:translateY(-50%); width:42px !important; height:42px !important; padding:0 !important; margin:0 !important; background:transparent !important; border:none !important; cursor:pointer; display:flex; align-items:center; justify-content:center; border-radius:8px; }
+        #loginPanelAdmin #loginPwEye:hover { background:rgba(212,175,55,0.12) !important; }
         @media (max-width: 480px), (max-height: 760px) {
             #loginScreen { padding:12px 16px !important; }
             #loginCard { padding:20px 18px !important; border-radius:18px !important; }
@@ -2470,6 +2479,7 @@ const firebaseConfig = {
             #loginPanelAdmin input { padding:12px !important; margin-bottom:10px !important; font-size:16px !important; }
             #loginPanelAdmin button { padding:12px !important; margin-bottom:8px !important; font-size:15px !important; }
             #loginPanelAdmin > div { margin-top:10px !important; padding:9px 10px !important; }
+            #loginPanelAdmin #loginPwWrap { margin-top:0 !important; padding:0 !important; margin-bottom:10px !important; }
             #loginVersionText { margin-top:8px !important; }
         }
     </style>
@@ -2486,14 +2496,19 @@ const firebaseConfig = {
         </div>
         <div id="loginPanelAdmin">
             <input type="email" id="loginEmail" placeholder="Email" readonly autocomplete="email" style="margin-bottom:12px; padding:15px; background:rgba(255,255,255,0.08); border:1px solid rgba(212,175,55,0.3); border-radius:10px; color:#f2f2f7; width:100%; box-sizing:border-box; font-size:15px;" onfocus="setTimeout(()=>{this.removeAttribute('readonly');},150)" onkeydown="if(event.key==='Enter')handleLogin()">
-            <input type="password" id="loginPassword" placeholder="Password (or 4-digit PIN for staff)" style="margin-bottom:20px; padding:15px; background:rgba(255,255,255,0.08); border:1px solid rgba(212,175,55,0.3); border-radius:10px; color:#f2f2f7; width:100%; box-sizing:border-box; font-size:15px;" onkeydown="if(event.key==='Enter')handleLogin()">
+            <div id="loginPwWrap">
+            <input type="password" id="loginPassword" placeholder="Password (or 4-digit PIN for staff)" style="margin-bottom:0; padding:15px; background:rgba(255,255,255,0.08); border:1px solid rgba(212,175,55,0.3); border-radius:10px; color:#f2f2f7; width:100%; box-sizing:border-box; font-size:15px;" onkeydown="if(event.key==='Enter')handleLogin()">
+            <button type="button" id="loginPwEye" aria-label="Show password" title="Show password" onclick="var i=document.getElementById('loginPassword'); var show=i.type==='password'; i.type=show?'text':'password'; this.setAttribute('aria-label', show?'Hide password':'Show password'); this.title=show?'Hide password':'Show password'; this.querySelector('.pw-eye-slash').style.display=show?'none':'inline';">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#d4af37" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/><line class="pw-eye-slash" x1="3" y1="21" x2="21" y2="3"/></svg>
+            </button>
+            </div>
             <button onclick="handleLogin()" style="width:100%; background:#d4af37; border:none; padding:15px; border-radius:10px; font-weight:900; font-size:16px; cursor:pointer; margin-bottom:10px; color:#000; letter-spacing:0.5px;">SIGN IN</button>
             <button onclick="trySignup()" style="width:100%; background:transparent; color:#d4af37; border:2px solid rgba(212,175,55,0.5); padding:15px; border-radius:10px; font-weight:900; font-size:16px; cursor:pointer; margin-bottom:10px;">CREATE ACCOUNT</button>
             <div id="signupRefWrap" style="margin:-2px 0 10px; text-align:center;">
                 <button id="signupRefLink" type="button" onclick="this.style.display='none';document.getElementById('signupRefCode').style.display='block';document.getElementById('signupRefCode').focus();" style="background:none !important; border:none !important; color:rgba(212,175,55,0.75) !important; font-size:12px !important; font-weight:700; cursor:pointer; padding:2px 4px !important; margin:0 !important; min-height:0 !important; width:auto !important; height:auto !important;">🤝 Got a referral code?</button>
                 <input type="text" id="signupRefCode" placeholder="Referral code (new accounts only) e.g. REF-AB12C" autocomplete="off" style="display:none; padding:12px 15px; background:rgba(255,255,255,0.08); border:1px solid rgba(212,175,55,0.3); border-radius:10px; color:#f2f2f7; width:100%; box-sizing:border-box; font-size:14px; text-transform:uppercase; letter-spacing:1px;">
             </div>
-            <button onclick="showForgotPassword()" style="width:100%; background:transparent; border:none; color:rgba(255,255,255,0.4); font-size:12px; font-weight:700; cursor:pointer; padding:6px;">Forgot password?</button>
+            <button onclick="showForgotPassword()" style="width:100%; background:transparent; border:none; color:rgba(255,255,255,0.75); font-size:12px; font-weight:700; cursor:pointer; padding:6px;">Forgot password?</button>
             <div style="margin-top:16px; padding:12px; background:rgba(33,150,243,0.1); border-radius:8px; border-left:3px solid #2196f3;">
                 <div style="font-size:11px; font-weight:900; color:#64b5f6; margin-bottom:4px;">&#x1F477; STAFF LOGIN</div>
                 <div style="font-size:10px; color:rgba(255,255,255,0.5); line-height:1.4;">Staff: Use your email + 4-digit PIN as password. Ask admin to create your account in Admin → Settings → Staff Accounts.</div>
@@ -3446,7 +3461,8 @@ const firebaseConfig = {
                     <div style="display:flex; gap:6px; margin-bottom:4px; align-items:center;">
                         <input type="text" id="formulaSearch" placeholder="🔍 Search colour, code or tinter (e.g. ITE2003)" style="flex:1; padding:7px 10px; border:1px solid #2196f3; border-radius:6px; font-size:11px; box-sizing:border-box;" oninput="searchFormulas()">
                         <button id="incompleteFilterBtn" onclick="toggleIncompleteFilter()" style="padding:6px 10px; border:2px solid #ff9500; background:#fff; border-radius:6px; font-size:10px; font-weight:900; cursor:pointer; color:#ff9500; white-space:nowrap;" title="Show formulas missing 2L or 3L">⚠️ Incomplete</button>
-                        <button onclick="document.getElementById('formulaSearch').value=''; window._incompleteFilterOn=false; document.getElementById('incompleteFilterBtn').style.background='#fff'; document.getElementById('incompleteFilterBtn').style.color='#ff9500'; searchFormulas();" style="padding:6px 10px; border:none; background:#eee; border-radius:6px; font-size:11px; font-weight:900; cursor:pointer; color:#666;">✕</button>
+                        <button id="cappedFilterBtn" onclick="toggleCappedFilter()" style="padding:6px 10px; border:2px solid #ff9500; background:#fff; border-radius:6px; font-size:10px; font-weight:900; cursor:pointer; color:#ff9500; white-space:nowrap;" title="Show tint-heavy formulas that mix in smaller tins (mixing tin cap)">🪣 Capped</button>
+                        <button onclick="document.getElementById('formulaSearch').value=''; window._incompleteFilterOn=false; window._cappedFilterOn=false; ['incompleteFilterBtn','cappedFilterBtn'].forEach(function(i){var b=document.getElementById(i); if(b){b.style.background='#fff'; b.style.color='#ff9500';}}); searchFormulas();" style="padding:6px 10px; border:none; background:#eee; border-radius:6px; font-size:11px; font-weight:900; cursor:pointer; color:#666;">✕</button>
                     </div>
                     <div style="font-size:9px; color:#888; margin-bottom:6px;">Tip: search a tinter code like <strong>ITE2003</strong> to find which formulas have typos</div>
                     <div id="paintFormulaList" style="background:#fff; border:1px solid #ddd; border-radius:8px; overflow:hidden; max-height:400px; overflow-y:auto;"></div>
@@ -4756,6 +4772,7 @@ const firebaseConfig = {
                     <div id="activePromoDisplay" style="margin-top:10px; display:none;"></div>
                 </div>
 
+                <hr class="staff-hidden" style="margin:20px 0; border:none; border-top:1px solid #ddd;">
                 <!-- ── REFER A SHOP (all users) — v1.16.447 ─────────────────── -->
                 <div class="staff-hidden" style="background:linear-gradient(135deg,#e8f5e9,#e8f5e9cc); border:2px solid #34c759; border-radius:12px; padding:12px 15px; margin-bottom:12px;">
                     <div style="display:flex; align-items:center; gap:8px; cursor:pointer;" onclick="toggleSection('referShopContainer', this.querySelector('button')); if(window.pwRenderReferCard) window.pwRenderReferCard();">
@@ -5666,6 +5683,37 @@ const firebaseConfig = {
         }
     }
     window.initPromoPanel = initPromoPanel;
+
+    // v1.16.451: owner panels collapse with + / − like the other Settings sections (closed by default)
+    function pwMakeOwnerPanelsCollapsible() {
+        ['ownerErrorPanel', 'ownerReferralPanel', 'ownerLoginHistoryPanel', 'ownerPromoPanel'].forEach(id => {
+            const panel = document.getElementById(id);
+            if (!panel || panel.dataset.pwCollapsible) return;
+            const h4 = panel.querySelector('h4');
+            if (!h4) return;
+            panel.dataset.pwCollapsible = '1';
+            const body = document.createElement('div');
+            body.id = id + 'Body';
+            body.style.display = 'none';
+            let n = h4.nextSibling;
+            while (n) { const next = n.nextSibling; body.appendChild(n); n = next; }
+            panel.appendChild(body);
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.textContent = '+';
+            btn.style.cssText = 'background:rgba(212,175,55,0.1); border:1px solid #d4af37; cursor:pointer; font-weight:900; font-size:18px; color:#d4af37; padding:2px 12px; border-radius:6px; min-width:32px; margin-left:auto; line-height:1.2;';
+            h4.style.display = 'flex'; h4.style.alignItems = 'center'; h4.style.gap = '6px'; h4.style.cursor = 'pointer'; h4.style.marginBottom = '8px';
+            h4.appendChild(btn);
+            h4.addEventListener('click', () => {
+                const open = body.style.display === 'none';
+                body.style.display = open ? 'block' : 'none';
+                btn.textContent = open ? '−' : '+';
+            });
+        });
+    }
+    window.pwMakeOwnerPanelsCollapsible = pwMakeOwnerPanelsCollapsible;
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', pwMakeOwnerPanelsCollapsible);
+    else pwMakeOwnerPanelsCollapsible();
 
     // v1.16.447: owner-only list of error reports from every account
     let _pwErrDocs = [];
@@ -8547,6 +8595,20 @@ const firebaseConfig = {
             });
         }
 
+        // v1.16.452: TOTAL WEIGHT — same as the Forms-tab mixing card (stored size total, else the running total)
+        {
+            let _tw = NaN;
+            try {
+                const _sz = f.sizes && (f.sizes[size] || f.sizes[String(size)]);
+                const _raw = (_sz && _sz.totalWeight) || (String(size) === '1' ? f.totalWeight : null);
+                if (_raw) _tw = parseFloat(String(_raw).replace(/[,\s]/g, '').replace('grams', '').replace('g', ''));
+            } catch(e) {}
+            if (isNaN(_tw) && runningTotal > 0) _tw = runningTotal;
+            boxY += 4;
+            doc.setFontSize(12); doc.setFont(undefined, 'bold'); doc.setTextColor(0, 0, 0);
+            doc.text('TOTAL WEIGHT: ' + (isNaN(_tw) ? '_______________' : _tw.toFixed(2)) + ' grams', 25, boxY);
+        }
+
         // Footer
         doc.setFontSize(10); doc.setFont(undefined,'normal'); doc.setTextColor(80,80,80);
         doc.text(`Generated: ${new Date().toLocaleString('en-AU')}`, 15, pageHeight-10);
@@ -8716,6 +8778,19 @@ const firebaseConfig = {
     }
 
     window._incompleteFilterOn = false;
+    window._cappedFilterOn = false;
+
+    // v1.16.451: show only formulas the mixing tin cap applies to (highest tint first)
+    function toggleCappedFilter() {
+        window._cappedFilterOn = !window._cappedFilterOn;
+        const btn = document.getElementById('cappedFilterBtn');
+        if (btn) {
+            btn.style.background = window._cappedFilterOn ? '#ff9500' : '#fff';
+            btn.style.color = window._cappedFilterOn ? '#fff' : '#ff9500';
+        }
+        searchFormulas();
+    }
+    window.toggleCappedFilter = toggleCappedFilter;
 
     function toggleIncompleteFilter() {
         window._incompleteFilterOn = !window._incompleteFilterOn;
@@ -8749,15 +8824,28 @@ const firebaseConfig = {
             formulasToDisplay = formulasToDisplay.filter(f => !isFormulaComplete(f));
         }
 
+        // v1.16.451: capped filter + live count on the button
+        const _isCapped = f => { try { return pwMaxMixLitres(f) < 4; } catch(e) { return false; } };
+        try {
+            const _cb = document.getElementById('cappedFilterBtn');
+            if (_cb) _cb.textContent = '🪣 Capped (' + (paintDatabase || []).filter(_isCapped).length + ')';
+        } catch(e) {}
+        if (window._cappedFilterOn) {
+            formulasToDisplay = formulasToDisplay.filter(_isCapped).slice()
+                .sort((a, b) => { try { return pwFormulaTintPct(b) - pwFormulaTintPct(a); } catch(e) { return 0; } });
+        }
+
         const displayFormulas = formulasToDisplay;
         
         // Update the count
         if (countSpan) {
-            countSpan.innerText = displayFormulas.length + (window._incompleteFilterOn ? ' (incomplete)' : '');
+            countSpan.innerText = displayFormulas.length + (window._incompleteFilterOn ? ' incomplete' : '') + (window._cappedFilterOn ? ' capped' : '');
         }
         
         if (displayFormulas.length === 0) {
-            list.innerHTML = window._incompleteFilterOn
+            list.innerHTML = window._cappedFilterOn
+                ? '<div style="padding:15px; text-align:center; color:#888; font-size:11px; font-weight:900;">No capped formulas' + ((document.getElementById('formulaSearch')?.value || '').trim() || window._incompleteFilterOn ? ' match these filters.' : '.') + '</div>'
+                : window._incompleteFilterOn
                 ? '<div style="padding:15px; text-align:center; color:#34c759; font-size:11px; font-weight:900;">🎉 All formulas complete!</div>'
                 : '<div style="padding:15px; text-align:center; color:#999; font-size:11px;">No formulas found.</div>';
             return;
@@ -8775,16 +8863,16 @@ const firebaseConfig = {
             
             html += `<div style="padding:12px; border-bottom:1px solid #eee; ${!complete ? 'border-left:3px solid #ff9500;' : ''}">`;
             html += `<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:4px;">`;
-            html += `<div style="font-weight:900; font-size:11px; color:#666;">     ${formulaHeader}</div>`;
+            html += `<div style="font-weight:900; font-size:13px; color:#666;">     ${formulaHeader}</div>`;
             html += `<div style="flex-shrink:0; margin-left:6px;">${formulaSizeBadges(f)}</div>`;
             html += `</div>`;
-            html += `<div style="font-size:10px; color:#2196f3; margin-bottom:2px; font-weight:bold;">-${f.product || 'Product'}</div>`;
-            if (f.version) html += `<div style="font-size:9px; color:#9c27b0; margin-bottom:4px; font-weight:700;">Version: ${f.version}</div>`;
-            html += `<div style="font-size:10px; color:#666; margin-bottom:6px;">Code: ${f.code || '---'}</div>`;
+            html += `<div style="font-size:12px; color:#2196f3; margin-bottom:2px; font-weight:bold;">-${f.product || 'Product'}</div>`;
+            if (f.version) html += `<div style="font-size:11px; color:#9c27b0; margin-bottom:4px; font-weight:700;">Version: ${f.version}</div>`;
+            html += `<div style="font-size:12px; color:#666; margin-bottom:6px;">Code: ${f.code || '---'}</div>`;
             const _tinterCodesStr = (f.colourants || []).map(c => c.code || '').filter(Boolean).join(' ');
             const _baseCodesStr = (f.baseTinters || f.whiteBase || []).map(c => c.code || '').filter(Boolean).join(' ');
-            html += `<div style="font-size:9px; color:#999; margin-bottom:8px;">${baseTintCount} base codes · ${colCount} colourants</div>`;
-            html += `<div data-tinter-codes="${_tinterCodesStr}" style="font-size:9px; color:#bbb; margin-bottom:6px; font-family:monospace;">${[_baseCodesStr, _tinterCodesStr].filter(Boolean).join(' · ')}</div>`;
+            html += `<div style="font-size:11px; color:#999; margin-bottom:6px;">${baseTintCount} base codes · ${colCount} colourants</div>`;
+            html += `<div data-tinter-codes="${_tinterCodesStr}" style="font-size:11px; color:#bbb; margin-bottom:8px; font-family:monospace;">${[_baseCodesStr, _tinterCodesStr].filter(Boolean).join(' · ')}</div>`;
             html += `<div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">`;
             html += `<button onclick="editPaintFormula(${actualIndex})" style="padding:5px 12px; background:#2196f3; color:#fff; border:none; border-radius:4px; font-size:10px; font-weight:900; cursor:pointer;">✏️ Edit</button>`;
             html += `<button onclick="openAddSizeModal(${actualIndex})" style="padding:5px 12px; background:#ff9500; color:#fff; border:none; border-radius:4px; font-size:10px; font-weight:900; cursor:pointer;">+ Sizes</button>`;
@@ -8795,8 +8883,10 @@ const firebaseConfig = {
                 const _tp = (typeof pwFormulaTintPct === 'function') ? pwFormulaTintPct(f) : 0;
                 const _mx = (typeof pwMaxMixLitres === 'function') ? pwMaxMixLitres(f) : 4;
                 const _mode = f.mixCap === 'always' ? 'always' : f.mixCap === 'never' ? 'never' : 'auto';
-                html += `<label title="Tinter ${_tp.toFixed(1)}% of weight — mixes up to ${_mx} L per tin" style="display:flex; align-items:center; gap:4px; font-size:9px; font-weight:900; color:${_mx < 4 ? '#0d47a1' : '#888'};">🪣 ${_tp.toFixed(0)}% · max ${_mx}L
-                    <select onchange="pwSetFormulaMixCap(${actualIndex}, this.value)" style="font-size:9px; padding:2px 3px; border:1px solid #90caf9; border-radius:4px;">
+                const _capped = _mx < 4;
+                html += `<label title="Tinter ${_tp.toFixed(1)}% of weight — mixes up to ${_mx} L per tin" style="display:flex; align-items:center; gap:6px; font-weight:900; color:${_capped ? '#ff9500' : '#888'};">
+                    <span style="display:flex; flex-direction:column; line-height:1.15; text-align:left;"><span style="font-size:11px;">🪣 ${_tp.toFixed(0)}% tint</span><span style="font-size:12px;">MAX ${_mx}L</span></span>
+                    <select onchange="pwSetFormulaMixCap(${actualIndex}, this.value)" style="font-size:11px; padding:3px 4px; border:1px solid ${_capped ? '#ff9500' : '#90caf9'}; border-radius:4px;">
                         <option value="auto" ${_mode==='auto'?'selected':''}>Auto</option>
                         <option value="always" ${_mode==='always'?'selected':''}>Always cap</option>
                         <option value="never" ${_mode==='never'?'selected':''}>Never cap</option>
@@ -18490,8 +18580,15 @@ const firebaseConfig = {
                     return batches;
                 }
                 const _earlyBatches = _getBatchesEarly(_earlyLitresNeeded);
-                // Header shows batch sizes not scaled amount: "4L" or "4L + 3L"
-                const _batchLabel = _earlyBatches.join('L + ') + 'L';
+                // Header shows batch sizes not scaled amount: "4L", "4L + 3L", or counted "4 × 3L + 1 × 1L"
+                // v1.16.451: counted format so big jobs never run off the page
+                const _batchLabel = (function(b) {
+                    if (b.length <= 1) return (b[0] || 1) + 'L';
+                    const groups = [];
+                    b.forEach(v => { const g = groups.find(x => x.s === v); if (g) g.n++; else groups.push({ s: v, n: 1 }); });
+                    if (groups.every(g => g.n === 1)) return b.join('L + ') + 'L';
+                    return groups.map(g => g.n + ' × ' + g.s + 'L').join(' + ');
+                })(_earlyBatches);
 
                 // ===== PAINT INFO BOX - SIMPLE BLACK TEXT ON WHITE TO SAVE INK =====
                 doc.setFontSize(18);
@@ -18504,7 +18601,14 @@ const firebaseConfig = {
 
                 // Format: Brand | Color | Finish | BatchSizes (e.g. "4L" or "4L + 3L")
                 const paintInfo = `${paintBrand} | ${color.toUpperCase()} | ${paintFinish} | ${_batchLabel}`;
-                doc.text(paintInfo, 25, y + 16);
+                // v1.16.451: never run off the page — shrink, then wrap to 2 lines inside the box
+                {
+                    let _fs = 18, _lines = doc.splitTextToSize(paintInfo, 160);
+                    while (_lines.length > 1 && _fs > 13) { _fs -= 1; doc.setFontSize(_fs); _lines = doc.splitTextToSize(paintInfo, 160); }
+                    if (_lines.length === 1) doc.text(_lines[0], 25, y + 16);
+                    else { doc.text(_lines.slice(0, 2), 25, y + 10, { lineHeightFactor: 1.15 }); }
+                    doc.setFontSize(18);
+                }
                 y += 28;
                 y += 8;
                 
@@ -18640,7 +18744,12 @@ const firebaseConfig = {
 
                 // Generate one mixing card page per batch
                 const _pageStart = y; // save y for subtitle
-                doc.text(`${_litresNeeded.toFixed(1)}L needed — mixing ${_batches.map((b,i)=>'Batch '+(i+1)+': '+b+'L').join(' + ')}`, 20, y);
+                {
+                    // v1.16.451: wrap long batch lists instead of running off the page
+                    const _subLines = doc.splitTextToSize(`${_litresNeeded.toFixed(1)}L needed — mixing ${_batches.map((b,i)=>'Batch '+(i+1)+': '+b+'L').join(' + ')}`, 170);
+                    doc.text(_subLines, 20, y);
+                    y += (_subLines.length - 1) * 4.5;
+                }
                 // ─────────────────────────────────────────────────────────────
                 doc.setTextColor(0, 0, 0);
                 y += 8;
