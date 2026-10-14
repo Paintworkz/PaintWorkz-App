@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.446-dev'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.446-dev2'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1514,7 +1514,7 @@ window.getTooltipKey = getTooltipKey;
 </head>
 <body>
 <style>#devBanner { position:fixed;top:0;left:0;right:0;z-index:99999;background:repeating-linear-gradient(-45deg,#ff3b30,#ff3b30 10px,#ff9500 10px,#ff9500 20px);color:#fff;text-align:center;font-weight:900;font-size:11px;letter-spacing:1px;padding:4px 8px;text-shadow:0 1px 2px rgba(0,0,0,0.5);pointer-events:none;}</style>
-<div id="devBanner">🚧 DEVELOPMENT VERSION — LIVE DATA — v1.16.446-dev (open in Incognito / separate browser) 🚧</div>
+<div id="devBanner">🚧 DEVELOPMENT VERSION — LIVE DATA — v1.16.446-dev2 (open in Incognito / separate browser) 🚧</div>
 
 <!-- COPYRIGHT NOTICE -->
 <div id="copyrightBanner" style="display:none;">
@@ -11609,6 +11609,41 @@ const firebaseConfig = {
         }
     }
     window.pwJobDocId = pwJobDocId;
+    // v1.16.446: save an Additional Charges snapshot onto the job — every local copy of it,
+    // bump lastModified so the sync notices, and write it straight to the cloud copy.
+    // Used by both Forms → Estimate/Quote/Invoice and Batch Print.
+    function pwSaveChargesToJob(snap) {
+        try {
+            if (!snap) return false;
+            const jn = document.getElementById('jN') ? document.getElementById('jN').value : '';
+            const canon = jn ? pwJobDocId({ jobNum: jn }) : '';
+            const history = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+            const now = new Date().toISOString();
+            let hit = null, n = 0;
+            history.forEach(function(j) {
+                const match = (currentEditingJobId && j.id === currentEditingJobId) || (canon && pwJobDocId(j) === canon);
+                if (!match) return;
+                if (!j.chargesHistory) j.chargesHistory = [];
+                if (!j.chargesHistory.some(function(c) { return c.appliedAt === snap.appliedAt; })) j.chargesHistory.push(snap);
+                j.lastCharges = snap;
+                j.lastModified = now;
+                hit = j; n++;
+            });
+            if (!hit) { console.log('Job not in history yet — charges parked for when job is saved'); return false; }
+            safeStorage.setJSON('jobHistory', history);
+            try { if (window.pwDB) window.pwDB.saveJob(hit); } catch(e) {}
+            const uid = window.resolvedDataUid || window.staffModeOwnerUid || (window.currentUser && window.currentUser.uid);
+            if (uid && window.firebaseDb && window.doc && window.updateDoc) {
+                window.updateDoc(window.doc(window.firebaseDb, 'users', uid, 'jobs', pwJobDocId(hit)), {
+                    lastCharges: snap, chargesHistory: hit.chargesHistory, lastModified: now
+                }).then(function() { console.log('✅ Charges saved to cloud for job #' + hit.jobNum); })
+                  .catch(function(e) { console.warn('Charges cloud write failed — background sync will retry:', e && e.code); if (window.debouncedFirebaseSync) window.debouncedFirebaseSync(); });
+            }
+            console.log('Charges saved to job #' + hit.jobNum + ' (' + n + ' local cop' + (n === 1 ? 'y' : 'ies') + ')');
+            return true;
+        } catch(e) { console.warn('pwSaveChargesToJob error:', e); return false; }
+    }
+
     // Cloud doc ID of the job currently open on the measure sheet
     function pwEditingDocId() {
         try {
@@ -24811,27 +24846,9 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 appliedCharges.lastSnapshot = chargesSnapshot;
                 window._lastChargesSnapshot = chargesSnapshot;
 
-                // Also save directly to localStorage NOW     don't wait for saveJob
-                var history = JSON.parse(localStorage.getItem('jobHistory') || '[]');
-                var currentJobNum = document.getElementById('jN') ? document.getElementById('jN').value : '';
-                var targetIdx = -1;
-                // Prefer index from recalled job, fall back to job number match
-                if (currentEditingJobIndex !== null && currentEditingJobIndex >= 0 && currentEditingJobIndex < history.length) {
-                    targetIdx = currentEditingJobIndex;
-                } else if (currentJobNum) {
-                    targetIdx = history.findIndex(function(j) { return String(j.jobNum) === String(currentJobNum); });
-                }
-                if (targetIdx >= 0) {
-                    if (!history[targetIdx].chargesHistory) history[targetIdx].chargesHistory = [];
-                    history[targetIdx].chargesHistory.push(chargesSnapshot);
-                    history[targetIdx].lastCharges = chargesSnapshot;
-                    safeStorage.setJSON('jobHistory', history);
-                    // Update IndexedDB too
-                    try { if (window.pwDB) window.pwDB.saveJob(history[targetIdx]); } catch(e) {}
-                    console.log('Charges saved directly to job #' + currentJobNum + ' at idx=' + targetIdx);
-                } else {
-                    console.log('Job not in history yet     charges parked for when job is saved');
-                }
+                // v1.16.446: save onto the job (all copies) + straight to the cloud
+                if (chargesSnapshot.formType === '__batch__') chargesSnapshot.formType = 'Batch Print';
+                pwSaveChargesToJob(chargesSnapshot);
             } catch(saveErr) { console.warn('Could not save charges:', saveErr); }
 
             // Capture batch state BEFORE closing modal (close clears pendingFormType)
@@ -24846,29 +24863,8 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 // BATCH MODE: charges were collected for a batch print — run the whole
                 // batch now (financial forms will read the appliedCharges we just set).
                 if (_wasBatch) {
-                    // Save charges history for batch print jobs — same as regular forms
-                    try {
-                        var _bHistory = JSON.parse(localStorage.getItem('jobHistory') || '[]');
-                        var _bJobNum = document.getElementById('jN') ? document.getElementById('jN').value : '';
-                        var _bIdx = -1;
-                        if (currentEditingJobIndex !== null && currentEditingJobIndex >= 0 && currentEditingJobIndex < _bHistory.length) {
-                            _bIdx = currentEditingJobIndex;
-                        } else if (_bJobNum) {
-                            _bIdx = _bHistory.findIndex(function(j) { return String(j.jobNum) === String(_bJobNum); });
-                        }
-                        if (_bIdx >= 0 && window._lastChargesSnapshot) {
-                            if (!_bHistory[_bIdx].chargesHistory) _bHistory[_bIdx].chargesHistory = [];
-                            var _bSnap = window._lastChargesSnapshot;
-                            var _bAlready = _bHistory[_bIdx].chargesHistory.some(function(c) { return c.appliedAt === _bSnap.appliedAt; });
-                            if (!_bAlready) {
-                                _bHistory[_bIdx].chargesHistory.push(_bSnap);
-                                _bHistory[_bIdx].lastCharges = _bSnap;
-                                safeStorage.setJSON('jobHistory', _bHistory);
-                                try { if (window.pwDB) window.pwDB.saveJob(_bHistory[_bIdx]); } catch(e) {}
-                                console.log('Batch print charges saved to job #' + _bJobNum);
-                            }
-                        }
-                    } catch(e) { console.warn('Batch charges history save error:', e); }
+                    // v1.16.446: charges were already saved onto the job above (pwSaveChargesToJob)
+                    try { if (window._lastChargesSnapshot) pwSaveChargesToJob(window._lastChargesSnapshot); } catch(e) {}
                     if (_batchForms && _batchForms.length && typeof _runBatchPrint === 'function') {
                         _runBatchPrint(_batchForms);
                     }
