@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.444-dev4'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.445-dev'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1487,7 +1487,7 @@ window.getTooltipKey = getTooltipKey;
 </head>
 <body>
 <style>#devBanner { position:fixed;top:0;left:0;right:0;z-index:99999;background:repeating-linear-gradient(-45deg,#ff3b30,#ff3b30 10px,#ff9500 10px,#ff9500 20px);color:#fff;text-align:center;font-weight:900;font-size:11px;letter-spacing:1px;padding:4px 8px;text-shadow:0 1px 2px rgba(0,0,0,0.5);pointer-events:none;}</style>
-<div id="devBanner">🚧 DEVELOPMENT VERSION — LIVE DATA — v1.16.444-dev4 🚧</div>
+<div id="devBanner">🚧 DEVELOPMENT VERSION — LIVE DATA — v1.16.445-dev 🚧</div>
 
 <!-- COPYRIGHT NOTICE -->
 <div id="copyrightBanner" style="display:none;">
@@ -1794,7 +1794,7 @@ const firebaseConfig = {
 <!-- Cache buster: separate script block so version check runs immediately -->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.444-dev4'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.445-dev'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -5815,10 +5815,10 @@ const firebaseConfig = {
                         <div style="font-weight:900; font-size:12px; color:#4a148c; margin-bottom:6px;">&#129302; Automated Overnight Backups</div>
                         <p style="font-size:10px; color:#555; margin:0 0 8px 0; line-height:1.5;">
                             The companion script <code style="background:#e1bee7; padding:2px 4px; border-radius:3px;">paintworkz-backup.js</code> runs nightly on Windows/Mac,
-                            connects to Firebase, and saves 30-day rotating backups to your external 5TB drive. No browser needed.
+                            connects to Firebase, and saves 30-day rotating backups into the folder you keep the script in (e.g. your external drive). No browser needed.
                         </p>
                         <p style="font-size:10px; color:#555; margin:0 0 10px 0; line-height:1.5;">
-                            Full setup instructions are included inside the script file.
+                            The script is built for the account you're logged in as — log in as the shop account before downloading. Setup steps are at the top of the file.
                         </p>
                         <button onclick="downloadBackupScript()" style="width:100%; background:#6a1b9a; color:#fff; border:none; padding:10px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer; letter-spacing:0.5px;">
                             ⬇️ DOWNLOAD BACKUP SCRIPT (paintworkz-backup.js)
@@ -13867,186 +13867,21 @@ const firebaseConfig = {
         notify('    Backup path saved: ' + path);
     }
 
+    // v1.16.445: serves the v2 nightly backup script (all pages, correct account, referer header)
+    const PW_BACKUP_SCRIPT_TEMPLATE = "/**\n * PaintWorkz Pro \u2014 Nightly Backup Script  (v2)\n * ============================================\n * Backs up the data for __EMAIL__ from Firebase to a dated JSON file.\n * Downloaded from PaintWorkz Pro __VERSION__ on __DATE__.\n *\n * - Refuses to run on any other account\n * - Fetches ALL jobs (every page) plus all settings\n * - Account + job count in the filename, e.g. PaintWorkz_Backup_2026-10-15_02-00_paint_workz_265jobs.json\n * - Writes BACKUP_FAILED.txt in the folder if anything goes wrong\n * - Keeps 30 days of backups; only deletes old ones after a good backup\n *\n * SETUP (one-time, on the PC that runs the backup):\n *   1. Install Node.js (https://nodejs.org, LTS version)\n *   2. Save THIS file into the folder you want backups in, e.g.\n *        D:\\PaintWorkz Backups\\paintworkz-backup.js\n *      (Backups are saved next to this file.)\n *   3. Open Command Prompt and run these two lines (use your real password):\n *        setx PAINTWORKZ_EMAIL \"__EMAIL__\"\n *        setx PAINTWORKZ_PASSWORD \"your PaintWorkz password\"\n *   4. Close Command Prompt, open a new one, and test:\n *        node \"D:\\PaintWorkz Backups\\paintworkz-backup.js\"\n *      It should finish with \"Backup complete\".\n *   5. Task Scheduler > Create Basic Task > Daily, 2:00 AM > Start a program:\n *        Program/script:  node\n *        Add arguments:   \"D:\\PaintWorkz Backups\\paintworkz-backup.js\"\n *        Start in:        D:\\PaintWorkz Backups\n *      Tick \"Run whether user is logged on or not\" (needs your Windows password).\n */\n\nconst fs    = require('fs');\nconst path  = require('path');\nconst https = require('https');\n\n// \u2500\u2500 CONFIG \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n// Backups are saved in the SAME folder as this script (e.g. D:\\PaintWorkz Backups)\nconst BACKUP_DIR     = process.env.PAINTWORKZ_BACKUP_DIR || __dirname;\nconst KEEP_DAYS      = 30;\nconst EXPECTED_EMAIL = '__EMAIL__';   // the account this script backs up\nconst PROJECT_ID     = 'paintworkz-42bc0';\nconst API_KEY        = 'AIzaSyBdcKqXf_EsOjWdSMvDr4jcnumhgFutlxk';\n// \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\nconst EMAIL    = (process.env.PAINTWORKZ_EMAIL || '').trim();\nconst PASSWORD = process.env.PAINTWORKZ_PASSWORD || '';\n\nfunction request(method, hostname, p, body, token) {\n    return new Promise((resolve, reject) => {\n        const payload = body ? JSON.stringify(body) : null;\n        const headers = {};\n        if (payload) { headers['Content-Type'] = 'application/json'; headers['Content-Length'] = Buffer.byteLength(payload); }\n        if (token) headers['Authorization'] = 'Bearer ' + token;\n        // The Firebase API key only accepts requests from the app's website\n        headers['Referer'] = 'https://app.paintworkzpro.com.au/';\n        headers['Origin']  = 'https://app.paintworkzpro.com.au';\n        const req = https.request({ method, hostname, path: p, headers }, res => {\n            let data = '';\n            res.on('data', d => data += d);\n            res.on('end', () => {\n                let json;\n                try { json = JSON.parse(data || '{}'); } catch (e) { return reject(new Error('Bad response (' + res.statusCode + '): ' + data.slice(0, 200))); }\n                if (res.statusCode >= 400) return reject(new Error('HTTP ' + res.statusCode + ': ' + JSON.stringify(json.error || json).slice(0, 300)));\n                resolve(json);\n            });\n        });\n        req.on('error', reject);\n        req.setTimeout(60000, () => req.destroy(new Error('Request timed out')));\n        if (payload) req.write(payload);\n        req.end();\n    });\n}\n\nasync function signIn() {\n    const res = await request('POST', 'identitytoolkit.googleapis.com',\n        '/v1/accounts:signInWithPassword?key=' + API_KEY,\n        { email: EMAIL, password: PASSWORD, returnSecureToken: true });\n    if (!res.idToken) throw new Error('Sign-in failed');\n    return { idToken: res.idToken, userId: res.localId, email: res.email };\n}\n\nfunction parseVal(v) {\n    if (!v) return null;\n    if (v.stringValue    !== undefined) return v.stringValue;\n    if (v.integerValue   !== undefined) return parseInt(v.integerValue, 10);\n    if (v.doubleValue    !== undefined) return parseFloat(v.doubleValue);\n    if (v.booleanValue   !== undefined) return v.booleanValue;\n    if (v.timestampValue !== undefined) return v.timestampValue;\n    if (v.nullValue      !== undefined) return null;\n    if (v.arrayValue) return (v.arrayValue.values || []).map(parseVal);\n    if (v.mapValue)   return parseFields(v.mapValue.fields || {});\n    return v;\n}\nfunction parseFields(fields) {\n    const out = {};\n    for (const [k, v] of Object.entries(fields || {})) out[k] = parseVal(v);\n    return out;\n}\n\nconst base = '/v1/projects/' + PROJECT_ID + '/databases/(default)/documents/';\n\n// Follows nextPageToken so EVERY document is fetched\nasync function fetchCollection(token, colPath) {\n    const docs = [];\n    let pageToken = '';\n    let pages = 0;\n    do {\n        const q = '?pageSize=300' + (pageToken ? '&pageToken=' + encodeURIComponent(pageToken) : '');\n        const res = await request('GET', 'firestore.googleapis.com', base + colPath + q, null, token);\n        (res.documents || []).forEach(d => docs.push({ id: d.name.split('/').pop(), ...parseFields(d.fields) }));\n        pageToken = res.nextPageToken || '';\n        if (++pages > 200) throw new Error('Too many pages \u2014 stopping to be safe');\n    } while (pageToken);\n    return docs;\n}\n\nasync function fetchDoc(token, docPath) {\n    try {\n        const res = await request('GET', 'firestore.googleapis.com', base + docPath, null, token);\n        return res.fields ? parseFields(res.fields) : null;\n    } catch (e) {\n        if (/HTTP 404/.test(e.message)) return null;\n        throw e;\n    }\n}\n\nfunction rotateOldBackups(dir) {\n    const cutoff = Date.now() - KEEP_DAYS * 86400000;\n    fs.readdirSync(dir).forEach(f => {\n        if (!/^PaintWorkz_Backup_.*\\.json$/.test(f)) return;\n        const full = path.join(dir, f);\n        if (fs.statSync(full).mtimeMs < cutoff) { fs.unlinkSync(full); console.log('  Deleted old backup:', f); }\n    });\n}\n\nasync function run() {\n    const now = new Date();\n    const pad = n => String(n).padStart(2, '0');\n    const stamp = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate()) + '_' + pad(now.getHours()) + '-' + pad(now.getMinutes());\n    console.log('\\nPaintWorkz Backup \u2014 ' + now.toLocaleString('en-AU'));\n\n    if (!EMAIL || !PASSWORD) throw new Error('PAINTWORKZ_EMAIL / PAINTWORKZ_PASSWORD are not set on this PC.');\n    if (EMAIL.toLowerCase() !== EXPECTED_EMAIL) {\n        throw new Error('WRONG ACCOUNT: this PC is set to back up \"' + EMAIL + '\". It must be \"' + EXPECTED_EMAIL + '\" (the account this script was made for). Fix with: setx PAINTWORKZ_EMAIL \"' + EXPECTED_EMAIL + '\"');\n    }\n\n    console.log('  Signing in as', EMAIL, '...');\n    const { idToken, userId, email } = await signIn();\n    console.log('  Account ID:', userId);\n\n    console.log('  Fetching jobs...');\n    const jobs = await fetchCollection(idToken, 'users/' + userId + '/jobs');\n    const jobNums = new Set(jobs.map(j => String(j.jobNum || '').trim()).filter(Boolean));\n    console.log('  Jobs:', jobs.length, 'cloud copies,', jobNums.size, 'unique job numbers');\n    if (jobs.length === 0) throw new Error('Cloud returned 0 jobs \u2014 not saving an empty backup.');\n\n    const appDataKeys = ['paintFormulas', 'clientDatabase', 'masterMatrix', 'ctsData', 'companySettings',\n        'appColors', 'stockSettings', 'stockLevels', 'additionalCharges', 'adminSettings',\n        'defaultTimeline', 'globalNotifications', 'shopClosures', 'coverageRates', 'adminAlerts'];\n    const appData = {};\n    for (const k of appDataKeys) {\n        const d = await fetchDoc(idToken, 'users/' + userId + '/appData/' + k);\n        if (d) appData[k] = d;\n    }\n    const config = {};\n    for (const k of ['doorProfiles']) {\n        const d = await fetchDoc(idToken, 'users/' + userId + '/config/' + k);\n        if (d) config[k] = d;\n    }\n    console.log('  App data sections:', Object.keys(appData).length, '| Config:', Object.keys(config).join(', ') || 'none');\n\n    const backup = {\n        _meta: {\n            backupDate: now.toISOString(),\n            backupDateAU: now.toLocaleString('en-AU'),\n            script: 'PaintWorkz Nightly Backup v2',\n            account: email,\n            ownerUid: userId,\n            project: PROJECT_ID,\n            jobDocs: jobs.length,\n            uniqueJobNumbers: jobNums.size\n        },\n        jobs, appData, config\n    };\n\n    if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });\n    const acct = email.split('@')[0];\n    const file = path.join(BACKUP_DIR, 'PaintWorkz_Backup_' + stamp + '_' + acct + '_' + jobNums.size + 'jobs.json');\n    fs.writeFileSync(file, JSON.stringify(backup, null, 2));\n    // Verify it wrote correctly before cleaning anything up\n    const check = JSON.parse(fs.readFileSync(file, 'utf8'));\n    if (!check.jobs || check.jobs.length !== jobs.length) throw new Error('Backup file did not verify \u2014 old backups kept.');\n    console.log('  Saved:', file, '(' + Math.round(fs.statSync(file).size / 1024) + ' KB)');\n\n    try { fs.unlinkSync(path.join(BACKUP_DIR, 'BACKUP_FAILED.txt')); } catch (e) {}\n    rotateOldBackups(BACKUP_DIR);\n    console.log('  \u2705 Backup complete\\n');\n}\n\nrun().catch(err => {\n    console.error('\\n\u274c Backup FAILED:', err.message, '\\n');\n    try {\n        if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });\n        fs.writeFileSync(path.join(BACKUP_DIR, 'BACKUP_FAILED.txt'),\n            'PaintWorkz backup FAILED at ' + new Date().toLocaleString('en-AU') + '\\n\\n' + err.message + '\\n');\n    } catch (e) {}\n    process.exit(1);\n});\n";
+
     function downloadBackupScript() {
-        const savedPath = localStorage.getItem('backupDrivePath') || 'E:\\Backups\\PaintWorkz';
-        const escapedPath = savedPath.replace(/\\/g, '\\\\');
-        const projectId = 'paintworkz-42bc0';
-        const apiKey = 'AIzaSyBdcKqXf_EsOjWdSMvDr4jcnumhgFutlxk';
-
-        const script = [
-'/**',
-' * PaintWorkz Pro     Nightly Backup Script',
-' * =======================================',
-' * Pulls all data from Firebase, saves a dated JSON backup to your external drive.',
-' * Old backups beyond KEEP_DAYS are automatically deleted.',
-' *',
-' * SETUP (one-time):',
-' *   1. Install Node.js from https://nodejs.org  (LTS version)',
-' *   2. Save this file somewhere on your PC, e.g.: C:\\Users\\Colin\\paintworkz-backup.js',
-' *   3. Open Task Scheduler     Create Basic Task     Daily at 2:00 AM',
-' *      Program/script: node',
-' *      Add arguments:  C:\\Users\\Colin\\paintworkz-backup.js',
-' *      Start in:       C:\\Users\\Colin\\',
-' *   4. Set PAINTWORKZ_EMAIL and PAINTWORKZ_PASSWORD env variables (see below)',
-' *   5. Done     runs silently every night, rotates after 30 days',
-' *',
-' * SET CREDENTIALS (run in Command Prompt once, then restart PC):',
-' *   setx PAINTWORKZ_EMAIL "your@email.com"',
-' *   setx PAINTWORKZ_PASSWORD "yourpassword"',
-' */',
-'',
-"const fs    = require('fs');",
-"const path  = require('path');",
-"const https = require('https');",
-'',
-'//           CONFIG                                                                                                                                                                                                       ',
-'const BACKUP_DIR = ' + JSON.stringify(savedPath + '\\\\') + ';',
-'const KEEP_DAYS  = 30;',
-'const PROJECT_ID = ' + JSON.stringify(projectId) + ';',
-'const API_KEY    = ' + JSON.stringify(apiKey) + ';',
-'//                                                                                                                                                                                                                                        ',
-'',
-"const EMAIL    = process.env.PAINTWORKZ_EMAIL    || '';",
-"const PASSWORD = process.env.PAINTWORKZ_PASSWORD || '';",
-'',
-'function httpsPost(url, body) {',
-'    return new Promise((resolve, reject) => {',
-'        const payload = JSON.stringify(body);',
-'        const opts = { method: "POST", headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) } };',
-'        const u = new URL(url);',
-'        const req = https.request({ hostname: u.hostname, path: u.pathname + u.search, ...opts }, res => {',
-'            let data = "";',
-'            res.on("data", d => data += d);',
-'            res.on("end", () => { try { resolve(JSON.parse(data)); } catch(e) { reject(new Error("Parse: " + data.substring(0,200))); } });',
-'        });',
-'        req.on("error", reject); req.write(payload); req.end();',
-'    });',
-'}',
-'',
-'function httpsGetJson(hostname, path_) {',
-'    return new Promise((resolve, reject) => {',
-'        let data = "";',
-'        https.get({ hostname, path: path_ }, res => {',
-'            res.on("data", d => data += d);',
-'            res.on("end", () => { try { resolve(JSON.parse(data)); } catch(e) { reject(e); } });',
-'        }).on("error", reject);',
-'    });',
-'}',
-'',
-'async function signIn() {',
-'    const url = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${API_KEY}`;',
-'    const res = await httpsPost(url, { email: EMAIL, password: PASSWORD, returnSecureToken: true });',
-'    if (!res.idToken) throw new Error("Sign-in failed: " + JSON.stringify(res));',
-'    const payload = JSON.parse(Buffer.from(res.idToken.split(".")[1], "base64").toString());',
-'    return { idToken: res.idToken, userId: payload.user_id };',
-'}',
-'',
-'function parseVal(v) {',
-'    if (!v) return null;',
-'    if (v.stringValue  !== undefined) return v.stringValue;',
-'    if (v.integerValue !== undefined) return parseInt(v.integerValue);',
-'    if (v.doubleValue  !== undefined) return parseFloat(v.doubleValue);',
-'    if (v.booleanValue !== undefined) return v.booleanValue;',
-'    if (v.nullValue    !== undefined) return null;',
-'    if (v.arrayValue)  return (v.arrayValue.values || []).map(parseVal);',
-'    if (v.mapValue)    return parseFields(v.mapValue.fields || {});',
-'    return v;',
-'}',
-'',
-'function parseFields(fields) {',
-'    const out = {};',
-'    for (const [k,v] of Object.entries(fields)) out[k] = parseVal(v);',
-'    return out;',
-'}',
-'',
-'async function fetchCollection(idToken, userId, col) {',
-'    const p = `/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${userId}/${col}`;',
-'    const res = await httpsGetJson("firestore.googleapis.com", p + "?pageSize=1000&access_token=" + idToken);',
-'    if (!res.documents) return [];',
-'    return res.documents.map(d => ({ _id: d.name.split("/").pop(), ...parseFields(d.fields||{}) }));',
-'}',
-'',
-'async function fetchDoc(idToken, path_) {',
-'    try {',
-'        const res = await httpsGetJson("firestore.googleapis.com",',
-'            `/v1/projects/${PROJECT_ID}/databases/(default)/documents/${path_}?access_token=${idToken}`);',
-'        return res.fields ? parseFields(res.fields) : {};',
-'    } catch(e) { return {}; }',
-'}',
-'',
-'function rotateOldBackups(dir) {',
-'    if (!fs.existsSync(dir)) return;',
-'    const cutoff = Date.now() - KEEP_DAYS * 86400000;',
-'    fs.readdirSync(dir).forEach(f => {',
-'        if (!f.startsWith("PaintWorkz_Backup_") || !f.endsWith(".json")) return;',
-'        const full = path.join(dir, f);',
-'        if (fs.statSync(full).mtimeMs < cutoff) {',
-'            fs.unlinkSync(full);',
-'            console.log("  Deleted old backup:", f);',
-'        }',
-'    });',
-'}',
-'',
-'async function run() {',
-'    const ts = new Date().toISOString().replace(/[T:]/g,"-").substring(0,19);',
-'    console.log("\\nPaintWorkz Backup     " + ts);',
-'',
-'    if (!EMAIL || !PASSWORD) {',
-'        console.error("ERROR: Set PAINTWORKZ_EMAIL and PAINTWORKZ_PASSWORD env variables.");',
-'        process.exit(1);',
-'    }',
-'',
-'    console.log("  Signing in to Firebase...");',
-'    const { idToken, userId } = await signIn();',
-'    console.log("  User:", userId);',
-'',
-'    console.log("  Fetching data...");',
-'    const [jobs, doorProfiles] = await Promise.all([',
-'        fetchCollection(idToken, userId, "jobs"),',
-'        fetchDoc(idToken, `users/${userId}/config/doorProfiles`)',
-'    ]);',
-'',
-'    // Fetch all appData documents',
-'    const appDataKeys = ["paintFormulas","clientDatabase","masterMatrix","ctsData",',
-'        "companySettings","appColors","stockSettings","additionalCharges",',
-'        "adminSettings","defaultTimeline","globalNotifications"];',
-'    const appData = {};',
-'    await Promise.all(appDataKeys.map(async k => {',
-'        try {',
-'            const doc = await fetchDoc(idToken, `users/${userId}/appData/${k}`);',
-'            if (doc && Object.keys(doc).length > 0) appData[k] = doc;',
-'        } catch(e) {}',
-'    }));',
-'',
-'    const backup = {',
-'        _meta: {',
-'            version: "v1.16.433",',
-'            exported: new Date().toISOString(),',
-'            exportedBy: "PaintWorkz Nightly Backup Script",',
-'            ownerUid: userId,',
-'            project: PROJECT_ID',
-'        },',
-'        jobs,',
-'        appData,',
-'        config: { doorProfiles }',
-'    };',
-'',
-'    if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });',
-'    const filename = path.join(BACKUP_DIR, `PaintWorkz_Backup_${ts}.json`);',
-'    fs.writeFileSync(filename, JSON.stringify(backup, null, 2));',
-'    const kb = Math.round(fs.statSync(filename).size / 1024);',
-'    console.log(`  Saved: ${filename} (${kb} KB)`);',
-'',
-'    rotateOldBackups(BACKUP_DIR);',
-'    console.log("      Backup complete\\n");',
-'}',
-'',
-'run().catch(err => {',
-'    console.error("\\nBackup FAILED:", err.message);',
-'    process.exit(1);',
-'});',
-        ].join('\n');
-
+        const email = (window.currentUser && window.currentUser.email) ? window.currentUser.email.toLowerCase() : '';
+        if (!email) { notify('Log in first — the script is built for the account you are logged in as'); return; }
+        let msg = 'This backup script will back up the data for:\n\n    ' + email + '\n\nIt will refuse to run on any other account.';
+        if (email === 'ckbedford@outlook.com') {
+            msg = '⚠️ You are logged in as ckbedford@outlook.com.\n\nThe SHOP data lives under paint_workz@outlook.com. A script downloaded now will back up the ckbedford data, NOT the shop jobs.\n\nTo back up the shop, cancel, log in as paint_workz and download again.\n\nDownload a ckbedford script anyway?';
+        }
+        if (!confirm(msg)) return;
+        const script = PW_BACKUP_SCRIPT_TEMPLATE
+            .split('__EMAIL__').join(email)
+            .split('__VERSION__').join(window.CURRENT_VERSION || '')
+            .split('__DATE__').join(new Date().toLocaleDateString('en-AU'));
         const blob = new Blob([script], { type: 'text/javascript' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -14055,8 +13890,8 @@ const firebaseConfig = {
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        notify('    Backup script downloaded     see setup instructions above');
+        setTimeout(function(){ URL.revokeObjectURL(url); }, 2000);
+        notify('Backup script downloaded for ' + email + ' — setup steps are at the top of the file');
     }
 
     function doRestoreBackup(input) {
