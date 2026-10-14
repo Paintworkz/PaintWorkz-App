@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.446'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.448'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1470,12 +1470,91 @@ const safeStorage = {
 
 <script>
 // Global error handler
-window.addEventListener('error', function(e) {
-    console.error('App error:', e.message, 'at', e.filename, ':', e.lineno);
-});
-window.addEventListener('unhandledrejection', function(e) {
-    console.error('Unhandled rejection:', e.reason);
-});
+// v1.16.447: errors are also reported to the owner (Firestore 'errorReports').
+// Queued on the device first, so reports survive a lost connection / lost sign-in,
+// and rate-limited so one repeating fault can't flood anything.
+(function(){
+    var QKEY = 'pw_err_queue', SEEN = 'pw_err_seen', DAY = 'pw_err_day';
+    function _get(k, d) { try { var v = JSON.parse(localStorage.getItem(k) || 'null'); return v == null ? d : v; } catch(e) { return d; } }
+    function _set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e) {} }
+    function _ignore(msg) {
+        msg = String(msg || '');
+        if (!msg || msg === 'Script error.' || msg === 'Script error') return true;      // cross-origin noise, no detail
+        if (/ResizeObserver loop/i.test(msg)) return true;                              // harmless browser warning
+        if (/extension:\/\/|chrome-extension/i.test(msg)) return true;                   // browser extensions, not the app
+        if (/permission-denied.*errorReports/i.test(msg)) return true;                  // don't report the reporter
+        return false;
+    }
+    window.pwReportError = function(kind, message, extra) {
+        try {
+            message = String(message || '').slice(0, 500);
+            if (_ignore(message)) return;
+            var now = Date.now();
+            var today = new Date().toISOString().slice(0, 10);
+            var day = _get(DAY, { d: today, n: 0 });
+            if (day.d !== today) day = { d: today, n: 0 };
+            if (day.n >= 20) return;                                   // max 20 per device per day
+            var key = (kind + '|' + message).slice(0, 200);
+            var seen = _get(SEEN, {});
+            Object.keys(seen).forEach(function(k){ if (now - seen[k] > 3600000) delete seen[k]; });
+            if (seen[key]) return;                                     // same error once per hour
+            seen[key] = now; _set(SEEN, seen);
+            day.n++; _set(DAY, day);
+            var u = window.currentUser || {};
+            var q = _get(QKEY, []);
+            q.push({
+                kind: String(kind || 'error'),
+                message: message,
+                stack: String((extra && extra.stack) || '').slice(0, 1500),
+                detail: String((extra && extra.detail) || '').slice(0, 500),
+                email: u.email || '',
+                uid: u.uid || '',
+                version: window.CURRENT_VERSION || '',
+                page: (location.pathname || '').split('/').pop() || 'index.html',
+                device: (navigator.userAgent || '').slice(0, 200),
+                at: now
+            });
+            if (q.length > 30) q = q.slice(-30);
+            _set(QKEY, q);
+            setTimeout(window.pwFlushErrorReports, 1500);
+        } catch(e) {}
+    };
+    var _flushing = false;
+    window.pwFlushErrorReports = async function() {
+        if (_flushing) return;
+        try {
+            var auth = window.firebaseAuth;
+            if (!auth || !auth.currentUser || !window.firebaseDb || !window.setDoc || !window.doc) return;
+            var q = _get(QKEY, []);
+            if (!q.length) return;
+            _flushing = true;
+            var left = [];
+            for (var i = 0; i < q.length; i++) {
+                var r = q[i];
+                if (!r.email) { r.email = auth.currentUser.email || ''; r.uid = auth.currentUser.uid || ''; }
+                var id = r.at + '_' + Math.random().toString(36).slice(2, 8);
+                try { await window.setDoc(window.doc(window.firebaseDb, 'errorReports', id), r); }
+                catch(e) {
+                    if (e && e.code === 'permission-denied') { left = []; break; } // rule not added yet — drop quietly
+                    left.push(r);
+                }
+            }
+            _set(QKEY, left.slice(-30));
+        } catch(e) {} finally { _flushing = false; }
+    };
+    window.addEventListener('error', function(e) {
+        console.error('App error:', e.message, 'at', e.filename, ':', e.lineno);
+        var f = String(e.filename || '').split('/').pop();
+        window.pwReportError('js-error', e.message, { stack: (e.error && e.error.stack) || '', detail: f + ':' + e.lineno + ':' + e.colno });
+    });
+    window.addEventListener('unhandledrejection', function(e) {
+        console.error('Unhandled rejection:', e.reason);
+        var r = e.reason || {};
+        var m = (r && r.message) ? r.message : String(r);
+        window.pwReportError('promise', (r && r.code ? '[' + r.code + '] ' : '') + m, { stack: r && r.stack || '' });
+    });
+    setInterval(function(){ window.pwFlushErrorReports && window.pwFlushErrorReports(); }, 120000);
+})();
 
 // CRITICAL: Define tooltip functions EARLY so checkbox can call them
 function getTooltipKey() {
@@ -1695,7 +1774,7 @@ window.getTooltipKey = getTooltipKey;
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
         import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, reauthenticateWithCredential, EmailAuthProvider, sendPasswordResetEmail, confirmPasswordReset, verifyPasswordResetCode } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js";
-        import { getFirestore, collection, doc, setDoc, addDoc, getDoc, onSnapshot, getDocs, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
+        import { getFirestore, collection, doc, setDoc, addDoc, getDoc, onSnapshot, getDocs, deleteDoc, updateDoc, query, where } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
         
         // ─────────────────────────────────────────────────────────────────
 // FIREBASE API KEY SECURITY
@@ -1757,6 +1836,8 @@ const firebaseConfig = {
         window.updateDoc = updateDoc;
         window.onSnapshot = onSnapshot;
         window.getDocs = getDocs;
+        window.fsQuery = query;   // v1.16.447 (referrals)
+        window.fsWhere = where;
         
         // Auth functions
         window.createUserWithEmailAndPassword = (email, password) => createUserWithEmailAndPassword(auth, email, password);
@@ -1771,6 +1852,9 @@ const firebaseConfig = {
                 localStorage.removeItem('pw_last_signout_reason');
                 console.warn('🔓 App called signOut:', _why, '|', _st);
             } catch(e) {}
+            // v1.16.447: any sign-out the APP asks for is deliberate → show the login screen.
+            // Only a sign-out Firebase does by itself gets the red "not connected" bar.
+            window._userInitiatedLogout = true;
             return signOut(auth);
         };
         window.sendPasswordResetEmail = (email) => sendPasswordResetEmail(auth, email, {
@@ -1802,13 +1886,14 @@ const firebaseConfig = {
                 }
                 // Cancel any pending logout timer
                 if (window._authNullTimer) { clearTimeout(window._authNullTimer); window._authNullTimer = null; }
+                window._userInitiatedLogout = false; // v1.16.447: signed in — clear any stale sign-out flag
                 // v1.16.444: signed back in — remove the "not connected" warning
                 clearTimeout(window._authLostTimer);
                 try { var _alb = document.getElementById('pwAuthLostBar'); if (_alb) _alb.remove(); } catch(e) {}
 
                 // DATA ISOLATION: non-owner accounts get clean slate on every fresh login
                 const lastUid = localStorage.getItem('pw_last_uid');
-                const isOwnerLogin = (user.email === 'ckbedford@outlook.com');
+                // v1.16.447: one code path — every account (owner included) gets the same clean-slate rule
                 const _freshSession = !sessionStorage.getItem('pw_session_active_' + user.uid);
                 const _differentUser = (lastUid && lastUid !== user.uid);
 
@@ -1831,8 +1916,8 @@ const firebaseConfig = {
                     }
                 }
 
-                if (!isOwnerLogin && (lastUid !== user.uid || _freshSession)) {
-                    console.log('Non-owner login — wiping localStorage for clean slate:', user.email);
+                if (lastUid !== user.uid || _freshSession) {
+                    console.log('Fresh login — wiping localStorage for clean slate:', user.email);
                     const keepGlobal = ['paintworkz_version', 'app_theme', 'pw_tooltips', 'pw_device_id', 'pw_explicit_login']; // v1.16.444: explicit-login flag must survive or the next auth fire silently signs out
                     for (let i = localStorage.length - 1; i >= 0; i--) {
                         const k = localStorage.key(i);
@@ -1867,9 +1952,6 @@ const firebaseConfig = {
                         console.warn('initSessionGuard never became available');
                     }
                 })(15); // up to 15 × 300ms = 4.5 seconds
-                // Store UIDs for cross-account data sharing (shop closures, login history)
-                if (user.email === 'ckbedford@outlook.com') localStorage.setItem('pw_owner_uid', user.uid);
-                if (user.email === 'paint_workz@outlook.com') localStorage.setItem('pw_paintworkz_uid', user.uid);
                 // Store last UID
                 localStorage.setItem('pw_last_uid', user.uid);
 
@@ -2003,8 +2085,9 @@ const firebaseConfig = {
                 if (window._userInitiatedLogout) {
                     window._userInitiatedLogout = false;
                     // Fall through to logout UI below
-                } else if (_prevEmail === 'paint_workz@outlook.com' || _prevEmail === 'ckbedford@outlook.com') {
-                    console.log('[Auth] Multi-device account — ignoring auth null for', _prevEmail);
+                } else if (_prevEmail) {
+                    // v1.16.447: same for every account — keep the app open and warn, never drop to login silently
+                    console.log('[Auth] Firebase dropped the session — keeping app open for', _prevEmail);
                     window.currentUser = window._cachedFullUser || window.currentUser; // Restore full user object
                     // v1.16.444: the app keeps running, but Firebase is NOT signed in, so nothing
                     // saves to the cloud. If it hasn't recovered in 5s, warn loudly instead of hiding it.
@@ -2016,6 +2099,7 @@ const firebaseConfig = {
                         try { _cause = localStorage.getItem('pw_last_signout') || ''; } catch(e) {}
                         if (!_cause) _cause = 'Firebase ended the session itself — the app did not call sign-out';
                         console.error('⚠️ Firebase session lost — cloud saves are being refused. Cause:', _cause);
+                        try { window.pwReportError && window.pwReportError('auth-lost', 'Red "not connected to cloud" bar shown', { detail: _cause }); } catch(e) {}
                         var bar = document.createElement('div');
                         bar.id = 'pwAuthLostBar';
                         bar.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:1000000;background:#ff3b30;color:#fff;font-weight:900;font-size:14px;text-align:center;padding:14px 12px;cursor:pointer;box-shadow:0 -4px 16px rgba(0,0,0,0.4);';
@@ -2368,6 +2452,10 @@ const firebaseConfig = {
             <input type="password" id="loginPassword" placeholder="Password (or 4-digit PIN for staff)" style="margin-bottom:20px; padding:15px; background:rgba(255,255,255,0.08); border:1px solid rgba(212,175,55,0.3); border-radius:10px; color:#f2f2f7; width:100%; box-sizing:border-box; font-size:15px;" onkeydown="if(event.key==='Enter')handleLogin()">
             <button onclick="handleLogin()" style="width:100%; background:#d4af37; border:none; padding:15px; border-radius:10px; font-weight:900; font-size:16px; cursor:pointer; margin-bottom:10px; color:#000; letter-spacing:0.5px;">SIGN IN</button>
             <button onclick="trySignup()" style="width:100%; background:transparent; color:#d4af37; border:2px solid rgba(212,175,55,0.5); padding:15px; border-radius:10px; font-weight:900; font-size:16px; cursor:pointer; margin-bottom:10px;">CREATE ACCOUNT</button>
+            <div id="signupRefWrap" style="margin:-2px 0 10px; text-align:center;">
+                <button id="signupRefLink" type="button" onclick="this.style.display='none';document.getElementById('signupRefCode').style.display='block';document.getElementById('signupRefCode').focus();" style="background:none !important; border:none !important; color:rgba(212,175,55,0.75) !important; font-size:12px !important; font-weight:700; cursor:pointer; padding:2px 4px !important; margin:0 !important; min-height:0 !important; width:auto !important; height:auto !important;">🤝 Got a referral code?</button>
+                <input type="text" id="signupRefCode" placeholder="Referral code (new accounts only) e.g. REF-AB12C" autocomplete="off" style="display:none; padding:12px 15px; background:rgba(255,255,255,0.08); border:1px solid rgba(212,175,55,0.3); border-radius:10px; color:#f2f2f7; width:100%; box-sizing:border-box; font-size:14px; text-transform:uppercase; letter-spacing:1px;">
+            </div>
             <button onclick="showForgotPassword()" style="width:100%; background:transparent; border:none; color:rgba(255,255,255,0.4); font-size:12px; font-weight:700; cursor:pointer; padding:6px;">Forgot password?</button>
             <div style="margin-top:16px; padding:12px; background:rgba(33,150,243,0.1); border-radius:8px; border-left:3px solid #2196f3;">
                 <div style="font-size:11px; font-weight:900; color:#64b5f6; margin-bottom:4px;">&#x1F477; STAFF LOGIN</div>
@@ -2377,6 +2465,19 @@ const firebaseConfig = {
 
         <div id="loginError" style="color:#ff6b6b; font-weight:900; margin-top:15px; text-align:center; display:none;"></div>
     </div>
+    <script>
+// v1.16.447: share links like app.paintworkzpro.com.au/?ref=REF-AB12C prefill the referral box on signup
+(function(){ try {
+    var m = /[?&]ref=([A-Za-z0-9-]{4,20})/.exec(location.search || '');
+    if (!m) return;
+    var code = m[1].toUpperCase();
+    sessionStorage.setItem('pw_ref_code', code);
+    document.addEventListener('DOMContentLoaded', function(){
+        var i = document.getElementById('signupRefCode'), l = document.getElementById('signupRefLink');
+        if (i) { i.value = code; i.style.display = 'block'; } if (l) l.style.display = 'none';
+    });
+} catch(e) {} })();
+</script>
     <div id="loginVersionText" style="text-align:center; margin-top:12px; font-size:10px; color:rgba(255,255,255,0.3); font-weight:700; position:relative; z-index:10;"></div>
 
     <script>
@@ -3387,6 +3488,32 @@ const firebaseConfig = {
                             </div>
                         </div>
                     </div>
+                </div>
+
+                <!-- v1.16.447: Mixing tin cap for tint-heavy colours -->
+                <div style="background:#e3f2fd; border:1px solid #1e88e5; border-radius:8px; padding:10px 12px; margin-bottom:14px;">
+                    <div style="font-size:10px; font-weight:900; color:#0d47a1; margin-bottom:4px;">🪣 Mixing Tin Cap — tint-heavy colours mix in smaller batches so they fit the tin with room to stir</div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                        <div style="background:rgba(255,255,255,0.5); border-radius:6px; padding:8px; text-align:center;">
+                            <div style="font-size:9px; font-weight:900; color:#0d47a1; margin-bottom:4px;">Cap when tinter is over (%)</div>
+                            <div style="display:flex; align-items:center; gap:3px; justify-content:center;">
+                                <input type="number" id="mixCapPct" min="0" max="100" step="1" value="12"
+                                    style="width:60px; padding:5px; border:1px solid #90caf9; border-radius:6px; font-size:12px; font-weight:900; text-align:center;"
+                                    oninput="saveStockAlertThreshold()">
+                                <span style="font-size:9px; color:#666;">%</span>
+                            </div>
+                        </div>
+                        <div style="background:rgba(255,255,255,0.5); border-radius:6px; padding:8px; text-align:center;">
+                            <div style="font-size:9px; font-weight:900; color:#0d47a1; margin-bottom:4px;">Max mix per tin (L)</div>
+                            <div style="display:flex; align-items:center; gap:3px; justify-content:center;">
+                                <input type="number" id="mixCapLitres" min="1" max="4" step="1" value="3"
+                                    style="width:60px; padding:5px; border:1px solid #90caf9; border-radius:6px; font-size:12px; font-weight:900; text-align:center;"
+                                    oninput="saveStockAlertThreshold()">
+                                <span style="font-size:9px; color:#666;">L</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="font-size:9px; color:#666; margin-top:6px;">Tinter % = tinter weight ÷ total weight of the 1 L formula. Set 0% to turn the cap off. Each formula can override this (Auto / Always cap / Never cap) when you edit it.</div>
                 </div>
 
                 <!-- BASE STOCK TABLE - collapsible -->
@@ -4429,6 +4556,11 @@ const firebaseConfig = {
                         <button style="background:rgba(13,71,161,0.1); border:1px solid #0d47a1; cursor:pointer; font-weight:900; font-size:18px; color:#0d47a1; padding:4px 12px; border-radius:6px; min-width:32px;">+</button>
                     </div>
                 </div>
+                <!-- v1.16.447: every plan can download all their data -->
+                <div class="staff-hidden" style="display:flex; align-items:center; gap:10px; background:#f1f8e9; border:1px solid #7cb342; border-radius:10px; padding:10px 12px; margin:-6px 0 12px 0; flex-wrap:wrap;">
+                    <div style="flex:1; min-width:180px; font-size:10px; color:#33691e; line-height:1.4;"><strong style="font-size:11px;">Your data is yours.</strong> Download every job, client, formula and setting from the cloud as one file, any time, on any plan.</div>
+                    <button id="pwDownloadAllBtn" onclick="pwDownloadAllMyData()" style="border:none; background:#558b2f; color:#fff; padding:9px 14px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">⬇️ Download all my data</button>
+                </div>
                 <div id="backup-section-container" class="staff-hidden" style="display:none;">
 
                     <div id="backupStatusBar" style="display:none; padding:10px 14px; border-radius:6px; font-size:11px; font-weight:900; margin-bottom:14px;"></div>
@@ -4557,7 +4689,7 @@ const firebaseConfig = {
                     </div>
                     <div style="display:flex; gap:8px; flex-wrap:wrap;">
                         <a href="https://paintworkzpro.com/pricing.html" target="_blank" style="display:inline-flex; align-items:center; gap:5px; background:#3a3a3c; color:#fff; padding:8px 12px; border-radius:6px; font-weight:900; font-size:10px; text-decoration:none;">🌐 Full Pricing Details</a>
-                        <a href="/cdn-cgi/l/email-protection#4d3e383d3d223f390d3d2c2423393a223f26373d3f22632e2220632c38" style="display:inline-flex; align-items:center; gap:5px; background:#3a3a3c; color:#fff; padding:8px 12px; border-radius:6px; font-weight:900; font-size:10px; text-decoration:none;">📧 Billing Support</a>
+                        <a href="mailto:support@paintworkzpro.com.au" style="display:inline-flex; align-items:center; gap:5px; background:#3a3a3c; color:#fff; padding:8px 12px; border-radius:6px; font-weight:900; font-size:10px; text-decoration:none;">📧 Billing Support</a>
                     </div>
                     <p style="font-size:9px; color:#666; margin:10px 0 0 0;">Prices in AUD exc. GST. GST added at checkout. Payments processed securely by Paddle. Cancel anytime.</p>
                     </div><!-- end subscriptionBody -->
@@ -4587,6 +4719,20 @@ const firebaseConfig = {
                     <div id="activePromoDisplay" style="margin-top:10px; display:none;"></div>
                 </div>
 
+                <!-- ── REFER A SHOP (all users) — v1.16.447 ─────────────────── -->
+                <div class="staff-hidden" style="background:linear-gradient(135deg,#e8f5e9,#e8f5e9cc); border:2px solid #34c759; border-radius:12px; padding:12px 15px; margin-bottom:12px;">
+                    <div style="display:flex; align-items:center; gap:8px; cursor:pointer;" onclick="toggleSection('referShopContainer', this.querySelector('button')); if(window.pwRenderReferCard) window.pwRenderReferCard();">
+                        <span style="font-size:20px;">🤝</span>
+                        <div style="margin:0; font-weight:900; font-size:13px; color:#1b5e20; letter-spacing:0.5px; flex:1;">REFER A SHOP — BOTH GET A FREE MONTH</div>
+                        <button style="background:rgba(27,94,32,0.1); border:1px solid #1b5e20; cursor:pointer; font-weight:900; font-size:18px; color:#1b5e20; padding:4px 12px; border-radius:6px; min-width:32px;">+</button>
+                    </div>
+                </div>
+                <div id="referShopContainer" class="staff-hidden" style="display:none; margin-bottom:20px;">
+                    <p style="font-size:11px; color:#666; margin:0 0 10px;">Know another paint shop that would use PaintWorkz Pro? Give them your code. When they've signed up with it and paid for their first month, <b>you both get a free month</b>. Up to 6 free months a year.</p>
+                    <div id="referShopBody" style="font-size:12px; color:#666;">Loading your code…</div>
+                    <p style="font-size:10px; color:#999; margin:10px 0 0;">Rewards are checked and applied by PaintWorkz. Codes can't be used on your own shop, a second account, or a business with the same name or ABN.</p>
+                </div>
+
                 <hr style="margin:20px 0; border:none; border-top:1px solid #ddd;">
 
                 <!-- Terms of Service -->
@@ -4610,7 +4756,7 @@ const firebaseConfig = {
                         <strong>7. Subscription &amp; Payment</strong><br>Where a subscription applies, access is contingent on current payment. Pricing may be modified with 30 days notice.<br><br>
                         <strong>8. Termination</strong><br>The Owner may suspend or terminate access at any time for breach of these Terms.<br><br>
                         <strong>9. Governing Law</strong><br>These Terms are governed by the laws of Victoria, Australia.<br><br>
-                        <strong>10. Contact</strong><br><a href="/cdn-cgi/l/email-protection#9deee8ededf2efe9ddedfcf4f3e9eaf2eff6e7edeff2b3fef2f0b3fce8" style="color:#2196f3;"><span class="__cf_email__" data-cfemail="186b6d6868776a6c58687971766c6f776a7362686a77367b777536796d">[email&#160;protected]</span></a><br><br>
+                        <strong>10. Contact</strong><br><a href="mailto:support@paintworkzpro.com.au" style="color:#2196f3;">support@paintworkzpro.com.au</a><br><br>
                         <hr style="border:none; border-top:1px solid #ddd; margin:8px 0;">
                         <strong>Privacy Policy (Summary)</strong><br>We collect your email address for login and business data you enter (stored in Firebase under your account). We do not sell your data. Firebase (Google) is used for auth and storage. You may request deletion of your account at any time by contacting us.
                     </div>
@@ -4629,8 +4775,8 @@ const firebaseConfig = {
                     <div style="background:#f0f4ff; border:1px solid #c5cae9; border-radius:8px; padding:14px; font-size:11px; color:#333; line-height:1.7;">
                         <p style="margin:0 0 10px 0; color:#555;">Found a bug or have a feature request? Send us a message and we'll get onto it.</p>
                         <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
-                            <a href="/cdn-cgi/l/email-protection#ff8c8a8f8f908d8bbf8f9e96918b88908d94858f8d90d19c9092d19e8ac08c8a9d959a9c8bc2bd8a98dacdcfad9a8f908d8bdacdcfd2dacdcfaf9e96918ba8908d9485dacdcfaf8d90d99d909b86c2bb9a8c9c8d969d9adacdcf8b979adacdcf9d8a98dacdcf979a8d9ad1d1d1" style="display:inline-flex;align-items:center;gap:6px;background:#ff3b30;color:#fff;border:none;padding:10px 16px;border-radius:6px;font-weight:900;font-size:11px;cursor:pointer;text-decoration:none;">🐛 Bug Report</a>
-                            <a href="/cdn-cgi/l/email-protection#83f0f6f3f3ecf1f7c3f3e2eaedf7f4ecf1e8f9f3f1ecade0eceeade2f6bcf0f6e1e9e6e0f7bec5e6e2f7f6f1e6a6b1b3d1e6f2f6e6f0f7a6b1b3aea6b1b3d3e2eaedf7d4ecf1e8f9a6b1b3d3f1eca5e1ece7fabec7e6f0e0f1eae1e6a6b1b3faecf6f1a6b1b3e5e6e2f7f6f1e6a6b1b3eae7e6e2a6b1b3ebe6f1e6adadad" style="display:inline-flex;align-items:center;gap:6px;background:#007aff;color:#fff;border:none;padding:10px 16px;border-radius:6px;font-weight:900;font-size:11px;cursor:pointer;text-decoration:none;">💡 Feature Request</a>
+                            <a href="mailto:support@paintworkzpro.com.au?subject=Bug%20Report%20-%20PaintWorkz%20Pro&body=Describe%20the%20bug%20here..." style="display:inline-flex;align-items:center;gap:6px;background:#ff3b30;color:#fff;border:none;padding:10px 16px;border-radius:6px;font-weight:900;font-size:11px;cursor:pointer;text-decoration:none;">🐛 Bug Report</a>
+                            <a href="mailto:support@paintworkzpro.com.au?subject=Feature%20Request%20-%20PaintWorkz%20Pro&body=Describe%20your%20feature%20idea%20here..." style="display:inline-flex;align-items:center;gap:6px;background:#007aff;color:#fff;border:none;padding:10px 16px;border-radius:6px;font-weight:900;font-size:11px;cursor:pointer;text-decoration:none;">💡 Feature Request</a>
                         </div>
                         <p style="margin:0; font-size:10px; color:#888;">Include your device type and what you were doing when the issue occurred. Screenshots welcome.</p>
                     </div>
@@ -4648,6 +4794,35 @@ const firebaseConfig = {
                     </p>
                 </div>
 
+
+                <!-- ── OWNER REFERRALS (owner only) — v1.16.447 ─────────────── -->
+                <div id="ownerReferralPanel" style="display:none; margin-bottom:20px;">
+                    <hr style="margin:0 0 20px 0; border:none; border-top:2px solid #d4af37;">
+                    <h4 style="margin:0 0 4px 0; font-weight:900; font-size:13px; color:#d4af37;">🤝 Owner — Referrals <span id="ownerReferralCount" style="background:#34c759;color:#000;border-radius:10px;padding:1px 8px;font-size:11px;margin-left:6px;display:none;"></span></h4>
+                    <p style="font-size:11px; color:#666; margin-bottom:12px;">Shops that signed up with another shop's code. <b>Approve</b> once they've paid a month (check Paddle), then apply a free month to <b>both</b> shops in Paddle and tap <b>Mark rewarded</b>.</p>
+                    <div style="background:#1c1c1e; border-radius:10px; overflow:hidden; max-height:420px; overflow-y:auto; margin-bottom:10px;">
+                        <div id="referralsList" style="min-height:60px;">
+                            <p style="color:#aaa;font-size:12px;text-align:center;padding:16px;">Tap Refresh to load.</p>
+                        </div>
+                    </div>
+                    <button onclick="pwLoadReferrals()" style="width:100%; background:#d4af37; border:none; padding:10px; border-radius:8px; font-weight:900; font-size:13px; cursor:pointer; color:#000;">🔄 Refresh Referrals</button>
+                </div>
+
+                <!-- ── OWNER ERROR REPORTS (owner only) — v1.16.447 ──────────── -->
+                <div id="ownerErrorPanel" style="display:none; margin-bottom:20px;">
+                    <hr style="margin:0 0 20px 0; border:none; border-top:2px solid #d4af37;">
+                    <h4 style="margin:0 0 4px 0; font-weight:900; font-size:13px; color:#d4af37;">⚠️ Owner — Error Reports <span id="ownerErrorCount" style="background:#ff3b30;color:#fff;border-radius:10px;padding:1px 8px;font-size:11px;margin-left:6px;display:none;"></span></h4>
+                    <p style="font-size:11px; color:#666; margin-bottom:12px;">Problems the app hit on any customer's device (all accounts). Same error is sent once an hour per device, max 20 a day.</p>
+                    <div style="background:#1c1c1e; border-radius:10px; overflow:hidden; max-height:360px; overflow-y:auto; margin-bottom:10px;">
+                        <div id="errorReportsList" style="min-height:60px;">
+                            <p style="color:#aaa;font-size:12px;text-align:center;padding:16px;">Tap Refresh to load.</p>
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:8px;">
+                        <button onclick="pwLoadErrorReports()" style="flex:1; background:#d4af37; border:none; padding:10px; border-radius:8px; font-weight:900; font-size:13px; cursor:pointer; color:#000;">🔄 Refresh</button>
+                        <button onclick="pwClearErrorReports()" style="flex:1; background:#2c2c2e; border:1px solid #ff6b6b; padding:10px; border-radius:8px; font-weight:900; font-size:13px; cursor:pointer; color:#ff6b6b;">🗑️ Clear All</button>
+                    </div>
+                </div>
 
                 <!-- ── OWNER LOGIN HISTORY (owner only) ─────────────────────── -->
                 <div id="ownerLoginHistoryPanel" style="display:none; margin-bottom:20px;">
@@ -5433,7 +5608,14 @@ const firebaseConfig = {
         if (panel) panel.style.display = isOwner() ? 'block' : 'none';
         const histPanel = document.getElementById('ownerLoginHistoryPanel');
         if (histPanel) histPanel.style.display = isOwner() ? 'block' : 'none';
-        if (isOwner()) loadPromoCodesList();
+        const errPanel = document.getElementById('ownerErrorPanel');
+        if (errPanel) errPanel.style.display = isOwner() ? 'block' : 'none';
+        const refPanel = document.getElementById('ownerReferralPanel');
+        if (refPanel) refPanel.style.display = isOwner() ? 'block' : 'none';
+        if (isOwner()) { loadPromoCodesList(); try { pwLoadErrorReports(); } catch(e) {} try { pwLoadReferrals(); } catch(e) {} }
+        clearTimeout(window._pwRefHeartbeatTimer);
+        window._pwRefHeartbeatTimer = setTimeout(() => { try { pwReferralHeartbeat(); } catch(e) {} }, 20000);
+        try { window.pwFlushErrorReports && window.pwFlushErrorReports(); } catch(e) {}
         checkActivePromo();
 
         // Show/hide custom row based on type
@@ -5446,6 +5628,48 @@ const firebaseConfig = {
         }
     }
     window.initPromoPanel = initPromoPanel;
+
+    // v1.16.447: owner-only list of error reports from every account
+    let _pwErrDocs = [];
+    async function pwLoadErrorReports() {
+        const box = document.getElementById('errorReportsList');
+        const badge = document.getElementById('ownerErrorCount');
+        if (!box || !isOwner()) return;
+        const esc = v => String(v == null ? '' : v).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+        try {
+            const snap = await window.getDocs(window.collection(window.firebaseDb, 'errorReports'));
+            _pwErrDocs = [];
+            snap.forEach(d => _pwErrDocs.push({ id: d.id, ...d.data() }));
+            _pwErrDocs.sort((a, b) => (b.at || 0) - (a.at || 0));
+            if (badge) { badge.textContent = _pwErrDocs.length; badge.style.display = _pwErrDocs.length ? 'inline' : 'none'; }
+            if (!_pwErrDocs.length) { box.innerHTML = '<p style="color:#34c759;font-size:12px;text-align:center;padding:16px;">✅ No errors reported.</p>'; return; }
+            box.innerHTML = _pwErrDocs.slice(0, 100).map(r => {
+                const when = r.at ? new Date(r.at).toLocaleString('en-AU', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : '';
+                const dev = /iPhone|iPad/.test(r.device) ? '📱 iOS' : /Android/.test(r.device) ? '📱 Android' : /Windows/.test(r.device) ? '🖥️ Windows' : /Mac/.test(r.device) ? '🖥️ Mac' : '❔';
+                const colour = r.kind === 'auth-lost' ? '#ff3b30' : r.kind === 'save-failed' ? '#ff9500' : '#aaa';
+                return `<div style="border-bottom:1px solid #2c2c2e; padding:9px 12px; font-size:11px;">
+                    <div style="display:flex; justify-content:space-between; gap:8px;">
+                        <span style="color:#d4af37; font-weight:900;">${esc(r.email || '(signed out)')}</span>
+                        <span style="color:#666; white-space:nowrap;">${esc(when)}</span>
+                    </div>
+                    <div style="color:${colour}; font-weight:900; margin-top:2px;">${esc(r.kind)} — <span style="color:#fff; font-weight:600;">${esc(r.message)}</span></div>
+                    <div style="color:#666; margin-top:2px;">${esc(r.version)} · ${esc(r.page)} · ${dev}${r.detail ? ' · ' + esc(r.detail) : ''}</div>
+                    ${r.stack ? `<details style="margin-top:3px;"><summary style="color:#555; cursor:pointer;">stack</summary><pre style="white-space:pre-wrap; color:#777; font-size:10px; margin:4px 0 0;">${esc(r.stack)}</pre></details>` : ''}
+                </div>`;
+            }).join('');
+        } catch(e) {
+            box.innerHTML = '<p style="color:#ff6b6b;font-size:12px;padding:12px;">Could not load error reports' + (e && e.code === 'permission-denied' ? ' — the Firestore rule for <b>errorReports</b> has not been added yet.' : ': ' + esc(e && e.message)) + '</p>';
+        }
+    }
+    async function pwClearErrorReports() {
+        if (!isOwner()) return;
+        if (!_pwErrDocs.length) { await pwLoadErrorReports(); if (!_pwErrDocs.length) return; }
+        if (!confirm('Delete all ' + _pwErrDocs.length + ' error reports?')) return;
+        for (const r of _pwErrDocs) { try { await window.deleteDoc(window.doc(window.firebaseDb, 'errorReports', r.id)); } catch(e) {} }
+        pwLoadErrorReports();
+    }
+    window.pwLoadErrorReports = pwLoadErrorReports;
+    window.pwClearErrorReports = pwClearErrorReports;
 
     // Generate a random code string
     function generatePromoCode() {
@@ -5546,6 +5770,15 @@ const firebaseConfig = {
         if (!code) { showPromoStatus('Enter a code first', 'error'); return; }
         if (!window.currentUser) { showPromoStatus('You must be logged in to redeem a code', 'error'); return; }
 
+        // v1.16.447: shop referral codes (REF-xxxxx) go through the referral system
+        if (/^REF-/.test(code)) {
+            showPromoStatus('Checking referral code...', 'info');
+            const r = await pwApplyReferralCode(code, false);
+            showPromoStatus(r.msg, r.ok ? 'success' : 'error');
+            if (r.ok && input) input.value = '';
+            return;
+        }
+
         showPromoStatus('Checking code...', 'info');
 
         try {
@@ -5596,6 +5829,238 @@ const firebaseConfig = {
         }
     }
     window.redeemPromoCode = redeemPromoCode;
+
+    // ══════════ REFERRAL PROGRAM — v1.16.447 ══════════
+    // referralCodes/{CODE} : one personal code per shop  {code, ownerUid, ownerEmail, business, abn, createdAt}
+    // referrals/{newUid}   : one per referred shop        {code, referrer*, referred*, status, firstPaidSeenAt, ...}
+    // status: pending → approved → rewarded   (or rejected / blocked)
+    const PW_PUBLIC_MAIL = /^(gmail|googlemail|outlook|hotmail|live|msn|icloud|me|mac|yahoo|ymail|bigpond|bigpond\.net|optusnet|iinet|tpg|internode|aol|proton|protonmail|gmx|zoho)\./i;
+    function pwNormEmail(e) {
+        e = String(e || '').trim().toLowerCase();
+        const at = e.lastIndexOf('@'); if (at < 0) return e;
+        let u = e.slice(0, at).split('+')[0]; const d = e.slice(at + 1);
+        if (/^(gmail|googlemail)\./.test(d)) u = u.replace(/\./g, '');
+        return u + '@' + d.replace('googlemail.', 'gmail.');
+    }
+    function pwEmailDomain(e) { e = String(e || '').toLowerCase(); return e.slice(e.lastIndexOf('@') + 1); }
+    function pwNormBiz(b) { return String(b || '').toLowerCase().replace(/\b(pty|ltd|limited|the|and|co|company)\b/g, '').replace(/[^a-z0-9]/g, ''); }
+    function pwNormAbn(a) { return String(a || '').replace(/\D/g, ''); }
+    function pwLocalCompany() {
+        let cs = {};
+        try { cs = (typeof companySettings !== 'undefined' && companySettings && Object.keys(companySettings).length) ? companySettings : JSON.parse(localStorage.getItem('companySettings') || '{}'); } catch(e) {}
+        return { business: cs.businessName || cs.name || cs.companyName || '', abn: cs.abn || cs.ABN || '' };
+    }
+    // Returns a reason string if the two shops look like the same business, else ''
+    function pwSameShopReason(a, b) {
+        if (a.email && b.email && pwNormEmail(a.email) === pwNormEmail(b.email)) return 'same email';
+        const da = pwEmailDomain(a.email), db = pwEmailDomain(b.email);
+        if (da && da === db && !PW_PUBLIC_MAIL.test(da)) return 'same business email domain (' + da + ')';
+        if (pwNormAbn(a.abn).length >= 9 && pwNormAbn(a.abn) === pwNormAbn(b.abn)) return 'same ABN';
+        if (pwNormBiz(a.business).length >= 3 && pwNormBiz(a.business) === pwNormBiz(b.business)) return 'same business name';
+        return '';
+    }
+
+    async function pwGetMyReferralCode() {
+        const u = window.currentUser;
+        if (!u || !window.firebaseDb || window.isStaffAccount) return null;
+        const userRef = window.doc(window.firebaseDb, 'users', u.uid);
+        const us = await window.getDoc(userRef);
+        if (us.exists() && us.data().myReferralCode) return us.data().myReferralCode;   // one code per shop, forever
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        const co = pwLocalCompany();
+        for (let tries = 0; tries < 6; tries++) {
+            let code = 'REF-'; for (let i = 0; i < 5; i++) code += chars[Math.floor(Math.random() * chars.length)];
+            const ref = window.doc(window.firebaseDb, 'referralCodes', code);
+            const ex = await window.getDoc(ref);
+            if (ex.exists()) continue;
+            await window.setDoc(ref, { code, ownerUid: u.uid, ownerEmail: u.email, business: co.business, abn: co.abn, createdAt: Date.now() });
+            await window.setDoc(userRef, { myReferralCode: code }, { merge: true });
+            return code;
+        }
+        throw new Error('Could not create a unique code — try again');
+    }
+
+    async function pwRenderReferCard() {
+        const box = document.getElementById('referShopBody');
+        if (!box) return;
+        if (window.isStaffAccount) { box.innerHTML = 'Referral codes are managed by the shop owner account.'; return; }
+        if (!window.currentUser) { box.innerHTML = 'Log in to see your code.'; return; }
+        try {
+            const code = await pwGetMyReferralCode();
+            const link = 'https://app.paintworkzpro.com.au/?ref=' + code;
+            const msg = "G'day — I use PaintWorkz Pro to run our paint shop (2pac job sheets, pricing, paint mixing). Sign up with my code " + code + " and we both get a free month: " + link;
+            window._pwReferMsg = msg;
+            let stats = '';
+            try {
+                if (window.fsQuery && window.fsWhere) {
+                    const snap = await window.getDocs(window.fsQuery(window.collection(window.firebaseDb, 'referrals'), window.fsWhere('referrerUid', '==', window.currentUser.uid)));
+                    let signed = 0, earned = 0;
+                    snap.forEach(d => { signed++; const st = d.data().status; if (st === 'approved' || st === 'rewarded') earned++; });
+                    stats = `<div style="margin-top:10px; font-size:12px; color:#1b5e20;"><b>${signed}</b> shop${signed === 1 ? '' : 's'} signed up with your code · <b>${earned}</b> free month${earned === 1 ? '' : 's'} earned</div>`;
+                }
+            } catch(e) { /* stats are optional */ }
+            box.innerHTML = `
+                <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                    <div style="font-size:22px; font-weight:900; letter-spacing:2px; color:#1b5e20; background:#fff; border:2px dashed #34c759; border-radius:8px; padding:6px 14px;">${code}</div>
+                    <button onclick="pwCopyReferMsg()" style="background:#34c759; color:#000; border:none; padding:10px 14px; border-radius:8px; font-weight:900; font-size:12px; cursor:pointer;">📋 Copy message</button>
+                    <button onclick="pwShareReferMsg()" style="background:#fff; color:#1b5e20; border:2px solid #34c759; padding:8px 14px; border-radius:8px; font-weight:900; font-size:12px; cursor:pointer;">📤 Share</button>
+                </div>
+                <div style="margin-top:8px; font-size:11px; color:#666; word-break:break-all;">Link: ${link}</div>${stats}`;
+        } catch(e) {
+            box.innerHTML = '<span style="color:#ff3b30;">Could not load your referral code' + (e && e.code === 'permission-denied' ? ' (referrals not switched on yet).' : ': ' + (e && e.message)) + '</span>';
+        }
+    }
+    function pwCopyReferMsg() {
+        const m = window._pwReferMsg || ''; if (!m) return;
+        (navigator.clipboard ? navigator.clipboard.writeText(m) : Promise.reject()).then(() => notify('✅ Copied — paste it into a text or email'))
+            .catch(() => { prompt('Copy this message:', m); });
+    }
+    function pwShareReferMsg() {
+        const m = window._pwReferMsg || ''; if (!m) return;
+        if (navigator.share) navigator.share({ title: 'PaintWorkz Pro', text: m }).catch(() => {});
+        else pwCopyReferMsg();
+    }
+
+    // Used at signup and from the code box. Returns {ok, msg}
+    async function pwApplyReferralCode(code, fromSignup) {
+        code = String(code || '').trim().toUpperCase();
+        const u = window.currentUser;
+        if (!code) return { ok: false, msg: 'Enter a code first' };
+        if (!u || !window.firebaseDb) return { ok: false, msg: 'Log in first' };
+        if (window.isStaffAccount) return { ok: false, msg: 'Staff logins can\'t use referral codes' };
+        try {
+            const myRef = window.doc(window.firebaseDb, 'referrals', u.uid);
+            const mine = await window.getDoc(myRef);
+            if (mine.exists()) return { ok: false, msg: '❌ This shop has already used a referral code (' + (mine.data().code || '') + ')' };
+            const created = u.metadata && u.metadata.creationTime ? new Date(u.metadata.creationTime).getTime() : Date.now();
+            if (!fromSignup && Date.now() - created > 30 * 86400000) return { ok: false, msg: '❌ Referral codes can only be added within 30 days of creating your account' };
+            const cs = await window.getDoc(window.doc(window.firebaseDb, 'referralCodes', code));
+            if (!cs.exists()) return { ok: false, msg: '❌ Referral code ' + code + ' not found — check it with the shop that gave it to you' };
+            const c = cs.data();
+            if (c.ownerUid === u.uid) return { ok: false, msg: '❌ That\'s your own code — give it to another shop' };
+            const co = pwLocalCompany();
+            const why = pwSameShopReason({ email: c.ownerEmail, business: c.business, abn: c.abn }, { email: u.email, business: co.business, abn: co.abn });
+            if (why) return { ok: false, msg: '❌ Referral not allowed — ' + why + ' as the shop that owns the code' };
+            await window.setDoc(myRef, {
+                code, referrerUid: c.ownerUid, referrerEmail: c.ownerEmail || '', referrerBusiness: c.business || '', referrerAbn: c.abn || '',
+                referredUid: u.uid, referredEmail: u.email || '', referredBusiness: co.business, referredAbn: co.abn,
+                createdAt: Date.now(), accountCreatedAt: created, status: 'pending', referredPlan: 'free', firstPaidSeenAt: null
+            });
+            try { await window.setDoc(window.doc(window.firebaseDb, 'users', u.uid), { referredBy: code }, { merge: true }); } catch(e) {}
+            return { ok: true, msg: '✅ Referral code ' + code + ' added. Once you\'ve paid for your first month, you and ' + (c.business || 'the shop that referred you') + ' each get a free month.' };
+        } catch(e) {
+            console.warn('[Referral] apply error:', e);
+            return { ok: false, msg: '❌ Could not add the referral code' + (e && e.code === 'permission-denied' ? ' (referrals not switched on yet)' : '') + ' — try again later' };
+        }
+    }
+
+    // Runs ~20s after login: keeps the referred shop's record up to date (business/ABN, paid status)
+    async function pwReferralHeartbeat() {
+        const u = window.currentUser;
+        if (!u || !window.firebaseDb || window.isStaffAccount) return;
+        try {
+            const ref = window.doc(window.firebaseDb, 'referrals', u.uid);
+            const snap = await window.getDoc(ref);
+            if (!snap.exists()) return;
+            const r = snap.data();
+            if (r.status !== 'pending') return;
+            const co = pwLocalCompany();
+            let plan = 'free';
+            try { const us = await window.getDoc(window.doc(window.firebaseDb, 'users', u.uid)); if (us.exists()) plan = us.data().plan || 'free'; } catch(e) {}
+            const upd = {};
+            if ((co.business || '') !== (r.referredBusiness || '')) upd.referredBusiness = co.business || '';
+            if ((co.abn || '') !== (r.referredAbn || '')) upd.referredAbn = co.abn || '';
+            if (plan !== r.referredPlan) upd.referredPlan = plan;
+            if ((plan === 'solo' || plan === 'pro') && !r.firstPaidSeenAt) upd.firstPaidSeenAt = Date.now();
+            const why = pwSameShopReason({ email: r.referrerEmail, business: r.referrerBusiness, abn: r.referrerAbn }, { email: r.referredEmail, business: co.business, abn: co.abn });
+            if (why) { upd.status = 'blocked'; upd.blockReason = why; }
+            if (Object.keys(upd).length) { upd.updatedAt = Date.now(); await window.setDoc(ref, upd, { merge: true }); }
+        } catch(e) { console.warn('[Referral] heartbeat:', e && e.code || e); }
+    }
+
+    // ── Owner: referral approval list ──
+    let _pwRefDocs = [];
+    async function pwLoadReferrals() {
+        const box = document.getElementById('referralsList');
+        const badge = document.getElementById('ownerReferralCount');
+        if (!box || !isOwner()) return;
+        const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        const dt = t => t ? new Date(t).toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: '2-digit' }) : '—';
+        try {
+            const snap = await window.getDocs(window.collection(window.firebaseDb, 'referrals'));
+            _pwRefDocs = []; snap.forEach(d => _pwRefDocs.push({ id: d.id, ...d.data() }));
+            const order = { pending: 0, approved: 1, blocked: 2, rewarded: 3, rejected: 4 };
+            _pwRefDocs.sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9) || (b.createdAt || 0) - (a.createdAt || 0));
+            const now = Date.now();
+            const ready = _pwRefDocs.filter(r => (r.status === 'pending' && r.firstPaidSeenAt && now - r.firstPaidSeenAt >= 30 * 86400000) || r.status === 'approved').length;
+            if (badge) { badge.textContent = ready ? ready + ' to action' : _pwRefDocs.length; badge.style.display = _pwRefDocs.length ? 'inline' : 'none'; }
+            if (!_pwRefDocs.length) { box.innerHTML = '<p style="color:#aaa;font-size:12px;text-align:center;padding:16px;">No referrals yet.</p>'; return; }
+            box.innerHTML = _pwRefDocs.map(r => {
+                const yearCount = _pwRefDocs.filter(x => x.referrerUid === r.referrerUid && (x.status === 'approved' || x.status === 'rewarded') && now - (x.approvedAt || 0) < 365 * 86400000).length;
+                const why = pwSameShopReason({ email: r.referrerEmail, business: r.referrerBusiness, abn: r.referrerAbn }, { email: r.referredEmail, business: r.referredBusiness, abn: r.referredAbn });
+                const paidDays = r.firstPaidSeenAt ? Math.floor((now - r.firstPaidSeenAt) / 86400000) : null;
+                const paidTxt = r.firstPaidSeenAt ? `<span style="color:${paidDays >= 30 ? '#34c759' : '#ff9500'};">💳 ${esc(r.referredPlan)} since ${dt(r.firstPaidSeenAt)} (${paidDays}d)</span>` : '<span style="color:#888;">Not paid yet (' + esc(r.referredPlan || 'free') + ')</span>';
+                const stCol = { pending: '#ff9500', approved: '#0a84ff', rewarded: '#34c759', rejected: '#888', blocked: '#ff3b30' }[r.status] || '#aaa';
+                const btn = (fn, label, bg, fg) => `<button onclick="${fn}('${esc(r.id)}')" style="background:${bg}; color:${fg}; border:none; padding:6px 10px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">${label}</button>`;
+                let actions = '';
+                if (r.status === 'pending' || r.status === 'blocked') actions = btn('pwApproveReferral', '✅ Approve', '#34c759', '#000') + ' ' + btn('pwRejectReferral', '✖ Reject', '#3a3a3c', '#ff6b6b');
+                else if (r.status === 'approved') actions = btn('pwMarkReferralRewarded', '🎁 Mark rewarded', '#0a84ff', '#fff') + ' ' + btn('pwRejectReferral', '✖ Reject', '#3a3a3c', '#ff6b6b');
+                return `<div style="border-bottom:1px solid #2c2c2e; padding:10px 12px; font-size:11px; color:#ccc;">
+                    <div style="display:flex; justify-content:space-between; gap:8px;">
+                        <span><b style="color:#fff;">${esc(r.referredBusiness || r.referredEmail)}</b> <span style="color:#666;">${esc(r.referredEmail)}</span></span>
+                        <span style="color:${stCol}; font-weight:900; text-transform:uppercase;">${esc(r.status)}</span>
+                    </div>
+                    <div style="margin-top:3px;">Referred by <b style="color:#d4af37;">${esc(r.referrerBusiness || r.referrerEmail)}</b> <span style="color:#666;">${esc(r.referrerEmail)} · code ${esc(r.code)}</span></div>
+                    <div style="margin-top:3px;">Signed up ${dt(r.createdAt)} · ${paidTxt} · referrer has <b>${yearCount}</b>/6 rewards this year</div>
+                    ${why || r.blockReason ? `<div style="margin-top:3px; color:#ff3b30; font-weight:900;">⚠️ Looks like the same shop: ${esc(why || r.blockReason)}</div>` : ''}
+                    ${r.rewardedAt ? `<div style="margin-top:3px; color:#34c759;">Rewarded ${dt(r.rewardedAt)}</div>` : ''}
+                    ${actions ? `<div style="margin-top:6px; display:flex; gap:6px;">${actions}</div>` : ''}
+                </div>`;
+            }).join('');
+        } catch(e) {
+            box.innerHTML = '<p style="color:#ff6b6b;font-size:12px;padding:12px;">Could not load referrals' + (e && e.code === 'permission-denied' ? ' — the Firestore rules for <b>referrals</b> have not been added yet.' : ': ' + esc(e && e.message)) + '</p>';
+        }
+    }
+    async function pwSetReferralStatus(id, fields) {
+        if (!isOwner()) return;
+        try { await window.setDoc(window.doc(window.firebaseDb, 'referrals', id), { ...fields, updatedAt: Date.now() }, { merge: true }); }
+        catch(e) { alert('Could not update referral: ' + ((e && e.code) || (e && e.message))); }
+        pwLoadReferrals();
+    }
+    async function pwApproveReferral(id) {
+        const r = _pwRefDocs.find(x => x.id === id); if (!r) return;
+        const now = Date.now();
+        const warn = [];
+        if (!r.firstPaidSeenAt) warn.push('• The app has NOT seen a paid plan on this shop yet.');
+        else if (now - r.firstPaidSeenAt < 30 * 86400000) warn.push('• They have been paid for less than a month (' + Math.floor((now - r.firstPaidSeenAt) / 86400000) + ' days).');
+        const why = pwSameShopReason({ email: r.referrerEmail, business: r.referrerBusiness, abn: r.referrerAbn }, { email: r.referredEmail, business: r.referredBusiness, abn: r.referredAbn }) || r.blockReason;
+        if (why) warn.push('• Looks like the same shop: ' + why + '.');
+        const yearCount = _pwRefDocs.filter(x => x.referrerUid === r.referrerUid && (x.status === 'approved' || x.status === 'rewarded') && now - (x.approvedAt || 0) < 365 * 86400000).length;
+        if (yearCount >= 6) warn.push('• ' + (r.referrerBusiness || r.referrerEmail) + ' already has ' + yearCount + ' rewards in the last 12 months (cap is 6).');
+        const msg = 'Approve this referral?\n\n' + (r.referredBusiness || r.referredEmail) + '  ←  referred by  ' + (r.referrerBusiness || r.referrerEmail) +
+            (warn.length ? '\n\n⚠️ CHECK FIRST:\n' + warn.join('\n') : '') +
+            '\n\nCheck Paddle shows their first month PAID, then give BOTH shops a free month in Paddle.';
+        if (!confirm(msg)) return;
+        pwSetReferralStatus(id, { status: 'approved', approvedAt: now, approvedBy: window.currentUser.email });
+    }
+    function pwMarkReferralRewarded(id) {
+        if (!confirm('Mark as rewarded?\n\nOnly do this AFTER you have applied the free month to BOTH shops in Paddle.')) return;
+        pwSetReferralStatus(id, { status: 'rewarded', rewardedAt: Date.now() });
+    }
+    function pwRejectReferral(id) {
+        const why = prompt('Reject this referral — reason (optional):', '');
+        if (why === null) return;
+        pwSetReferralStatus(id, { status: 'rejected', rejectReason: why, rejectedAt: Date.now() });
+    }
+    window.pwApplyReferralCode = pwApplyReferralCode;
+    window.pwRenderReferCard = pwRenderReferCard;
+    window.pwCopyReferMsg = pwCopyReferMsg;
+    window.pwShareReferMsg = pwShareReferMsg;
+    window.pwLoadReferrals = pwLoadReferrals;
+    window.pwApproveReferral = pwApproveReferral;
+    window.pwMarkReferralRewarded = pwMarkReferralRewarded;
+    window.pwRejectReferral = pwRejectReferral;
+    window.pwReferralHeartbeat = pwReferralHeartbeat;
 
     function showPromoStatus(msg, type) {
         const el = document.getElementById('promoCodeStatus');
@@ -5800,8 +6265,7 @@ const firebaseConfig = {
         } catch(e) {}
 
         const isAdmin = (user.email === 'ckbedford@outlook.com');
-        const isPaintWorkz = (user.email === 'paint_workz@outlook.com');
-        const isKnownAccount = isAdmin || isPaintWorkz;
+        const isPaintWorkz = false; // v1.16.447: no per-account special cases (field kept for old login-history entries)
 
         const sessionRef = window.doc(window.firebaseDb, 'users', user.uid, 'appData', 'activeSession');
 
@@ -7286,6 +7750,17 @@ const firebaseConfig = {
         return defaults;
     })();
 
+    // v1.16.447: set ONLY the mixing tin cap override on one formula ('auto' removes it)
+    function pwSetFormulaMixCap(idx, mode) {
+        const f = paintDatabase[idx];
+        if (!f) return;
+        if (mode === 'always' || mode === 'never') f.mixCap = mode; else delete f.mixCap;
+        savePaintFormulas();
+        try { renderPaintFormulaList(); } catch(e) {}
+        notify('🪣 ' + (f.color || 'Formula') + ': ' + (mode === 'always' ? 'always mixes in capped batches' : mode === 'never' ? 'never capped' : 'automatic by tinter %'));
+    }
+    window.pwSetFormulaMixCap = pwSetFormulaMixCap;
+
     function savePaintFormulas() {
         // Guard: only save arrays - never save an object
         if (!Array.isArray(paintDatabase)) {
@@ -7306,7 +7781,7 @@ const firebaseConfig = {
             const ref = window.doc(window.firebaseDb, 'users', _saveUid, 'appData', 'paintFormulas');
             window.setDoc(ref, { formulas: paintDatabase, updated: new Date().toISOString() })
                 .then(() => console.log('       Paint formulas synced to Firestore:', paintDatabase.length, 'formulas (uid:', _saveUid, ')'))
-                .catch(e => console.warn('       Firestore paint formula save failed:', e));
+                .catch(e => { console.warn('       Firestore paint formula save failed:', e); try{window.pwReportError&&window.pwReportError('save-failed','Paint formulas save failed'+' — '+((e&&e.code)||(e&&e.message)||'unknown'),{stack:e&&e.stack});}catch(_r){} });
         } else {
             console.warn('       Firestore not ready - paint formulas saved locally only');
         }
@@ -8268,6 +8743,18 @@ const firebaseConfig = {
             html += `<button onclick="openAddSizeModal(${actualIndex})" style="padding:5px 12px; background:#ff9500; color:#fff; border:none; border-radius:4px; font-size:10px; font-weight:900; cursor:pointer;">+ Sizes</button>`;
             html += `<button onclick="printFormulaFromDB(${actualIndex})" style="padding:5px 16px; background:#9c27b0; color:#fff; border:none; border-radius:4px; font-size:10px; font-weight:900; cursor:pointer;">🖨️ Print</button>`;
             html += `<button onclick="deletePaintFormula(${actualIndex})" style="padding:5px 12px; background:#ff3b30; color:#fff; border:none; border-radius:4px; font-size:10px; font-weight:900; cursor:pointer;">🗑️</button>`;
+            // v1.16.447: mixing tin cap — Auto (by tinter %), Always cap, Never cap. Changes ONLY this setting.
+            try {
+                const _tp = (typeof pwFormulaTintPct === 'function') ? pwFormulaTintPct(f) : 0;
+                const _mx = (typeof pwMaxMixLitres === 'function') ? pwMaxMixLitres(f) : 4;
+                const _mode = f.mixCap === 'always' ? 'always' : f.mixCap === 'never' ? 'never' : 'auto';
+                html += `<label title="Tinter ${_tp.toFixed(1)}% of weight — mixes up to ${_mx} L per tin" style="display:flex; align-items:center; gap:4px; font-size:9px; font-weight:900; color:${_mx < 4 ? '#0d47a1' : '#888'};">🪣 ${_tp.toFixed(0)}% · max ${_mx}L
+                    <select onchange="pwSetFormulaMixCap(${actualIndex}, this.value)" style="font-size:9px; padding:2px 3px; border:1px solid #90caf9; border-radius:4px;">
+                        <option value="auto" ${_mode==='auto'?'selected':''}>Auto</option>
+                        <option value="always" ${_mode==='always'?'selected':''}>Always cap</option>
+                        <option value="never" ${_mode==='never'?'selected':''}>Never cap</option>
+                    </select></label>`;
+            } catch(_mce) {}
             html += `</div></div>`;
         }
         
@@ -9406,7 +9893,7 @@ const firebaseConfig = {
                 const ref = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'clientDatabase');
                 window.setDoc(ref, { clients: db, updated: new Date().toISOString() })
                     .then(() => console.log('       Client database synced to Firestore'))
-                    .catch(e => console.warn('       Firestore client save failed:', e));
+                    .catch(e => { console.warn('       Firestore client save failed:', e); try{window.pwReportError&&window.pwReportError('save-failed','Client list save failed'+' — '+((e&&e.code)||(e&&e.message)||'unknown'),{stack:e&&e.stack});}catch(_r){} });
             }
         } catch(e) {
             console.warn('       Firestore client sync error:', e.message);
@@ -10447,7 +10934,7 @@ const firebaseConfig = {
                     if (_hi >= 0) { _hist[_hi].id = _safeDocId; localStorage.setItem('jobHistory', JSON.stringify(_hist)); }
                 }
                 var _jref=window.doc(window.firebaseDb,'users',window.staffModeOwnerUid||window.currentUser.uid,'jobs',_safeDocId);
-                window.setDoc(_jref,_jfc,{merge:false}).then(function(){console.log('Job pushed to Firestore:',jobData.jobNum);if(window.debouncedFirebaseSync)window.debouncedFirebaseSync();}).catch(function(e){console.error('Direct job push failed:',e);});
+                window.setDoc(_jref,_jfc,{merge:false}).then(function(){console.log('Job pushed to Firestore:',jobData.jobNum);if(window.debouncedFirebaseSync)window.debouncedFirebaseSync();}).catch(function(e){console.error('Direct job push failed:',e);try{window.pwReportError&&window.pwReportError('save-failed','Job '+jobData.jobNum+' save to cloud failed'+' — '+((e&&e.code)||(e&&e.message)||'unknown'),{stack:e&&e.stack});}catch(_r){}});
             }catch(_dpe){console.error('Direct push error:',_dpe);}
         }
         // Deduct paint from stocktake ONLY for actual jobs — never for quotes or on-hold.
@@ -11593,6 +12080,7 @@ const firebaseConfig = {
             .then(function() { console.log('✅ Completion status saved to cloud:', job.jobNum, fields.completed ? 'COMPLETED' : 'REOPENED'); })
             .catch(function(e) {
                 console.error('Completion cloud write failed:', e);
+                try{window.pwReportError&&window.pwReportError('save-failed','Job '+job.jobNum+' completion save failed'+' — '+((e&&e.code)||(e&&e.message)||'unknown'),{stack:e&&e.stack});}catch(_r){}
                 alert('⚠️ Job #' + job.jobNum + ' was ' + (fields.completed ? 'completed' : 'reopened') + ' on this device but did NOT save to the cloud.\n\nReason: ' + ((e && e.code) || (e && e.message) || 'unknown') + '\n\nReload the app, log in again, then redo it.');
                 if (window.debouncedFirebaseSync) window.debouncedFirebaseSync();
             });
@@ -11639,7 +12127,7 @@ const firebaseConfig = {
             }
             console.log('Charges saved to job #' + hit.jobNum + ' (' + n + ' local cop' + (n === 1 ? 'y' : 'ies') + ')');
             return true;
-        } catch(e) { console.warn('pwSaveChargesToJob error:', e); return false; }
+        } catch(e) { console.warn('pwSaveChargesToJob error:', e); try{window.pwReportError&&window.pwReportError('save-failed','Charges save failed'+' — '+((e&&e.code)||(e&&e.message)||'unknown'),{stack:e&&e.stack});}catch(_r){} return false; }
     }
 
     // Cloud doc ID of the job currently open on the measure sheet
@@ -12546,7 +13034,7 @@ const firebaseConfig = {
                 const ref = window.doc(window.firebaseDb, 'users', dataUid, 'appData', 'settings');
                 window.setDoc(ref, { floorPIN: pin, updated: new Date().toISOString() }, { merge: true })
                     .then(() => console.log('%c✅ SAVED TO Firestore', 'background:#34c759;color:#fff;font-weight:900;padding:4px;', 'PIN synced'))
-                    .catch(e => console.warn('%c❌ Firestore sync FAILED', 'background:#ff3b30;color:#fff;font-weight:900;padding:4px;', e.message));
+                    .catch(e => { console.warn('%c❌ Firestore sync FAILED', 'background:#ff3b30;color:#fff;font-weight:900;padding:4px;', e.message); try{window.pwReportError&&window.pwReportError('save-failed','Cloud sync failed'+' — '+((e&&e.code)||(e&&e.message)||'unknown'),{stack:e&&e.stack});}catch(_r){} });
             } catch(e) {
                 console.warn('%c❌ Firestore sync ERROR', 'background:#ff3b30;color:#fff;font-weight:900;padding:4px;', e.message);
             }
@@ -12735,7 +13223,7 @@ const firebaseConfig = {
             "lastPaintBrand","jobsChartMinimized"];
         var payload = {
             meta: {
-                appVersion: "v1.7.43",
+                appVersion: window.CURRENT_VERSION || "",
                 backupDate: new Date().toISOString(),
                 backupDateAU: new Date().toLocaleString("en-AU"),
                 userEmail: (window.currentUser ? window.currentUser.email : "unknown"),
@@ -12770,11 +13258,75 @@ const firebaseConfig = {
         if (type==="ok") setTimeout(function(){ bar.style.display="none"; }, 6000);
     }
 
-    function downloadFullBackup() {
+    // v1.16.447: build a backup from the CLOUD (the real copy), in the same format Restore reads.
+    // Falls back to this device's copy only if the cloud can't be reached.
+    async function pwCollectCloudBackup() {
+        if (!window.currentUser || !window.firebaseDb || !window.getDocs || !window.getDoc) throw new Error('Not connected to the cloud');
+        const uid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid;
+        const snap = await window.getDocs(window.collection(window.doc(window.firebaseDb, 'users', uid), 'jobs'));
+        const raw = []; snap.forEach(d => raw.push({ ...d.data(), id: d.id }));
+        // one copy per job number — best copy (most parts, newest), latest Complete/Reopen
+        const best = {};
+        raw.forEach(j => {
+            const k = j.jobNum ? pwJobDocId(j) : j.id; const b = best[k];
+            if (!b) { best[k] = j; return; }
+            const jp = (j.items||[]).length, bp = (b.items||[]).length;
+            const w = (jp > bp || (jp === bp && (j.lastModified||'') > (b.lastModified||''))) ? j : b;
+            const l = w === j ? b : j; const src = pwPickCompletionSource(w, l, true);
+            if (src !== w) pwApplyCompletion(w, src); best[k] = w;
+        });
+        const jobs = Object.keys(best).map(k => best[k]).sort((a, b) => (b.timestamp||'') > (a.timestamp||'') ? 1 : -1);
+        const get = async (col, name) => { try { const d = await window.getDoc(window.doc(window.firebaseDb, 'users', uid, col, name)); return d.exists() ? d.data() : null; } catch(e) { return null; } };
+        const names = ['paintFormulas','clientDatabase','masterMatrix','companySettings','additionalCharges','appColors','stockSettings2','stockLevels','coverageRates','defaultTimeline','shopClosures','adminAlerts','globalNotifications','ctsData'];
+        const appData = {}; for (const n of names) { const d = await get('appData', n); if (d) appData[n] = d; }
+        const dp = await get('config', 'doorProfiles');
+        const ls = { jobHistory: jobs };
+        if (appData.paintFormulas && Array.isArray(appData.paintFormulas.formulas)) ls.paintFormulas = appData.paintFormulas.formulas;
+        if (appData.clientDatabase && appData.clientDatabase.clients) ls.clientDatabase = appData.clientDatabase.clients;
+        if (dp && dp.doorProfiles) ls.doorProfiles = dp.doorProfiles;
+        if (dp && dp.masterMatrix) ls.masterMatrix = dp.masterMatrix; else if (appData.masterMatrix && appData.masterMatrix.matrix) ls.masterMatrix = appData.masterMatrix.matrix;
+        ['companySettings','additionalCharges','appColors'].forEach(n => { if (appData[n]) ls[n] = appData[n]; });
+        // keep any photos that are only on this device
+        try { Object.keys(localStorage).forEach(k => { if (k.startsWith('jobPhotos_')) { try { ls[k] = JSON.parse(localStorage.getItem(k)); } catch(e) {} } }); } catch(e) {}
+        return {
+            meta: { appVersion: window.CURRENT_VERSION || '', backupDate: new Date().toISOString(), backupDateAU: new Date().toLocaleString('en-AU'),
+                    userEmail: window.currentUser.email, source: 'PaintWorkz Pro Cloud Backup', fromCloud: true, cloudCopies: raw.length },
+            localStorage: ls, cloud: { appData, config: { doorProfiles: dp } },
+            jobHistoryCount: jobs.length, paintFormulaCount: (ls.paintFormulas || []).length
+        };
+    }
+    window.pwCollectCloudBackup = pwCollectCloudBackup;
+
+    // Any plan: download everything this shop has in the cloud
+    async function pwDownloadAllMyData() {
+        const btn = document.getElementById('pwDownloadAllBtn');
+        const orig = btn ? btn.textContent : '';
+        if (btn) { btn.disabled = true; btn.textContent = '⏳ Gathering your data...'; }
         try {
-            var payload  = collectAllBackupData();
+            const payload = await pwCollectCloudBackup();
+            const who = (window.currentUser.email || 'account').split('@')[0].replace(/[^a-z0-9_-]/gi, '');
+            const fname = 'PaintWorkz_AllMyData_' + who + '_' + new Date().toISOString().split('T')[0] + '.json';
+            const blob = new Blob([JSON.stringify(payload, null, 1)], { type: 'application/json' });
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = fname;
+            document.body.appendChild(a); a.click(); setTimeout(() => { a.remove(); URL.revokeObjectURL(a.href); }, 800);
+            notify('✅ Downloaded ' + payload.jobHistoryCount + ' jobs, ' + payload.paintFormulaCount + ' formulas and your settings');
+        } catch (e) {
+            alert('Could not download your data: ' + (e.code || e.message) + '\n\nCheck you are logged in and online, then try again.');
+        } finally { if (btn) { btn.disabled = false; btn.textContent = orig; } }
+    }
+    window.pwDownloadAllMyData = pwDownloadAllMyData;
+
+    async function downloadFullBackup() {
+        try {
+            var payload;
+            try { payload = await pwCollectCloudBackup(); }
+            catch (_ce) {
+                payload = collectAllBackupData();
+                payload.meta.source = 'PaintWorkz Pro Manual Backup (THIS DEVICE ONLY — cloud not reachable)';
+                alert('The cloud could not be reached, so this backup only contains what is saved on THIS device. Try again when online for a full backup.');
+            }
             var dateStr  = new Date().toISOString().split("T")[0];
-            var filename = "PaintWorkz_Backup_" + dateStr + ".json";
+            var filename = "PaintWorkz_Backup_" + dateStr + (payload.meta && payload.meta.fromCloud ? "_cloud" : "_device") + ".json";
             var json     = JSON.stringify(payload, null, 2);
             var blob = new Blob([json], { type: "application/json" });
             var url  = URL.createObjectURL(blob);
@@ -12878,7 +13430,7 @@ const firebaseConfig = {
                                     try{if(typeof Blob!=='undefined'&&new Blob([JSON.stringify(jfc)]).size>850000){jfc.items=(jfc.items||[]).map(function(it){return{h:it.h,w:it.w,qty:it.qty,desc:it.desc,prof:it.prof,fm:it.fm,mode:it.mode,e:it.e,type:it.type,thk:it.thk,brand:it.brand,color:it.color,finish:it.finish,sqm:it.sqm,cts:it.cts};});}}catch(se){}
                                     var ref = window.doc(window.firebaseDb, 'users', uid, 'jobs', jobId);
                                     pushes.push(window.setDoc(ref, jfc, { merge: false }));
-                                } catch(e) { console.error('restore push err:',e); }
+                                } catch(e) { console.error('restore push err:',e); try{window.pwReportError&&window.pwReportError('save-failed','Restore to cloud failed'+' — '+((e&&e.code)||(e&&e.message)||'unknown'),{stack:e&&e.stack});}catch(_r){} }
                             });
                         }
                         // Push appData collections
@@ -17878,11 +18430,13 @@ const firebaseConfig = {
                 const _earlyLitresNeeded = _colorSQMPreview > 0 ? (_colorSQMPreview / _coveragePreview) : 1;
 
                 // Calculate batches NOW so header shows e.g. "4L" or "4L + 3L"
+                // v1.16.447: tint-heavy colours mix in smaller batches (e.g. 3 L) so they fit the tin
+                const _mixMaxL = (function(){ try { return pwMaxMixLitres(paintDatabase.find(f => f.color && f.color.toLowerCase() === color.toLowerCase())); } catch(e) { return 4; } })();
                 function _getBatchesEarly(litres) {
                     const batches = [];
                     let remaining = Math.ceil(litres);
                     while (remaining > 0) {
-                        const picked = remaining >= 4 ? 4 : remaining >= 3 ? 3 : remaining >= 2 ? 2 : 1;
+                        const picked = Math.min(_mixMaxL, remaining >= 4 ? 4 : remaining >= 3 ? 3 : remaining >= 2 ? 2 : 1);
                         batches.push(picked);
                         remaining -= picked;
                     }
@@ -29725,6 +30279,14 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                     console.log('⏳ Waiting for Firestore propagation...');
                     await new Promise(resolve => setTimeout(resolve, 2000));
                     console.log('✅ Ready to show app');
+                    // v1.16.447: referral code entered at signup (or from a ?ref= link)
+                    try {
+                        let _ref = (document.getElementById('signupRefCode')?.value || '').trim().toUpperCase();
+                        if (!_ref) { try { _ref = (sessionStorage.getItem('pw_ref_code') || '').trim().toUpperCase(); } catch(e) {} }
+                        if (_ref && typeof window.pwApplyReferralCode === 'function') {
+                            setTimeout(() => { window.pwApplyReferralCode(_ref, true).then(r => { if (r && r.msg) notify(r.msg); }); }, 1500);
+                        }
+                    } catch(e) {}
                     
                 } catch (firestoreError) {
                     console.error('❌ Error creating user document:', firestoreError);
@@ -29876,10 +30438,8 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         // Check if current user is a staff account (first time only)
         if (!ownerUid && !window._staffCheckDone) {
             window._staffCheckDone = true;
-            // paint_workz is a known non-staff operational account — skip Firestore check
-            if (window.currentUser.email === 'paint_workz@outlook.com') {
-                console.log('✅ Known operational account — skipping staff check');
-            } else {
+            // v1.16.447: every account goes through the same staff check (no paint_workz bypass)
+            {
             try {
                 const userDocRef = window.doc(window.firebaseDb, 'users', window.currentUser.uid);
                 const userDocSnap = await window.getDoc(userDocRef);
@@ -29943,6 +30503,15 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                     } else if (window.currentUser && window.currentUser.email === 'ckbedford@outlook.com') {
                         // Hard-code owner email check as safety net in case isOwner() misfired
                         console.log('✅ Owner email match - skipping deleted account check');
+                    } else if (await (async () => {
+                        // v1.16.447: an account that owns its own data is a real shop, not a deleted staff login.
+                        // (Staff never store data under their own UID.) Never sign a real shop out.
+                        for (const _k of ['paintFormulas', 'companySettings', 'clientDatabase']) {
+                            try { const _d = await window.getDoc(window.doc(window.firebaseDb, 'users', window.currentUser.uid, 'appData', _k)); if (_d.exists()) return true; } catch(e) { return true; }
+                        }
+                        return false;
+                    })()) {
+                        console.log('✅ Account has its own data — not a deleted staff login, continuing');
                     } else {
                         // Account is old and has no document - deleted staff account
                         console.error('❌ User document not found - this account has been deleted');
@@ -29961,7 +30530,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                     window._staffCheckDone = false;
                 }
             }
-            } // end else (non paint_workz accounts)
+            } // end staff check block
         }
         
         // If ownerUid is provided (staff account), load from owner's path
@@ -30562,6 +31131,32 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         return JSON.parse(localStorage.getItem('pwStockSettings2') || '{}');
     }
 
+    // v1.16.447: tinter share of a formula (by weight, from the 1 L formula). Reads only — never changes the formula.
+    function pwFormulaTintPct(formula) {
+        try {
+            if (!formula) return 0;
+            const s1 = (formula.sizes && formula.sizes['1']) || {};
+            const col = s1.colourants || formula.colourants || [];
+            const base = s1.baseTinters || formula.baseTinters || formula.whiteBase || [];
+            const g = col.reduce((t, c) => t + (parseFloat(c.amount != null ? c.amount : c.grams) || 0), 0);
+            const b = base.reduce((t, c) => t + (parseFloat(c.grams) || 0), 0);
+            return (g + b) > 0 ? (100 * g / (g + b)) : 0;
+        } catch(e) { return 0; }
+    }
+    // Largest batch (litres) to mix in one tin for this formula: the cap (default 3 L) or 4 L
+    function pwMaxMixLitres(formula) {
+        const st = getStockSettings();
+        const capL = Math.min(4, Math.max(1, parseInt(st.mixCapLitres) || 3));
+        const pct = st.mixCapPct !== undefined ? parseFloat(st.mixCapPct) : 12;
+        const mode = formula && formula.mixCap; // 'always' | 'never' | undefined (auto)
+        if (mode === 'never') return 4;
+        if (mode === 'always') return capL;
+        if (pct > 0 && pwFormulaTintPct(formula) > pct) return capL;
+        return 4;
+    }
+    window.pwFormulaTintPct = pwFormulaTintPct;
+    window.pwMaxMixLitres = pwMaxMixLitres;
+
     function toggleStockSection(bodyId, chevronId) {
         const body = document.getElementById(bodyId);
         const chevron = document.getElementById(chevronId);
@@ -30577,8 +31172,11 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         const lightTint      = parseFloat(document.getElementById('lightTintThreshold')?.value)  || 100;
         const extraTint      = parseFloat(document.getElementById('extraTintThreshold')?.value)  || 400;
         const tintAlertGrams = parseFloat(document.getElementById('tintAlertGrams')?.value)      || 100;
+        const _mcPctEl = document.getElementById('mixCapPct'), _mcLEl = document.getElementById('mixCapLitres');
+        const mixCapPct    = _mcPctEl && _mcPctEl.value !== '' ? Math.max(0, parseFloat(_mcPctEl.value) || 0) : 12;
+        const mixCapLitres = _mcLEl && _mcLEl.value !== '' ? Math.min(4, Math.max(1, parseInt(_mcLEl.value) || 3)) : 3;
         const st = { ...getStockSettings(), alertLevel: threshold, darkTintThreshold: darkTint,
-                     lightTintThreshold: lightTint, extraTintThreshold: extraTint, tintAlertGrams };
+                     lightTintThreshold: lightTint, extraTintThreshold: extraTint, tintAlertGrams, mixCapPct, mixCapLitres };
         localStorage.setItem('pwStockSettings2', JSON.stringify(st));
         if (window.currentUser && window.firebaseDb && window.doc && window.setDoc) {
             try {
@@ -30621,6 +31219,9 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         if (ltEl) ltEl.value = st.lightTintThreshold || 100;
         if (etEl) etEl.value = st.extraTintThreshold || 400;
         if (taEl) taEl.value = st.tintAlertGrams || 100;
+        const _mcp = document.getElementById('mixCapPct'), _mcl = document.getElementById('mixCapLitres');
+        if (_mcp) _mcp.value = st.mixCapPct !== undefined ? st.mixCapPct : 12;
+        if (_mcl) _mcl.value = st.mixCapLitres || 3;
 
         const _dm = document.body.dataset.theme === 'dark' ||
             (!document.body.dataset.theme && window.matchMedia('(prefers-color-scheme:dark)').matches);
@@ -31644,6 +32245,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             }
         } catch (error) {
             console.error('syncJobsToFirebase error:', error);
+            try{window.pwReportError&&window.pwReportError('save-failed','Job sync to cloud failed'+' — '+((error&&error.code)||(error&&error.message)||'unknown'),{stack:error&&error.stack});}catch(_r){}
         }
     }
 
