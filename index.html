@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.454'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.455'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -11427,6 +11427,25 @@ const firebaseConfig = {
                 archivedCount++;
                 if (job.id) _justArchivedIds.add(job.id);
                 console.log(`📦 Archiving job #${job.jobNum} (completed ${completedDate.toLocaleDateString()})`);
+            }
+        });
+
+        // v1.16.455: Quotes and On Hold jobs with no changes for 30+ days also go to Archives (not deleted)
+        history.forEach(job => {
+            if (job.completed || job.archived) return;
+            if (job.jobStatus !== 'quote' && job.jobStatus !== 'hold') return;
+            let _last = 0;
+            [job.lastEditedAt, job.lastModified, job.timestamp].forEach(d => {
+                const t = d ? new Date(d).getTime() : NaN;
+                if (!isNaN(t) && t > _last) _last = t;
+            });
+            if (!_last) return; // no reliable date — leave it alone
+            if (_last < thirtyDaysAgo.getTime()) {
+                job.archived = true;
+                modified = true;
+                archivedCount++;
+                if (job.id) _justArchivedIds.add(job.id);
+                console.log(`📦 Archiving ${job.jobStatus} #${job.jobNum} (no changes since ${new Date(_last).toLocaleDateString()})`);
             }
         });
         
@@ -30448,6 +30467,13 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                     console.log('📝 Creating Firestore user document...');
                     await window.setDoc(userDocRef, initialData);
                     console.log('✅ Firestore user document created');
+                    // v1.16.455: tell Colin a new shop signed up (Paddle can't see free sign-ups)
+                    try { window.pwSendAlertEmail && window.pwSendAlertEmail('🆕 New shop signed up — ' + (user.email || ''),
+                        'A new shop just created a PaintWorkz Pro account.\n\nEmail: ' + (user.email || '') +
+                        '\nWhen: ' + new Date().toLocaleString('en-AU') +
+                        '\nTime zone: ' + ((Intl.DateTimeFormat().resolvedOptions() || {}).timeZone || 'unknown') +
+                        '\nVersion: ' + (window.CURRENT_VERSION || '') +
+                        '\n\nThey start on Free. Firestore → users → search their email to see their plan.', { cap: 20 }); } catch(e) {}
                     
                     // Demo data will be seeded by seedDemoDataForNewUser() on first loadAllDataFromFirebase()
                     console.log('📝 Demo data will be seeded automatically');
