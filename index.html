@@ -11434,11 +11434,11 @@ const firebaseConfig = {
         history.forEach(job => {
             if (job.completed || job.archived) return;
             if (job.jobStatus !== 'quote' && job.jobStatus !== 'hold') return;
-            let _last = 0;
-            [job.lastEditedAt, job.lastModified, job.timestamp].forEach(d => {
-                const t = d ? new Date(d).getTime() : NaN;
-                if (!isNaN(t) && t > _last) _last = t;
-            });
+            // Last real edit = last Save (lastEditedAt / timestamp). lastModified is also stamped by
+            // background syncs and repairs, so only use it when the job has no save time at all.
+            const _t = d => { const t = d ? new Date(d).getTime() : NaN; return isNaN(t) ? 0 : t; };
+            let _last = Math.max(_t(job.lastEditedAt), _t(job.timestamp));
+            if (!_last) _last = _t(job.lastModified);
             if (!_last) return; // no reliable date — leave it alone
             if (_last < thirtyDaysAgo.getTime()) {
                 job.archived = true;
@@ -30857,7 +30857,19 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             clearTimeout(window._archiveAppendTimer);
             window._archiveAppendTimer = setTimeout(() => {
                 if (!window.currentUser) return; // logged out mid-load — abort cleanly
-                fullHistory = _activeJobs.concat(_archivedJobs);
+                // v1.16.455: run auto-archive now that the real jobs are loaded (at app start the list is still empty)
+                let _act = _activeJobs, _arcd = _archivedJobs;
+                try {
+                    if (typeof autoArchiveOldJobs === 'function') {
+                        autoArchiveOldJobs();
+                        const _ls = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+                        const _nowArc = new Set(_ls.filter(j => j.archived).map(j => String(j.id || j.jobNum)));
+                        safeJobs.forEach(j => { if (!j.archived && _nowArc.has(String(j.id || j.jobNum))) j.archived = true; });
+                        _act = safeJobs.filter(j => !j.archived);
+                        _arcd = safeJobs.filter(j => j.archived);
+                    }
+                } catch(e) { console.error('Auto-archive after load error:', e); }
+                fullHistory = _act.concat(_arcd);
                 console.log('📦 Archived jobs appended:', _archivedJobs.length);
                 try { if (typeof renderHistory === 'function') renderHistory(); } catch(e) {}
             }, 800);
