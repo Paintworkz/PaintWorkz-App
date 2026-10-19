@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.455-dev'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.456-dev'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1629,7 +1629,7 @@ window.getTooltipKey = getTooltipKey;
 </script>
 </head>
 <body>
-<div id="devBanner">🚧 DEVELOPMENT VERSION — LIVE DATA — v1.16.455-dev (open in Incognito / separate browser) 🚧</div>
+<div id="devBanner">🚧 DEVELOPMENT VERSION — LIVE DATA — v1.16.456-dev (open in Incognito / separate browser) 🚧</div>
 
 <!-- COPYRIGHT NOTICE -->
 <div id="copyrightBanner" style="display:none;">
@@ -1963,6 +1963,7 @@ const firebaseConfig = {
                         if (k && !keepGlobal.some(g => k === g)
                             && !k.startsWith('pw_tour_done_')
                             && !k.startsWith('pw_tooltips_')
+                            && !k.startsWith('pw_bkup_')
                             && !k.startsWith('jobPhotos_')) {
                             localStorage.removeItem(k);
                         }
@@ -6513,7 +6514,8 @@ const firebaseConfig = {
                 const dev = e.device === 'mobile' ? '📱' : '💻';
                 const badge = e.isOwner ? '<span style="background:#d4af37;color:#000;font-size:9px;font-weight:900;padding:1px 6px;border-radius:3px;margin-left:6px;">ADMIN</span>'
                     : e.isPaintWorkz ? '<span style="background:#34c759;color:#000;font-size:9px;font-weight:900;padding:1px 6px;border-radius:3px;margin-left:6px;">PAINTWORKZ</span>'
-                    : '<span style="background:#2196f3;color:#fff;font-size:9px;font-weight:900;padding:1px 6px;border-radius:3px;margin-left:6px;">STAFF</span>';
+                    : (e.isStaff || e.staffName || (e.email && window.currentUser && e.email !== window.currentUser.email)) ? '<span style="background:#2196f3;color:#fff;font-size:9px;font-weight:900;padding:1px 6px;border-radius:3px;margin-left:6px;">STAFF</span>'
+                    : '<span style="background:#34c759;color:#000;font-size:9px;font-weight:900;padding:1px 6px;border-radius:3px;margin-left:6px;">SHOP</span>'; // v1.16.456: shop's own login (not staff)
                 const ua = e.userAgent || '';
                 let browser = ua.includes('Edg') ? 'Edge' : ua.includes('Chrome') ? 'Chrome' : ua.includes('Firefox') ? 'Firefox' : ua.includes('Safari') ? 'Safari' : 'Browser';
                 return '<div style="padding:10px 12px;border-bottom:1px solid #2c2c2e;display:flex;gap:10px;align-items:flex-start;">' +
@@ -13469,6 +13471,7 @@ const firebaseConfig = {
             const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = fname;
             document.body.appendChild(a); a.click(); setTimeout(() => { a.remove(); URL.revokeObjectURL(a.href); }, 800);
             notify('✅ Downloaded ' + payload.jobHistoryCount + ' jobs, ' + payload.paintFormulaCount + ' formulas and your settings');
+            try { if (window.pwMarkDataBackedUp) window.pwMarkDataBackedUp(); } catch(_e) {}
         } catch (e) {
             alert('Could not download your data: ' + (e.code || e.message) + '\n\nCheck you are logged in and online, then try again.');
         } finally { if (btn) { btn.disabled = false; btn.textContent = orig; } }
@@ -13494,6 +13497,7 @@ const firebaseConfig = {
             document.body.appendChild(a); a.click();
             setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
             localStorage.setItem("lastBackupTimestamp", new Date().toISOString());
+            try { if (payload.meta && payload.meta.fromCloud && window.pwMarkDataBackedUp) window.pwMarkDataBackedUp(); } catch(_e) {}
             localStorage.setItem("lastBackupFile", filename);
             updateLastBackupDisplay();
             backupStatusMsg("Backup saved: " + filename + "  -  " + payload.jobHistoryCount + " jobs, " + payload.paintFormulaCount + " formulas", "ok");
@@ -33261,6 +33265,97 @@ window.endTour = endTour;
     }
     // iPhone / iPad: no install button exists on iOS, so show the one-time Share tip
     if (isIOS() && !isStandalone()) tryLater('ios');
+})();
+</script>
+<script>
+// v1.16.456: weekly "download your backup" reminder — the shop's backup lives on THEIR device, not ours.
+// Shows once a shop has real jobs, at most every 7 days after their last download; "Later" waits 3 days.
+// Last download is stored on users/{uid}.lastDataDownloadAt so a download on one device counts for all.
+(function(){
+    var DAY = 86400000, WEEK = 7 * DAY, SNOOZE = 3 * DAY;
+    var shown = false;
+    function uid() { return window.currentUser && window.currentUser.uid; }
+    function lsGet(k) { try { return Number(localStorage.getItem(k) || 0) || 0; } catch(e) { return 0; } }
+    function lsSet(k, v) { try { localStorage.setItem(k, String(v)); } catch(e) {} }
+    function appVisible() {
+        var app = document.getElementById('appContainer'), login = document.getElementById('loginScreen');
+        return window.currentUser && app && app.style.display !== 'none' && (!login || login.style.display === 'none');
+    }
+    window.pwMarkDataBackedUp = function() {
+        var u = uid(); if (!u) return;
+        var now = Date.now();
+        lsSet('pw_bkup_last_' + u, now);
+        try { var el = document.getElementById('pwBackupStrip'); if (el) el.remove(); } catch(e) {}
+        try {
+            if (window.firebaseDb && window.doc && window.setDoc)
+                window.setDoc(window.doc(window.firebaseDb, 'users', u), { lastDataDownloadAt: now }, { merge: true }).catch(function(){});
+        } catch(e) {}
+    };
+    function close(snooze, off) {
+        var el = document.getElementById('pwBackupStrip'); if (el) el.remove();
+        var u = uid(); if (!u) return;
+        if (off) lsSet('pw_bkup_off_' + u, 1);
+        else if (snooze) lsSet('pw_bkup_snooze_' + u, Date.now() + SNOOZE);
+    }
+    function show() {
+        if (shown || document.getElementById('pwBackupStrip') || !appVisible()) return;
+        if (document.getElementById('pwInstallStrip')) { setTimeout(show, 30000); return; } // don't stack on the install strip
+        shown = true;
+        var foot = document.getElementById('stickyFooter');
+        var bottom = (foot && foot.offsetHeight ? foot.offsetHeight : 0) + 12;
+        var el = document.createElement('div');
+        el.id = 'pwBackupStrip';
+        el.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:' + bottom + 'px;z-index:9000;width:calc(100% - 24px);max-width:520px;box-sizing:border-box;background:#1c1c1e;border:1px solid rgba(212,175,55,0.6);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.45);padding:10px 10px 10px 14px;display:flex;align-items:center;gap:10px;color:#f2f2f7;font-size:13px;line-height:1.35;';
+        el.innerHTML = '<span style="font-size:22px;">💾</span>' +
+            '<div style="flex:1;min-width:0;"><b style="color:#d4af37;">Time for a backup</b><br>' +
+            '<span style="color:#ccc;">Save a copy of all your jobs &amp; settings to this device.</span><br>' +
+            '<a href="#" id="pwBackupOff" style="color:#888;font-size:11px;text-decoration:underline;">Don\'t remind me</a></div>' +
+            '<button type="button" id="pwBackupGo" style="background:#d4af37;color:#000;border:none;border-radius:8px;padding:8px 12px;font-weight:900;font-size:13px;cursor:pointer;white-space:nowrap;">Download</button>' +
+            '<button type="button" id="pwBackupLater" style="background:none;border:1px solid #555;color:#ccc;border-radius:8px;padding:7px 10px;font-size:12px;cursor:pointer;white-space:nowrap;">Later</button>';
+        document.body.appendChild(el);
+        document.getElementById('pwBackupLater').onclick = function() { close(true); };
+        document.getElementById('pwBackupOff').onclick = function(ev) {
+            ev.preventDefault();
+            if (confirm('Stop the weekly backup reminder on this device?\n\nYou can still download a backup any time from Admin → General Settings → "Download all my data".')) close(false, true);
+        };
+        document.getElementById('pwBackupGo').onclick = function() {
+            var b = this; b.disabled = true; b.textContent = '⏳';
+            Promise.resolve(window.pwDownloadAllMyData && window.pwDownloadAllMyData()).then(function() {
+                if (document.getElementById('pwBackupStrip')) { b.disabled = false; b.textContent = 'Download'; } // failed — it stays
+            });
+        };
+    }
+    async function check() {
+        var u = uid();
+        if (!u || !appVisible()) return false;
+        if (window.isStaffAccount) return true;                       // staff don't get it — the shop owner does
+        if (!window._userHasRealData) return false;                    // wait until real jobs have loaded
+        if (lsGet('pw_bkup_off_' + u)) return true;
+        var now = Date.now();
+        if (lsGet('pw_bkup_snooze_' + u) > now) return true;
+        var last = Math.max(lsGet('pw_bkup_last_' + u), Date.parse(localStorage.getItem('lastBackupTimestamp') || '') || 0);
+        try {
+            if (window.firebaseDb && window.doc && window.getDoc) {
+                var snap = await window.getDoc(window.doc(window.firebaseDb, 'users', u));
+                var d = snap.exists() ? snap.data() : {};
+                if (d.lastDataDownloadAt) last = Math.max(last, Number(d.lastDataDownloadAt) || 0);
+            }
+        } catch(e) {}
+        if (!last) {                                                   // first time: start the clock, no nag on day one
+            var first = lsGet('pw_bkup_first_' + u);
+            if (!first) { lsSet('pw_bkup_first_' + u, now); return true; }
+            last = first;
+        }
+        if (now - last >= WEEK) show();
+        return true;
+    }
+    function loop(tries) {
+        tries = tries || 0;
+        check().then(function(done) {
+            if (!done && tries < 40) setTimeout(function(){ loop(tries + 1); }, 15000);  // wait for login + jobs (~10 min)
+        }).catch(function(){});
+    }
+    setTimeout(loop, 25000);
 })();
 </script>
 </body>
