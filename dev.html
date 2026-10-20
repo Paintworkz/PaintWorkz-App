@@ -20999,9 +20999,10 @@ const firebaseConfig = {
 
     let _reportStatusFilter = 'all'; // 'all' | 'active' | 'completed'
     // v1.16.457: which jobs a report period includes.
-    //   Active    = not completed yet, and RECEIVED in the period
+    //   Active    = still open (not completed), received on or before the end of the period — the work on hand,
+    //               including jobs that came in before the period started (e.g. Leighton Park received 30 Sept)
     //   Completed = COMPLETED in the period (wherever it was received — a September job finished in October is October's)
-    //   All       = received in the period OR completed in the period (so All always includes everything Completed shows)
+    //   All       = Active + Completed
     function pwJobCompletedOn(j) {
         if (!j.completed) return null;
         let c = j.completedDate ? new Date(j.completedDate) : null;
@@ -21035,6 +21036,12 @@ const firebaseConfig = {
                 btn.style.background = '#fff'; btn.style.color = '#666'; btn.style.borderColor = '#ddd';
             }
         });
+        // v1.16.457: re-run the report straight away — before, the button changed colour but the
+        // old results stayed on screen until the report was generated again
+        try {
+            const _f = document.getElementById('reportDateFrom'), _t = document.getElementById('reportDateTo');
+            if (_f && _t && _f.value && _t.value && typeof buildReports === 'function') buildReports();
+        } catch(e) {}
     }
 
     let buildReportsTimer = null;
@@ -21113,8 +21120,8 @@ const firebaseConfig = {
             const _inRec = _rec >= fromDate && _rec <= toDate;
             const _inComp = !!_comp && _comp >= fromDate && _comp <= toDate;
             if (_reportStatusFilter === 'completed') { if (!_inComp) return false; }
-            else if (_reportStatusFilter === 'active') { if (j.completed || !_inRec) return false; }
-            else if (!_inRec && !_inComp) return false;
+            else if (_reportStatusFilter === 'active') { if (j.completed || j.archived || _rec > toDate) return false; }
+            else if (!_inComp && (j.completed || j.archived || _rec > toDate)) return false;   // archived = filed away, not on hand
             if (_clientFilter && (j.client || '') !== _clientFilter) return false;
             if (j.jobStatus === 'quote' || j.jobStatus === 'hold') return false; // exclude non-jobs
             if (_sqmThresh > 0) {
