@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.457-dev'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.458-dev'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1629,7 +1629,7 @@ window.getTooltipKey = getTooltipKey;
 </script>
 </head>
 <body>
-<div id="devBanner">🚧 DEVELOPMENT VERSION — LIVE DATA — v1.16.457-dev (open in Incognito / separate browser) 🚧</div>
+<div id="devBanner">🚧 DEVELOPMENT VERSION — LIVE DATA — v1.16.458-dev (open in Incognito / separate browser) 🚧</div>
 
 <!-- COPYRIGHT NOTICE -->
 <div id="copyrightBanner" style="display:none;">
@@ -1893,6 +1893,7 @@ const firebaseConfig = {
             // v1.16.447: any sign-out the APP asks for is deliberate → show the login screen.
             // Only a sign-out Firebase does by itself gets the red "not connected" bar.
             window._userInitiatedLogout = true;
+            try { localStorage.setItem('pw_deliberate_signout_at', String(Date.now())); } catch(e) {}
             return signOut(auth);
         };
         window.sendPasswordResetEmail = (email) => sendPasswordResetEmail(auth, email, {
@@ -1956,7 +1957,7 @@ const firebaseConfig = {
 
                 if (lastUid !== user.uid || _freshSession) {
                     console.log('Fresh login — wiping localStorage for clean slate:', user.email);
-                    const keepGlobal = ['paintworkz_version', 'app_theme', 'pw_tooltips', 'pw_device_id', 'pw_explicit_login', 'pw_install_dismissed']; // v1.16.444: explicit-login flag must survive or the next auth fire silently signs out
+                    const keepGlobal = ['paintworkz_version', 'app_theme', 'pw_tooltips', 'pw_device_id', 'pw_explicit_login', 'pw_install_dismissed', 'pw_err_queue', 'pw_err_seen', 'pw_err_day', 'pw_mail_day']; // v1.16.444: explicit-login flag must survive or the next auth fire silently signs out
                     for (let i = localStorage.length - 1; i >= 0; i--) {
                         const k = localStorage.key(i);
                         // Preserve per-user tooltip + tour prefs so help-icon toggle survives login
@@ -2124,6 +2125,11 @@ const firebaseConfig = {
                 if (window._userInitiatedLogout) {
                     window._userInitiatedLogout = false;
                     // Fall through to logout UI below
+                } else if (Date.now() - (Number(localStorage.getItem('pw_deliberate_signout_at')) || 0) < 60000) {
+                    // v1.16.458: you logged out in ANOTHER tab/window of the app in this browser (e.g. dev.html vs
+                    // the live app). Every tab shares one login, so this tab was signed out too — on purpose.
+                    // Show the login screen here as well, instead of the red "not connected" bar + error email.
+                    console.log('[Auth] Logged out in another tab — showing login screen here too');
                 } else if (_prevEmail) {
                     // v1.16.447: same for every account — keep the app open and warn, never drop to login silently
                     console.log('[Auth] Firebase dropped the session — keeping app open for', _prevEmail);
@@ -6307,7 +6313,7 @@ const firebaseConfig = {
         window.realtimeSyncActive = false;
         // Nuclear wipe on logout - preserve only app-global prefs
         const uid = window.currentUser ? window.currentUser.uid : null;
-        const keepOnLogout = ['paintworkz_version', 'pw_device_id'];
+        const keepOnLogout = ['paintworkz_version', 'pw_device_id', 'pw_err_queue', 'pw_err_seen', 'pw_err_day', 'pw_mail_day']; // v1.16.458: queued error reports survive logout
         if (uid) { keepOnLogout.push('pw_tooltips_' + uid); keepOnLogout.push('pw_tour_done_' + uid); }
         keepOnLogout.push('doorProfiles', 'masterMatrix', 'paintBrands');
         const logoutKeys = [];
