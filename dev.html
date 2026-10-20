@@ -2,7 +2,7 @@
 ╔════════════════════════════════════════════════════════════════╗
 ║                                                                ║
 ║  ⚖️  OWNERSHIP NOTICE - HARDLOCKED                             ║
-║                                                               ║
+║                                                                ║
 ║  SOFTWARE OWNED BY: COLIN BEDFORD                             ║
 ║  COPYRIGHT: © 2026 Colin Bedford                              ║
 ║  PROPERTY: Personal Intellectual Property                     ║
@@ -21103,7 +21103,7 @@ const firebaseConfig = {
             window._jbSort.dir = window._jbSort.dir === 'asc' ? 'desc' : 'asc';
         } else {
             window._jbSort.key = key;
-            const numKeys = ['totalParts','_estValue','totalSqm','_cts','jobNum','dateReceived'];
+            const numKeys = ['totalParts','_estValue','totalSqm','_cts','jobNum','dateReceived','_closed'];
             window._jbSort.dir = numKeys.includes(key) ? 'desc' : 'asc';
         }
         buildReportsRunning = false; // allow immediate rebuild
@@ -21505,6 +21505,7 @@ const firebaseConfig = {
             jobs.sort((a,b) => {
                 let av = a[k], bv = b[k];
                 if (k === 'dateReceived') { av = parseReportDate(a.dateReceived)?.getTime()||0; bv = parseReportDate(b.dateReceived)?.getTime()||0; }
+                else if (k === '_closed') { av = pwJobCompletedOn(a)?.getTime()||0; bv = pwJobCompletedOn(b)?.getTime()||0; }
                 else if (numKeys.includes(k)) { av = parseFloat(av)||0; bv = parseFloat(bv)||0; }
                 else { av = (av||'').toString().toLowerCase(); bv = (bv||'').toString().toLowerCase(); }
                 if (av < bv) return -1*dir;
@@ -21709,7 +21710,8 @@ const firebaseConfig = {
                     <th onclick="sortJobBreakdown('_estValue')" style="padding:7px 8px; text-align:right; cursor:pointer; user-select:none;" title="Sort by Est. Value">Est. Value ${_jbSortArrow('_estValue')}</th>
                     <th onclick="sortJobBreakdown('_cts')" style="padding:7px 8px; text-align:right; cursor:pointer; user-select:none;" title="Sort by CTS">CTS ${_jbSortArrow('_cts')}</th>
                     <th onclick="sortJobBreakdown('totalSqm')" style="padding:7px 8px; text-align:right; cursor:pointer; user-select:none;" title="Sort by SQM">SQM ${_jbSortArrow('totalSqm')}</th>
-                    <th onclick="sortJobBreakdown('dateReceived')" style="padding:7px 8px; text-align:left; cursor:pointer; user-select:none;" title="Sort by Date">Date ${_jbSortArrow('dateReceived')}</th>
+                    <th onclick="sortJobBreakdown('dateReceived')" style="padding:7px 8px; text-align:left; cursor:pointer; user-select:none;" title="Sort by date received">Received ${_jbSortArrow('dateReceived')}</th>
+                    <th onclick="sortJobBreakdown('_closed')" style="padding:7px 8px; text-align:left; cursor:pointer; user-select:none;" title="Sort by date completed (closed)">Closed ${_jbSortArrow('_closed')}</th>
                     <th onclick="sortJobBreakdown('_workDays')" style="padding:7px 8px; text-align:right; cursor:pointer; user-select:none;" title="Working days from received to completed (excludes shop closures). Sort to find jobs that blew out the average.">Days ${_jbSortArrow('_workDays')}</th>
                 </tr></thead>
                 <tbody>
@@ -21738,6 +21740,7 @@ const firebaseConfig = {
                     <td style="padding:6px 8px; text-align:right; font-weight:900; color:#2c3e50;">${jCts>0?'$'+jCts.toFixed(0):'-'}</td>
                     <td style="padding:6px 8px; text-align:right; font-weight:900; color:#000;">${parseFloat(j.totalSqm||0).toFixed(2)}</td>
                     <td style="padding:6px 8px; color:#000;">${j.dateReceived||'   '}</td>
+                    <td style="padding:6px 8px; color:${j.completed ? '#2e7d32' : '#bbb'}; font-weight:${j.completed ? '700' : '400'};">${(() => { const c = pwJobCompletedOn(j); return c ? c.toLocaleDateString('en-AU', { day:'2-digit', month:'2-digit', year:'2-digit' }) : '—'; })()}</td>
                     <td style="padding:6px 8px; text-align:right;">${_daysCell}</td>
                 </tr>`;}).join('')}
                 </tbody>
@@ -21747,6 +21750,7 @@ const firebaseConfig = {
                     <td style="padding:7px 8px; text-align:right; font-weight:900; color:#2196f3;">${totalValue.toFixed(0)}</td>
                     <td style="padding:7px 8px; text-align:right; font-weight:900; color:#2c3e50;">${totalCtsRevenue>0?'$'+totalCtsRevenue.toFixed(0):'-'}</td>
                     <td style="padding:7px 8px; text-align:right; color:#000;">${totalSqm.toFixed(2)}</td>
+                    <td></td>
                     <td style="padding:7px 8px; text-align:right; font-size:9px; color:#00838f;">avg</td>
                     <td style="padding:7px 8px; text-align:right; font-weight:900; color:#00838f;">${_avgDays !== null ? _avgDays + 'd' : '—'}</td>
                 </tr></tfoot>
