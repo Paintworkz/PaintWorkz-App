@@ -20998,16 +20998,21 @@ const firebaseConfig = {
     }
 
     let _reportStatusFilter = 'all'; // 'all' | 'active' | 'completed'
-    // v1.16.457: which date a job counts on in Reports. "Completed" reports go by the day the job was
-    // COMPLETED (a job received in September but finished in October belongs to October).
-    // All / Active reports keep going by the date received, as before.
-    function pwReportDate(j) {
-        if (_reportStatusFilter === 'completed' && j.completed) {
-            let c = j.completedDate ? new Date(j.completedDate) : null;
-            if (!c || isNaN(c)) c = parseReportDate(j.dateCompleted);
-            if (c && !isNaN(c)) return c;
-        }
-        return parseReportDate(j.dateReceived) || new Date(j.timestamp || 0);
+    // v1.16.457: which jobs a report period includes.
+    //   Active    = not completed yet, and RECEIVED in the period
+    //   Completed = COMPLETED in the period (wherever it was received — a September job finished in October is October's)
+    //   All       = received in the period OR completed in the period (so All always includes everything Completed shows)
+    function pwJobCompletedOn(j) {
+        if (!j.completed) return null;
+        let c = j.completedDate ? new Date(j.completedDate) : null;
+        if (!c || isNaN(c)) c = parseReportDate(j.dateCompleted);
+        return (c && !isNaN(c)) ? c : null;
+    }
+    function pwJobReceivedOn(j) { return parseReportDate(j.dateReceived) || new Date(j.timestamp || 0); }
+    function pwReportDate(j, from, to) {   // the date a job is charted under
+        const c = pwJobCompletedOn(j);
+        if (c && from && to && c >= from && c <= to) return c;
+        return pwJobReceivedOn(j);
     }
     function populateClientFilter() {
         // Populate client dropdown with unique clients from job history, keep current selection
@@ -21104,10 +21109,12 @@ const firebaseConfig = {
         const _sqmUnder = typeof _sqmFilterRaw === 'string' && _sqmFilterRaw.startsWith('u');
         const _sqmThresh = _sqmUnder ? parseFloat(_sqmFilterRaw.substring(1)) : parseFloat(_sqmFilterRaw);
         const jobs = history.filter(j => {
-            const d = pwReportDate(j);
-            if (d < fromDate || d > toDate) return false;
-            if (_reportStatusFilter === 'active' && j.completed) return false;
-            if (_reportStatusFilter === 'completed' && !j.completed) return false;
+            const _rec = pwJobReceivedOn(j), _comp = pwJobCompletedOn(j);
+            const _inRec = _rec >= fromDate && _rec <= toDate;
+            const _inComp = !!_comp && _comp >= fromDate && _comp <= toDate;
+            if (_reportStatusFilter === 'completed') { if (!_inComp) return false; }
+            else if (_reportStatusFilter === 'active') { if (j.completed || !_inRec) return false; }
+            else if (!_inRec && !_inComp) return false;
             if (_clientFilter && (j.client || '') !== _clientFilter) return false;
             if (j.jobStatus === 'quote' || j.jobStatus === 'hold') return false; // exclude non-jobs
             if (_sqmThresh > 0) {
@@ -21251,7 +21258,7 @@ const firebaseConfig = {
             job._estValue=_jv;
             totalValue += _jv;
 
-            const d = pwReportDate(job);
+            const d = pwReportDate(job, fromDate, toDate);
             const mo = d.toLocaleDateString('en-AU', { month: 'short', year: 'numeric' });
             if (!monthlyData[mo]) monthlyData[mo] = { sqm: 0, jobs: 0, sqmActive: 0, sqmCompleted: 0 };
             monthlyData[mo].sqm += sqm;
