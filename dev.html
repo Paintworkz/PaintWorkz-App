@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.456-dev'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.457-dev'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1629,7 +1629,7 @@ window.getTooltipKey = getTooltipKey;
 </script>
 </head>
 <body>
-<div id="devBanner">🚧 DEVELOPMENT VERSION — LIVE DATA — v1.16.456-dev (open in Incognito / separate browser) 🚧</div>
+<div id="devBanner">🚧 DEVELOPMENT VERSION — LIVE DATA — v1.16.457-dev (open in Incognito / separate browser) 🚧</div>
 
 <!-- COPYRIGHT NOTICE -->
 <div id="copyrightBanner" style="display:none;">
@@ -20998,6 +20998,17 @@ const firebaseConfig = {
     }
 
     let _reportStatusFilter = 'all'; // 'all' | 'active' | 'completed'
+    // v1.16.457: which date a job counts on in Reports. "Completed" reports go by the day the job was
+    // COMPLETED (a job received in September but finished in October belongs to October).
+    // All / Active reports keep going by the date received, as before.
+    function pwReportDate(j) {
+        if (_reportStatusFilter === 'completed' && j.completed) {
+            let c = j.completedDate ? new Date(j.completedDate) : null;
+            if (!c || isNaN(c)) c = parseReportDate(j.dateCompleted);
+            if (c && !isNaN(c)) return c;
+        }
+        return parseReportDate(j.dateReceived) || new Date(j.timestamp || 0);
+    }
     function populateClientFilter() {
         // Populate client dropdown with unique clients from job history, keep current selection
         const sel = document.getElementById('rClientFilter');
@@ -21093,7 +21104,7 @@ const firebaseConfig = {
         const _sqmUnder = typeof _sqmFilterRaw === 'string' && _sqmFilterRaw.startsWith('u');
         const _sqmThresh = _sqmUnder ? parseFloat(_sqmFilterRaw.substring(1)) : parseFloat(_sqmFilterRaw);
         const jobs = history.filter(j => {
-            const d = parseReportDate(j.dateReceived) || new Date(j.timestamp || 0);
+            const d = pwReportDate(j);
             if (d < fromDate || d > toDate) return false;
             if (_reportStatusFilter === 'active' && j.completed) return false;
             if (_reportStatusFilter === 'completed' && !j.completed) return false;
@@ -21240,7 +21251,7 @@ const firebaseConfig = {
             job._estValue=_jv;
             totalValue += _jv;
 
-            const d = parseReportDate(job.dateReceived) || new Date(job.timestamp || 0);
+            const d = pwReportDate(job);
             const mo = d.toLocaleDateString('en-AU', { month: 'short', year: 'numeric' });
             if (!monthlyData[mo]) monthlyData[mo] = { sqm: 0, jobs: 0, sqmActive: 0, sqmCompleted: 0 };
             monthlyData[mo].sqm += sqm;
@@ -21371,7 +21382,7 @@ const firebaseConfig = {
         const palette = ['#2196f3','#4caf50','#ff9800','#9c27b0','#f44336','#00bcd4','#ff5722','#607d8b','#3f51b5','#8bc34a'];
 
         const _cfl = (document.getElementById('rClientFilter')?.value || '').trim();
-        const statusLabel = (_reportStatusFilter === 'active' ? '     Active' : _reportStatusFilter === 'completed' ? '    Completed' : '     All Jobs') + (_cfl ? '          ' + _cfl : '');
+        const statusLabel = (_reportStatusFilter === 'active' ? '     Active' : _reportStatusFilter === 'completed' ? '    Completed (by date completed)' : '     All Jobs') + (_cfl ? '          ' + _cfl : '');
         // Pre-calc estimated value and paint cost for KPI row
         const _estCosts = getBaseCosts();
         let _totalEstVal = 0;
