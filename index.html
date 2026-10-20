@@ -5093,11 +5093,11 @@ const firebaseConfig = {
                     <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
                         <div style="flex:1; min-width:120px;">
                             <label style="font-size:9px; font-weight:900; color:#2196f3; text-transform:uppercase; display:block; margin-bottom:3px;">From</label>
-                            <input type="date" id="reportDateFrom" style="width:100%; padding:8px; border:1px solid #90caf9; border-radius:6px; font-size:13px; box-sizing:border-box; font-weight:700;">
+                            <input type="date" id="reportDateFrom" onchange="pwReportDatesChanged()" onblur="pwReportFixYear(this)" style="width:100%; padding:8px; border:1px solid #90caf9; border-radius:6px; font-size:13px; box-sizing:border-box; font-weight:700;">
                         </div>
                         <div style="flex:1; min-width:120px;">
                             <label style="font-size:9px; font-weight:900; color:#2196f3; text-transform:uppercase; display:block; margin-bottom:3px;">To</label>
-                            <input type="date" id="reportDateTo" style="width:100%; padding:8px; border:1px solid #90caf9; border-radius:6px; font-size:13px; box-sizing:border-box; font-weight:700;">
+                            <input type="date" id="reportDateTo" onchange="pwReportDatesChanged()" onblur="pwReportFixYear(this)" style="width:100%; padding:8px; border:1px solid #90caf9; border-radius:6px; font-size:13px; box-sizing:border-box; font-weight:700;">
                         </div>
                         <div style="display:flex; flex-direction:column; gap:5px; flex-shrink:0;">
                             <div style="display:flex; gap:5px;">
@@ -20948,12 +20948,54 @@ const firebaseConfig = {
     // ===== END GLOBAL SEARCH =====
 
     // ===== REPORTS ENGINE =====
+    // v1.16.457: dates in YOUR time zone. toISOString() is UTC, so before 11 am in Australia
+    // "today" came out as yesterday and today's jobs were left off the report.
+    function pwLocalYMD(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+    function pwYMDToLocal(str, endOfDay) {
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(str || '');
+        if (!m) return null;
+        return endOfDay ? new Date(+m[1], +m[2] - 1, +m[3], 23, 59, 59, 999) : new Date(+m[1], +m[2] - 1, +m[3]);
+    }
+    // Typing a 2-digit year ("26") into a date box gives year 0026 — which made a From date of
+    // 1/10/0026 pull in every job ever. Read 2-digit years as 20xx; reject anything else odd.
+    function pwReportRangeDate(id, endOfDay) {
+        const el = document.getElementById(id);
+        const m = /^(\d{4,6})-(\d{2})-(\d{2})$/.exec((el && el.value) || '');
+        if (!m) return null;
+        let y = +m[1];
+        if (y < 100) y += 2000;
+        if (y < 2000 || y > 2100) return null;
+        return endOfDay ? new Date(y, +m[2] - 1, +m[3], 23, 59, 59, 999) : new Date(y, +m[2] - 1, +m[3]);
+    }
+    // When you leave a date box, show the corrected year (0026 → 2026) so what you see is what's used
+    function pwReportFixYear(el) {
+        try {
+            const m = /^(\d{4,6})-(\d{2})-(\d{2})$/.exec(el.value || '');
+            if (m && +m[1] < 100) el.value = String(2000 + +m[1]) + '-' + m[2] + '-' + m[3];
+        } catch(e) {}
+    }
+    window.pwReportFixYear = pwReportFixYear;
+    // Typed / picked dates re-run the report once both dates are complete (before, the old results
+    // stayed on screen until ▶ RUN was pressed, so the figures didn't match the dates shown)
+    let _pwRepDateTimer = null;
+    function pwReportDatesChanged() {
+        clearTimeout(_pwRepDateTimer);
+        _pwRepDateTimer = setTimeout(() => {
+            const f = pwReportRangeDate('reportDateFrom'), t = pwReportRangeDate('reportDateTo', true);
+            if (!f || !t) return;   // still typing, or not a real date yet
+            if (f > t) { notify('⚠️ The From date is after the To date'); return; }
+            document.querySelectorAll('.report-quick-btn').forEach(b => { b.style.background = '#e3f2fd'; b.style.color = '#1565c0'; });
+            buildReports();
+        }, 1000);
+    }
+    window.pwReportDatesChanged = pwReportDatesChanged;
     function reportQuick(days) {
         const to = new Date();
         const from = new Date();
         from.setDate(from.getDate() - days);
-        document.getElementById('reportDateFrom').value = from.toISOString().slice(0,10);
-        document.getElementById('reportDateTo').value = to.toISOString().slice(0,10);
+        document.getElementById('reportDateFrom').value = pwLocalYMD(from);
+        document.getElementById('reportDateTo').value = pwLocalYMD(to);
+        setTimeout(buildReports, 0);
         // Highlight active button
         document.querySelectorAll('.report-quick-btn').forEach(b => {
             b.style.background = '#e3f2fd';
@@ -20964,7 +21006,8 @@ const firebaseConfig = {
     }
     function reportQuickAll() {
         document.getElementById('reportDateFrom').value = '2020-01-01';
-        document.getElementById('reportDateTo').value = new Date().toISOString().slice(0,10);
+        document.getElementById('reportDateTo').value = pwLocalYMD(new Date());
+        setTimeout(buildReports, 0);
         // Highlight active button
         document.querySelectorAll('.report-quick-btn').forEach(b => {
             b.style.background = '#e3f2fd';
@@ -20978,8 +21021,8 @@ const firebaseConfig = {
         const from = new Date();
         from.setDate(from.getDate() - 30);
         if (!document.getElementById('reportDateFrom').value) {
-            document.getElementById('reportDateFrom').value = from.toISOString().slice(0,10);
-            document.getElementById('reportDateTo').value = to.toISOString().slice(0,10);
+            document.getElementById('reportDateFrom').value = pwLocalYMD(from);
+            document.getElementById('reportDateTo').value = pwLocalYMD(to);
         }
         populateClientFilter();
     }
@@ -20987,11 +21030,11 @@ const firebaseConfig = {
     function parseReportDate(str) {
         if (!str) return null;
         // Handle DD/MM/YY and DD/MM/YYYY and YYYY-MM-DD
-        if (str.includes('-')) return new Date(str);
+        if (str.includes('-')) { const _l = pwYMDToLocal(String(str).slice(0, 10)); return (_l && String(str).length <= 10) ? _l : new Date(str); }
         const p = str.split('/');
         if (p.length === 3) {
             const y = p[2].length === 2 ? '20' + p[2] : p[2];
-            return new Date(`${y}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`);
+            return new Date(+y, +p[1] - 1, +p[0]);   // v1.16.457: local date, not UTC
         }
         return new Date(str);
     }
@@ -21083,9 +21126,19 @@ const firebaseConfig = {
             return; 
         }
 
-        const fromDate = new Date(fromStr);
-        const toDate = new Date(toStr);
-        toDate.setHours(23,59,59);
+        // v1.16.457: start / end of the day in YOUR time zone, with 2-digit years read as 20xx
+        const fromDate = pwReportRangeDate('reportDateFrom');
+        const toDate = pwReportRangeDate('reportDateTo', true);
+        if (!fromDate || !toDate) {
+            document.getElementById('reportsOutput').innerHTML = '<div style="text-align:center; padding:40px; color:#c62828; font-size:14px; font-weight:700;">⚠️ Check the dates — one of them isn\'t a real date (look at the year).</div>';
+            window._reportJobs = [];
+            return;
+        }
+        if (fromDate > toDate) {
+            document.getElementById('reportsOutput').innerHTML = '<div style="text-align:center; padding:40px; color:#c62828; font-size:14px; font-weight:700;">⚠️ The From date is after the To date.</div>';
+            window._reportJobs = [];
+            return;
+        }
 
         const history = JSON.parse(localStorage.getItem('jobHistory') || '[]');
         // Load formulas     try all known keys + in-memory global
@@ -21134,6 +21187,7 @@ const firebaseConfig = {
         });
 
         if (jobs.length === 0) {
+            window._reportJobs = [];
             document.getElementById('reportsOutput').innerHTML = `
                 <div style="text-align:center; padding:40px; color:#999; font-size:14px;">No jobs found in this date range.</div>`;
             return;
