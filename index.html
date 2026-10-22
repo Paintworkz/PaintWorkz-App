@@ -22833,31 +22833,49 @@ const firebaseConfig = {
             const { jsPDF } = window.jspdf;
             const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
             const M = 10, PW = 210 - 2 * M, PH = 297 - 2 * M;
+            // ONE capture of the report only. html2canvas copies the page for every capture, and the app is
+            // huge — so skip everything except the report (this was taking over a minute on an iPhone).
+            // iPhones refuse pictures bigger than ~16 million pixels (a whole-year report would come out blank) —
+            // so long reports are captured slightly less sharp to stay under the limit
+            const _areaCss = holder.offsetWidth * holder.offsetHeight;
+            const _scale = Math.max(0.6, Math.min(1.6, Math.sqrt(14000000 / Math.max(1, _areaCss))));
+            const shot = await window.html2canvas(holder, {
+                scale: _scale, backgroundColor: '#ffffff', useCORS: true, logging: false,
+                ignoreElements: el => el.parentElement === document.body && el !== holder
+            });
+            const pxPerCss = shot.width / holder.offsetWidth;
+            const mmPerPx = PW / shot.width;
+            const pagePx = Math.floor(PH / mmPerPx);
+            const hTop = holder.getBoundingClientRect().top;
+            const blocks = [head, ...cards].map(el => {
+                const r = el.getBoundingClientRect();
+                return { top: Math.max(0, Math.round((r.top - hTop) * pxPerCss)), h: Math.round(r.height * pxPerCss) };
+            }).filter(b => b.h > 0);
+            const cut = (top, h) => {
+                const c = document.createElement('canvas');
+                c.width = shot.width; c.height = h;
+                c.getContext('2d').drawImage(shot, 0, top, shot.width, h, 0, 0, shot.width, h);
+                return c.toDataURL('image/jpeg', 0.85);
+            };
             let y = M;
-            const blocks = [head, ...cards];
-            for (let i = 0; i < blocks.length; i++) {
-                const cv = await window.html2canvas(blocks[i], { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false });
-                if (!cv.width || !cv.height) continue;
-                const mmPerPx = PW / cv.width;
-                const hMM = cv.height * mmPerPx;
-                if (hMM <= PH) {
+            const gap = 4;
+            for (const bl of blocks) {
+                const hMM = bl.h * mmPerPx;
+                if (bl.h <= pagePx) {
                     if (y + hMM > M + PH) { pdf.addPage(); y = M; }
-                    pdf.addImage(cv.toDataURL('image/jpeg', 0.9), 'JPEG', M, y, PW, hMM);
-                    y += hMM + 4;
+                    pdf.addImage(cut(bl.top, bl.h), 'JPEG', M, y, PW, hMM);
+                    y += hMM + gap;
                 } else {
-                    // Card taller than a page (e.g. a long job list): slice it across pages
+                    // Taller than a page (e.g. a long job list): slice it across pages
                     if (y > M) { pdf.addPage(); y = M; }
-                    const slicePx = Math.floor(PH / mmPerPx);
-                    for (let top = 0; top < cv.height; top += slicePx) {
-                        const h = Math.min(slicePx, cv.height - top);
-                        const part = document.createElement('canvas');
-                        part.width = cv.width; part.height = h;
-                        part.getContext('2d').drawImage(cv, 0, top, cv.width, h, 0, 0, cv.width, h);
-                        if (top > 0) { pdf.addPage(); y = M; }
-                        pdf.addImage(part.toDataURL('image/jpeg', 0.9), 'JPEG', M, y, PW, h * mmPerPx);
-                        y += h * mmPerPx + 4;
+                    for (let t = 0; t < bl.h; t += pagePx) {
+                        const h = Math.min(pagePx, bl.h - t);
+                        if (t > 0) { pdf.addPage(); y = M; }
+                        pdf.addImage(cut(bl.top + t, h), 'JPEG', M, y, PW, h * mmPerPx);
+                        y += h * mmPerPx + gap;
                     }
                 }
+                await new Promise(r => setTimeout(r, 0)); // keep the app responsive between pages
             }
             const name = 'PaintWorkz_Report_' + (fromStr || '') + '_to_' + (toStr || '');
             showPDFPreview(pdf.output('datauristring'), name, '📊 Report');
