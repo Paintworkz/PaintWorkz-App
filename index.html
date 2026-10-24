@@ -27,7 +27,7 @@
 --->
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.459'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.460'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1933,13 +1933,15 @@ const firebaseConfig = {
                 const lastUid = localStorage.getItem('pw_last_uid');
                 // v1.16.447: one code path — every account (owner included) gets the same clean-slate rule
                 const _freshSession = !sessionStorage.getItem('pw_session_active_' + user.uid);
-                const _differentUser = (lastUid && lastUid !== user.uid);
+                // v1.16.460: also catch a different account in the SAME tab (logout clears pw_last_uid)
+                const _differentUser = (lastUid && lastUid !== user.uid) || (window._pwAuthUid && window._pwAuthUid !== user.uid);
 
                 // CRITICAL DATA-LEAK FIX: if a DIFFERENT user is logging in, reset ALL
                 // in-memory data-scoping globals. These persist on `window` across logins
                 // in the same tab — if not cleared, the new account loads the PREVIOUS
                 // account's Firestore data (resolvedDataUid still points at the old UID).
                 if (_differentUser || _freshSession) {
+                    window._pwClientsLoaded = false; // v1.16.460
                     window.resolvedDataUid = null;
                     window.staffModeOwnerUid = null;
                     window.isStaffAccount = false;
@@ -1993,6 +1995,7 @@ const firebaseConfig = {
                 })(15); // up to 15 × 300ms = 4.5 seconds
                 // Store last UID
                 localStorage.setItem('pw_last_uid', user.uid);
+                window._pwAuthUid = user.uid; // v1.16.460: in-memory copy survives the logout wipe
 
                 // Pre-load plan from Firestore BEFORE applying locks
                 (async () => {
@@ -3820,7 +3823,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.459</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.460</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-03-25</div>
                         </div>
                     </div>
@@ -4849,7 +4852,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.459</span><span style="color:#d4af37; font-weight:900;" id="versionDate"></span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.460</span><span style="color:#d4af37; font-weight:900;" id="versionDate"></span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);if(typeof tab==='function')tab('measure');setTimeout(function(){if(typeof startTour==='function')startTour();},300);" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -5306,6 +5309,21 @@ const firebaseConfig = {
     function isOwner() {
         return window.currentUser && window.currentUser.email === OWNER_EMAIL;
     }
+
+    // v1.16.460: ONE safe answer to "which account's data do I save to?"
+    // Staff → owner's account. Everyone else → the account that is logged in RIGHT NOW.
+    // Never trusts a leftover UID from a previous login in the same tab.
+    function pwSafeUid() {
+        const cu = window.currentUser;
+        if (!cu) return null;
+        if (window.isStaffAccount) {
+            let o = window.staffModeOwnerUid;
+            if (!o) { try { o = localStorage.getItem('pw_staff_owner_uid'); } catch(e) {} }
+            if (o) return o;
+        }
+        return cu.uid;
+    }
+    window.pwSafeUid = pwSafeUid;
 
     // Get target UID for Firestore operations (owner UID if staff mode, current user otherwise)
     function getTargetUid() {
@@ -6259,7 +6277,17 @@ const firebaseConfig = {
         settings.ownerName   = (document.getElementById('ob_ownerName')?.value || '').trim();
         settings.phone       = (document.getElementById('ob_phone')?.value || '').trim();
         settings.abn         = (document.getElementById('ob_abn')?.value || '').trim();
+        if (!settings.name) settings.name = biz; // v1.16.460: show in Company Details too
         localStorage.setItem('companySettings', JSON.stringify(settings));
+        // v1.16.460: save to the cloud too (was this computer only)
+        try {
+            if (window.currentUser && window.firebaseDb && window.setDoc && window.doc && pwSafeUid()) {
+                const { lastUpdated: _lu2, ...obSettings } = settings;
+                window.setDoc(window.doc(window.firebaseDb, 'users', pwSafeUid(), 'appData', 'companySettings'),
+                    { ...obSettings, lastUpdated: new Date().toISOString() }, { merge: true })
+                    .catch(e => { console.warn('Onboarding company save failed:', e); try{window.pwReportError&&window.pwReportError('save-failed','Sign-up business details save failed — '+((e&&e.code)||(e&&e.message)||'unknown'),{stack:e&&e.stack});}catch(_r){} });
+            }
+        } catch(e) { console.warn('Onboarding company save error:', e); }
         obNext(3);
     }
     function closeOnboarding() {
@@ -6310,6 +6338,14 @@ const firebaseConfig = {
             window.realtimeSyncUnsubscribe = null;
         }
         window.realtimeSyncActive = false;
+        // v1.16.460: forget which account's data this tab was using (memory only —
+        // nothing is deleted). Stops the next login in this tab saving to the old account.
+        window.resolvedDataUid = null;
+        window.staffModeOwnerUid = null;
+        window.isStaffAccount = false;
+        window._staffCheckDone = false;
+        window._pwAuthUid = null;
+        window._pwClientsLoaded = false;
         // Nuclear wipe on logout - preserve only app-global prefs
         const uid = window.currentUser ? window.currentUser.uid : null;
         const keepOnLogout = ['paintworkz_version', 'pw_device_id', 'pw_err_queue', 'pw_err_seen', 'pw_err_day', 'pw_mail_day']; // v1.16.458: queued error reports survive logout
@@ -6400,7 +6436,7 @@ const firebaseConfig = {
         // logins from accounts whose auth UID ≠ data UID never appeared in the list.
         // If resolvedDataUid isn't resolved yet, retry until it is (max ~12s).
         const _writeAudit = (attempt) => {
-            const _auditUid = window.resolvedDataUid || window.staffModeOwnerUid;
+            const _auditUid = window.resolvedDataUid ? pwSafeUid() : null; // v1.16.460: wait until the account is resolved (staff → owner)
             if (!_auditUid) {
                 if (attempt < 8) { setTimeout(() => _writeAudit(attempt + 1), 1500); return; }
                 // Last resort: write to own uid so the entry isn't lost entirely
@@ -6500,7 +6536,7 @@ const firebaseConfig = {
         }
         containers.forEach(c => c.innerHTML = '<p style="color:#aaa;font-size:12px;text-align:center;padding:16px;">⏳ Loading...</p>');
         try {
-            const _lhUid = window.resolvedDataUid || window.currentUser?.uid;
+            const _lhUid = pwSafeUid();
             if (!_lhUid) { containers.forEach(c => c.innerHTML = '<p style="color:#ff6b6b;font-size:12px;padding:12px;">⚠️ UID not available — try again in a moment.</p>'); return; }
             console.log('loadLoginHistory: uid=', _lhUid, 'email=', window.currentUser?.email);
             const col = window.collection(window.firebaseDb, 'users', _lhUid, 'loginHistory');
@@ -7882,7 +7918,7 @@ const firebaseConfig = {
         // For accounts where auth-uid ≠ data-uid (e.g. paint_workz), writing to
         // currentUser.uid meant the loader never saw new formulas and overwrote them.
         if (window.currentUser && window.firebaseDb && window.setDoc && window.doc) {
-            const _saveUid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid;
+            const _saveUid = pwSafeUid();
             const ref = window.doc(window.firebaseDb, 'users', _saveUid, 'appData', 'paintFormulas');
             window.setDoc(ref, { formulas: paintDatabase, updated: new Date().toISOString() })
                 .then(() => console.log('       Paint formulas synced to Firestore:', paintDatabase.length, 'formulas (uid:', _saveUid, ')'))
@@ -7900,7 +7936,7 @@ const firebaseConfig = {
                 return;
             }
             // CRITICAL: Staff must load from owner's path, not their own empty collection
-            const targetUid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid;
+            const targetUid = pwSafeUid();
             const ref = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'paintFormulas');
             const snap = await window.getDoc(ref);
             // Read whatever is currently in localStorage so we can protect local-only
@@ -8000,7 +8036,7 @@ const firebaseConfig = {
         saveData();
         // CRITICAL: Write directly to Firestore — don't rely on syncJobsToFirebase
         if (currentEditingJobId && window.firebaseDb && window.doc && window.updateDoc) {
-            const _selSyncUid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser?.uid;
+            const _selSyncUid = pwSafeUid();
             if (_selSyncUid) {
                 // Mark confirmed IMMEDIATELY — don't wait for async .then()
                 // This closes the snapshot revert window between click and write confirmation
@@ -8077,7 +8113,7 @@ const firebaseConfig = {
                 // Use resolvedDataUid — set during loadAllDataFromFirebase when the correct UID is known.
                 // paint_workz stores data under a fixed UID that differs from auth UID,
                 // so window.currentUser.uid alone gives the wrong Firestore path.
-                const syncUid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser?.uid;
+                const syncUid = pwSafeUid();
                 if (syncUid) {
                     const jobRef = window.doc(window.firebaseDb, 'users', syncUid, 'jobs', pwEditingDocId());
                     // Build colors (plural) field from all unique part colours — this is what history cards display
@@ -9706,7 +9742,7 @@ const firebaseConfig = {
             console.log('        Clearing stale Firebase data...');
             
             // 1. Delete the old Firebase documents to remove stale data
-            const _uid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser?.uid;
+            const _uid = pwSafeUid();
         if (!_uid) { console.warn('loadStockFromFirebase: no UID'); return; }
             const configDoc = window.doc(window.firebaseDb, 'users', _uid, 'config', 'doorProfiles');
             window.deleteDoc(configDoc).then(() => {
@@ -9985,7 +10021,7 @@ const firebaseConfig = {
                     localStorage.setItem('pwPartBackup_' + _jn, JSON.stringify(_backupPayload));
                     // Also push to Firestore so backup survives across devices
                     if (window.firebaseDb && window.doc && window.setDoc && window.currentUser) {
-                        const _buid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid;
+                        const _buid = pwSafeUid();
                         const _bref = window.doc(window.firebaseDb, 'users', _buid, 'partBackups', String(_jn));
                         window.setDoc(_bref, _backupPayload, { merge: false }).catch(e => console.warn('Part backup Firestore write failed:', e));
                     }
@@ -10035,8 +10071,12 @@ const firebaseConfig = {
     function saveClientDatabase(db) {
         localStorage.setItem('clientDatabase', JSON.stringify(db));
         try {
+            // v1.16.460: don't push the client list to the cloud until this login's cloud data
+            // has loaded — an early save would overwrite the cloud list (and its contact details)
+            // with whatever was on this computer. The post-load merge saves it properly.
+            if (!window._pwClientsLoaded) { console.log('       Client list kept local until cloud data has loaded'); return; }
             if (window.currentUser && window.firebaseDb && window.setDoc && window.doc) {
-                const targetUid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid;
+                const targetUid = pwSafeUid();
                 const ref = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'clientDatabase');
                 window.setDoc(ref, { clients: db, updated: new Date().toISOString() })
                     .then(() => console.log('       Client database synced to Firestore'))
@@ -11069,7 +11109,7 @@ const firebaseConfig = {
         if(window.currentUser&&window.firebaseDb&&window.doc&&window.setDoc&&jobData.id){
             try{
                 var _jfc=Object.assign({},jobData); delete _jfc.photos;
-                _jfc.userId = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid; _jfc.lastModified=new Date().toISOString();
+                _jfc.userId = pwSafeUid(); _jfc.lastModified=new Date().toISOString();
                 try{if(typeof Blob!=='undefined'&&new Blob([JSON.stringify(_jfc)]).size>850000){_jfc.items=(_jfc.items||[]).map(function(it){return{h:it.h,w:it.w,qty:it.qty,desc:it.desc,prof:it.prof,fm:it.fm,mode:it.mode,e:it.e,type:it.type,thk:it.thk,brand:it.brand,color:it.color,finish:it.finish,sqm:it.sqm,cts:it.cts};});}}catch(se){}
                 // Sanitize Firestore doc ID — slashes/dots are invalid in Firestore paths
                 var _safeDocId = pwJobDocId(jobData); // v1.16.446: same ID rule as the background sync
@@ -11080,7 +11120,7 @@ const firebaseConfig = {
                     const _hi = _hist.findIndex(j => j.jobNum === jobData.jobNum || j.id === jobData.id);
                     if (_hi >= 0) { _hist[_hi].id = _safeDocId; localStorage.setItem('jobHistory', JSON.stringify(_hist)); }
                 }
-                var _jref=window.doc(window.firebaseDb,'users',window.staffModeOwnerUid||window.currentUser.uid,'jobs',_safeDocId);
+                var _jref=window.doc(window.firebaseDb,'users',pwSafeUid(),'jobs',_safeDocId);
                 window.setDoc(_jref,_jfc,{merge:false}).then(function(){console.log('Job pushed to Firestore:',jobData.jobNum);if(window.debouncedFirebaseSync)window.debouncedFirebaseSync();}).catch(function(e){console.error('Direct job push failed:',e);try{window.pwReportError&&window.pwReportError('save-failed','Job '+jobData.jobNum+' save to cloud failed'+' — '+((e&&e.code)||(e&&e.message)||'unknown'),{stack:e&&e.stack});}catch(_r){}});
             }catch(_dpe){console.error('Direct push error:',_dpe);}
         }
@@ -11280,7 +11320,7 @@ const firebaseConfig = {
     // backup of every cloud job before changing anything.
     async function mergeDuplicateJobs() {
         if (!window.currentUser || !window.firebaseDb || !window.getDocs || !window.collection) { alert('Not connected to the cloud — log in and try again.'); return; }
-        const uid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid;
+        const uid = pwSafeUid();
         if (!uid) { alert('Account not ready yet — wait a few seconds and try again.'); return; }
         let snap;
         try { snap = await window.getDocs(window.collection(window.doc(window.firebaseDb, 'users', uid), 'jobs')); }
@@ -11468,7 +11508,7 @@ const firebaseConfig = {
                 .map(job => pwJobDocId(job)); // v1.16.446: main cloud copy
 
             const _doArchiveSync = () => {
-                const syncUid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser?.uid;
+                const syncUid = pwSafeUid();
                 if (!syncUid || !window.firebaseDb || !window.doc || !window.setDoc) return;
                 if (_newlyArchivedIds.length === 0) return;
                 try {
@@ -11892,7 +11932,7 @@ const firebaseConfig = {
                 // If no local backup or cloud might have more — check Firestore
                 if ((!_backup || _backup.partCount <= _loadedParts) && window.firebaseDb && window.doc && window.getDoc && window.currentUser) {
                     try {
-                        const _buid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid;
+                        const _buid = pwSafeUid();
                         const _bref = window.doc(window.firebaseDb, 'users', _buid, 'partBackups', String(job.jobNum));
                         const _bsnap = await window.getDoc(_bref);
                         if (_bsnap.exists()) {
@@ -12091,7 +12131,7 @@ const firebaseConfig = {
         }
         
         try {
-            const jobDoc = window.doc(window.firebaseDb, 'users', window.staffModeOwnerUid||window.currentUser.uid, 'jobs', jobId);
+            const jobDoc = window.doc(window.firebaseDb, 'users', pwSafeUid(), 'jobs', jobId);
             window.deleteDoc(jobDoc).then(() => {
             }).catch(err => {
                 console.error('Firebase deletion error:', err);
@@ -12160,7 +12200,7 @@ const firebaseConfig = {
             try {
                 const _canon = pwJobDocId(jobToDelete);
                 if (_canon && _canon !== String(jobId) && window.getDoc) {
-                    const _cref = window.doc(window.firebaseDb, 'users', window.staffModeOwnerUid||window.currentUser.uid, 'jobs', _canon);
+                    const _cref = window.doc(window.firebaseDb, 'users', pwSafeUid(), 'jobs', _canon);
                     window.getDoc(_cref).then(function(snap) {
                         if (snap.exists() && (snap.data().client||'').trim().toLowerCase() === (jobToDelete.client||'').trim().toLowerCase()) deleteJobFromFirebase(_canon);
                     }).catch(function(){});
@@ -12229,7 +12269,7 @@ const firebaseConfig = {
             if (window.debouncedFirebaseSync) window.debouncedFirebaseSync();
             return;
         }
-        const uid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid;
+        const uid = pwSafeUid();
         const canonId = pwJobDocId(job);
         if (!uid || !canonId) return;
         const full = { ...job, id: canonId, userId: uid };
@@ -12284,7 +12324,7 @@ const firebaseConfig = {
             if (!hit) { console.log('Job not in history yet — charges parked for when job is saved'); return false; }
             safeStorage.setJSON('jobHistory', history);
             try { if (window.pwDB) window.pwDB.saveJob(hit); } catch(e) {}
-            const uid = window.resolvedDataUid || window.staffModeOwnerUid || (window.currentUser && window.currentUser.uid);
+            const uid = pwSafeUid();
             if (uid && window.firebaseDb && window.doc && window.updateDoc) {
                 window.updateDoc(window.doc(window.firebaseDb, 'users', uid, 'jobs', pwJobDocId(hit)), {
                     lastCharges: snap, chargesHistory: hit.chargesHistory, lastModified: now
@@ -12385,7 +12425,7 @@ const firebaseConfig = {
         if (!job.editHistory) job.editHistory = [];
         job.editHistory.push({
             timestamp: new Date().toISOString(),
-            userId: window.resolvedDataUid || window.currentUser?.uid || '',
+            userId: (pwSafeUid() || ''),
             userName: window.currentUserName || (window.isStaffAccount ? window.staffAccountName : (window.currentUser?.email?.split('@')[0] || 'Unknown')),
             action: 'completed',
             parts: job.totalParts,
@@ -12473,7 +12513,7 @@ const firebaseConfig = {
             if (!job.editHistory) job.editHistory = [];
             job.editHistory.push({
                 timestamp: _reopenNow,
-                userId: window.resolvedDataUid || window.currentUser?.uid || '',
+                userId: (pwSafeUid() || ''),
                 userName: window.currentUserName || (window.isStaffAccount ? window.staffAccountName : (window.currentUser?.email?.split('@')[0] || 'Unknown')),
                 action: 'reopened',
                 parts: job.totalParts,
@@ -12717,7 +12757,7 @@ const firebaseConfig = {
     function syncNotifArchiveToFirebase(archive) {
         if (!window.currentUser || !window.firebaseDb || !window.doc || !window.setDoc) return;
         try {
-            const targetUid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid;
+            const targetUid = pwSafeUid();
             const ref = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'notifArchive');
             window.setDoc(ref, { archive: archive, updated: new Date().toISOString() }, { merge: false }).catch(() => {});
         } catch(e) {}
@@ -12726,7 +12766,7 @@ const firebaseConfig = {
     async function loadAdminAlertsFromFirebase() {
         if (!window.currentUser || !window.firebaseDb || !window.getDoc || !window.doc) return;
         try {
-            const targetUid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid;
+            const targetUid = pwSafeUid();
             const ref = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'adminAlerts');
             const snap = await window.getDoc(ref);
             if (snap.exists()) {
@@ -13197,7 +13237,7 @@ const firebaseConfig = {
         // Sync to Firestore for cross-device support
         if (window.currentUser && window.firebaseDb && window.setDoc && window.doc) {
             try {
-                const ref = window.doc(window.firebaseDb, 'users', dataUid, 'appData', 'settings');
+                const ref = window.doc(window.firebaseDb, 'users', pwSafeUid(), 'appData', 'settings');
                 window.setDoc(ref, { floorPIN: pin, updated: new Date().toISOString() }, { merge: true })
                     .then(() => console.log('%c✅ SAVED TO Firestore', 'background:#34c759;color:#fff;font-weight:900;padding:4px;', 'PIN synced'))
                     .catch(e => { console.warn('%c❌ Firestore sync FAILED', 'background:#ff3b30;color:#fff;font-weight:900;padding:4px;', e.message); try{window.pwReportError&&window.pwReportError('save-failed','Cloud sync failed'+' — '+((e&&e.code)||(e&&e.message)||'unknown'),{stack:e&&e.stack});}catch(_r){} });
@@ -13428,7 +13468,7 @@ const firebaseConfig = {
     // Falls back to this device's copy only if the cloud can't be reached.
     async function pwCollectCloudBackup() {
         if (!window.currentUser || !window.firebaseDb || !window.getDocs || !window.getDoc) throw new Error('Not connected to the cloud');
-        const uid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid;
+        const uid = pwSafeUid();
         const snap = await window.getDocs(window.collection(window.doc(window.firebaseDb, 'users', uid), 'jobs'));
         const raw = []; snap.forEach(d => raw.push({ ...d.data(), id: d.id }));
         // one copy per job number — best copy (most parts, newest), latest Complete/Reopen
@@ -14684,7 +14724,7 @@ const firebaseConfig = {
             return;
         }
         if (!jobNum || jobNum === '_pending') return;
-        const uid = window.resolvedDataUid || window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid;
+        const uid = pwSafeUid();
         let synced = 0;
         let failed = 0;
         for (const photo of photosArray) {
@@ -14732,7 +14772,7 @@ const firebaseConfig = {
         if (!window.firebaseDb || !window.currentUser) return null;
         
         try {
-            const targetUid = window.resolvedDataUid || window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid;
+            const targetUid = pwSafeUid();
             const userName = window.isStaffAccount ? 
                 (window.staffUserName || window.currentUser.email.split('@')[0]) : 
                 'Owner';
@@ -14776,7 +14816,7 @@ const firebaseConfig = {
         if (!window.currentUser || !window.firebaseDb || !window.getDocs || !window.collection) return [];
         if (!jobNum || jobNum === '_pending') return [];
         try {
-            const uid = window.resolvedDataUid || window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid;
+            const uid = pwSafeUid();
             const colRef = window.collection(window.firebaseDb, 'users', uid, 'jobPhotos');
             const snap = await window.getDocs(colRef);
             const seen = new Set(); // deduplicate by id
@@ -14930,7 +14970,7 @@ const firebaseConfig = {
             if (jobNum) await photoDB.savePhotos(jobNum, jobPhotos);
             // Also clean Firestore - delete all docs for this job and re-sync
             if (jobNum && window.currentUser && window.firebaseDb) {
-                const uid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid;
+                const uid = pwSafeUid();
                 // Re-sync the deduplicated array
                 jobPhotos.forEach(p => { p.firestoreSynced = false; }); // force re-upload
                 await syncPhotosToFirebase(jobNum, jobPhotos);
@@ -14953,7 +14993,7 @@ const firebaseConfig = {
         // Remove from Firestore
         if (jobNum && window.currentUser && window.firebaseDb && window.doc && window.deleteDoc) {
             try {
-                const uid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid;
+                const uid = pwSafeUid();
                 const docId = String(jobNum) + '_' + String(photoId);
                 await window.deleteDoc(window.doc(window.firebaseDb, 'users', uid, 'jobPhotos', docId));
                 console.log('✅ Photo deleted from Firestore:', docId);
@@ -15549,7 +15589,7 @@ const firebaseConfig = {
         if (removeBtn) removeBtn.style.display = 'none';
         // Delete from the correct Firestore logos doc
         if (window.currentUser && window.firebaseDb && window.deleteDoc && window.doc) {
-            const uid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid;
+            const uid = pwSafeUid();
             sessionStorage.setItem('pw_logo_removed', '1');
             window.deleteDoc(window.doc(window.firebaseDb, 'users', uid, 'appData', 'logos'))
                 .then(() => notify('✅ Logo removed'))
@@ -16126,23 +16166,27 @@ const firebaseConfig = {
         }, 5000);
     }
 
+    // v1.16.460: report estimates now price each part exactly like the quote does
+    // (your pricing matrix, by profile + finish, Clear pricing, glass door multiplier).
+    // Was a fixed $125/m2, and moulded parts could count as $0.
     function getProfilePrice(profileName) {
-        if (!pricingMatrix || pricingMatrix.length === 0) return 0;
-        const row = pricingMatrix.find(p => p.profile === profileName);
-        return (row && row.satin) ? parseFloat(row.satin) || 0 : 0;
+        try { return getMatrixPrice(profileName, 'Satin'); } catch(e) { return 0; }
     }
 
     function calculateLinePrice(item) {
+        const profile = item.prof || item.mld || '';
+        const profileBase = profile.replace(/\s*\(\d+\)\s*$/, '').trim();
+        const isClearPaint = (item.color || '').toLowerCase().includes('clear');
+        const finish = isClearPaint ? 'Clear' : (item.finish || 'Satin');
         let pricePerSqm = 125;
-        if (item.fm === 'Moulded' && item.mld) {
-            const profilePrice = getProfilePrice(item.mld);
-            if (profilePrice > 0) pricePerSqm = profilePrice;
-        }
+        try { pricePerSqm = getMatrixPrice(profileBase || profile, finish); } catch(e) {}
+        let mult = 1;
+        try { mult = _glassDoorMultiplier(item) || 1; } catch(e) {}
         const sqm = parseFloat(item.sqm) || 0;
-        const qty = parseInt(item.qty) || 1;
+        const qty = item.qty || 1;
         return {
             pricePerSqm: pricePerSqm,
-            lineCost: sqm * qty * pricePerSqm
+            lineCost: sqm * pricePerSqm * qty * mult
         };
     }
     
@@ -22367,7 +22411,7 @@ const firebaseConfig = {
         // Sync to Firestore so it persists across devices and page reloads
         if (window.currentUser && window.firebaseDb && window.doc && window.setDoc) {
             try {
-                const ref = window.doc(window.firebaseDb, 'users', window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid, 'appData', 'coverageRates');
+                const ref = window.doc(window.firebaseDb, 'users', pwSafeUid(), 'appData', 'coverageRates');
                 window.setDoc(ref, { ...cr, lastUpdated: new Date().toISOString() }, { merge: false })
                     .then(() => console.log('Coverage rates synced to Firestore'))
                     .catch(e => console.warn('Coverage rates Firestore sync failed:', e));
@@ -22382,7 +22426,7 @@ const firebaseConfig = {
         // Also pull from Firestore to get latest values
         if (window.currentUser && window.firebaseDb && window.doc && window.getDoc) {
             try {
-                const ref = window.doc(window.firebaseDb, 'users', window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid, 'appData', 'coverageRates');
+                const ref = window.doc(window.firebaseDb, 'users', pwSafeUid(), 'appData', 'coverageRates');
                 window.getDoc(ref).then(snap => {
                     if (snap.exists()) {
                         const remote = snap.data();
@@ -22419,7 +22463,7 @@ const firebaseConfig = {
             // Push to Firebase — always use owner UID so staff updates go to the right account
             if (window.currentUser && window.firebaseDb && window.doc && window.setDoc) {
                 try {
-                    const targetUid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid;
+                    const targetUid = pwSafeUid();
                     const stockRef = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'stockLevels');
                     window.setDoc(stockRef, { levels, savedAt }, { merge: true })
                         .then(() => console.log('✅ Stock levels pushed to Firebase'))
@@ -22555,7 +22599,7 @@ const firebaseConfig = {
         // Sync to Firestore
         if (window.currentUser && window.firebaseDb && window.doc && window.setDoc) {
             try {
-                const uid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid;
+                const uid = pwSafeUid();
                 window.setDoc(window.doc(window.firebaseDb,'users',uid,'appData','stockLevels'), { levels:stock, savedAt:new Date().toISOString() }, {merge:false}).catch(()=>{});
                 window.setDoc(window.doc(window.firebaseDb,'users',uid,'appData','stockDeducted'), { jobs:newDeducted, updatedAt:new Date().toISOString() }, {merge:false}).catch(()=>{});
             } catch(e) {}
@@ -22639,7 +22683,7 @@ const firebaseConfig = {
         // Also sync the deducted log to Firestore so other devices don't double-deduct
         if (window.currentUser && window.firebaseDb && window.doc && window.setDoc) {
             try {
-                const _dRef = window.doc(window.firebaseDb, 'users', window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid, 'appData', 'stockDeducted');
+                const _dRef = window.doc(window.firebaseDb, 'users', pwSafeUid(), 'appData', 'stockDeducted');
                 window.setDoc(_dRef, { jobs: deductedJobs, updatedAt: new Date().toISOString() }, { merge: false }).catch(() => {});
             } catch(e) {}
         }
@@ -22664,7 +22708,7 @@ const firebaseConfig = {
         // Sync to Firestore
         if (window.currentUser && window.firebaseDb) {
             try {
-                const ref = window.doc(window.firebaseDb, 'users', window.staffModeOwnerUid||window.currentUser.uid, 'appData', 'stockSettings');
+                const ref = window.doc(window.firebaseDb, 'users', pwSafeUid(), 'appData', 'stockSettings');
                 window.setDoc(ref, { ...st, lastUpdated: new Date().toISOString() }, { merge: false })
                     .then(() => console.log('       Stock settings synced'))
                     .catch(e => console.warn('Stock settings Firestore sync failed:', e));
@@ -22691,7 +22735,7 @@ const firebaseConfig = {
         // Pull from Firestore     merge so Firestore never wipes locally-saved cost values
         if (window.currentUser && window.firebaseDb) {
             try {
-                const ref = window.doc(window.firebaseDb, 'users', window.staffModeOwnerUid||window.currentUser.uid, 'appData', 'stockSettings');
+                const ref = window.doc(window.firebaseDb, 'users', pwSafeUid(), 'appData', 'stockSettings');
                 window.getDoc(ref).then(snap => {
                     if (snap.exists()) {
                         const remote = snap.data();
@@ -23813,7 +23857,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
                     history[jobIdx] = job;
                     safeStorage.setJSON('jobHistory', history);
                 }
-                const targetUid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid;
+                const targetUid = pwSafeUid();
                 const jobRef = window.doc(window.firebaseDb, 'users', targetUid, 'jobs', pwJobDocId(job)); // v1.16.446: one cloud ID per job
                 const jobForCloud = { ...job, id: pwJobDocId(job), lastModified: new Date().toISOString(), userId: targetUid };
                 delete jobForCloud.photos;
@@ -24094,7 +24138,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
                             history[jobIdx] = job;
                             safeStorage.setJSON('jobHistory', history);
                         }
-                        const targetUid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser?.uid;
+                        const targetUid = pwSafeUid();
                         if (!targetUid) { console.warn('syncJobs: no UID for job', job.jobNum); return; }
                         const jobRef = window.doc(window.firebaseDb, 'users', targetUid, 'jobs', pwJobDocId(job)); // v1.16.446
                         const jobForCloud = { ...job, id: pwJobDocId(job), lastModified: new Date().toISOString(), userId: targetUid };
@@ -24288,7 +24332,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 // Load additional charges from Firestore if it's newer than local
                 if (window.currentUser && window.firebaseDb && window.doc && window.getDoc) {
                     try {
-                        const _acRef = window.doc(window.firebaseDb, 'users', window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid, 'appData', 'additionalCharges');
+                        const _acRef = window.doc(window.firebaseDb, 'users', pwSafeUid(), 'appData', 'additionalCharges');
                         window.getDoc(_acRef).then(snap => {
                             if (snap.exists()) {
                                 const remote = snap.data();
@@ -24344,7 +24388,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 // Load batch print settings from Firestore
                 if (window.currentUser && window.firebaseDb && window.doc && window.getDoc) {
                     try {
-                        const bpsRef = window.doc(window.firebaseDb, 'users', window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid, 'appData', 'batchPrintSettings');
+                        const bpsRef = window.doc(window.firebaseDb, 'users', pwSafeUid(), 'appData', 'batchPrintSettings');
                         window.getDoc(bpsRef).then(snap => {
                             if (snap.exists()) {
                                 const remote = snap.data();
@@ -24694,8 +24738,9 @@ if ('serviceWorker' in navigator && _swAllowed) {
         // Sync to Firestore so colours persist across devices
         if (window.currentUser && window.firebaseDb) {
             try {
-                const ref = window.doc(window.firebaseDb, 'users', dataUid, 'appData', 'appColors');
-                window.setDoc(ref, { colors: window.appColors, lastUpdated: new Date().toISOString() }, { merge: false });
+                const ref = window.doc(window.firebaseDb, 'users', pwSafeUid(), 'appData', 'appColors');
+                window.setDoc(ref, { colors: window.appColors, lastUpdated: new Date().toISOString() }, { merge: false })
+                    .catch(e => { console.warn('appColors cloud save failed:', e); try{window.pwReportError&&window.pwReportError('save-failed','App colours save failed — '+((e&&e.code)||(e&&e.message)||'unknown'),{stack:e&&e.stack});}catch(_r){} });
             } catch(e) { console.warn('appColors sync error:', e); }
         }
         notify('    Color Updated');
@@ -26584,8 +26629,8 @@ if ('serviceWorker' in navigator && _swAllowed) {
                     // Match by ID if available
                     if (job.client && job.client.id === clientId) {
                         job.client.name = newName;
-                        job.client.email = email;
-                        job.client.phone = phone;
+                        job.client.email = email1;
+                        job.client.phone = mobile || landline;
                         job.client.address = address;
                         historySynced++;
                     } 
@@ -27692,7 +27737,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
     function syncMasterMatrixToFirestore() {
         try {
             if (window.currentUser && window.firebaseDb && window.setDoc && window.doc) {
-                const _uid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser?.uid;
+                const _uid = pwSafeUid();
         if (!_uid) { console.warn('loadStockFromFirebase: no UID'); return; }
                 const ref = window.doc(window.firebaseDb, 'users', _uid, 'appData', 'masterMatrix');
                 window.setDoc(ref, { matrix: masterMatrix, updated: new Date().toISOString() })
@@ -27889,7 +27934,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
         // Sync to Firestore so it persists across devices
         if (window.currentUser && window.firebaseDb && window.doc && window.setDoc) {
             try {
-                const targetUid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid;
+                const targetUid = pwSafeUid();
                 const ref = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'defaultTimeline');
                 window.setDoc(ref, { ...timeline, lastUpdated: new Date().toISOString() }, { merge: false })
                     .then(() => console.log('✅ Default timeline synced to Firestore'))
@@ -28849,7 +28894,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
     function saveShopClosures(closures) {
         localStorage.setItem('shopClosures', JSON.stringify(closures));
         // Save to THIS user's own data path — never a hardcoded shared UID
-        const DATA_UID = window.resolvedDataUid || window.staffModeOwnerUid || (window.currentUser && window.currentUser.uid);
+        const DATA_UID = pwSafeUid();
         const _save = () => {
             if (!window.currentUser || !window.firebaseDb || !window.doc || !window.setDoc) { setTimeout(_save, 1500); return; }
             if (!DATA_UID) return;
@@ -28898,7 +28943,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
         if (!window.currentUser || !window.firebaseDb || !window.getDoc || !window.doc) return;
         try {
             // Load from THIS user's own data path — never a hardcoded shared UID
-            const OWNER_UID = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid;
+            const OWNER_UID = pwSafeUid();
             if (!OWNER_UID) return;
             const ref = window.doc(window.firebaseDb, 'users', OWNER_UID, 'appData', 'shopClosures');
             const snap = await window.getDoc(ref);
@@ -28958,7 +29003,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
     async function loadDefaultTimelineFromFirebase() {
         if (!window.currentUser || !window.firebaseDb || !window.getDoc || !window.doc) return;
         try {
-            const targetUid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid;
+            const targetUid = pwSafeUid();
             const ref = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'defaultTimeline');
             const snap = await window.getDoc(ref);
             if (snap.exists()) {
@@ -29075,7 +29120,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
         window._brandsSyncedThisSession = true;
         if (!window.currentUser || !window.firebaseDb || !window.doc || !window.getDoc) return;
         try {
-            const ref = window.doc(window.firebaseDb, 'users', window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid, 'appData', 'paintBrands');
+            const ref = window.doc(window.firebaseDb, 'users', pwSafeUid(), 'appData', 'paintBrands');
             window.getDoc(ref).then(snap => {
                 if (snap.exists()) {
                     const remote = snap.data();
@@ -29099,7 +29144,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
         // Sync to Firestore so it persists across all devices
         if (window.currentUser && window.firebaseDb && window.doc && window.setDoc) {
             try {
-                const ref = window.doc(window.firebaseDb, 'users', window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid, 'appData', 'paintBrands');
+                const ref = window.doc(window.firebaseDb, 'users', pwSafeUid(), 'appData', 'paintBrands');
                 window.setDoc(ref, { brands: brands, lastUpdated: new Date().toISOString() }, { merge: false })
                     .then(() => console.log('Paint brands synced to Firestore'))
                     .catch(e => console.warn('Paint brands Firestore sync failed:', e));
@@ -29396,23 +29441,29 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         const email = document.getElementById('companyEmail')?.value || '';
         const address = document.getElementById('companyAddress')?.value || '';
         
-        const settings = {
+        // v1.16.460: UPDATE the saved details instead of replacing them, so ABN /
+        // owner name entered at sign-up are kept. Business name follows the edited name.
+        let _prevCS = {};
+        try { _prevCS = JSON.parse(localStorage.getItem('companySettings') || '{}') || {}; } catch(e) {}
+        const { lastUpdated: _lu, ...prevSettings } = _prevCS;
+        const settings = Object.assign({}, prevSettings, {
             name: name,
             phone: phone,
             email: email,
             address: address
-        };
+        });
+        if (name) settings.businessName = name;
         
         localStorage.setItem('companySettings', JSON.stringify(settings));
 
         // Sync to Firestore so settings load on all devices after login
         if (window.currentUser && window.firebaseDb) {
             try {
-                const ref = window.doc(window.firebaseDb, 'users', dataUid, 'appData', 'companySettings');
+                const ref = window.doc(window.firebaseDb, 'users', pwSafeUid(), 'appData', 'companySettings');
                 window.setDoc(ref, { ...settings, lastUpdated: new Date().toISOString() }, { merge: false })
                     .then(() => { console.log('       Company settings synced to Firestore'); })
-                    .catch(e => { console.error('    Company settings Firestore FAILED:', e); notify('       Cloud save failed     details saved locally only'); });
-            } catch(e) { console.warn('Company settings Firestore sync error:', e); }
+                    .catch(e => { console.error('    Company settings Firestore FAILED:', e); notify('       Cloud save failed     details saved locally only'); try{window.pwReportError&&window.pwReportError('save-failed','Company details save failed — '+((e&&e.code)||(e&&e.message)||'unknown'),{stack:e&&e.stack});}catch(_r){} });
+            } catch(e) { console.warn('Company settings Firestore sync error:', e); notify('       Cloud save failed     details saved locally only'); try{window.pwReportError&&window.pwReportError('save-failed','Company details save error — '+((e&&e.message)||'unknown'),{stack:e&&e.stack});}catch(_r){} }
         } else {
             notify('       Not connected to cloud     details saved locally only');
         }
@@ -29799,7 +29850,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         // Sync to Firestore so it persists across devices
         if (window.currentUser && window.firebaseDb && window.doc && window.setDoc) {
             try {
-                const ref = window.doc(window.firebaseDb, 'users', window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid, 'appData', 'additionalCharges');
+                const ref = window.doc(window.firebaseDb, 'users', pwSafeUid(), 'appData', 'additionalCharges');
                 window.setDoc(ref, { ...charges, lastUpdated: new Date().toISOString() }, { merge: false })
                     .then(() => console.log('✅ Synced to Firestore'))
                     .catch(e => console.warn('❌ Firestore sync failed:', e));
@@ -29906,7 +29957,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         // Sync to Firestore
         if (window.currentUser && window.firebaseDb && window.doc && window.setDoc) {
             try {
-                const ref = window.doc(window.firebaseDb, 'users', window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid, 'appData', 'batchPrintSettings');
+                const ref = window.doc(window.firebaseDb, 'users', pwSafeUid(), 'appData', 'batchPrintSettings');
                 window.setDoc(ref, settings, { merge: false })
                     .then(() => console.log('✅ Batch print settings synced to Firestore'))
                     .catch(e => console.warn('❌ Batch print Firestore sync failed:', e));
@@ -30822,12 +30873,12 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             jobData.id = String(jobData.jobNum);
         }
         
-        const jobRef = window.doc(window.firebaseDb, 'users', window.staffModeOwnerUid||window.currentUser.uid, 'jobs', jobId);
+        const jobRef = window.doc(window.firebaseDb, 'users', pwSafeUid(), 'jobs', jobId);
         window.setDoc(jobRef, {
             ...jobData,
             id: jobId,  // Ensure id is always saved
             lastModified: new Date().toISOString(),
-            userId: window.staffModeOwnerUid||window.currentUser.uid
+            userId: pwSafeUid()
         }, { merge: true }).then(() => {
             try { flashSaved('       Synced'); } catch(e) {}
         }).catch(e => console.warn('Firestore save error:', e));
@@ -31193,6 +31244,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                     }
                 }
                 // Always run owner merge AFTER Firebase data is in localStorage
+                window._pwClientsLoaded = true; // v1.16.460: cloud client list is in — saves may go to the cloud now
                 try { if (typeof initializeDefaultClients === 'function') initializeDefaultClients(); } catch(e) {}
                 // Refresh UI
                 try { if (typeof renderClientsList === 'function') renderClientsList(); } catch(e) {}
@@ -31335,7 +31387,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             } catch(e) { console.warn('Company settings load error:', e.message); }
 
             try {
-                const logosRef = window.doc(window.firebaseDb, 'users', window.staffModeOwnerUid||window.currentUser.uid, 'appData', 'logos');
+                const logosRef = window.doc(window.firebaseDb, 'users', pwSafeUid(), 'appData', 'logos');
                 const logosSnap = await window.getDoc(logosRef);
                 if (logosSnap.exists()) {
                     const ld = logosSnap.data();
@@ -31399,7 +31451,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                 // Load paint brands from Firestore — push local if doc doesn't exist yet
                 if (window.currentUser && window.firebaseDb && window.doc && window.getDoc && window.setDoc) {
                     try {
-                        const _pbRef = window.doc(window.firebaseDb, 'users', window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid, 'appData', 'paintBrands');
+                        const _pbRef = window.doc(window.firebaseDb, 'users', pwSafeUid(), 'appData', 'paintBrands');
                         window.getDoc(_pbRef).then(snap => {
                             let brands = null;
                             if (snap.exists()) {
@@ -31445,7 +31497,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                 // Check if Firestore has newer charges data than localStorage
                 setTimeout(() => {
                     try {
-                        const _acRef = window.doc(window.firebaseDb, 'users', window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid, 'appData', 'additionalCharges');
+                        const _acRef = window.doc(window.firebaseDb, 'users', pwSafeUid(), 'appData', 'additionalCharges');
                         window.getDoc(_acRef).then(snap => {
                             if (snap.exists()) {
                                 const remote = snap.data();
@@ -31545,7 +31597,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         // Sync to Firestore
         if (window.currentUser && window.firebaseDb && window.doc && window.setDoc) {
             try {
-                const targetUid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid;
+                const targetUid = pwSafeUid();
                 const ref = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'stockLevels');
                 window.setDoc(ref, { levels, savedAt: new Date().toISOString() }, { merge: true })
                     .catch(e => console.warn('Stock sync error:', e));
@@ -31606,7 +31658,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         localStorage.setItem('pwStockSettings2', JSON.stringify(st));
         if (window.currentUser && window.firebaseDb && window.doc && window.setDoc) {
             try {
-                const targetUid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid;
+                const targetUid = pwSafeUid();
                 const ref = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'stockSettings2');
                 window.setDoc(ref, { ...st, lastUpdated: new Date().toISOString() }, { merge: false })
                     .catch(e => console.warn('Stock settings sync error:', e));
@@ -31803,7 +31855,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         // Sync to Firestore
         if (window.currentUser && window.firebaseDb && window.doc && window.setDoc) {
             try {
-                const targetUid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid;
+                const targetUid = pwSafeUid();
                 const ref = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'tinterNames');
                 window.setDoc(ref, { names, lastUpdated: new Date().toISOString() }, { merge: false })
                     .catch(e => console.warn('Tinter names sync error:', e));
@@ -32040,7 +32092,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             });
         }
         try {
-            const targetUid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid;
+            const targetUid = pwSafeUid();
             const ref = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'stockLevels');
             const snap = await window.getDoc(ref);
             if (snap.exists()) {
@@ -32087,7 +32139,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
     window.loadPaintBrandsEarly = function() {
         if (!window.currentUser || !window.firebaseDb || !window.doc || !window.getDoc) return;
         try {
-            const _pbRef = window.doc(window.firebaseDb, 'users', window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid, 'appData', 'paintBrands');
+            const _pbRef = window.doc(window.firebaseDb, 'users', pwSafeUid(), 'appData', 'paintBrands');
             window.getDoc(_pbRef).then(snap => {
                 let brands = null;
                 if (snap.exists()) {
@@ -32155,7 +32207,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         try {
             console.log('     Setting up real-time sync listener...');
             // resolvedDataUid is the canonical data path — ALWAYS use this
-            const syncUid = window.resolvedDataUid || window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid;
+            const syncUid = pwSafeUid();
             const jobsCollectionRef = window.collection(
                 window.doc(window.firebaseDb, 'users', syncUid), 'jobs'
             );
@@ -32624,7 +32676,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             // Previously wrote ALL 157 jobs every sync → resource-exhausted.
             if (!window._lastSyncedJobHashes) window._lastSyncedJobHashes = {};
             
-            const _syncWriteUid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser?.uid;
+            const _syncWriteUid = pwSafeUid();
             if (!_syncWriteUid) return;
             const _completedRegistry = JSON.parse(localStorage.getItem('pwCompletedJobs') || '{}');
             let _writtenCount = 0;
@@ -32715,7 +32767,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         syncProfilesFromMatrix();
 
         try {
-            const targetUid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid;
+            const targetUid = pwSafeUid();
             const configDoc = window.doc(window.firebaseDb, 'users', targetUid, 'config', 'doorProfiles');
             const _sv = window._localProfilesTimestamp || Date.now();
             window.setDoc(configDoc, {
@@ -32886,7 +32938,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             notify('    No formulas to push');
             return;
         }
-        const ref = window.doc(window.firebaseDb, 'users', window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid, 'appData', 'paintFormulas');
+        const ref = window.doc(window.firebaseDb, 'users', pwSafeUid(), 'appData', 'paintFormulas');
         window.setDoc(ref, { formulas: paintDatabase, updated: new Date().toISOString() })
             .then(() => notify(` Pushed ${paintDatabase.length} formulas to cloud `))
             .catch(e => notify('    Push failed: ' + e.message));
@@ -32898,7 +32950,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         const db = getClientDatabase();
         const count = Object.keys(db).length;
         if (count === 0) { notify('    No clients to push'); return; }
-        const ref = window.doc(window.firebaseDb, 'users', window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid, 'appData', 'clientDatabase');
+        const ref = window.doc(window.firebaseDb, 'users', pwSafeUid(), 'appData', 'clientDatabase');
         window.setDoc(ref, { clients: db, updated: new Date().toISOString() })
             .then(() => notify(` Pushed ${count} clients to cloud `))
             .catch(e => notify('    Push failed: ' + e.message));
@@ -32907,7 +32959,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
     function forcePushPricingToCloud() {
         if (!window.currentUser) { notify('    Not logged in'); return; }
         if (!window.firebaseDb || !window.doc || !window.setDoc) { notify('    Firebase not ready'); return; }
-        const dataUid = window.resolvedDataUid || window.staffModeOwnerUid || window.currentUser.uid; // v1.16.444: was undefined → button did nothing
+        const dataUid = pwSafeUid(); // v1.16.444: was undefined → button did nothing
         const configDoc = window.doc(window.firebaseDb, 'users', dataUid, 'config', 'doorProfiles');
         window.setDoc(configDoc, {
             doorProfiles: profiles,
