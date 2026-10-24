@@ -26,8 +26,40 @@
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
+// v1.16.462: the login screen is visible before the main script has finished loading.
+// A quick click/Enter on Sign In, Create Account or Forgot Password used to throw
+// "handleLogin is not defined". These placeholders wait for the real function, then run it.
+(function(){
+    ['handleLogin','trySignup','showForgotPassword'].forEach(function(n){
+        var pending = null, waiting = false, btns = [];
+        var stub = function(){
+            pending = arguments;                       // extra clicks just replace the queued one
+            // Show the click registered: "Loading…" on the clicked button until the app is ready
+            try {
+                var b = (window.event && window.event.target && window.event.target.closest) ? window.event.target.closest('button') : null;
+                if (b && !b.dataset.pwOrigText) { b.dataset.pwOrigText = b.innerHTML; b.innerHTML = 'Loading…'; b.style.opacity = '0.7'; btns.push(b); }
+            } catch(e) {}
+            if (waiting) return;
+            waiting = true;
+            var tries = 0;
+            (function wait(){
+                if (typeof window[n] === 'function' && window[n] !== stub) {
+                    btns.forEach(function(b){ try { b.innerHTML = b.dataset.pwOrigText; delete b.dataset.pwOrigText; b.style.opacity = ''; } catch(e) {} });
+                    btns = []; waiting = false;
+                    var a = pending; pending = null;
+                    return window[n].apply(null, a || []);   // runs ONCE, however many clicks
+                }
+                if (++tries < 150) setTimeout(wait, 100);
+                else { waiting = false; btns.forEach(function(b){ try { b.innerHTML = b.dataset.pwOrigText; delete b.dataset.pwOrigText; b.style.opacity = ''; } catch(e) {} }); btns = []; }
+            })();
+        };
+        window[n] = stub;
+    });
+})();
+</script>
+<script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.461'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.462'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -3814,7 +3846,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.461</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.462</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-03-25</div>
                         </div>
                     </div>
@@ -4843,7 +4875,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.461</span><span style="color:#d4af37; font-weight:900;" id="versionDate"></span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.462</span><span style="color:#d4af37; font-weight:900;" id="versionDate"></span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);if(typeof tab==='function')tab('measure');setTimeout(function(){if(typeof startTour==='function')startTour();},300);" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
