@@ -1,5 +1,5 @@
-const CACHE_NAME = 'paintworkz-v1.8.16';
-const ASSETS = ['./', './index.html', './logo.png', './manifest.json'];
+const CACHE_NAME = 'paintworkz-v1.16.461';
+const ASSETS = ['./', './index.html', './logo.png', './manifest.json', './icon-192.png', './icon-512.png', './icon-maskable-512.png', './icon-180.png', './favicon-32.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(
