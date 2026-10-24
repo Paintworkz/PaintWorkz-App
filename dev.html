@@ -21326,28 +21326,21 @@ const firebaseConfig = {
             totalParts += parts;
             // Estimate job value from items
             var _jv=0;
+            // v1.16.460: priced exactly like the quote (matrix by profile + finish, Clear, glass doors)
             (job.items||[]).forEach(function(it){
-                var _sqm=parseFloat(it.sqm)||0, _qty=parseInt(it.qty)||1;
-                var _ppsm=125; // default
-                if(it.prof&&masterMatrix){
-                    Object.values(masterMatrix).forEach(function(tier){
-                        Object.keys(tier).forEach(function(code){
-                            if(tier[code][0]===it.prof||code===it.prof){
-                                var _fin=(it.finish||'satin').toLowerCase();
-                                var _pi=_fin==='matt'?1:_fin==='semi-gloss'||_fin==='semi gloss'?3:_fin==='gloss'?4:_fin==='clear'?5:2;
-                                if(tier[code][_pi]>0) _ppsm=tier[code][_pi];
-                            }
-                        });
-                    });
-                }
-                _jv += _sqm * _qty * _ppsm;
+                try { _jv += (calculateLinePrice(it).lineCost || 0); } catch(e) {}
             });
             // v1.16.446: if charges were applied (estimate/quote/invoice), use that saved total
             // (ex-GST) so the value includes surcharges, delivery, courier and other charges,
             // at the prices quoted at the time. Otherwise fall back to the base calculation.
             job._estFromCharges=false;
             try{
-                var _lc=job.lastCharges;
+                // v1.16.460: newest saved charges entry (by date) — lastCharges on an older
+                // copy of the job could still hold a previous estimate
+                var _lc=job.lastCharges||null;
+                (job.chargesHistory||[]).forEach(function(c){
+                    if(c && parseFloat(c.totalWithCharges)>0 && (!_lc || String(c.appliedAt||'') > String(_lc.appliedAt||''))) _lc=c;
+                });
                 var _tw=_lc?parseFloat(_lc.totalWithCharges):0;
                 if(_tw>0){
                     var _g=parseFloat(_lc.gstRate); if(!(_g>=0&&_g<1)) _g=0.10;
@@ -21361,7 +21354,7 @@ const firebaseConfig = {
                 if(!window._rptSJ){var _ac=(typeof loadAdditionalCharges==='function')?loadAdditionalCharges():{};window._rptSJ={t:parseFloat(_ac.smallJobSqm),f:parseFloat(_ac.smallJobFee)};setTimeout(function(){window._rptSJ=null;},2000);}
                 var _sjT=window._rptSJ.t, _sjF=window._rptSJ.f;
                 if(_sjF>0&&_sjT>0&&sqm>0&&sqm<_sjT){
-                    var _lc2=job.lastCharges||{};
+                    var _lc2=_lc||job.lastCharges||{};
                     var _hasFee=(parseFloat(_lc2.otherChargeAmount)||0)>=_sjF || (_lc2.otherRows||[]).some(function(r){return r&&(r._autoSmallJob||/^Small Job Setup Fee/i.test(r.desc||''));});
                     if(!job._estFromCharges||!_hasFee){ _jv+=_sjF; job._estSmallJob=true; }
                 }
@@ -21510,6 +21503,7 @@ const firebaseConfig = {
             if (job.items && job.items.length > 0) {
                 job.items.forEach(item => { try { jobVal += (calculateLinePrice(item).lineCost || 0); } catch(e) {} });
             } else { jobVal = (parseFloat(job.totalSqm) || 0) * 125; }
+            if (typeof job._estValue === 'number') jobVal = job._estValue; // v1.16.460: same figure as Job Breakdown
             _totalEstVal += jobVal;
         });
         Object.keys(baseCodeLitres).forEach(k => {
@@ -22197,6 +22191,7 @@ const firebaseConfig = {
                         // Fallback: SQM    125 base rate
                         jobVal = (parseFloat(job.totalSqm) || 0) * 125;
                     }
+                    if (typeof job._estValue === 'number') jobVal = job._estValue; // v1.16.460: same figure as Job Breakdown
                     clientEstimates[cl] = (clientEstimates[cl] || 0) + jobVal;
                 });
                 const estData = Object.entries(clientEstimates).sort((a,b) => b[1]-a[1]).slice(0,8);
@@ -25702,7 +25697,8 @@ if ('serviceWorker' in navigator && _swAllowed) {
             const profile = (item.prof || '').replace(/\s*\(\d+\)\s*$/, '').trim();
             const isClearPaint = (item.color || '').toLowerCase().includes('clear');
             const pricePerSqm = getMatrixPrice(profile, isClearPaint ? 'Clear' : (item.finish || 'Satin'));
-            const itemTotal = sqm * pricePerSqm * qty;
+            let _gm = 1; try { _gm = _glassDoorMultiplier(item) || 1; } catch(e) {} // v1.16.460: match the quote PDF (glass doors)
+            const itemTotal = sqm * pricePerSqm * qty * _gm;
             const itemSqm = sqm * qty;
             
             const brand = item.brand || '';
