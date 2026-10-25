@@ -26,6 +26,15 @@
 ╚════════════════════════════════════════════════════════════════╝
 --->
 <script>
+// v1.16.465: safe text for inline buttons — names with ' or " (O'Brien's Kitchens) used to break
+// Complete Job, schedule ticks, matrix edits etc. Returns a quoted JS string, escaped for HTML.
+function pwQ(v){ return JSON.stringify(v == null ? '' : String(v)).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+window.pwQ = pwQ;
+// v1.16.465: today's date in the shop's own time zone (toISOString gives UTC = yesterday before 11 am in Victoria)
+function pwToday(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+window.pwToday = pwToday;
+</script>
+<script>
 // v1.16.462: the login screen is visible before the main script has finished loading.
 // A quick click/Enter on Sign In, Create Account or Forgot Password used to throw
 // "handleLogin is not defined". These placeholders wait for the real function, then run it.
@@ -59,7 +68,7 @@
 </script>
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.464-dev'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.465-dev'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1513,7 +1522,7 @@ const safeStorage = {
             message = String(message || '').slice(0, 500);
             if (_ignore(message)) return;
             var now = Date.now();
-            var today = new Date().toISOString().slice(0, 10);
+            var today = pwToday();
             var day = _get(DAY, { d: today, n: 0 });
             if (day.d !== today) day = { d: today, n: 0 };
             if (day.n >= 20) return;                                   // max 20 per device per day
@@ -1548,7 +1557,7 @@ const safeStorage = {
     var EJ = { service: 'service_t77r5r9', template: 'template_acl30bz', key: 'PV5tJbdRIFgousSsJ' };
     window.pwSendAlertEmail = function(subject, message, opts) {
         try {
-            var today = new Date().toISOString().slice(0, 10);
+            var today = pwToday();
             var c = _get('pw_mail_day', { d: today, n: 0 });
             if (c.d !== today) c = { d: today, n: 0 };
             var cap = (opts && opts.cap) || 5;
@@ -1652,7 +1661,7 @@ window.getTooltipKey = getTooltipKey;
 </script>
 </head>
 <body>
-<div id="devBanner">🚧 DEVELOPMENT VERSION — LIVE DATA — v1.16.464-dev (open in Incognito / separate browser) 🚧</div>
+<div id="devBanner">🚧 DEVELOPMENT VERSION — LIVE DATA — v1.16.465-dev (open in Incognito / separate browser) 🚧</div>
 
 <!-- COPYRIGHT NOTICE -->
 <div id="copyrightBanner" style="display:none;">
@@ -3861,7 +3870,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.464</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.465</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-03-25</div>
                         </div>
                     </div>
@@ -4894,7 +4903,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.464</span><span style="color:#d4af37; font-weight:900;" id="versionDate"></span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.465</span><span style="color:#d4af37; font-weight:900;" id="versionDate"></span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);if(typeof tab==='function')tab('measure');setTimeout(function(){if(typeof startTour==='function')startTour();},300);" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -5901,7 +5910,7 @@ const firebaseConfig = {
                         <span style="color:#d4af37; font-weight:900; letter-spacing:1px; font-size:12px;">${c.code}</span>${expiry}
                         <span style="color:#666; font-size:10px; margin-left:8px;">${c.type}    ${c.plan}    ${c.days}d    ${c.uses}/${c.maxUses} uses</span>
                     </div>
-                    <button onclick="deletePromoCode('${c.code}')"
+                    <button onclick="deletePromoCode(${pwQ(c.code)})"
                         style="background:none; border:none; color:#ff6b6b; font-size:16px; cursor:pointer; padding:0 4px;" title="Delete code">  </button>
                 </div>`;
             });
@@ -6173,7 +6182,7 @@ const firebaseConfig = {
                 const paidDays = r.firstPaidSeenAt ? Math.floor((now - r.firstPaidSeenAt) / 86400000) : null;
                 const paidTxt = r.firstPaidSeenAt ? `<span style="color:${paidDays >= 30 ? '#34c759' : '#ff9500'};">💳 ${esc(r.referredPlan)} since ${dt(r.firstPaidSeenAt)} (${paidDays}d)</span>` : '<span style="color:#888;">Not paid yet (' + esc(r.referredPlan || 'free') + ')</span>';
                 const stCol = { pending: '#ff9500', approved: '#0a84ff', rewarded: '#34c759', rejected: '#888', blocked: '#ff3b30' }[r.status] || '#aaa';
-                const btn = (fn, label, bg, fg) => `<button onclick="${fn}('${esc(r.id)}')" style="background:${bg}; color:${fg}; border:none; padding:6px 10px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">${label}</button>`;
+                const btn = (fn, label, bg, fg) => `<button onclick="${fn}(${pwQ(esc(r.id))})" style="background:${bg}; color:${fg}; border:none; padding:6px 10px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">${label}</button>`;
                 let actions = '';
                 if (r.status === 'pending' || r.status === 'blocked') actions = btn('pwApproveReferral', '✅ Approve', '#34c759', '#000') + ' ' + btn('pwRejectReferral', '✖ Reject', '#3a3a3c', '#ff6b6b');
                 else if (r.status === 'approved') actions = btn('pwMarkReferralRewarded', '🎁 Mark rewarded', '#0a84ff', '#fff') + ' ' + btn('pwRejectReferral', '✖ Reject', '#3a3a3c', '#ff6b6b');
@@ -11768,10 +11777,10 @@ const firebaseConfig = {
                     </div>
                 </div>
                 <div style="display:flex; gap:8px; flex-wrap:wrap; position:relative; z-index:1;">
-                    <button onclick="loadJobFromHistory('${stableKey}')" style="flex:1; min-width:100px; border:none; background:#f0f0f0; padding:10px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">LOAD</button>
+                    <button onclick="loadJobFromHistory(${pwQ(stableKey)})" style="flex:1; min-width:100px; border:none; background:#f0f0f0; padding:10px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">LOAD</button>
                     ${job.editHistory && job.editHistory.length > 0 ? `<button onclick="viewJobEditHistory(${originalIdx})" style="flex:1; min-width:100px; border:none; background:#007aff15; color:#007aff; padding:10px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">📝 HISTORY (${job.editHistory.length})</button>` : ''}
                     <button onclick="printShopLabelFromHistory(${originalIdx})" style="flex:1; min-width:80px; border:none; background:#e91e6315; color:#e91e63; padding:10px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">🏷️ LABEL</button>
-                    ${!isComplete ? `<button onclick="completeJobById('${job.jobNum}', '${job.dateReceived}', '${job.client}')" style="flex:1; min-width:100px; border:none; background:var(--gold); color:#000; padding:10px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">COMPLETE JOB</button>` : `<button onclick="toggleJobCompleteById('${job.jobNum}', '${job.dateReceived}', '${job.client}')" style="flex:1; min-width:100px; border:none; background:#34c759; color:#fff; padding:10px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">✓ COMPLETED</button>`}
+                    ${!isComplete ? `<button onclick="completeJobById(${pwQ(job.jobNum)}, ${pwQ(job.dateReceived)}, ${pwQ(job.client)})" style="flex:1; min-width:100px; border:none; background:var(--gold); color:#000; padding:10px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">COMPLETE JOB</button>` : `<button onclick="toggleJobCompleteById(${pwQ(job.jobNum)}, ${pwQ(job.dateReceived)}, ${pwQ(job.client)})" style="flex:1; min-width:100px; border:none; background:#34c759; color:#fff; padding:10px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">✓ COMPLETED</button>`}
                     ${!window.staffMode ? `<button onclick="deleteJobFromHistory(${originalIdx})" style="flex:1; min-width:80px; border:none; background:#ff3b3015; color:#ff3b30; padding:10px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">&#x274C; DELETE</button>` : ''}
                 </div>
             </div>`;
@@ -12005,7 +12014,7 @@ const firebaseConfig = {
                     setTimeout(() => {
                         const _warn = document.createElement('div');
                         _warn.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);background:#ff3b30;color:#fff;padding:14px 20px;border-radius:10px;font-weight:900;z-index:99999;box-shadow:0 4px 16px rgba(0,0,0,0.4);max-width:340px;text-align:center;';
-                        _warn.innerHTML = `⚠️ PART COUNT MISMATCH<br><span style="font-size:12px;font-weight:700;">Loaded: ${_loadedParts} parts (${items.length} lines)<br>Backup has: ${_backup.partCount} parts (${_backup.lineCount} lines)<br><br>Tap RESTORE BACKUP to recover missing parts</span><br><br><button onclick="window._restorePartBackup('${job.jobNum}');this.closest('div').remove();" style="background:#fff;color:#ff3b30;border:none;padding:8px 18px;border-radius:6px;font-weight:900;cursor:pointer;margin-right:8px;">RESTORE BACKUP</button><button onclick="this.closest('div').remove();" style="background:rgba(255,255,255,0.2);color:#fff;border:none;padding:8px 14px;border-radius:6px;font-weight:900;cursor:pointer;">Dismiss</button>`;
+                        _warn.innerHTML = `⚠️ PART COUNT MISMATCH<br><span style="font-size:12px;font-weight:700;">Loaded: ${_loadedParts} parts (${items.length} lines)<br>Backup has: ${_backup.partCount} parts (${_backup.lineCount} lines)<br><br>Tap RESTORE BACKUP to recover missing parts</span><br><br><button onclick="window._restorePartBackup(${pwQ(job.jobNum)});this.closest('div').remove();" style="background:#fff;color:#ff3b30;border:none;padding:8px 18px;border-radius:6px;font-weight:900;cursor:pointer;margin-right:8px;">RESTORE BACKUP</button><button onclick="this.closest('div').remove();" style="background:rgba(255,255,255,0.2);color:#fff;border:none;padding:8px 14px;border-radius:6px;font-weight:900;cursor:pointer;">Dismiss</button>`;
                         document.body.appendChild(_warn);
                     }, 800);
                 } else {
@@ -12419,7 +12428,7 @@ const firebaseConfig = {
         const job = history[jobIdx];
         
         // Show a modal with a date picker instead of a plain confirm()
-        const todayISO = new Date().toISOString().split('T')[0];
+        const todayISO = pwToday();
         
         const modal = document.createElement('div');
         modal.id = 'completeJobModal';
@@ -12444,7 +12453,7 @@ const firebaseConfig = {
                         style="padding:13px;background:#e0e0e0;color:#333;border:none;border-radius:8px;font-weight:900;cursor:pointer;font-size:13px;">
                         CANCEL
                     </button>
-                    <button onclick="confirmCompleteJob('${jobNum}','${dateReceived}','${client}')"
+                    <button onclick="confirmCompleteJob(${pwQ(jobNum)},${pwQ(dateReceived)},${pwQ(client)})"
                         style="padding:13px;background:#34c759;color:#fff;border:none;border-radius:8px;font-weight:900;cursor:pointer;font-size:13px;">
                         &#x2713; COMPLETE
                     </button>
@@ -12455,7 +12464,7 @@ const firebaseConfig = {
     
     function confirmCompleteJob(jobNum, dateReceived, client) {
         const picker = document.getElementById('completionDatePicker');
-        const chosenDateISO = picker ? picker.value : new Date().toISOString().split('T')[0];
+        const chosenDateISO = picker ? picker.value : pwToday();
         
         // Format as DD/MM/YYYY for display
         const [y, m, d] = chosenDateISO.split('-');
@@ -13563,7 +13572,7 @@ const firebaseConfig = {
         try {
             const payload = await pwCollectCloudBackup();
             const who = (window.currentUser.email || 'account').split('@')[0].replace(/[^a-z0-9_-]/gi, '');
-            const fname = 'PaintWorkz_AllMyData_' + who + '_' + new Date().toISOString().split('T')[0] + '.json';
+            const fname = 'PaintWorkz_AllMyData_' + who + '_' + pwToday() + '.json';
             const blob = new Blob([JSON.stringify(payload, null, 1)], { type: 'application/json' });
             const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = fname;
             document.body.appendChild(a); a.click(); setTimeout(() => { a.remove(); URL.revokeObjectURL(a.href); }, 800);
@@ -13584,7 +13593,7 @@ const firebaseConfig = {
                 payload.meta.source = 'PaintWorkz Pro Manual Backup (THIS DEVICE ONLY — cloud not reachable)';
                 alert('The cloud could not be reached, so this backup only contains what is saved on THIS device. Try again when online for a full backup.');
             }
-            var dateStr  = new Date().toISOString().split("T")[0];
+            var dateStr  = pwToday();
             var filename = "PaintWorkz_Backup_" + dateStr + (payload.meta && payload.meta.fromCloud ? "_cloud" : "_device") + ".json";
             var json     = JSON.stringify(payload, null, 2);
             var blob = new Blob([json], { type: "application/json" });
@@ -13644,7 +13653,7 @@ const firebaseConfig = {
             var su = URL.createObjectURL(sb);
             var sa = document.createElement("a");
             sa.href=su;
-            sa.download="PaintWorkz_PreRestore_Safety_"+new Date().toISOString().split("T")[0]+".json";
+            sa.download="PaintWorkz_PreRestore_Safety_"+pwToday()+".json";
             document.body.appendChild(sa); sa.click();
             setTimeout(function(){ document.body.removeChild(sa); URL.revokeObjectURL(su); }, 500);
             // Restore
@@ -14952,9 +14961,9 @@ const firebaseConfig = {
 
             html += `
                 <div style="position:relative; cursor:pointer; border-radius:6px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,0.1); height:80px;">
-                    <img src="${photo.data}" style="width:100%; height:100%; object-fit:cover;" onclick="viewPhoto('${photo.id}')">
+                    <img src="${photo.data}" style="width:100%; height:100%; object-fit:cover;" onclick="viewPhoto(${pwQ(photo.id)})">
                     <div style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; font-size:8px; padding:2px 4px; border-radius:3px;">${_lp.length}</div>${_plabel}
-                    <button onclick="deletePhoto('${photo.id}')" style="position:absolute; bottom:2px; right:2px; background:#ff3b30; border:none; color:#fff; padding:2px 4px; border-radius:3px; font-size:9px; cursor:pointer;">X</button>
+                    <button onclick="deletePhoto(${pwQ(photo.id)})" style="position:absolute; bottom:2px; right:2px; background:#ff3b30; border:none; color:#fff; padding:2px 4px; border-radius:3px; font-size:9px; cursor:pointer;">X</button>
                 </div>
             `;
         });
@@ -15122,6 +15131,17 @@ const firebaseConfig = {
         }
         
         if(!h || !w) return;
+        // v1.16.465: catch typos before they hit a quote — negative/zero sizes or qty, or a
+        // part over 3.6 m (usually an extra digit, e.g. 7200 instead of 720)
+        {
+            const _hN = parseFloat(h), _wN = parseFloat(w), _qN = parseInt(document.getElementById('qty').value);
+            if (!(_hN > 0) || !(_wN > 0)) { notify('⚠️ Length and width must be more than 0'); return; }
+            if (document.getElementById('qty').value !== '' && !(_qN >= 1)) { notify('⚠️ Qty must be 1 or more'); return; }
+            if (_hN > 3600 || _wN > 3600) {
+                const _big = Math.round(Math.max(_hN, _wN));
+                if (!confirm('That part is ' + _big + ' mm long — over 3.6 m.\n\nIs that right?\n\nOK = add it\nCancel = fix the size')) return;
+            }
+        }
         const edges = [
             document.getElementById('E1').classList.contains('active'),
             document.getElementById('E2').classList.contains('active'),
@@ -15129,10 +15149,22 @@ const firebaseConfig = {
             document.getElementById('E4').classList.contains('active')
         ];
         // REQUIREMENT: Deduplication (Add 1 to existing if identical)
+        // v1.16.465: only merge into an existing line if it's truly the same part — same size,
+        // profile, mode, edges AND colour, finish, brand, type, thickness, glass, CTS and description.
+        // (Before, a same-size door in a different colour or a glass door merged into the first line.)
+        const _newColor = (document.getElementById('p-color').value || '').toUpperCase();
+        const _newBrand = document.getElementById('p-brand').value;
+        const _newFinish = document.getElementById('p-finish').value;
+        const _newGlass = document.getElementById('glassDoor') ? document.getElementById('glassDoor').checked : false;
+        const _newCts = document.getElementById('ctsPart') ? document.getElementById('ctsPart').checked : false;
         let existing = items.find(it => 
             it.h === h && it.w === w && it.prof === prof && 
             it.fm === fmState && it.mode === mode && 
-            JSON.stringify(it.e) === JSON.stringify(edges)
+            JSON.stringify(it.e) === JSON.stringify(edges) &&
+            (it.color || '') === _newColor && (it.brand || '') === (_newBrand || '') &&
+            (it.finish || '') === (_newFinish || '') && (it.type || '') === (pType || '') &&
+            String(it.thk || '') === String(thkStored || '') && !!it.isGlass === !!_newGlass &&
+            !!it.cts === !!_newCts && (it.desc || '') === desc.toUpperCase()
         );
         if (existing) {
             const _addQty = parseInt(document.getElementById('qty').value) || 1;
@@ -15930,6 +15962,13 @@ const firebaseConfig = {
                 return;
             }
             
+            // v1.16.465: same size checks as Add Part
+            {
+                var _chk=[document.getElementById('editH'), document.getElementById('editW')].map(function(el){ return el && el.value.trim() !== '' ? parseFloat(el.value) : null; });
+                if (_chk.some(function(v){ return v !== null && !(v > 0); })) { notify('⚠️ Length and width must be more than 0'); return; }
+                var _mm=_chk.map(function(v){ return v === null ? 0 : (isImperial() ? v*25.4 : v); });
+                if ((_mm[0] > 3600 || _mm[1] > 3600) && !confirm('That part is ' + Math.round(Math.max(_mm[0],_mm[1])) + ' mm long — over 3.6 m.\n\nIs that right?')) return;
+            }
             // Convert dimensions back to mm if Imperial
             var _eh=document.getElementById('editH'); 
             if(_eh&&_eh.value.trim()) {
@@ -17188,7 +17227,7 @@ const firebaseConfig = {
             doc.setTextColor(0,0,0); doc.setFont('helvetica','normal'); doc.setFontSize(9);
             
             // Show preview modal (like Supply Docket)
-            const filename = `Invoice_${jobClient.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+            const filename = `Estimate_${jobClient.replace(/\s+/g, '_')}_${pwToday()}.pdf`;
             const pdfDataUri = doc.output('datauristring'); // datauristring stays valid for SEND/email
             showPDFPreview(pdfDataUri, filename, '📄 Estimate Preview');
             notify('    Invoice Ready - Review & Download');
@@ -17693,7 +17732,7 @@ const firebaseConfig = {
             doc.setTextColor(0,0,0); doc.setFont('helvetica','normal'); doc.setFontSize(9);
             
             // Show preview modal (like Supply Docket)
-            const filename = `Invoice_${jobClient.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+            const filename = `Invoice_${jobClient.replace(/\s+/g, '_')}_${pwToday()}.pdf`;
             const pdfDataUri = doc.output('datauristring'); // datauristring stays valid for SEND/email
             showPDFPreview(pdfDataUri, filename, '📄 Invoice Preview');
             notify('    Invoice Ready - Review & Download');
@@ -18196,7 +18235,7 @@ const firebaseConfig = {
             doc.text('Created by paintworkzpro.com.au', doc.internal.pageSize.getWidth()-10, doc.internal.pageSize.getHeight()-4, {align:'right'});
             doc.setTextColor(0,0,0); doc.setFont('helvetica','normal'); doc.setFontSize(9);
             // Show preview modal (like Supply Docket)
-            const filename = `Invoice_${jobClient.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+            const filename = `Quote_${jobClient.replace(/\s+/g, '_')}_${pwToday()}.pdf`;
             const pdfDataUri = doc.output('datauristring'); // datauristring stays valid for SEND/email
             showPDFPreview(pdfDataUri, filename, '📄 Quote Preview');
             notify('    Invoice Ready - Review & Download');
@@ -18604,7 +18643,7 @@ const firebaseConfig = {
         }
         // Show preview
         const pdfDataUri = window.batchCapturing ? doc.output('datauristring') : URL.createObjectURL(doc.output('blob'));
-        const filename = `SupplyDocket_${jobClient.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+        const filename = `SupplyDocket_${jobClient.replace(/\s+/g, '_')}_${pwToday()}.pdf`;
         showPDFPreview(pdfDataUri, filename, '     Supply Docket Preview');
         notify("    Supply Docket Ready - Review & Download");
     }
@@ -19309,7 +19348,7 @@ const firebaseConfig = {
             });
             
             // Save combined PDF with all colors
-            const filename = `MixingCard_${jobNum}_${new Date().toISOString().split('T')[0]}.pdf`;
+            const filename = `MixingCard_${jobNum}_${pwToday()}.pdf`;
             const pdfDataUri = window.batchCapturing ? doc.output('datauristring') : URL.createObjectURL(doc.output('blob'));
             
             showPDFPreview(pdfDataUri, filename, '     Mixing Card Preview');
@@ -19923,7 +19962,7 @@ const firebaseConfig = {
                 colorPageCount++;
             });
             
-            const filename = `ShopLabel_${jobNum}_${jobClient.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+            const filename = `ShopLabel_${jobNum}_${jobClient.replace(/\s+/g, '_')}_${pwToday()}.pdf`;
             const pdfDataUri = window.batchCapturing ? doc.output('datauristring') : URL.createObjectURL(doc.output('blob'));
             showPDFPreview(pdfDataUri, filename, '        Shop Label Preview');
             
@@ -20672,7 +20711,7 @@ const firebaseConfig = {
             // footer
             doc.setFont(undefined,'italic'); doc.setFontSize(6.5); doc.setTextColor(140,140,140);
             doc.text('Generated: '+new Date().toLocaleString('en-AU')+'  -  '+(companySettings.name||'')+'  -  PaintWorkz Pro', 20, pageHeight-6);
-            const filename = `Work_Schedule_${new Date().toISOString().split('T')[0]}.pdf`;
+            const filename = `Work_Schedule_${pwToday()}.pdf`;
             const pdfDataUri = doc.output('datauristring'); // datauristring stays valid for SEND/email
             showPDFPreview(pdfDataUri, filename, '     Work Schedule');
             notify('    Work Schedule ready     A3 Landscape');
@@ -23334,7 +23373,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
         for (let day = 1; day <= daysInMonth; day++) {
             const isToday = day === today.getDate() && month === today.getMonth() && year === today.getFullYear();
             const dateStr = `${day.toString().padStart(2, '0')}/${(month + 1).toString().padStart(2, '0')}/${year.toString().slice(-2)}`;
-            daysHTML += `<div onclick="selectDate('${dateStr}')" style="padding:8px; text-align:center; font-weight:900; background:${isToday ? 'var(--gs)' : '#fff'}; color:${isToday ? '#000' : '#333'}; border:${isToday ? '2px solid var(--gs)' : '1px solid #eee'}; border-radius:6px; cursor:pointer; transition:all 0.2s;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='${isToday ? 'var(--gs)' : '#fff'}'">${day}</div>`;
+            daysHTML += `<div onclick="selectDate(${pwQ(dateStr)})" style="padding:8px; text-align:center; font-weight:900; background:${isToday ? 'var(--gs)' : '#fff'}; color:${isToday ? '#000' : '#333'}; border:${isToday ? '2px solid var(--gs)' : '1px solid #eee'}; border-radius:6px; cursor:pointer; transition:all 0.2s;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background=${pwQ(isToday ? 'var(--gs)' : '#fff')}">${day}</div>`;
         }
         
         // Next month's days
@@ -23688,7 +23727,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
                             }
                             
                             if (phaseKey) {
-                                barHTML = `<div style="width:28px; min-width:28px; max-width:28px; height:28px; background:${phaseColor}; border:1px solid ${phaseColor}; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:900; color:#fff; position:relative; cursor:pointer; box-sizing:border-box; ${isStrikeThrough ? 'opacity:0.5; text-decoration:line-through;' : ''}" ontouchstart="event.preventDefault();event.stopPropagation();window._lastPhaseTouch=Date.now();toggleJobPhaseById('${job.jobNum}', '${job.dateReceived}', '${job.client}', '${phaseKey}')" onclick="if(window._lastPhaseTouch && Date.now()-window._lastPhaseTouch<600){return;}toggleJobPhaseById('${job.jobNum}', '${job.dateReceived}', '${job.client}', '${phaseKey}')" title="Tap to mark complete">
+                                barHTML = `<div style="width:28px; min-width:28px; max-width:28px; height:28px; background:${phaseColor}; border:1px solid ${phaseColor}; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:900; color:#fff; position:relative; cursor:pointer; box-sizing:border-box; ${isStrikeThrough ? 'opacity:0.5; text-decoration:line-through;' : ''}" ontouchstart="event.preventDefault();event.stopPropagation();window._lastPhaseTouch=Date.now();toggleJobPhaseById(${pwQ(job.jobNum)}, ${pwQ(job.dateReceived)}, ${pwQ(job.client)}, ${pwQ(phaseKey)})" onclick="if(window._lastPhaseTouch && Date.now()-window._lastPhaseTouch<600){return;}toggleJobPhaseById(${pwQ(job.jobNum)}, ${pwQ(job.dateReceived)}, ${pwQ(job.client)}, ${pwQ(phaseKey)})" title="Tap to mark complete">
                                     <span>${phaseLabel}</span>
                                     ${isStrikeThrough ? '<svg style="position:absolute; width:24px; height:24px;" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><line x1="3" y1="3" x2="21" y2="21"/></svg>' : ''}
                                 </div>`;
@@ -23704,31 +23743,31 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 ganttHTML += '</div>';  // Close timeline bars row
                 ganttHTML += `<div style="display:flex; gap:8px; padding:4px 6px; background:transparent; flex-wrap:wrap; align-items:center;">
                         <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
-                            <input type="checkbox" ${job.phases && job.phases.measuring ? 'checked' : ''} onchange="toggleJobPhaseById('${job.jobNum}', '${job.dateReceived}', '${job.client}', 'measuring')" style="width:13px; height:13px; cursor:pointer;">
+                            <input type="checkbox" ${job.phases && job.phases.measuring ? 'checked' : ''} onchange="toggleJobPhaseById(${pwQ(job.jobNum)}, ${pwQ(job.dateReceived)}, ${pwQ(job.client)}, 'measuring')" style="width:13px; height:13px; cursor:pointer;">
                             <span>M</span>
                         </label>
                         <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
-                            <input type="checkbox" ${job.phases && job.phases.sanding1 ? 'checked' : ''} onchange="toggleJobPhaseById('${job.jobNum}', '${job.dateReceived}', '${job.client}', 'sanding1')" style="width:13px; height:13px; cursor:pointer;">
+                            <input type="checkbox" ${job.phases && job.phases.sanding1 ? 'checked' : ''} onchange="toggleJobPhaseById(${pwQ(job.jobNum)}, ${pwQ(job.dateReceived)}, ${pwQ(job.client)}, 'sanding1')" style="width:13px; height:13px; cursor:pointer;">
                             <span>S1</span>
                         </label>
                         <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
-                            <input type="checkbox" ${job.phases && job.phases.undercoat ? 'checked' : ''} onchange="toggleJobPhaseById('${job.jobNum}', '${job.dateReceived}', '${job.client}', 'undercoat')" style="width:13px; height:13px; cursor:pointer;">
+                            <input type="checkbox" ${job.phases && job.phases.undercoat ? 'checked' : ''} onchange="toggleJobPhaseById(${pwQ(job.jobNum)}, ${pwQ(job.dateReceived)}, ${pwQ(job.client)}, 'undercoat')" style="width:13px; height:13px; cursor:pointer;">
                             <span>U</span>
                         </label>
                         <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
-                            <input type="checkbox" ${job.phases && job.phases.sanding2 ? 'checked' : ''} onchange="toggleJobPhaseById('${job.jobNum}', '${job.dateReceived}', '${job.client}', 'sanding2')" style="width:13px; height:13px; cursor:pointer;">
+                            <input type="checkbox" ${job.phases && job.phases.sanding2 ? 'checked' : ''} onchange="toggleJobPhaseById(${pwQ(job.jobNum)}, ${pwQ(job.dateReceived)}, ${pwQ(job.client)}, 'sanding2')" style="width:13px; height:13px; cursor:pointer;">
                             <span>S2</span>
                         </label>
                         <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
-                            <input type="checkbox" ${job.phases && job.phases.topcoat ? 'checked' : ''} onchange="toggleJobPhaseById('${job.jobNum}', '${job.dateReceived}', '${job.client}', 'topcoat')" style="width:13px; height:13px; cursor:pointer;">
+                            <input type="checkbox" ${job.phases && job.phases.topcoat ? 'checked' : ''} onchange="toggleJobPhaseById(${pwQ(job.jobNum)}, ${pwQ(job.dateReceived)}, ${pwQ(job.client)}, 'topcoat')" style="width:13px; height:13px; cursor:pointer;">
                             <span>T</span>
                         </label>
                         <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
-                            <input type="checkbox" ${job.phases && job.phases.inspect ? 'checked' : ''} onchange="toggleJobPhaseById('${job.jobNum}', '${job.dateReceived}', '${job.client}', 'inspect')" style="width:13px; height:13px; cursor:pointer;">
+                            <input type="checkbox" ${job.phases && job.phases.inspect ? 'checked' : ''} onchange="toggleJobPhaseById(${pwQ(job.jobNum)}, ${pwQ(job.dateReceived)}, ${pwQ(job.client)}, 'inspect')" style="width:13px; height:13px; cursor:pointer;">
                             <span>I</span>
                         </label>
                         <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
-                            <input type="checkbox" ${job.phases && job.phases.complete ? 'checked' : ''} onchange="toggleJobPhaseById('${job.jobNum}', '${job.dateReceived}', '${job.client}', 'complete')" style="width:13px; height:13px; cursor:pointer;">
+                            <input type="checkbox" ${job.phases && job.phases.complete ? 'checked' : ''} onchange="toggleJobPhaseById(${pwQ(job.jobNum)}, ${pwQ(job.dateReceived)}, ${pwQ(job.client)}, 'complete')" style="width:13px; height:13px; cursor:pointer;">
                             <span>C</span>
                         </label>
                         <button onclick="markJobComplete(${originalIdx})" style="border:none; background:#34c759; color:#fff; padding:4px 10px; border-radius:4px; font-weight:900; font-size:9px; cursor:pointer;">    DONE</button>
@@ -26433,8 +26472,8 @@ if ('serviceWorker' in navigator && _swAllowed) {
                     <p style="font-size:10px; color:#aaaaaa; margin:6px 0 0 0;">Note: all jobs over 30 m² auto-trigger 25 days regardless of this setting.</p>
                 </div>
                 <div style="display:flex; gap:10px; margin-top:15px;">
-                    <button onclick="saveNewClient('${clientId}', '${modalId}', '${overlayId}')" style="flex:1; background:#2196f3; color:#fff; border:none; padding:12px; border-radius:6px; font-weight:900; font-size:12px; cursor:pointer;">    Save</button>
-                    <button onclick="document.getElementById('${modalId}').remove(); document.getElementById('${overlayId}').remove();" style="flex:1; background:#e0e0e0; color:#333; border:none; padding:12px; border-radius:6px; font-weight:900; font-size:12px; cursor:pointer;">Cancel</button>
+                    <button onclick="saveNewClient(${pwQ(clientId)}, ${pwQ(modalId)}, ${pwQ(overlayId)})" style="flex:1; background:#2196f3; color:#fff; border:none; padding:12px; border-radius:6px; font-weight:900; font-size:12px; cursor:pointer;">    Save</button>
+                    <button onclick="document.getElementById(${pwQ(modalId)}).remove(); document.getElementById(${pwQ(overlayId)}).remove();" style="flex:1; background:#e0e0e0; color:#333; border:none; padding:12px; border-radius:6px; font-weight:900; font-size:12px; cursor:pointer;">Cancel</button>
                 </div>
             </div>
         `;
@@ -26509,8 +26548,8 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 </select>
                 
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-                    <button onclick="document.getElementById('${modalId}').remove(); document.getElementById('${overlayId}').remove();" style="padding:12px; border:1px solid #ccc; background:#fff; border-radius:6px; font-weight:900; cursor:pointer;">CANCEL</button>
-                    <button onclick="saveNewClient('${newId}', '${modalId}', '${overlayId}')" style="padding:12px; border:none; background:#34c759; color:#fff; border-radius:6px; font-weight:900; cursor:pointer;">    ADD CLIENT</button>
+                    <button onclick="document.getElementById(${pwQ(modalId)}).remove(); document.getElementById(${pwQ(overlayId)}).remove();" style="padding:12px; border:1px solid #ccc; background:#fff; border-radius:6px; font-weight:900; cursor:pointer;">CANCEL</button>
+                    <button onclick="saveNewClient(${pwQ(newId)}, ${pwQ(modalId)}, ${pwQ(overlayId)})" style="padding:12px; border:none; background:#34c759; color:#fff; border-radius:6px; font-weight:900; cursor:pointer;">    ADD CLIENT</button>
                 </div>
             </div>
         `;
@@ -27589,29 +27628,29 @@ if ('serviceWorker' in navigator && _swAllowed) {
                     <td style="padding:8px;">
                         <div style="display:flex; justify-content:space-between; align-items:center;">
                             <div>
-                                <div style="font-weight:900; cursor:pointer;" onclick="editDoorName('${tierName}', ${code}, '${profileName}')" title="Click to edit name">${profileName}</div>
+                                <div style="font-weight:900; cursor:pointer;" onclick="editDoorName(${pwQ(tierName)}, ${code}, ${pwQ(profileName)})" title="Click to edit name">${profileName}</div>
                                 <div style="font-size:9px; color:#999;">(${code})</div>
                             </div>
                             <div style="display:flex; gap:4px;">
-                                <button onclick="editDoorTier('${tierName}', ${code}, '${profileName}')" style="background:#2196f3; color:#fff; border:none; padding:4px 6px; border-radius:3px; font-weight:900; font-size:9px; cursor:pointer;" title="Change tier">T</button>
-                                <button onclick="deleteDoorFromMatrix('${tierName}', ${code}, '${profileName}')" style="background:#ff3b30; color:#fff; border:none; padding:4px 6px; border-radius:3px; font-weight:900; font-size:9px; cursor:pointer;" title="Delete door">X</button>
+                                <button onclick="editDoorTier(${pwQ(tierName)}, ${code}, ${pwQ(profileName)})" style="background:#2196f3; color:#fff; border:none; padding:4px 6px; border-radius:3px; font-weight:900; font-size:9px; cursor:pointer;" title="Change tier">T</button>
+                                <button onclick="deleteDoorFromMatrix(${pwQ(tierName)}, ${code}, ${pwQ(profileName)})" style="background:#ff3b30; color:#fff; border:none; padding:4px 6px; border-radius:3px; font-weight:900; font-size:9px; cursor:pointer;" title="Delete door">X</button>
                             </div>
                         </div>
                     </td>
                     <td style="padding:8px; text-align:center;">
-                        <input type="number" inputmode="numeric" value="${prices[0]}" onchange="updatePricingMatrix('${tierName}', ${code}, 0, this.value)" style="width:55px; padding:4px; border:1px solid #ddd; border-radius:4px; text-align:center;"> $
+                        <input type="number" inputmode="numeric" value="${prices[0]}" onchange="updatePricingMatrix(${pwQ(tierName)}, ${code}, 0, this.value)" style="width:55px; padding:4px; border:1px solid #ddd; border-radius:4px; text-align:center;"> $
                     </td>
                     <td style="padding:8px; text-align:center;">
-                        <input type="number" inputmode="numeric" value="${prices[1]}" onchange="updatePricingMatrix('${tierName}', ${code}, 1, this.value)" style="width:55px; padding:4px; border:1px solid #ddd; border-radius:4px; text-align:center;"> $
+                        <input type="number" inputmode="numeric" value="${prices[1]}" onchange="updatePricingMatrix(${pwQ(tierName)}, ${code}, 1, this.value)" style="width:55px; padding:4px; border:1px solid #ddd; border-radius:4px; text-align:center;"> $
                     </td>
                     <td style="padding:8px; text-align:center;">
-                        <input type="number" inputmode="numeric" value="${prices[2]}" onchange="updatePricingMatrix('${tierName}', ${code}, 2, this.value)" style="width:55px; padding:4px; border:1px solid #ddd; border-radius:4px; text-align:center;"> $
+                        <input type="number" inputmode="numeric" value="${prices[2]}" onchange="updatePricingMatrix(${pwQ(tierName)}, ${code}, 2, this.value)" style="width:55px; padding:4px; border:1px solid #ddd; border-radius:4px; text-align:center;"> $
                     </td>
                     <td style="padding:8px; text-align:center;">
-                        <input type="number" inputmode="numeric" value="${prices[3]}" onchange="updatePricingMatrix('${tierName}', ${code}, 3, this.value)" style="width:55px; padding:4px; border:1px solid #ddd; border-radius:4px; text-align:center;"> $
+                        <input type="number" inputmode="numeric" value="${prices[3]}" onchange="updatePricingMatrix(${pwQ(tierName)}, ${code}, 3, this.value)" style="width:55px; padding:4px; border:1px solid #ddd; border-radius:4px; text-align:center;"> $
                     </td>
                     <td style="padding:8px; text-align:center; background:#e3f2fd;">
-                        <input type="number" inputmode="numeric" value="${prices[4] !== undefined ? prices[4] : 110}" onchange="updatePricingMatrix('${tierName}', ${code}, 4, this.value)" style="width:55px; padding:4px; border:1px solid #90caf9; border-radius:4px; text-align:center;"> $
+                        <input type="number" inputmode="numeric" value="${prices[4] !== undefined ? prices[4] : 110}" onchange="updatePricingMatrix(${pwQ(tierName)}, ${code}, 4, this.value)" style="width:55px; padding:4px; border:1px solid #90caf9; border-radius:4px; text-align:center;"> $
                     </td>
                 </tr>`;
             });
@@ -27650,8 +27689,8 @@ if ('serviceWorker' in navigator && _swAllowed) {
                             ${getSortedTierNames().map(t => `<option value="${t}">${t}</option>`).join('')}
                         </select>
                         <div style="display:flex; gap:5px;">
-                            <button onclick="assignDoorToTier('${door.code}', '${door.name}')" style="flex:1; padding:8px; background:#34c759; color:#fff; border:none; border-radius:4px; font-weight:900; font-size:11px; cursor:pointer; box-shadow:0 2px 4px rgba(0,0,0,0.1);">    ASSIGN</button>
-                            <button onclick="deleteUnallocatedDoor('${door.code}', '${door.name}')" style="padding:8px 6px; background:#ff3b30; color:#fff; border:none; border-radius:4px; font-weight:900; font-size:11px; cursor:pointer;" title="Delete door permanently">X</button>
+                            <button onclick="assignDoorToTier(${pwQ(door.code)}, ${pwQ(door.name)})" style="flex:1; padding:8px; background:#34c759; color:#fff; border:none; border-radius:4px; font-weight:900; font-size:11px; cursor:pointer; box-shadow:0 2px 4px rgba(0,0,0,0.1);">    ASSIGN</button>
+                            <button onclick="deleteUnallocatedDoor(${pwQ(door.code)}, ${pwQ(door.name)})" style="padding:8px 6px; background:#ff3b30; color:#fff; border:none; border-radius:4px; font-weight:900; font-size:11px; cursor:pointer;" title="Delete door permanently">X</button>
                         </div>
                     </td>
                 </tr>`;
@@ -28453,8 +28492,8 @@ if ('serviceWorker' in navigator && _swAllowed) {
 
         document.getElementById('jobLabelStickersModal').style.display = 'none';
         const filename = isBlank
-            ? `BlankJobLabelStickers_${new Date().toISOString().split('T')[0]}`
-            : `JobLabelStickers_${jobNum}_${new Date().toISOString().split('T')[0]}`;
+            ? `BlankJobLabelStickers_${pwToday()}`
+            : `JobLabelStickers_${jobNum}_${pwToday()}`;
         const pdfDataUri = doc.output('datauristring');
         setTimeout(() => showPDFPreview(pdfDataUri, filename, isBlank ? '🏷️ Blank Job Label Stickers' : '🏷️ Job Label Stickers'), 200);
     }
@@ -28602,7 +28641,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
         doc.setFontSize(7); doc.setFont(undefined, 'normal'); doc.setTextColor(160,160,160);
         doc.text(`Generated: ${new Date().toLocaleString('en-AU')}  |  PaintWorkz Pro`, pw/2, ph-12, {align:'center'});
 
-        const filename = isBlank ? `BlankJobLabel_${new Date().toISOString().split('T')[0]}` : `JobLabel_${jobNum}_${client.replace(/\s+/g,'_')}`;
+        const filename = isBlank ? `BlankJobLabel_${pwToday()}` : `JobLabel_${jobNum}_${client.replace(/\s+/g,'_')}`;
         const pdfDataUri = doc.output('datauristring');
         showPDFPreview(pdfDataUri, filename, isBlank ? '📦 Blank Job Label Preview' : '📦 Job Label Preview');
     }
@@ -28890,7 +28929,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
             labelIdx++;
         });
 
-        const filename = `PartLabels_${jobNum}_${new Date().toISOString().split('T')[0]}`;
+        const filename = `PartLabels_${jobNum}_${pwToday()}`;
         const pdfDataUri = doc.output('datauristring');
         document.getElementById('partLabelsModal').style.display = 'none';
         setTimeout(() => showPDFPreview(pdfDataUri, filename, '🏷️ Part Labels Preview'), 200);
@@ -28989,7 +29028,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
                             ${start} → ${end} <span style="color:#666;">•</span> <strong>${days} ${days === 1 ? 'day' : 'days'}</strong>
                         </div>
                     </div>
-                    <button onclick="removeShopClosure('${closure.id}')" style="border:none; background:#ff3b3015; color:#ff3b30; padding:6px 12px; border-radius:4px; font-weight:900; font-size:10px; cursor:pointer;">✕ REMOVE</button>
+                    <button onclick="removeShopClosure(${pwQ(closure.id)})" style="border:none; background:#ff3b3015; color:#ff3b30; padding:6px 12px; border-radius:4px; font-weight:900; font-size:10px; cursor:pointer;">✕ REMOVE</button>
                 </div>
             `;
         }).join('');
@@ -29254,7 +29293,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
         brands.forEach(brand => {
             html += `<div style="background:#fff; padding:6px 12px; border-radius:20px; border:1px solid #ddd; display:flex; align-items:center; gap:8px; font-size:11px;">
                 <span style="font-weight:900;">${brand}</span>
-                <button onclick="removePaintBrand('${brand}')" style="background:none; border:none; color:#ff3b30; font-weight:900; font-size:14px; cursor:pointer; padding:0; width:18px; height:18px; line-height:18px;">  </button>
+                <button onclick="removePaintBrand(${pwQ(brand)})" style="background:none; border:none; color:#ff3b30; font-weight:900; font-size:14px; cursor:pointer; padding:0; width:18px; height:18px; line-height:18px;">  </button>
             </div>`;
         });
         
@@ -30419,7 +30458,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                     ${phases.map(phase => {
                         const isChecked = jobPhases[phase] || false;
                         return `<td style="text-align:center; padding:8px; border-right:1px solid #ddd;">
-                            <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleGanttCell(${idx}, '${phase}')" style="width:18px; height:18px; cursor:pointer;">
+                            <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleGanttCell(${idx}, ${pwQ(phase)})" style="width:18px; height:18px; cursor:pointer;">
                         </td>`;
                     }).join('')}
                 </tr>`;
@@ -30488,7 +30527,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                 <label>Formula Mix Instructions:</label>
                 <textarea id="fEdit" style="width:100%; height:100px; border-radius:8px; border:1px solid #ccc; padding:10px; font-family:monospace; font-size:12px; margin-bottom:10px; box-sizing:border-box;">${current}</textarea>
                 <div style="display:flex; gap:10px;">
-                    <button onclick="saveFormula('${brand}','${color}')" style="flex:1; background:var(--gs); color:#000; border:none; padding:12px; border-radius:8px; font-weight:900; cursor:pointer;">    SAVE</button>
+                    <button onclick="saveFormula(${pwQ(brand)},${pwQ(color)})" style="flex:1; background:var(--gs); color:#000; border:none; padding:12px; border-radius:8px; font-weight:900; cursor:pointer;">    SAVE</button>
                     <button onclick="closeFormulaPopup()" style="flex:1; background:#444; color:#fff; border:none; border-radius:8px; font-weight:900; cursor:pointer;">CLOSE</button>
                 </div>
             </div>
@@ -31791,7 +31830,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                             data-stock-key="${base.key}"
                             value="${qty.toFixed(1)}"
                             style="width:80px; padding:6px; border:1px solid ${border}; border-radius:6px; font-size:13px; font-weight:900; text-align:right; background:${_dm ? '#3a3a3c' : '#fff'}; color:${textCol};"
-                            onchange="updateSingleStockLevel('${base.key}', this.value)">
+                            onchange="updateSingleStockLevel(${pwQ(base.key)}, this.value)">
                         <span style="font-size:10px; color:${mutedCol};">${base.unit}</span>
                     </div>
                 </div>`;
@@ -31872,8 +31911,8 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                                     value="${savedName}"
                                     title="Custom name override"
                                     style="font-size:9px; padding:2px 4px; border:1px solid ${border}; border-radius:3px; background:rgba(255,255,255,0.15); color:${tintTxt}; width:70px; flex-shrink:1; min-width:0; display:${savedName || !autoName ? 'block' : 'none'};"
-                                    oninput="saveTinterName('${code}', this.value)"
-                                    onchange="saveTinterName('${code}', this.value)">
+                                    oninput="saveTinterName(${pwQ(code)}, this.value)"
+                                    onchange="saveTinterName(${pwQ(code)}, this.value)">
                             </div>
                             <div style="height:3px; background:rgba(0,0,0,0.2); border-radius:2px; margin-top:3px;">
                                 <div style="width:${pct.toFixed(0)}%; height:100%; background:${barCol}; border-radius:2px; transition:width 0.3s;"></div>
@@ -31886,7 +31925,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                                 value="${qty > 0 ? qty.toFixed(0) : ''}"
                                 placeholder="0"
                                 style="width:72px; padding:5px 6px; border:1px solid rgba(255,255,255,0.3); border-radius:6px; font-size:12px; font-weight:900; text-align:right; background:rgba(0,0,0,0.2); color:${tintTxt}; text-shadow:0 1px 2px rgba(0,0,0,0.4);"
-                                onchange="updateSingleStockLevel('${tintKey}', this.value)">
+                                onchange="updateSingleStockLevel(${pwQ(tintKey)}, this.value)">
                             <span style="font-size:10px; color:${tintTxt}; opacity:0.8; text-shadow:0 1px 2px rgba(0,0,0,0.4);">g</span>
                         </div>
                     </div>`;
