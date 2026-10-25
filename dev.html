@@ -59,7 +59,7 @@
 </script>
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.463-dev'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.464-dev'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1652,7 +1652,7 @@ window.getTooltipKey = getTooltipKey;
 </script>
 </head>
 <body>
-<div id="devBanner">🚧 DEVELOPMENT VERSION — LIVE DATA — v1.16.463-dev (open in Incognito / separate browser) 🚧</div>
+<div id="devBanner">🚧 DEVELOPMENT VERSION — LIVE DATA — v1.16.464-dev (open in Incognito / separate browser) 🚧</div>
 
 <!-- COPYRIGHT NOTICE -->
 <div id="copyrightBanner" style="display:none;">
@@ -1980,7 +1980,21 @@ const firebaseConfig = {
                     }
                 }
 
-                if (lastUid !== user.uid || _freshSession) {
+                // v1.16.464: opening the app with NO internet — keep this shop's saved data on the
+                // device (the usual fresh-start wipe would leave an empty app until back online)
+                const _offlineSameUser = (typeof navigator !== 'undefined' && navigator.onLine === false) && lastUid === user.uid;
+                if (_offlineSameUser) {
+                    try {
+                        const _cachedOwner = localStorage.getItem('pw_staff_owner_uid');
+                        if (_cachedOwner) {
+                            window.isStaffAccount = true; window.staffModeOwnerUid = _cachedOwner; window._staffCheckDone = true;
+                            setTimeout(function(){ try { if (typeof activateStaffMode === 'function') activateStaffMode(); } catch(e) {} }, 500);
+                        }
+                    } catch(e) {}
+                    console.log('📴 Offline — using the data saved on this device');
+                    try { if (typeof notify === 'function') setTimeout(function(){ notify('📴 Offline — showing data saved on this device. Changes sync when you\'re back online.'); }, 1500); } catch(e) {}
+                }
+                if (!_offlineSameUser && (lastUid !== user.uid || _freshSession)) {
                     console.log('Fresh login — wiping localStorage for clean slate:', user.email);
                     const keepGlobal = ['paintworkz_version', 'app_theme', 'pw_tooltips', 'pw_device_id', 'pw_explicit_login', 'pw_install_dismissed', 'pw_err_queue', 'pw_err_seen', 'pw_err_day', 'pw_mail_day']; // v1.16.444: explicit-login flag must survive or the next auth fire silently signs out
                     for (let i = localStorage.length - 1; i >= 0; i--) {
@@ -3847,7 +3861,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.463</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.464</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-03-25</div>
                         </div>
                     </div>
@@ -4190,6 +4204,10 @@ const firebaseConfig = {
                     <div>
                         <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Phone Number</label>
                         <input type="text" id="companyPhone" placeholder="Your Phone Number" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
+                    </div>
+                    <div style="grid-column:1 / -1;">
+                        <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">ABN <span style="font-weight:400;">(shows on estimates, quotes and invoices)</span></label>
+                        <input type="text" id="companyAbn" placeholder="e.g. 12 345 678 901" inputmode="numeric" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; box-sizing:border-box;">
                     </div>
                     <div style="grid-column:1 / -1;">
                         <label style="display:block; font-weight:900; font-size:11px; color:#666; margin-bottom:5px;">Email Address</label>
@@ -4876,7 +4894,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.463</span><span style="color:#d4af37; font-weight:900;" id="versionDate"></span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.464</span><span style="color:#d4af37; font-weight:900;" id="versionDate"></span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);if(typeof tab==='function')tab('measure');setTimeout(function(){if(typeof startTour==='function')startTour();},300);" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -5348,6 +5366,14 @@ const firebaseConfig = {
         return cu.uid;
     }
     window.pwSafeUid = pwSafeUid;
+
+    // v1.16.464: ABN for documents — blank if missing or the old demo placeholder (all zeros)
+    function pwCleanAbn(a) {
+        const t = String(a || '').trim();
+        if (!t || !/[1-9]/.test(t)) return '';
+        return t;
+    }
+    window.pwCleanAbn = pwCleanAbn;
 
     // Get target UID for Firestore operations (owner UID if staff mode, current user otherwise)
     function getTargetUid() {
@@ -10295,7 +10321,7 @@ const firebaseConfig = {
                 phone: '0400 000 000',
                 email: 'info@democabinetco.com.au',
                 address: '123 Sample Street, Melbourne VIC 3000',
-                abn: '00 000 000 000',
+                abn: '',
                 gst: true
             };
             localStorage.setItem('companySettings', JSON.stringify(demoCompany));
@@ -16767,6 +16793,7 @@ const firebaseConfig = {
             doc.text(`Email: ${companySettings.email}`, x, y);
             y += 4;
             doc.text(`Phone: ${companySettings.phone}`, x, y);
+            { const _abn = pwCleanAbn(companySettings.abn); if (_abn) { y += 4; doc.text('ABN: ' + _abn, x, y); } } // v1.16.464
             y += 10;
             
             // Job details
@@ -17254,7 +17281,7 @@ const firebaseConfig = {
 
             doc.setFontSize(32);
             doc.setTextColor(..._pdfHeaderColor('Invoice PDF Header'));
-            doc.text('INVOICE', x, y);
+            doc.text((pwCleanAbn(companySettings.abn) ? 'TAX INVOICE' : 'INVOICE'), x, y); // v1.16.464: AU tax invoice wording when an ABN is set
             doc.setTextColor(0, 0, 0);
             y += 15;
             
@@ -17271,6 +17298,7 @@ const firebaseConfig = {
             doc.text(`Email: ${companySettings.email}`, x, y);
             y += 4;
             doc.text(`Phone: ${companySettings.phone}`, x, y);
+            { const _abn = pwCleanAbn(companySettings.abn); if (_abn) { y += 4; doc.text('ABN: ' + _abn, x, y); } } // v1.16.464
             y += 10;
             
             // Job details
@@ -17773,6 +17801,7 @@ const firebaseConfig = {
             doc.text(`Email: ${companySettings.email}`, x, y);
             y += 4;
             doc.text(`Phone: ${companySettings.phone}`, x, y);
+            { const _abn = pwCleanAbn(companySettings.abn); if (_abn) { y += 4; doc.text('ABN: ' + _abn, x, y); } } // v1.16.464
             y += 10;
             
             // Job details
@@ -18274,6 +18303,8 @@ const firebaseConfig = {
         y += 4;
         
         doc.text(`Phone: ${companySettings.phone}`, x, y);
+        
+        { const _abn = pwCleanAbn(companySettings.abn); if (_abn) { y += 4; doc.text('ABN: ' + _abn, x, y); } } // v1.16.464
         y += 10;  // Increased spacing from 7 to 10
         
         // ===== JOB DETAILS =====
@@ -23111,7 +23142,7 @@ const firebaseConfig = {
 //        Service Worker Registration                                                                                           
 // Only register on production (GitHub Pages)     skip on preview/dev domains
 const _swHost = window.location.hostname;
-const _swAllowed = _swHost.includes('github.io') || _swHost === 'localhost' || _swHost === '127.0.0.1';
+const _swAllowed = _swHost.includes('github.io') || _swHost === 'localhost' || _swHost === '127.0.0.1' || _swHost === 'app.paintworkzpro.com.au'; // v1.16.464: the live domain was missing, so the app never worked offline
 if ('serviceWorker' in navigator && _swAllowed) {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('./sw.js')
@@ -29465,6 +29496,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         const phone = document.getElementById('companyPhone')?.value || '';
         const email = document.getElementById('companyEmail')?.value || '';
         const address = document.getElementById('companyAddress')?.value || '';
+        const abnInput = document.getElementById('companyAbn'); // v1.16.464
         
         // v1.16.460: UPDATE the saved details instead of replacing them, so ABN /
         // owner name entered at sign-up are kept. Business name follows the edited name.
@@ -29478,6 +29510,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             address: address
         });
         if (name) settings.businessName = name;
+        if (abnInput) settings.abn = (abnInput.value || '').trim(); // v1.16.464
         
         localStorage.setItem('companySettings', JSON.stringify(settings));
 
@@ -29624,6 +29657,8 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         if (phoneInput) phoneInput.value = settings.phone;
         if (emailInput) emailInput.value = settings.email;
         if (addressInput) addressInput.value = settings.address;
+        const abnInput = document.getElementById('companyAbn'); // v1.16.464
+        if (abnInput) abnInput.value = pwCleanAbn(settings.abn);
         
         // Load and display header logo in app header
         loadHeaderLogo();
