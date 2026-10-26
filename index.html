@@ -33,6 +33,7 @@ window.pwQ = pwQ;
 // v1.16.465: today's date in the shop's own time zone (toISOString gives UTC = yesterday before 11 am in Victoria)
 function pwItemSqm(it){ return (parseFloat(it && it.sqm) || 0) * (parseInt(it && it.qty) || 1); } // v1.16.466: m² for the whole line (per-piece m² × qty)
 function pwPct(m){ var v = Math.round((parseFloat(m) || 0) * 1000) / 10; return (v < 0 ? '-' : '+') + Math.abs(v) + '%'; } // v1.16.466: 0.8 -> '+80%', -0.2 -> '-20%'
+function pwItemsSqm(list){ return (list || []).reduce(function(s,it){ return s + pwItemSqm(it); }, 0).toFixed(3); } // v1.16.466: job total m² from ALL parts (the footer only shows the filtered parts, and ft² in imperial)
 function pwToday(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 window.pwToday = pwToday;
 </script>
@@ -10101,7 +10102,7 @@ const firebaseConfig = {
                 if (_target && String(_target.jobNum) === String(_jNum)) {
                     _hist[_editIdx].items = items;
                     _hist[_editIdx].totalParts = String(items.reduce((s,i) => s + (parseInt(i.qty)||1), 0));
-                    _hist[_editIdx].totalSqm = document.getElementById('tA')?.innerText || _hist[_editIdx].totalSqm;
+                    _hist[_editIdx].totalSqm = pwItemsSqm(items); // v1.16.466: was the footer total (filtered colour / ft²)
                     _hist[_editIdx].colors = Array.from(new Set(items.map(i => i.color).filter(c => c && c.trim()))).join(', ') || _hist[_editIdx].color;
                     localStorage.setItem('jobHistory', JSON.stringify(_hist));
                 }
@@ -10903,7 +10904,7 @@ const firebaseConfig = {
             colors: Array.from(new Set(items.map(i => i.color).filter(c => c && c.trim()))).join(', ') || document.getElementById('p-color').value,  // All unique colors
             code: document.getElementById('p-code').value,
             finish: document.getElementById('p-finish').value,
-            totalSqm: document.getElementById('tA')?.innerText || '0.000',
+            totalSqm: pwItemsSqm(items), // v1.16.466: from all parts — the footer total only counts the filtered parts (colour/type filter) and is ft² in imperial
             totalParts: String(items.reduce((s,i) => s + (parseInt(i.qty)||1), 0)),  // Calculate from items array, not DOM
             timestamp: new Date().toISOString(),
             savedDate: new Date().toLocaleString('en-AU'),
@@ -18664,7 +18665,7 @@ const firebaseConfig = {
             const jobNum = document.getElementById('jNum')?.value || document.getElementById('jN')?.value || '';
             const jobName = document.getElementById('jNm')?.value || 'Job Name';
             const dateReceived = normDateDisplay(document.getElementById('dRec')?.value || document.getElementById('dat')?.value) || new Date().toLocaleDateString('en-AU',{day:'2-digit',month:'2-digit',year:'numeric'});
-            const totalSQM = parseFloat(document.getElementById('tA')?.innerText || '0') || 0;  // FIX: was 'tot', should be 'tA'
+            const totalSQM = parseFloat(pwItemsSqm(items)) || 0;  // v1.16.466: all parts, in m² (footer = filtered / ft²)
             console.log('MIXING CARD START - totalSQM: ' + totalSQM + ', items: ' + items.length);
             
             // Get paint data - use FIRST ITEM'S BRAND (all items should have same brand per part logic)
@@ -19384,7 +19385,7 @@ const firebaseConfig = {
             const jobNum = document.getElementById('jNum')?.value || document.getElementById('jN')?.value || 'XXX';
             const jobName = document.getElementById('jNm')?.value || 'Job Name';
             const dateReceived = normDateDisplay(document.getElementById('dRec')?.value || document.getElementById('dat')?.value) || new Date().toLocaleDateString('en-AU',{day:'2-digit',month:'2-digit',year:'numeric'});
-            const totalSQM = parseFloat(document.getElementById('tot')?.innerText || '0') || 0;
+            const totalSQM = parseFloat(pwItemsSqm(items)) || 0; // v1.16.466: 'tot' doesn't exist — all parts, in m²
             
             // Get job completion date from history (if marked complete)
             let dateFinished = '';
