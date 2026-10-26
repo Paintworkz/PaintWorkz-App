@@ -81,7 +81,7 @@ window.pwToday = pwToday;
 </script>
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.466-dev'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.467-dev'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1674,7 +1674,7 @@ window.getTooltipKey = getTooltipKey;
 </script>
 </head>
 <body>
-<div id="devBanner">🚧 DEVELOPMENT VERSION — LIVE DATA — v1.16.466-dev (open in Incognito / separate browser) 🚧</div>
+<div id="devBanner">🚧 DEVELOPMENT VERSION — LIVE DATA — v1.16.467-dev (open in Incognito / separate browser) 🚧</div>
 
 <!-- COPYRIGHT NOTICE -->
 <div id="copyrightBanner" style="display:none;">
@@ -1924,6 +1924,23 @@ const firebaseConfig = {
         
         // Auth functions
         window.createUserWithEmailAndPassword = (email, password) => createUserWithEmailAndPassword(auth, email, password);
+        // v1.16.467: create a staff login on a SEPARATE temporary Firebase connection, so the owner stays signed in
+        // (no owner-password prompt, no sign-out/sign-in swap that could leave the owner stuck as the staff user).
+        // The staff user's own profile doc is written by that temporary connection (signed in as the staff user).
+        window.pwCreateStaffLogin = async (email, password, staffProfile) => {
+            const _sec = initializeApp(firebaseConfig, 'pwStaffCreator_' + Date.now());
+            try {
+                const _secAuth = getAuth(_sec);
+                try { const { setPersistence, inMemoryPersistence } = await import('https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js'); await setPersistence(_secAuth, inMemoryPersistence); } catch(_pe) {}
+                const _cred = await createUserWithEmailAndPassword(_secAuth, email, password);
+                const _staffUid = _cred.user.uid;
+                if (staffProfile) await setDoc(doc(getFirestore(_sec), 'users', _staffUid), staffProfile);
+                try { await signOut(_secAuth); } catch(_so) {}
+                return _staffUid;
+            } finally {
+                try { const { deleteApp } = await import('https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js'); await deleteApp(_sec); } catch(_de) {}
+            }
+        };
         window.signInWithEmailAndPassword = (email, password) => signInWithEmailAndPassword(auth, email, password);
         window.signOut = (authInstance) => signOut(authInstance || auth);
         window.signOut = () => {
@@ -3883,7 +3900,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.466</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.467</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-03-25</div>
                         </div>
                     </div>
@@ -4750,7 +4767,7 @@ const firebaseConfig = {
                 <hr style="margin:30px 0; border:none; border-top:1px solid #ddd;">
 
                 <!-- ===== SUBSCRIPTION / PAYMENT ===== -->
-                <div style="background:linear-gradient(135deg,#1a1a1a,#2d2d2d); border:2px solid #d4af37; border-radius:12px; padding:18px; margin-bottom:20px;">
+                <div class="staff-hidden" style="background:linear-gradient(135deg,#1a1a1a,#2d2d2d); border:2px solid #d4af37; border-radius:12px; padding:18px; margin-bottom:20px;">
                     <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
                         <span style="font-size:22px;">💳</span>
                         <div style="flex:1;">
@@ -4916,7 +4933,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.466</span><span style="color:#d4af37; font-weight:900;" id="versionDate"></span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.467</span><span style="color:#d4af37; font-weight:900;" id="versionDate"></span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);if(typeof tab==='function')tab('measure');setTimeout(function(){if(typeof startTour==='function')startTour();},300);" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -5327,6 +5344,8 @@ const firebaseConfig = {
 
     // Open Paddle checkout for a given price ID
     function openPaddleCheckout(priceId) {
+        // v1.16.467: staff logins can't buy a plan (it would go on the staff login, not the shop)
+        if (window.staffMode || window.isStaffAccount) { alert('Only the shop owner can change the subscription.\n\nAsk the owner to upgrade from their own login.'); return; }
         if (window.isAppStoreBuild) {
             notify('To subscribe, visit paintworkzpro.com on your browser');
             return;
@@ -8120,6 +8139,7 @@ const firebaseConfig = {
 
                 const _selRef = window.doc(window.firebaseDb, 'users', _selSyncUid, 'jobs', pwEditingDocId());
                 const _selColors = [...new Set(items.map(i => i.color || i.colour).filter(Boolean))];
+                window._pwCloudTouchedDuringEdit = true; // v1.16.467
                 window.updateDoc(_selRef, {
                     items: items,
                     color: newColour,
@@ -8203,6 +8223,7 @@ const firebaseConfig = {
                     if (!window._firebaseConfirmedJobs) window._firebaseConfirmedJobs = {};
                     window._firebaseConfirmedJobs[currentEditingJobId] = Date.now();
                     if (newColour) window._firebaseConfirmedJobs[String(document.getElementById('jN')?.value||'')] = Date.now();
+                    window._pwCloudTouchedDuringEdit = true; // v1.16.467
                     window.updateDoc(jobRef, updateData)
                         .then(() => console.log('✅ Colour change synced to Firestore via', syncUid))
                         .catch(e => console.warn('Colour sync failed:', e));
@@ -8781,13 +8802,13 @@ const firebaseConfig = {
 
         if (!selectedFormula) return;
         
-        const scaleFactor = litres / selectedFormula.baseSize;
+        const scaleFactor = litres / (parseFloat(selectedFormula.baseSize) || 1); // v1.16.467: missing baseSize gave NaN
         
         let html = `<div style="font-size:12px; font-weight:900; margin-bottom:10px;">Scaled for ${litres}L:</div>`;
         
         html += '<div style="margin-bottom:10px;"><strong>Base Tinters:</strong></div>';
         (selectedFormula.baseTinters || selectedFormula.whiteBase || []).forEach(t => { // v1.16.463
-            const scaledAmount = (t.amount * scaleFactor).toFixed(2);
+            const scaledAmount = ((parseFloat(t.amount ?? t.grams) || 0) * scaleFactor).toFixed(2); // v1.16.467: base tinters store 'grams' (showed NaNg)
             html += `<div style="display:flex; justify-content:space-between; font-size:11px; margin:4px 0;">
                 <span>${t.code}</span>
                 <span style="color:#d4af37; font-weight:900;">${scaledAmount}g</span>
@@ -8796,7 +8817,7 @@ const firebaseConfig = {
         
         html += '<div style="margin-top:10px; margin-bottom:10px;"><strong>Colourants:</strong></div>';
         (selectedFormula.colourants || []).forEach(c => { // v1.16.463
-            const scaledAmount = (c.amount * scaleFactor).toFixed(2);
+            const scaledAmount = ((parseFloat(c.amount ?? c.grams) || 0) * scaleFactor).toFixed(2); // v1.16.467
             html += `<div style="display:flex; justify-content:space-between; font-size:11px; margin:4px 0;">
                 <span>${c.code}</span>
                 <span style="color:#d4af37; font-weight:900;">${scaledAmount}g</span>
@@ -10984,8 +11005,13 @@ const firebaseConfig = {
                     return;
                 }
             } catch(e) {}
-            if (!confirm(`Save changes to Job #${jobData.jobNum} — ${jobData.client}?\n\nOK = Save & update\nCancel = Keep editing (changes not saved to the cloud yet)`)) {
-                return; // User chose not to save
+            if (!confirm(`Save changes to Job #${jobData.jobNum} — ${jobData.client}?\n\nOK = Save & update\nCancel = more options (keep editing or undo changes)`)) {
+                // v1.16.467: Cancel can now really undo — back to the job as it was when loaded / last saved
+                const _snap = window._pwSavedJobSnapshot;
+                if (_snap && String(_snap.jobNum) === String(existingJob.jobNum) && confirm(`Undo ALL changes to Job #${_snap.jobNum} since it was opened?\n\nOK = Undo — go back to the saved version\nCancel = Keep editing`)) {
+                    try { pwRevertToSavedJob(_snap); } catch(_re) { console.warn('Undo failed:', _re); notify('⚠️ Undo failed — ' + _re.message); }
+                }
+                return; // not saved
             }
             // Preserve charges history from existing record
             if (existingJob.lastCharges) jobData.lastCharges = existingJob.lastCharges;
@@ -11001,25 +11027,35 @@ const firebaseConfig = {
             
             // Add to edit history with detailed change info
             jobData.editHistory = existingJob.editHistory || [];
-            const _prevParts = parseInt(existingJob.totalParts) || 0;
+            // v1.16.467: compare with the job as it was when OPENED — this device's history copy is already
+            // updated while editing, so comparing with it always said "no changes detected"
+            const _snapBase = (window._pwSavedJobSnapshot && String(window._pwSavedJobSnapshot.jobNum) === String(existingJob.jobNum)
+                && (window._pwSavedJobSnapshot.client||'').trim().toLowerCase() === (existingJob.client||'').trim().toLowerCase()) ? window._pwSavedJobSnapshot : null;
+            const _base = _snapBase || existingJob;
+            const _prevParts = parseInt(_base.totalParts) || 0;
             const _newParts = parseInt(jobData.totalParts) || 0;
-            const _prevColors = Array.from(new Set((existingJob.items||[]).map(i=>i.color).filter(Boolean))).sort().join(', ');
+            const _prevColors = Array.from(new Set((_base.items||[]).map(i=>i.color).filter(Boolean))).sort().join(', ');
             const _newColors = Array.from(new Set((jobData.items||[]).map(i=>i.color).filter(Boolean))).sort().join(', ');
-            const _prevSqm = parseFloat(existingJob.totalSqm || 0).toFixed(3);
+            const _prevSqm = parseFloat(_base.totalSqm || 0).toFixed(3);
             const _newSqm = parseFloat(jobData.totalSqm || 0).toFixed(3);
             const _changes = [];
             if (_newParts !== _prevParts) _changes.push(`parts ${_prevParts > _newParts ? '▼' : '▲'} ${_prevParts}→${_newParts}`);
             if (_prevSqm !== _newSqm) _changes.push(`sqm ${_prevSqm}→${_newSqm}`);
             if (_prevColors !== _newColors) _changes.push(`colour: ${_newColors || 'none'}`);
-            if (String(existingJob.jobNum) !== String(jobData.jobNum)) _changes.push(`job# ${existingJob.jobNum}→${jobData.jobNum}`);
-            if (existingJob.client !== jobData.client) _changes.push(`client: ${jobData.client}`);
-            if (existingJob.color !== jobData.color) _changes.push(`paint: ${existingJob.color||'?'}→${jobData.color||'?'}`);
-            if (existingJob.brand !== jobData.brand) _changes.push(`brand: ${existingJob.brand||'?'}→${jobData.brand||'?'}`);
-            if (existingJob.dateReceived !== jobData.dateReceived) _changes.push(`date: ${jobData.dateReceived}`);
+            if (String(_base.jobNum) !== String(jobData.jobNum)) _changes.push(`job# ${_base.jobNum}→${jobData.jobNum}`);
+            if (_base.client !== jobData.client) _changes.push(`client: ${jobData.client}`);
+            if (_base.color !== jobData.color) _changes.push(`paint: ${_base.color||'?'}→${jobData.color||'?'}`);
+            if (_base.brand !== jobData.brand) _changes.push(`brand: ${_base.brand||'?'}→${jobData.brand||'?'}`);
+            if (_base.dateReceived !== jobData.dateReceived) _changes.push(`date: ${jobData.dateReceived}`);
+            if ((_base.jobName||'') !== (jobData.jobName||'')) _changes.push(`name: ${jobData.jobName||''}`);
             // Check for edge changes across items
-            const _prevEdged = (existingJob.items||[]).filter(i=>(i.e||[]).some(Boolean)).length;
+            const _prevEdged = (_base.items||[]).filter(i=>(i.e||[]).some(Boolean)).length;
             const _newEdged = (jobData.items||[]).filter(i=>(i.e||[]).some(Boolean)).length;
             if (_prevEdged !== _newEdged) _changes.push(`edged parts: ${_prevEdged}→${_newEdged}`);
+            if (!_changes.length) { // v1.16.467: sizes/qty/profile edits that keep the same totals
+                const _sig = arr => JSON.stringify((arr||[]).map(i => [i.h, i.w, i.qty, i.mode, i.prof, i.fm, i.thk, i.color, i.finish, (i.e||[]).map(Boolean), !!i.isGlass, !!i.cts, i.desc]));
+                if (_sig(_base.items) !== _sig(jobData.items)) _changes.push('parts edited');
+            }
             const _changesSummary = _changes.length ? _changes.join(' | ') : 'reviewed — no changes detected';
             jobData.editHistory.push({
                 timestamp: jobData.timestamp,
@@ -11355,7 +11391,59 @@ const firebaseConfig = {
         console.log('     Ready for next job entry');
         window._pwLastSaveOk = true; // v1.16.463
         window._pwLastSaveAt = Date.now(); // v1.16.466: double-tap guard in saveJob
+        window._pwSavedJobSnapshot = null; // v1.16.467: job closed after saving — next open takes a fresh copy
     }
+
+    // v1.16.467: has someone else saved this job since it was opened? Ask before overwriting their version.
+    async function pwCheckSaveConflict(snap) {
+        let _go = true;
+        try {
+            const _ref = window.doc(window.firebaseDb, 'users', pwSafeUid(), 'jobs', pwJobDocId(snap));
+            const _d = await Promise.race([ window.getDoc(_ref), new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 4000)) ]);
+            if (_d && _d.exists()) {
+                const c = _d.data() || {};
+                const _ts = x => String(x.lastEditedAt || x.timestamp || x.createdAt || '');
+                if (_ts(c) && _ts(c) > _ts(snap)) {
+                    const _who = c.lastEditedByName || 'someone else';
+                    let _when = ''; try { _when = new Date(_ts(c)).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' }); } catch(e) {}
+                    _go = confirm(`⚠️ Job #${snap.jobNum} was changed by ${_who}${_when ? ' at ' + _when : ''} after you opened it` +
+                        ` (${c.totalParts || '?'} parts now, you have ${items.reduce((s,i) => s + (parseInt(i.qty)||1), 0)}).\n\n` +
+                        `OK = save YOUR version over theirs\nCancel = don't save (load the job again from History to see their changes)`);
+                }
+            }
+        } catch(e) { console.warn('Save conflict check skipped:', e && e.message); }
+        if (!_go) { notify('Not saved — load the job again to see the latest version'); return; }
+        window._pwConflictChecked = true;
+        try { saveJob(); } finally { window._pwConflictChecked = false; }
+    }
+    window.pwCheckSaveConflict = pwCheckSaveConflict;
+
+    // v1.16.467: put a loaded job back exactly as it was saved (sheet + this device's history copy,
+    // and the cloud copy if a colour change was already written there while editing)
+    function pwRevertToSavedJob(snap) {
+        const saved = JSON.parse(JSON.stringify(snap));
+        const hist = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+        let idx = hist.findIndex(j => saved.id && j.id === saved.id);
+        if (idx < 0) idx = hist.findIndex(j => String(j.jobNum) === String(saved.jobNum) && (j.client||'').trim().toLowerCase() === (saved.client||'').trim().toLowerCase());
+        if (idx >= 0) { hist[idx] = saved; localStorage.setItem('jobHistory', JSON.stringify(hist)); }
+        items = (saved.items || []).map(it => ({ ...it, e: Array.isArray(it.e) ? it.e : [it.e1||false, it.e2||false, it.e3||false, it.e4||false],
+            mode: it.mode || it.sides || 'SS', fm: it.fm || 'Flat', type: it.type || 'Door', qty: parseInt(it.qty) || 1 }));
+        const _set = (id, v) => { const el = document.getElementById(id); if (el && v !== undefined && v !== null) el.value = v; };
+        _set('jNm', saved.jobName); _set('dRec', saved.dateReceived); _set('p-brand', saved.brand); _set('p-color', saved.color); _set('p-finish', saved.finish); _set('p-code', saved.code);
+        try { if (typeof previousJobColour !== 'undefined') previousJobColour = String(saved.color || '').toUpperCase(); } catch(e) {}
+        try { const js = document.getElementById('jobStatus'); if (js) { js.value = saved.jobStatus || 'job'; if (typeof updateJobStatusStyle === 'function') updateJobStatusStyle(); } } catch(e) {}
+        if (window._pwCloudTouchedDuringEdit && window.firebaseDb && window.doc && window.setDoc && window.currentUser) {
+            const _id = pwJobDocId(saved);
+            window.setDoc(window.doc(window.firebaseDb, 'users', pwSafeUid(), 'jobs', _id), { ...saved, id: _id, lastModified: new Date().toISOString() }, { merge: false })
+                .catch(e => console.warn('Undo cloud write failed:', e));
+            window._pwCloudTouchedDuringEdit = false;
+        }
+        window._lastLocalSaveTime = Date.now();
+        render();
+        try { renderHistory(); } catch(e) {}
+        notify('↩️ Changes undone — Job #' + saved.jobNum + ' is back to its saved version');
+    }
+    window.pwRevertToSavedJob = pwRevertToSavedJob;
 
     let historyFilter = 'all';
     
@@ -11987,6 +12075,8 @@ const firebaseConfig = {
         currentEditingJobId = job.id || null; // Stable ID for save lookup
         isJobViewMode = true; // Set view mode
         window.currentLoadedJob = job; // Store for cover sheet / PDFs
+        // v1.16.467: copy of the job as saved, so Cancel on "Save changes?" can undo the edits
+        try { window._pwSavedJobSnapshot = JSON.parse(JSON.stringify(job)); window._pwCloudTouchedDuringEdit = false; } catch(e) { window._pwSavedJobSnapshot = null; }
         
         // Protect this job from onSnapshot overwriting immediately after load
         window._lastLocalSaveTime = Date.now();
@@ -13083,35 +13173,44 @@ const firebaseConfig = {
         // CRITICAL: Save admin credentials BEFORE creating staff account
         const adminEmail = window.currentUser.email;
         const adminUid = window.currentUser.uid;
-        const adminPassword = prompt('Enter YOUR password to confirm staff account creation:');
-        if (!adminPassword) { notify('❌ Password required'); return; }
+        const _useSecondary = typeof window.pwCreateStaffLogin === 'function'; // v1.16.467: owner stays signed in
+        const adminPassword = _useSecondary ? '' : prompt('Enter YOUR password to confirm staff account creation:');
+        if (!_useSecondary && !adminPassword) { notify('❌ Password required'); return; }
 
         // Pad PIN to meet Firebase 6-character minimum (pw1234)
         const paddedPassword = 'pw' + pin;
 
         try {
-            // Create the staff account (this will sign us in as the new user)
-            const userCredential = await window.createUserWithEmailAndPassword(email, paddedPassword);
-            const staffUid = userCredential.user.uid;
-
-            console.log('Staff Firebase account created:', staffUid);
-
-            // Store staff account metadata in STAFF's user document (use saved adminUid)
-            const staffUserRef = window.doc(window.firebaseDb, 'users', staffUid);
-            await window.setDoc(staffUserRef, {
+            const _staffProfile = {
                 name: name,
                 email: email,
                 parentUid: adminUid, // Use saved admin UID
                 isStaffAccount: true,
                 staffPin: pin, // Store original 4-digit PIN for display
                 createdAt: new Date().toISOString()
-            });
+            };
+            let staffUid;
+            if (_useSecondary) {
+                // v1.16.467: separate connection — the owner never leaves their own sign-in
+                staffUid = await window.pwCreateStaffLogin(email, paddedPassword, _staffProfile);
+                console.log('Staff Firebase account created (owner stayed signed in):', staffUid);
+            } else {
+            // Create the staff account (this will sign us in as the new user)
+            const userCredential = await window.createUserWithEmailAndPassword(email, paddedPassword);
+            staffUid = userCredential.user.uid;
+
+            console.log('Staff Firebase account created:', staffUid);
+
+            // Store staff account metadata in STAFF's user document (use saved adminUid)
+            const staffUserRef = window.doc(window.firebaseDb, 'users', staffUid);
+            await window.setDoc(staffUserRef, _staffProfile);
 
             // Sign back in as admin
             await window.signInWithEmailAndPassword(adminEmail, adminPassword);
             
             // Explicitly mark that we're logging in (for session guard)
             localStorage.setItem('pw_explicit_login', '1');
+            }
 
             // Now currentUser is admin again - store staff relationship in admin's document
             const staffAccountRef = window.doc(window.firebaseDb, 'users', adminUid, 'staffAccounts', staffUid);
@@ -16120,6 +16219,10 @@ const firebaseConfig = {
     function notify(m, duration = 1500) { 
         const t = document.getElementById('toast');
         if (!t) return; // Exit if toast doesn't exist
+        // v1.16.467: turn &#x1F512; style codes into the real symbol (they showed as raw text)
+        m = String(m == null ? '' : m).replace(/&#x([0-9a-f]+);/gi, function(_, h){ try { return String.fromCodePoint(parseInt(h, 16)); } catch(e) { return ''; } })
+                                      .replace(/&#(\d+);/g, function(_, d){ try { return String.fromCodePoint(+d); } catch(e) { return ''; } })
+                                      .replace(/&amp;/g, '&');
         t.innerText = m; 
         t.style.display = 'block'; 
         setTimeout(()=>t.style.display='none', duration); 
@@ -23289,6 +23392,16 @@ if ('serviceWorker' in navigator && _swAllowed) {
         // v1.16.466: a second tap within 2 s of a successful save used to pop up "Cannot save — missing fields"
         // (the sheet had already cleared). Ignore it.
         if (window._pwLastSaveAt && Date.now() - window._pwLastSaveAt < 2000 && items.length === 0) return;
+        // v1.16.467: before saving a job that was opened from History, check nobody else saved it since it was
+        // opened (owner + staff, or two devices). Saving an old copy used to silently wipe their changes.
+        const _snapC = window._pwSavedJobSnapshot;
+        if (!window._pwConflictChecked && _snapC && currentEditingJobId && navigator.onLine !== false
+            && window.getDoc && window.doc && window.firebaseDb && window.currentUser
+            && String((document.getElementById('jN')?.value || '')).trim() === String(_snapC.jobNum)) {
+            pwCheckSaveConflict(_snapC);
+            return;
+        }
+        window._pwConflictChecked = false;
         // FREE PLAN GATE — check job limit
         if (freeJobLimitReached()) {
             showUpgradePrompt('job-limit');
@@ -32606,7 +32719,11 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                                     return (_g.id && cj.id === _g.id) ||
                                            (String(cj.jobNum) === _g.jobNum && (cj.client||'') === (_g.client||''));
                                 });
-                                if (_cloudCopy) {
+                                // v1.16.467: a later deliberate save by someone else (staff/other device, after a
+                                // "changed since you opened it" warning) is not a sync glitch — don't undo it
+                                const _otherSave = _cloudCopy && _cloudCopy.lastEditedAt && _cloudCopy.lastEditedAt > new Date(_g.at).toISOString()
+                                    && (_cloudCopy.lastEditedByName || '') !== (window.currentUserName || '');
+                                if (_cloudCopy && !_otherSave) {
                                     const _cloudParts = parseInt(_cloudCopy.totalParts) || (_cloudCopy.items ? _cloudCopy.items.length : 0);
                                     if (_cloudParts < _g.parts) {
                                         // Cloud regressed — restore our saved version into the snapshot
@@ -32622,7 +32739,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                                             ' — cloud had ' + _cloudParts + ' parts, restored ' + _g.parts + '. Re-pushing.');
                                         // Re-push the correct version to Firestore so it sticks
                                         try {
-                                            const _uid2 = window.staffModeOwnerUid || window.currentUser.uid;
+                                            const _uid2 = pwSafeUid(); // v1.16.467: staff device → owner's data (was the staff login's own path)
                                             if (_uid2 && _g.id) {
                                                 const _rref = window.doc(window.firebaseDb, 'users', _uid2, 'jobs', _g.id);
                                                 const _push = Object.assign({}, _cloudCopy); delete _push.photos;
