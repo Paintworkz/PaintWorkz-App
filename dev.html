@@ -34,6 +34,16 @@ window.pwQ = pwQ;
 function pwItemSqm(it){ return (parseFloat(it && it.sqm) || 0) * (parseInt(it && it.qty) || 1); } // v1.16.466: m² for the whole line (per-piece m² × qty)
 function pwPct(m){ var v = Math.round((parseFloat(m) || 0) * 1000) / 10; return (v < 0 ? '-' : '+') + Math.abs(v) + '%'; } // v1.16.466: 0.8 -> '+80%', -0.2 -> '-20%'
 function pwItemsSqm(list){ return (list || []).reduce(function(s,it){ return s + pwItemSqm(it); }, 0).toFixed(3); } // v1.16.466: job total m² from ALL parts (the footer only shows the filtered parts, and ft² in imperial)
+function pwPartBackupFor(jobNum, client){ // v1.16.466: the part backup only counts if it's for the same job (same client) — job numbers can be reused
+  try { var b = JSON.parse(localStorage.getItem('pwPartBackup_' + jobNum) || 'null'); if (!b) return null;
+        var bc = String(b.client || '').trim().toLowerCase(), cc = String(client || '').trim().toLowerCase();
+        return (!bc || !cc || bc === cc) ? b : null; } catch(e) { return null; } }
+function pwA(v){ return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); } // v1.16.466: safe text inside value="…" (a " in a name or 18" in a description used to cut it off)
+function pwRealDate(v){ // v1.16.466: true if v is a real calendar date (DD/MM/YY, DD/MM/YYYY or YYYY-MM-DD)
+  var m = String(v||'').trim().match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2}|\d{4})$/), d, mo, y;
+  if (m) { d=+m[1]; mo=+m[2]; y=+m[3]; if (y < 100) y += 2000; }
+  else { m = String(v||'').trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); if (!m) return false; y=+m[1]; mo=+m[2]; d=+m[3]; }
+  var t = new Date(y, mo-1, d); return t.getFullYear()===y && t.getMonth()===mo-1 && t.getDate()===d && y >= 2000 && y <= 2100; }
 function pwToday(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 window.pwToday = pwToday;
 </script>
@@ -9449,7 +9459,7 @@ const firebaseConfig = {
             
             <div style="margin-bottom:12px;">
                 <label style="font-weight:bold; display:block; margin-bottom:4px;">Color Name:</label>
-                <input type="text" id="editColorName" value="${f.color || ''}" style="width:100%; padding:6px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box;">
+                <input type="text" id="editColorName" value="${pwA(f.color || '')}" style="width:100%; padding:6px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box;">
             </div>
             
             <div style="margin-bottom:12px;">
@@ -9471,7 +9481,7 @@ const firebaseConfig = {
             
             <div style="margin-bottom:12px;">
                 <label style="font-weight:bold; display:block; margin-bottom:4px;">Base Color:</label>
-                <input type="text" id="editBaseColor" value="${f.baseColor || ''}" style="width:100%; padding:6px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box;" placeholder="e.g., White, Clear, Green">
+                <input type="text" id="editBaseColor" value="${pwA(f.baseColor || '')}" style="width:100%; padding:6px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box;" placeholder="e.g., White, Clear, Green">
             </div>
             
             <div style="margin-bottom:12px;">
@@ -10084,7 +10094,7 @@ const firebaseConfig = {
                     // Also push to Firestore so backup survives across devices
                     if (window.firebaseDb && window.doc && window.setDoc && window.currentUser) {
                         const _buid = pwSafeUid();
-                        const _bref = window.doc(window.firebaseDb, 'users', _buid, 'partBackups', String(_jn));
+                        const _bref = window.doc(window.firebaseDb, 'users', _buid, 'partBackups', pwJobDocId({ jobNum: _jn }));
                         window.setDoc(_bref, _backupPayload, { merge: false }).catch(e => console.warn('Part backup Firestore write failed:', e));
                     }
                 }
@@ -10832,7 +10842,7 @@ const firebaseConfig = {
         try {
             const _guardJobNum = (document.getElementById('jN')?.value || '').trim();
             if (_guardJobNum && items.length > 0) {
-                const _backup = JSON.parse(localStorage.getItem('pwPartBackup_' + _guardJobNum) || 'null');
+                const _backup = pwPartBackupFor(_guardJobNum, document.getElementById('cli')?.value);
                 const _currentCount = items.reduce((s,i) => s + (parseInt(i.qty)||1), 0);
                 if (_backup && _backup.partCount > 0 && _currentCount < _backup.partCount * 0.7) {
                     const _restore = confirm(
@@ -10854,6 +10864,18 @@ const firebaseConfig = {
                         notify('✅ ' + _backup.partCount + ' parts restored from backup — check then save again');
                         return; // Let user verify before saving
                     }
+                    // v1.16.466: "save anyway" = these are the right parts. Make them the new backup so the
+                    // warning (and the red PART COUNT MISMATCH banner on load) doesn't keep coming back,
+                    // and RESTORE can't put the deliberately removed parts back on the job.
+                    try {
+                        const _nb = { jobNum: _guardJobNum, client: document.getElementById('cli')?.value || _backup.client || '',
+                            jobName: document.getElementById('jNm')?.value || _backup.jobName || '', items: items,
+                            partCount: _currentCount, lineCount: items.length, savedAt: new Date().toISOString() };
+                        localStorage.setItem('pwPartBackup_' + _guardJobNum, JSON.stringify(_nb));
+                        if (window.firebaseDb && window.doc && window.setDoc && window.currentUser) {
+                            window.setDoc(window.doc(window.firebaseDb, 'users', pwSafeUid(), 'partBackups', pwJobDocId({ jobNum: _guardJobNum })), _nb, { merge: false }).catch(function(){});
+                        }
+                    } catch(_be) {}
                 }
             }
         } catch(e) {}
@@ -10881,6 +10903,7 @@ const firebaseConfig = {
         if (!clientVal)  missing.push('• Client name');
         if (!jobNumVal)  missing.push('• Job number');
         if (!dateVal)    missing.push('• Date received');
+        else if (!pwRealDate(dateVal)) missing.push('• Date received — "' + dateVal + '" isn\'t a real date (use DD/MM/YYYY)'); // v1.16.466
         if (!colourVal)  missing.push('• Paint colour');
         if (items.length === 0) missing.push('• At least one part');
 
@@ -10961,7 +10984,7 @@ const firebaseConfig = {
                     return;
                 }
             } catch(e) {}
-            if (!confirm(`Save changes to Job #${jobData.jobNum} — ${jobData.client}?\n\nOK = Save & update\nCancel = Go back without saving`)) {
+            if (!confirm(`Save changes to Job #${jobData.jobNum} — ${jobData.client}?\n\nOK = Save & update\nCancel = Keep editing (changes not saved to the cloud yet)`)) {
                 return; // User chose not to save
             }
             // Preserve charges history from existing record
@@ -11331,6 +11354,7 @@ const firebaseConfig = {
         notify('    Job Saved - Form ready for next entry'); flashSaved('Job Saved');
         console.log('     Ready for next job entry');
         window._pwLastSaveOk = true; // v1.16.463
+        window._pwLastSaveAt = Date.now(); // v1.16.466: double-tap guard in saveJob
     }
 
     let historyFilter = 'all';
@@ -11991,18 +12015,19 @@ const firebaseConfig = {
         (async () => {
             try {
                 const _loadedParts = items.reduce((s,i) => s + (parseInt(i.qty)||1), 0);
-                let _backup = JSON.parse(localStorage.getItem('pwPartBackup_' + job.jobNum) || 'null');
+                let _backup = pwPartBackupFor(job.jobNum, job.client); // v1.16.466: same client only
 
                 // If no local backup or cloud might have more — check Firestore
                 if ((!_backup || _backup.partCount <= _loadedParts) && window.firebaseDb && window.doc && window.getDoc && window.currentUser) {
                     try {
                         const _buid = pwSafeUid();
-                        const _bref = window.doc(window.firebaseDb, 'users', _buid, 'partBackups', String(job.jobNum));
+                        const _bref = window.doc(window.firebaseDb, 'users', _buid, 'partBackups', pwJobDocId({ jobNum: job.jobNum }));
                         const _bsnap = await window.getDoc(_bref);
                         if (_bsnap.exists()) {
                             const _cloudBackup = _bsnap.data();
-                            // Use cloud backup if it has more parts than local backup
-                            if (!_backup || (_cloudBackup.partCount || 0) > (_backup.partCount || 0)) {
+                            const _cbc = String(_cloudBackup.client || '').trim().toLowerCase(), _jc = String(job.client || '').trim().toLowerCase();
+                            // Use cloud backup if it has more parts than local backup (v1.16.466: and is for this client)
+                            if ((!_cbc || !_jc || _cbc === _jc) && (!_backup || (_cloudBackup.partCount || 0) > (_backup.partCount || 0))) {
                                 _backup = _cloudBackup;
                                 // Cache to localStorage for next time
                                 localStorage.setItem('pwPartBackup_' + job.jobNum, JSON.stringify(_backup));
@@ -12029,7 +12054,7 @@ const firebaseConfig = {
         // Restore backup function — available globally for the warning button
         window._restorePartBackup = function(jobNum) {
             try {
-                const _backup = JSON.parse(localStorage.getItem('pwPartBackup_' + jobNum) || 'null');
+                const _backup = pwPartBackupFor(jobNum, document.getElementById('cli')?.value);
                 if (!_backup || !_backup.items) { notify('❌ No backup found'); return; }
                 items = _backup.items.map(it => ({
                     ...it,
@@ -12243,6 +12268,7 @@ const firebaseConfig = {
         // Remove from history array
         history.splice(index, 1);
         safeStorage.setJSON('jobHistory', history);
+        try { localStorage.removeItem('pwPartBackup_' + jobToDelete.jobNum); } catch(e) {} // v1.16.466: don't offer a deleted job's parts to a new job with the same number
         console.log(` Removed from localStorage`);
         
         // Verify deletion
@@ -12354,7 +12380,7 @@ const firebaseConfig = {
                 alert('⚠️ Job #' + job.jobNum + ' was ' + (fields.completed ? 'completed' : 'reopened') + ' on this device but did NOT save to the cloud.\n\nReason: ' + ((e && e.code) || (e && e.message) || 'unknown') + '\n\nReload the app, log in again, then redo it.');
                 if (window.debouncedFirebaseSync) window.debouncedFirebaseSync();
             });
-        if (job.id && job.id !== canonId && window.getDoc && window.updateDoc) {
+        if (job.id && job.id !== canonId && String(job.id).indexOf('/') < 0 && window.getDoc && window.updateDoc) { // v1.16.466: an id with '/' isn't a valid cloud path
             const aliasRef = window.doc(window.firebaseDb, 'users', uid, 'jobs', job.id);
             window.getDoc(aliasRef).then(function(snap) {
                 if (!snap.exists()) return;
@@ -15122,7 +15148,7 @@ const firebaseConfig = {
         // Store everything in mm — convert from inches if imperial mode
         const h = isImperial() ? String((parseFloat(hRaw)||0) * 25.4) : hRaw;
         const w = isImperial() ? String((parseFloat(wRaw)||0) * 25.4) : wRaw;
-        const thkStored = isImperial() ? String((parseFloat(thkRaw)||18) * 25.4) : (thkRaw || '18');
+        const thkStored = isImperial() ? String((parseFloat(thkRaw)||0.75) * 25.4) : (thkRaw || '18'); // v1.16.466: blank = 0.75" (was 18" = 457 mm)
         const prof = document.getElementById('prof-select').value;
         const _rawDesc = (document.getElementById('desc').value || '').trim();
         // If desc is blank, default to current part type name (not generic "Part")
@@ -15140,6 +15166,7 @@ const firebaseConfig = {
             const _hN = parseFloat(h), _wN = parseFloat(w), _qN = parseInt(document.getElementById('qty').value);
             if (!(_hN > 0) || !(_wN > 0)) { notify('⚠️ Length and width must be more than 0'); return; }
             if (document.getElementById('qty').value !== '' && !(_qN >= 1)) { notify('⚠️ Qty must be 1 or more'); return; }
+            if (_qN > 200 && !confirm('Qty ' + _qN + ' — is that right?\n\nOK = add ' + _qN + '\nCancel = fix the qty')) return; // v1.16.466: catches an extra digit
             if (_hN > 3600 || _wN > 3600) {
                 const _big = Math.round(Math.max(_hN, _wN));
                 if (!confirm('That part is ' + _big + ' mm long — over 3.6 m.\n\nIs that right?\n\nOK = add it\nCancel = fix the size')) return;
@@ -15171,11 +15198,11 @@ const firebaseConfig = {
         );
         if (existing) {
             const _addQty = parseInt(document.getElementById('qty').value) || 1;
-            existing.qty += _addQty;
+            existing.qty = (parseInt(existing.qty) || 1) + _addQty; // v1.16.466: number
             notify("Qty updated: " + existing.desc + " now x" + existing.qty);
         } else {
-            const liveSqElement = document.getElementById('liveSq');
-            const sqmValue = liveSqElement ? liveSqElement.innerText : '0.000';
+            // v1.16.466: m² worked out from the part itself (the live box shows ft² in imperial)
+            const sqmValue = (function(){ try { return calculateItemSQM({ h: h, w: w, thk: thkStored, mode: mode, e: edges }).toFixed(3); } catch(e) { const el = document.getElementById('liveSq'); return el ? el.innerText : '0.000'; } })();
             
             items.push({
                 h, w, qty: (parseInt(document.getElementById('qty').value) || 1),
@@ -15694,7 +15721,7 @@ const firebaseConfig = {
                 console.error('Invalid item index:', index);
                 return;
             }
-            items[index].qty += delta; 
+            items[index].qty = (parseInt(items[index].qty) || 1) + delta; // v1.16.466: number, never "2"+1 = "21"
             if (items[index].qty < 1) items[index].qty = 1; 
             render();
             saveData();
@@ -15720,7 +15747,7 @@ const firebaseConfig = {
             }
             if (item.prof && !_editProfList.includes(item.prof)) _editProfList = [item.prof, ..._editProfList];
             let profOptions = _editProfList.map(p => `<option value="${p}" ${p === item.prof ? 'selected' : ''}>${p}</option>`).join('');
-            if (!profOptions) profOptions = `<option value="${item.prof||''}">${item.prof||'No profiles'}</option>`;
+            if (!profOptions) profOptions = `<option value="${pwA(item.prof||'')}">${item.prof||'No profiles'}</option>`;
             
             // Get paint brands for dropdown
             const brands = getPaintBrands();
@@ -15760,7 +15787,7 @@ const firebaseConfig = {
             
             // Add current color if it's not in the list
             if (item.color && !sortedColors.includes(item.color)) {
-                colorOptions = `<option value="${item.color}" selected>${item.color}</option>` + colorOptions;
+                colorOptions = `<option value="${pwA(item.color)}" selected>${item.color}</option>` + colorOptions;
             }
             
             // Add a blank option at the top for "no color"
@@ -15814,7 +15841,7 @@ const firebaseConfig = {
                         <label style="display:block; font-weight:900; margin-bottom:8px; font-size:12px; color:var(--modal-text,#666);">DESCRIPTION</label>
                         <div style="display:flex; gap:6px; align-items:stretch;">
                             <div style="flex:1; position:relative;">
-                                <input type="text" id="editDescInput" value="${item.desc}"
+                                <input type="text" id="editDescInput" value="${pwA(item.desc)}"
                                     style="width:100%; padding:10px; border:1px solid #ddd; border-radius:4px; font-size:14px; box-sizing:border-box; background:var(--modal-bg,#fff); color:var(--modal-text,#222); text-transform:uppercase;"
                                     list="editDescSuggest" autocomplete="off"
                                     placeholder="e.g. DOOR, PANEL...">
@@ -15847,7 +15874,7 @@ const firebaseConfig = {
                         
                         <div style="margin-bottom:10px;">
                             <label style="display:block; font-weight:900; margin-bottom:4px; font-size:11px; color:#666;">Colour</label>
-                            <input type="text" id="editColorInput" list="editColorSuggest" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:12px;box-sizing:border-box;text-transform:uppercase;" placeholder="Type colour name" autocomplete="off" value="${item.color||''}" oninput="(function(el){var c=(el.value||'').trim().toLowerCase();var db=window.paintDatabase||JSON.parse(localStorage.getItem('paintFormulas')||'[]');var f=db.find(function(x){return (x.color||'').toLowerCase()===c;});if(f){var ci=document.getElementById('editCodeInput');var bi=document.getElementById('editBrandInput');var fi=document.getElementById('editFinishInput');if(ci){var code=(f.code||'').toUpperCase();var col=(f.color||'').toUpperCase();var prod=f.product||'';ci.value=prod?code+' - '+col+' ('+prod+')':code+' - '+col;}if(bi&&f.brand)bi.value=f.brand;if(fi&&f.finish)fi.value=f.finish;}})(this)"><datalist id="editColorSuggest">${sortedColors.map(function(cc){return '<option value="'+cc+'">';}).join('')}</datalist>
+                            <input type="text" id="editColorInput" list="editColorSuggest" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:12px;box-sizing:border-box;text-transform:uppercase;" placeholder="Type colour name" autocomplete="off" value="${pwA(item.color||'')}" oninput="(function(el){var c=(el.value||'').trim().toLowerCase();var db=window.paintDatabase||JSON.parse(localStorage.getItem('paintFormulas')||'[]');var f=db.find(function(x){return (x.color||'').toLowerCase()===c;});if(f){var ci=document.getElementById('editCodeInput');var bi=document.getElementById('editBrandInput');var fi=document.getElementById('editFinishInput');if(ci){var code=(f.code||'').toUpperCase();var col=(f.color||'').toUpperCase();var prod=f.product||'';ci.value=prod?code+' - '+col+' ('+prod+')':code+' - '+col;}if(bi&&f.brand)bi.value=f.brand;if(fi&&f.finish)fi.value=f.finish;}})(this)"><datalist id="editColorSuggest">${sortedColors.map(function(cc){return '<option value="'+cc+'">';}).join('')}</datalist>
                         </div>
                         
                         <div style="margin-bottom:10px;">
@@ -23259,6 +23286,9 @@ if ('serviceWorker' in navigator && _swAllowed) {
 
 
         function saveJob() { 
+        // v1.16.466: a second tap within 2 s of a successful save used to pop up "Cannot save — missing fields"
+        // (the sheet had already cleared). Ignore it.
+        if (window._pwLastSaveAt && Date.now() - window._pwLastSaveAt < 2000 && items.length === 0) return;
         // FREE PLAN GATE — check job limit
         if (freeJobLimitReached()) {
             showUpgradePrompt('job-limit');
@@ -24287,7 +24317,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
                     try {
                         // Use jobNum as stable Firestore doc ID (consistent with syncJobsToFirebase)
                         if (!job.id) {
-                            job.id = String(job.jobNum);
+                            job.id = pwJobDocId(job); // v1.16.466: '/' safe (162/162A → 162-162A)
                             history[jobIdx] = job;
                             safeStorage.setJSON('jobHistory', history);
                         }
@@ -24759,8 +24789,8 @@ if ('serviceWorker' in navigator && _swAllowed) {
             <label style="display:block; font-weight:900; font-size:11px; margin-bottom:2px;">${label}</label>
             <div style="font-size:10px; color:#666; margin-bottom:8px; line-height:1.3;">${desc}</div>
             <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
-                <input type="color" id="${pickerId}" value="${colorValue}" onchange="${onchangeFn}" style="width:44px; height:36px; border:1px solid #ddd; border-radius:4px; cursor:pointer; flex-shrink:0;">
-                <input type="text" id="${textId}" value="${colorValue}" onchange="${onchangeFn}" style="flex:1; padding:7px 8px; border:1px solid #ddd; border-radius:4px; font-size:11px; font-family:monospace; box-sizing:border-box;">
+                <input type="color" id="${pickerId}" value="${pwA(colorValue)}" onchange="${onchangeFn}" style="width:44px; height:36px; border:1px solid #ddd; border-radius:4px; cursor:pointer; flex-shrink:0;">
+                <input type="text" id="${textId}" value="${pwA(colorValue)}" onchange="${onchangeFn}" style="flex:1; padding:7px 8px; border:1px solid #ddd; border-radius:4px; font-size:11px; font-family:monospace; box-sizing:border-box;">
             </div>
             <div id="preview_${pickerId}" style="padding:8px; border-radius:4px; background:${colorValue}; color:${previewText}; font-weight:900; text-align:center; font-size:11px;">Preview</div>
         </div>`;
@@ -25626,27 +25656,33 @@ if ('serviceWorker' in navigator && _swAllowed) {
             });
         }
         
-        // Auto tint surcharge — check total tint weight and pre-tick appropriate surcharge
+        // Auto tint surcharge — v1.16.466: worked out PER COLOUR (that colour's parts × its formula's tinter g/L),
+        // and only that colour's box is ticked. It replaces a lower Light/Dark/Tint tick on that colour instead of
+        // adding to it (before: whole-job grams ticked the same level on every colour — even Clear — and stacked).
+        // Standard and Colour Match ticks are left alone.
         setTimeout(() => {
             try {
-                const _tintInfo = getAutoTintSurcharge();
-                if (_tintInfo.isExtra) {
-                    document.querySelectorAll('.surcharge-check[data-type="ExtraTint"]').forEach(cb => {
-                        if (!cb.checked) { cb.checked = true; cb.dispatchEvent(new Event('change')); }
+                const _keyOf = it => { const b = it.brand || '', c = it.color || '', f = it.finish || 'Satin'; return b && c ? `${b} ${c} ${f}` : (c ? `${c} ${f}` : ''); };
+                const _rank = { Light: 1, Dark: 2, ExtraTint: 3 };
+                const _msgs = [];
+                uniqueColours.forEach(colKey => {
+                    const _parts = items.filter(it => _keyOf(it) === colKey);
+                    if (!_parts.length) return;
+                    const _t = getAutoTintSurcharge(_parts);
+                    const _lvl = _t.isExtra ? 'ExtraTint' : _t.isDark ? 'Dark' : _t.isLight ? 'Light' : null;
+                    if (!_lvl) return;
+                    const _boxes = [...document.querySelectorAll('.surcharge-check')].filter(cb => cb.getAttribute('data-colour') === colKey);
+                    const _higherTicked = _boxes.some(cb => cb.checked && _rank[cb.getAttribute('data-type')] > _rank[_lvl]);
+                    if (_higherTicked) return; // a higher level was chosen by hand — keep it
+                    _boxes.forEach(cb => {
+                        const ty = cb.getAttribute('data-type');
+                        if (_rank[ty] && ty !== _lvl && cb.checked) { cb.checked = false; cb.dispatchEvent(new Event('change')); }
+                        if (ty === _lvl && !cb.checked) { cb.checked = true; cb.dispatchEvent(new Event('change')); }
                     });
-                    notify('🎨 Extra Tint surcharge auto-applied (' + _tintInfo.totalGrams + 'g)');
-                } else if (_tintInfo.isDark) {
-                    document.querySelectorAll('.surcharge-check[data-type="Dark"]').forEach(cb => {
-                        if (!cb.checked) { cb.checked = true; cb.dispatchEvent(new Event('change')); }
-                    });
-                    notify('🎨 Dark Tint surcharge auto-applied (' + _tintInfo.totalGrams + 'g)');
-                } else if (_tintInfo.isLight) {
-                    document.querySelectorAll('.surcharge-check[data-type="Light"]').forEach(cb => {
-                        if (!cb.checked) { cb.checked = true; cb.dispatchEvent(new Event('change')); }
-                    });
-                    notify('🎨 Light Tint surcharge auto-applied (' + _tintInfo.totalGrams + 'g)');
-                }
-            } catch(e) {}
+                    _msgs.push((_lvl === 'ExtraTint' ? 'Extra Tint' : _lvl) + ' on ' + colKey + ' (' + _t.totalGrams + 'g)');
+                });
+                if (_msgs.length) notify('🎨 Tint surcharge auto-applied: ' + _msgs.join(', '));
+            } catch(e) { console.warn('Auto tint error:', e); }
         }, 100);
 
         // Reset other fields
@@ -25771,7 +25807,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
                         if (r._autoSmallJob) row.dataset.autosmalljob = '1';
                         const _isAuto = r._autoPencil || r._autoSmallJob;
                         const _autoClr = r._autoPencil ? '#7b2d8b' : (r._autoSmallJob ? '#e65100' : '');
-                        row.innerHTML = '<input type="text" class="otherChargeDesc" value="' + (r.desc||'') + '" placeholder="e.g. Rush job" style="flex:2; padding:7px 8px; border:1px solid #ddd; border-radius:6px; font-size:11px; box-sizing:border-box;' + (_isAuto ? 'color:' + _autoClr + ';font-weight:700;' : '') + '">' +
+                        row.innerHTML = '<input type="text" class="otherChargeDesc" value="' + String(r.desc||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;') + '" placeholder="e.g. Rush job" style="flex:2; padding:7px 8px; border:1px solid #ddd; border-radius:6px; font-size:11px; box-sizing:border-box;' + (_isAuto ? 'color:' + _autoClr + ';font-weight:700;' : '') + '">' +
                             '<input type="number" inputmode="decimal" class="otherChargeAmount" value="' + (r.amount||0) + '" min="0" step="5" style="flex:1; padding:7px 6px; border:1px solid #ddd; border-radius:6px; font-size:13px; font-weight:700; box-sizing:border-box;' + (_isAuto ? 'color:' + _autoClr + ';' : '') + '" ' + (_isAuto ? 'readonly' : '') + '>' +
                             '<button type="button" onclick="removeOtherChargeRow(this)" style="border:none; background:' + (_isAuto ? '#ccc' : '#ff3b30') + '; color:#fff; border-radius:4px; padding:0 8px; font-size:12px; cursor:pointer; flex-shrink:0;">' + (_isAuto ? '-' : 'X') + '</button>';
                         ocRows2.appendChild(row);
@@ -26468,39 +26504,39 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 <h3 style="margin-top:0; margin-bottom:20px; font-weight:900;">       Edit Client</h3>
                 
                 <label style="margin-top:10px; font-weight:900; font-size:11px; color:var(--modal-text,#666);">Client Company Name *</label>
-                <input type="text" id="modalClientName" value="${client.name || ''}" placeholder="e.g., ABC Kitchens" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
+                <input type="text" id="modalClientName" value="${pwA(client.name || '')}" placeholder="e.g., ABC Kitchens" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
                 
                 <label style="font-weight:900; font-size:11px; color:#666;">Contact Person Name</label>
-                <input type="text" id="modalClientContactName" value="${client.contactName || ''}" placeholder="e.g., John Smith" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
+                <input type="text" id="modalClientContactName" value="${pwA(client.contactName || '')}" placeholder="e.g., John Smith" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
                 
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
                     <div>
                         <label style="font-weight:900; font-size:11px; color:#666;">Landline</label>
-                        <input type="tel" id="modalClientLandline" value="${client.landline || ''}" placeholder="(03) 1234 5678" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
+                        <input type="tel" id="modalClientLandline" value="${pwA(client.landline || '')}" placeholder="(03) 1234 5678" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
                     </div>
                     <div>
                         <label style="font-weight:900; font-size:11px; color:#666;">Mobile</label>
-                        <input type="tel" id="modalClientMobile" value="${client.mobile || ''}" placeholder="Your Phone Number" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
+                        <input type="tel" id="modalClientMobile" value="${pwA(client.mobile || '')}" placeholder="Your Phone Number" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
                     </div>
                 </div>
                 
                 <label style="font-weight:900; font-size:11px; color:#666;">Email Address 1</label>
-                <input type="email" id="modalClientEmail1" value="${client.email1 || client.email || ''}" placeholder="john@example.com" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
+                <input type="email" id="modalClientEmail1" value="${pwA(client.email1 || client.email || '')}" placeholder="john@example.com" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
                 
                 <label style="font-weight:900; font-size:11px; color:#666;">Email Address 2 (Optional)</label>
-                <input type="email" id="modalClientEmail2" value="${client.email2 || ''}" placeholder="jane@example.com" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
+                <input type="email" id="modalClientEmail2" value="${pwA(client.email2 || '')}" placeholder="jane@example.com" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
                 
                 <label style="font-weight:900; font-size:11px; color:#666;">Street Address</label>
-                <input type="text" id="modalClientAddress" value="${client.address || ''}" placeholder="123 Main Street" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
+                <input type="text" id="modalClientAddress" value="${pwA(client.address || '')}" placeholder="123 Main Street" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
                 
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
                     <div>
                         <label style="font-weight:900; font-size:11px; color:#666;">Town/City</label>
-                        <input type="text" id="modalClientTown" value="${client.town || ''}" placeholder="Geelong" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
+                        <input type="text" id="modalClientTown" value="${pwA(client.town || '')}" placeholder="Geelong" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
                     </div>
                     <div>
                         <label style="font-weight:900; font-size:11px; color:#666;">Postcode</label>
-                        <input type="text" id="modalClientPostcode" value="${client.postcode || ''}" placeholder="3220" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
+                        <input type="text" id="modalClientPostcode" value="${pwA(client.postcode || '')}" placeholder="3220" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
                     </div>
                 </div>
                 
@@ -26645,39 +26681,39 @@ if ('serviceWorker' in navigator && _swAllowed) {
             <h3 style="margin-top:0; margin-bottom:20px; font-weight:900;">       Edit Client</h3>
             
             <label style="margin-top:0; display:block; font-weight:900; font-size:11px; margin-bottom:5px;">Company Name *</label>
-            <input type="text" id="editClientName" value="${client.name}" placeholder="e.g., ABC Kitchens" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box; font-size:12px;">
+            <input type="text" id="editClientName" value="${pwA(client.name)}" placeholder="e.g., ABC Kitchens" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box; font-size:12px;">
             
             <label style="display:block; font-weight:900; font-size:11px; margin-bottom:5px;">Contact Person Name</label>
-            <input type="text" id="editClientContactName" value="${client.contactName || ''}" placeholder="e.g., John Smith" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box; font-size:12px;">
+            <input type="text" id="editClientContactName" value="${pwA(client.contactName || '')}" placeholder="e.g., John Smith" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box; font-size:12px;">
             
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:15px;">
                 <div>
                     <label style="display:block; font-weight:900; font-size:11px; margin-bottom:5px;">Landline</label>
-                    <input type="tel" id="editClientLandline" value="${client.landline || ''}" placeholder="(03) 1234 5678" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box; font-size:12px;">
+                    <input type="tel" id="editClientLandline" value="${pwA(client.landline || '')}" placeholder="(03) 1234 5678" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box; font-size:12px;">
                 </div>
                 <div>
                     <label style="display:block; font-weight:900; font-size:11px; margin-bottom:5px;">Mobile</label>
-                    <input type="tel" id="editClientMobile" value="${client.mobile || ''}" placeholder="Your Phone Number" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box; font-size:12px;">
+                    <input type="tel" id="editClientMobile" value="${pwA(client.mobile || '')}" placeholder="Your Phone Number" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box; font-size:12px;">
                 </div>
             </div>
             
             <label style="display:block; font-weight:900; font-size:11px; margin-bottom:5px;">Email Address 1</label>
-            <input type="email" id="editClientEmail1" value="${client.email1 || client.email || ''}" placeholder="john@example.com" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box; font-size:12px;">
+            <input type="email" id="editClientEmail1" value="${pwA(client.email1 || client.email || '')}" placeholder="john@example.com" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box; font-size:12px;">
             
             <label style="display:block; font-weight:900; font-size:11px; margin-bottom:5px;">Email Address 2 (Optional)</label>
-            <input type="email" id="editClientEmail2" value="${client.email2 || ''}" placeholder="jane@example.com" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box; font-size:12px;">
+            <input type="email" id="editClientEmail2" value="${pwA(client.email2 || '')}" placeholder="jane@example.com" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box; font-size:12px;">
             
             <label style="display:block; font-weight:900; font-size:11px; margin-bottom:5px;">Street Address</label>
-            <input type="text" id="editClientAddress" value="${client.address || ''}" placeholder="123 Main Street" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box; font-size:12px;">
+            <input type="text" id="editClientAddress" value="${pwA(client.address || '')}" placeholder="123 Main Street" style="margin-bottom:15px; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box; font-size:12px;">
             
             <div style="display:grid; grid-template-columns:2fr 1fr; gap:10px; margin-bottom:15px;">
                 <div>
                     <label style="display:block; font-weight:900; font-size:11px; margin-bottom:5px;">Town/Suburb</label>
-                    <input type="text" id="editClientTown" value="${client.town || ''}" placeholder="Sydney" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box; font-size:12px;">
+                    <input type="text" id="editClientTown" value="${pwA(client.town || '')}" placeholder="Sydney" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box; font-size:12px;">
                 </div>
                 <div>
                     <label style="display:block; font-weight:900; font-size:11px; margin-bottom:5px;">Postcode</label>
-                    <input type="text" id="editClientPostcode" value="${client.postcode || ''}" placeholder="2000" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box; font-size:12px;">
+                    <input type="text" id="editClientPostcode" value="${pwA(client.postcode || '')}" placeholder="2000" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box; font-size:12px;">
                 </div>
             </div>
             
@@ -30335,7 +30371,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             if (job) {
                 // Ensure job has stable ID to prevent duplicate creation
                 if (!job.id && job.jobNum) {
-                    job.id = String(job.jobNum);
+                    job.id = pwJobDocId(job); // v1.16.466: '/' safe
                 }
                 
                 job.timeline = timeline;
@@ -31029,7 +31065,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         
         // If jobData didn't have an id, update it with the stable ID
         if (!jobData.id && jobData.jobNum) {
-            jobData.id = String(jobData.jobNum);
+            jobData.id = jobId; // v1.16.466: same '/'-safe ID as the cloud document
         }
         
         const jobRef = window.doc(window.firebaseDb, 'users', pwSafeUid(), 'jobs', jobId);
@@ -31298,7 +31334,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             // Re-push any jobs that were completed locally but not in Firestore
             repushQueue.forEach(job => {
                 try {
-                    const jobId = job.id || job.jobNum;
+                    const jobId = pwJobDocId(job); // v1.16.466: '/' in a job number broke this path
                     const jobDoc = window.doc(window.firebaseDb, 'users', dataUid, 'jobs', jobId);
                     window.setDoc(jobDoc, { ...job, lastModified: new Date().toISOString() }, { merge: false })
                         .then(() => console.log('    Re-pushed completed job', job.jobNum))
@@ -31968,7 +32004,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                                 <span style="font-size:11px; font-weight:900; color:${tintTxt}; font-family:monospace; white-space:nowrap; text-shadow:0 1px 2px rgba(0,0,0,0.4);">${code}</span>
                                 <span style="font-size:10px; font-weight:700; color:${tintTxt}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100px; display:inline-block; vertical-align:middle; text-shadow:0 1px 2px rgba(0,0,0,0.4);">${displayLabel.length > 16 ? displayLabel.slice(0,14)+'…' : displayLabel}</span>
                                 <input type="text" placeholder="${autoName || 'Override…'}"
-                                    value="${savedName}"
+                                    value="${pwA(savedName)}"
                                     title="Custom name override"
                                     style="font-size:9px; padding:2px 4px; border:1px solid ${border}; border-radius:3px; background:rgba(255,255,255,0.15); color:${tintTxt}; width:70px; flex-shrink:1; min-width:0; display:${savedName || !autoName ? 'block' : 'none'};"
                                     oninput="saveTinterName(${pwQ(code)}, this.value)"
@@ -32138,7 +32174,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
 
     // ---- AUTO DARK TINT SURCHARGE ----
     // Called from showChargesModal — checks total tint weight for the current job
-    function getAutoTintSurcharge() {
+    function getAutoTintSurcharge(_list) { // v1.16.466: optional list of parts (one colour) — default = all parts
         const st = getStockSettings();
         const darkThreshold  = parseFloat(st.darkTintThreshold  || 200);
         const lightThreshold = parseFloat(st.lightTintThreshold || 100);
@@ -32148,7 +32184,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         const getFormula = col => formulas.find(f => (f.color||'').toLowerCase().trim() === (col||'').toLowerCase().trim());
 
         let totalGrams = 0;
-        (items || []).forEach(item => {
+        (_list || items || []).forEach(item => {
             const col = item.color || '';
             const formula = getFormula(col);
             if (!formula || !formula.colourants) return;
