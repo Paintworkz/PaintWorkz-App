@@ -31,6 +31,8 @@
 function pwQ(v){ return JSON.stringify(v == null ? '' : String(v)).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 window.pwQ = pwQ;
 // v1.16.465: today's date in the shop's own time zone (toISOString gives UTC = yesterday before 11 am in Victoria)
+function pwItemSqm(it){ return (parseFloat(it && it.sqm) || 0) * (parseInt(it && it.qty) || 1); } // v1.16.466: m² for the whole line (per-piece m² × qty)
+function pwPct(m){ var v = Math.round((parseFloat(m) || 0) * 1000) / 10; return (v < 0 ? '-' : '+') + Math.abs(v) + '%'; } // v1.16.466: 0.8 -> '+80%', -0.2 -> '-20%'
 function pwToday(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 window.pwToday = pwToday;
 </script>
@@ -68,7 +70,7 @@ window.pwToday = pwToday;
 </script>
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.465'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.466'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -3869,7 +3871,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.465</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.466</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-03-25</div>
                         </div>
                     </div>
@@ -4298,7 +4300,7 @@ const firebaseConfig = {
                         </div>
                         <div>
                             <label style="display:block; font-weight:900; font-size:10px; color:#666; margin-bottom:4px;">Undercoat (% of profile rate)</label>
-                            <input type="number" inputmode="decimal" id="chargeUndercoat" value="80" min="0" max="100" step="0.5" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px; font-size:11px; box-sizing:border-box;">
+                            <input type="number" inputmode="decimal" id="chargeUndercoat" value="80" min="-100" max="100" step="0.5" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px; font-size:11px; box-sizing:border-box;">
                         </div>
                         <div>
                             <label style="display:block; font-weight:900; font-size:10px; color:#666; margin-bottom:4px;">Colour Match (Flat $)</label>
@@ -4902,7 +4904,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.465</span><span style="color:#d4af37; font-weight:900;" id="versionDate"></span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.466</span><span style="color:#d4af37; font-weight:900;" id="versionDate"></span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);if(typeof tab==='function')tab('measure');setTimeout(function(){if(typeof startTour==='function')startTour();},300);" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -10908,12 +10910,12 @@ const firebaseConfig = {
             jobStatus: document.getElementById('jobStatus')?.value || 'job', // 'job', 'quote', or 'hold'
             timeline: (function(){
                 // Calculate total SQM for timeline trigger
-                const _tlSqm = items.reduce((s,it) => s + (parseFloat(it.sqm)||0), 0);
+                const _tlSqm = items.reduce((s,it) => s + pwItemSqm(it), 0);
                 const _tlClient = document.getElementById('cli')?.value || '';
                 return getDefaultTimeline(_tlSqm, _tlClient);
             })(),
             scheduledFinish: (function(){
-                const _tlSqm2 = items.reduce((s,it) => s + (parseFloat(it.sqm)||0), 0);
+                const _tlSqm2 = items.reduce((s,it) => s + pwItemSqm(it), 0);
                 const _tlClient2 = document.getElementById('cli')?.value || '';
                 const _tl = getDefaultTimeline(_tlSqm2, _tlClient2);
                 return getScheduledFinishDate(document.getElementById('dRec').value, _tl);
@@ -11022,7 +11024,7 @@ const firebaseConfig = {
             if (existingIdx !== -1) {
                 // Job with same number, date, and client already exists - preserve its stable ID
                 jobData.id = pwJobDocId(jobData); // v1.16.446: one cloud ID per job
-                if (confirm(`Job #${jobData.jobNum} already exists. Replace it?`)) {
+                if (confirm(`Job #${jobData.jobNum} for ${history[existingIdx].client || jobData.client} is already saved` + (history[existingIdx].jobName ? ` (${history[existingIdx].jobName})` : '') + `.\n\nOK = Replace it with this measure sheet (its parts are replaced)\nCancel = Go back without saving`)) {
                     const existingJob = history[existingIdx];
                     if (existingJob.lastCharges) jobData.lastCharges = existingJob.lastCharges;
                     if (existingJob.chargesHistory) jobData.chargesHistory = existingJob.chargesHistory;
@@ -15644,11 +15646,11 @@ const firebaseConfig = {
         // Only warn if this is NOT the job currently being edited
         const isEditingThisJob = String(currentEditingJobId || '') !== '' &&
             allJobs.find(j => String(j.jobNum) === String(val) && (j.id === currentEditingJobId || j.jobNum === currentEditingJobId));
-        const match = allJobs.find(j => String(j.jobNum) === String(val));
+        const match = localHistory.find(j => String(j.jobNum) === String(val)) || memoryJobs.find(j => String(j.jobNum) === String(val)); // v1.16.466: full history first
         const indicator = document.getElementById('jNDuplicateWarning');
         if (indicator) {
             if (match && !isEditingThisJob) {
-                indicator.textContent = '⚠️ Job #' + val + ' already exists — ' + match.client + '. Use a different number or you will overwrite it.';
+                indicator.textContent = '⚠️ Job #' + val + ' is already used — ' + match.client + (match.jobName ? ' (' + match.jobName + ')' : '') + '. Use a different number.';
                 indicator.style.color = '#ff3b30';
                 indicator.style.fontWeight = '900';
                 indicator.style.display = 'block';
@@ -20453,7 +20455,7 @@ const firebaseConfig = {
                         const colourSqm = job.items.filter(it => {
                             const k = [it.brand||it.paintBrand, it.color||it.colour, it.finish].filter(Boolean).join(' / ');
                             return k === p.key;
-                        }).reduce((s, it) => s + (parseFloat(it.sqm)||0), 0);
+                        }).reduce((s, it) => s + pwItemSqm(it), 0);
                         scheduleRows.push({ job, paintStr: p.key, suffix: suffixes[pi] !== undefined ? suffixes[pi] : String(pi), colourParts, colourSqm });
                     });
                 }
@@ -21324,7 +21326,7 @@ const firebaseConfig = {
             if (_sqmThresh > 0) {
                 // Use stored totalSqm on job record — items array not present on archived jobs
                 const jobSqm = parseFloat(j.totalSqm || 0) ||
-                    (j.items || []).reduce((s, it) => s + (parseFloat(it.sqm) || 0), 0);
+                    (j.items || []).reduce((s, it) => s + pwItemSqm(it), 0);
                 if (_sqmUnder && jobSqm >= _sqmThresh) return false; // UNDER filter
                 if (!_sqmUnder && jobSqm < _sqmThresh) return false; // OVER filter
             }
@@ -21398,7 +21400,7 @@ const firebaseConfig = {
                     const raw = be ? ((be.code||'').toUpperCase().startsWith('XB') ? be.code : be.altCode) : null;
                     if (raw && _mattCodes.includes(raw.toUpperCase())) {
                         const key = raw.toUpperCase() + ' ← ' + col + ' (#' + (j.jobNum||'?') + ')';
-                        _byCode[key] = (_byCode[key] || 0) + (parseFloat(it.sqm)||0);
+                        _byCode[key] = (_byCode[key] || 0) + pwItemSqm(it);
                     }
                 });
             });
@@ -21489,7 +21491,7 @@ const firebaseConfig = {
 
             // Per-item stats
             (job.items || []).forEach(item => {
-                const iSqm = parseFloat(item.sqm) || 0;
+                const iSqm = pwItemSqm(item); // v1.16.466: × qty (was one piece per line)
                 const col = item.color || job.color || 'Unknown';
                 colourCount[col] = (colourCount[col] || 0) + iSqm;
 
@@ -21644,6 +21646,9 @@ const firebaseConfig = {
                 let av = a[k], bv = b[k];
                 if (k === 'dateReceived') { av = parseReportDate(a.dateReceived)?.getTime()||0; bv = parseReportDate(b.dateReceived)?.getTime()||0; }
                 else if (k === '_closed') { av = pwJobCompletedOn(a)?.getTime()||0; bv = pwJobCompletedOn(b)?.getTime()||0; }
+                else if (k === 'color') { // v1.16.466: sort by the job's first colour (A–Z), as shown on its first row
+                    const _fc = j => { const cs = (j.items||[]).map(it => (it.color || it.colour || '')).filter(Boolean).sort((x,y)=>x.localeCompare(y)); return (cs[0] || j.color || '').toLowerCase(); };
+                    av = _fc(a); bv = _fc(b); }
                 else if (numKeys.includes(k)) { av = parseFloat(av)||0; bv = parseFloat(bv)||0; }
                 else { av = (av||'').toString().toLowerCase(); bv = (bv||'').toString().toLowerCase(); }
                 if (av < bv) return -1*dir;
@@ -21853,7 +21858,13 @@ const firebaseConfig = {
                     <th onclick="sortJobBreakdown('_workDays')" style="padding:7px 8px; text-align:right; cursor:pointer; user-select:none;" title="Working days from received to completed (excludes shop closures). Sort to find jobs that blew out the average.">Days ${_jbSortArrow('_workDays')}</th>
                 </tr></thead>
                 <tbody>
-                ${jobs.map((j,i)=>{
+                ${(() => {
+                    // v1.16.466: a job with more than one colour gets one row per colour — same as the
+                    // schedule sheet: first colour = job #, then #A, #B… (colours A–Z). Parts, m², value
+                    // and CTS are split by colour; the totals row is unchanged.
+                    const _sfx = ['','A','B','C','D','E','F','G','H','I','J'];
+                    let _ri = 0;
+                    return jobs.map(j => {
                     const jCts = (j.items||[]).reduce((s,it)=>{ if(!it.cts) return s; const p=getCtsPriceForPart(it); return s+(p?p.total:0); },0);
                     // Working days to complete (same logic as the Avg Days KPI)
                     let _wd = null;
@@ -21867,20 +21878,59 @@ const firebaseConfig = {
                     const _daysCell = _wd === null
                         ? '<span style="color:#bbb;">—</span>'
                         : `<span style="font-weight:900; color:${_slow ? '#c62828' : '#2e7d32'};">${_wd}d</span>`;
-                    return `<tr style="background:${i%2?'#f9f9f9':'#fff'}; color:#000; border-bottom:1px solid #eee;">
-                    <td style="padding:6px 8px; font-weight:900; color:#000;">${j.jobNum||'   '}</td>
+                    const _closedTxt = (() => { const c = pwJobCompletedOn(j); return c ? c.toLocaleDateString('en-AU', { day:'2-digit', month:'2-digit', year:'2-digit' }) : '—'; })();
+                    // Group the parts by brand / colour / finish
+                    const _grp = [];
+                    const _gIdx = {};
+                    (j.items||[]).forEach(it => {
+                        const col = it.color || it.colour || j.color || '';
+                        const fin = it.finish || j.finish || '';
+                        const key = [it.brand || it.paintBrand || '', col, fin].join('|').toLowerCase();
+                        if (_gIdx[key] === undefined) { _gIdx[key] = _grp.length; _grp.push({ color: col, finish: fin, parts: 0, sqm: 0, base: 0, cts: 0 }); }
+                        const g = _grp[_gIdx[key]];
+                        g.parts += (parseInt(it.qty) || 1);
+                        g.sqm += pwItemSqm(it);
+                        try { g.base += (calculateLinePrice(it).lineCost || 0); } catch(e) {}
+                        if (it.cts) { const cp = getCtsPriceForPart(it); g.cts += (cp ? cp.total : 0); }
+                    });
+                    _grp.sort((x, y) => (x.color||'').localeCompare(y.color||''));
+                    let rows;
+                    if (_grp.length <= 1) {
+                        rows = [{ suffix: '', color: (_grp[0] && _grp[0].color) || j.color, finish: (_grp[0] && _grp[0].finish) || j.finish,
+                                  parts: j.totalParts || 0, value: j._estValue || 0, cts: jCts, sqm: parseFloat(j.totalSqm||0), first: true }];
+                    } else {
+                        // Split the job's value by each colour's share of the base price (or m² if no prices)
+                        const _baseSum = _grp.reduce((s, g) => s + g.base, 0);
+                        const _sqmSum = _grp.reduce((s, g) => s + g.sqm, 0);
+                        const _jobSqm = parseFloat(j.totalSqm || 0);
+                        rows = _grp.map((g, gi) => {
+                            const share = _baseSum > 0 ? g.base / _baseSum : (_sqmSum > 0 ? g.sqm / _sqmSum : 1 / _grp.length);
+                            const sq = _sqmSum > 0 && _jobSqm > 0 ? _jobSqm * (g.sqm / _sqmSum) : g.sqm;
+                            return { suffix: _sfx[gi] !== undefined ? _sfx[gi] : String(gi), color: g.color, finish: g.finish,
+                                     parts: g.parts, value: (j._estValue || 0) * share, cts: g.cts, sqm: sq, first: gi === 0 };
+                        });
+                    }
+                    const _multi = rows.length > 1;
+                    return rows.map(r => {
+                    const i = _ri++;
+                    const _bg = i%2?'#f9f9f9':'#fff';
+                    const _link = _multi ? `border-left:3px solid #2196f3;` : '';
+                    return `<tr style="background:${_bg}; color:#000; border-bottom:1px solid ${_multi && !r.first ? '#f4f4f4' : '#eee'};">
+                    <td style="padding:6px 8px; font-weight:900; color:#000; ${_link}">${j.jobNum||'   '}${r.suffix}</td>
                     <td style="padding:6px 8px; color:#000;">${j.client||'   '}</td>
                     <td style="padding:6px 8px; color:#000;">${j.jobName||'   '}</td>
-                    <td style="padding:6px 8px; color:#000;">${j.color||'   '}</td>
-                    <td style="padding:6px 8px; color:#000;">${j.finish||'   '}</td>
-                    <td style="padding:6px 8px; text-align:right; color:#000;">${j.totalParts||0}</td>
-                    <td style="padding:6px 8px; text-align:right; font-weight:900; color:#2196f3;" title="${j._estFromCharges ? 'From the saved estimate total incl. charges (ex GST)' : 'Base price only — no charges applied yet (ex GST)'}">${(j._estValue||0).toFixed(0)}${j._estFromCharges ? '' : '<span style="color:#ff9500;">*</span>'}</td>
-                    <td style="padding:6px 8px; text-align:right; font-weight:900; color:#2c3e50;">${jCts>0?'$'+jCts.toFixed(0):'-'}</td>
-                    <td style="padding:6px 8px; text-align:right; font-weight:900; color:#000;">${parseFloat(j.totalSqm||0).toFixed(2)}</td>
+                    <td style="padding:6px 8px; color:#000;">${r.color||'   '}</td>
+                    <td style="padding:6px 8px; color:#000;">${r.finish||'   '}</td>
+                    <td style="padding:6px 8px; text-align:right; color:#000;">${r.parts}</td>
+                    <td style="padding:6px 8px; text-align:right; font-weight:900; color:#2196f3;" title="${j._estFromCharges ? 'From the saved estimate total incl. charges (ex GST)' : 'Base price only — no charges applied yet (ex GST)'}${_multi ? ' — this colour\'s share of the job' : ''}">${(r.value||0).toFixed(0)}${j._estFromCharges ? '' : '<span style="color:#ff9500;">*</span>'}</td>
+                    <td style="padding:6px 8px; text-align:right; font-weight:900; color:#2c3e50;">${r.cts>0?'$'+r.cts.toFixed(0):'-'}</td>
+                    <td style="padding:6px 8px; text-align:right; font-weight:900; color:#000;">${(r.sqm||0).toFixed(2)}</td>
                     <td style="padding:6px 8px; color:#000;">${j.dateReceived||'   '}</td>
-                    <td style="padding:6px 8px; color:${j.completed ? '#2e7d32' : '#bbb'}; font-weight:${j.completed ? '700' : '400'};">${(() => { const c = pwJobCompletedOn(j); return c ? c.toLocaleDateString('en-AU', { day:'2-digit', month:'2-digit', year:'2-digit' }) : '—'; })()}</td>
-                    <td style="padding:6px 8px; text-align:right;">${_daysCell}</td>
-                </tr>`;}).join('')}
+                    <td style="padding:6px 8px; color:${j.completed ? '#2e7d32' : '#bbb'}; font-weight:${j.completed ? '700' : '400'};">${_closedTxt}</td>
+                    <td style="padding:6px 8px; text-align:right;">${r.first ? _daysCell : '<span style="color:#bbb;">″</span>'}</td>
+                </tr>`;}).join('');
+                    }).join('');
+                })()}
                 </tbody>
                 <tfoot><tr style="background:#e3f2fd; font-weight:900; color:#000;">
                     <td colspan="5" style="padding:7px 8px; color:#000;">TOTALS</td>
@@ -21894,7 +21944,7 @@ const firebaseConfig = {
                 </tr></tfoot>
             </table>
             </div>
-            <div style="font-size:9px; color:#888; margin-top:6px;">Est. Value is ex GST and includes applied charges (surcharges, delivery, courier, other) and the small job setup fee where it applies. <span style="color:#ff9500; font-weight:900;">*</span> = no charges applied yet, base price only.</div>
+            <div style="font-size:9px; color:#888; margin-top:6px;">Est. Value is ex GST and includes applied charges (surcharges, delivery, courier, other) and the small job setup fee where it applies. <span style="color:#ff9500; font-weight:900;">*</span> = no charges applied yet, base price only. Jobs with more than one colour show one row per colour (#, #A, #B…) with the job's value split between them.</div>
         </div>
 
         <!-- Row 7+8: Estimated Job Value + Paint Base Cost — 50/50 -->
@@ -22419,7 +22469,7 @@ const firebaseConfig = {
                 jobs.forEach(job => {
                     (job.items || []).forEach(item => {
                         const col = item.color || job.color || '';
-                        const sqm = parseFloat(item.sqm) || 0;
+                        const sqm = pwItemSqm(item);
                         const fin = (item.finish || job.finish || '').toLowerCase();
                         const rate = fin === 'matt' ? (parseFloat(CR3.matt)||5) : fin === 'gloss' ? (parseFloat(CR3.gloss)||5) : (parseFloat(CR3.satin)||5);
                         const litres = sqm / rate;
@@ -22736,7 +22786,7 @@ const firebaseConfig = {
         const deduct = (key, litres) => { stock[key] = Math.max(0, (parseFloat(stock[key])||0) - litres); };
 
         (jobData.items || []).forEach(item => {
-            const sqm = parseFloat(item.sqm) || 0;
+            const sqm = pwItemSqm(item);
             const col = item.color || jobData.color || '';
             const fin = (item.finish || jobData.finish || '').toLowerCase();
             if (col.toLowerCase().includes('clear')) {
@@ -23219,14 +23269,22 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 const _localH = JSON.parse(localStorage.getItem('jobHistory') || '[]');
                 const _memH = window._reportJobs || [];
                 const _allH = _localH.length >= _memH.length ? _localH : _memH;
-                const _dup = _allH.find(j => String(j.jobNum) === String(_saveJobNum));
+                // v1.16.466: look in the full saved history first — _reportJobs is only the jobs in the last report
+                const _dup = _localH.find(j => String(j.jobNum) === String(_saveJobNum)) || _memH.find(j => String(j.jobNum) === String(_saveJobNum));
                 const _isEditing = _dup && (
                     (_dup.id && _dup.id === currentEditingJobId) ||
                     (currentEditingJobIndex !== null && _allH[currentEditingJobIndex]?.jobNum === _saveJobNum)
                 );
                 if (_dup && !_isEditing) {
-                    const _proceed = confirm('WARNING: Job #' + _saveJobNum + ' already exists for ' + _dup.client + '. Saving will OVERWRITE that job and lose its parts. Continue anyway?');
-                    if (!_proceed) return;
+                    // v1.16.466: say what will actually happen.
+                    // Same client + still active -> the save asks "Replace it?" next (one question, not two).
+                    // Different client or completed -> the save is blocked, so say so and stop here.
+                    const _cliNow = (document.getElementById('cli')?.value || '').trim().toLowerCase();
+                    const _sameCli = (_dup.client || '').trim().toLowerCase() === _cliNow;
+                    if (!_sameCli || _dup.completed) {
+                        alert('Job #' + _saveJobNum + ' is already used by another job:\n\n' + (_dup.client || '') + (_dup.jobName ? ' – ' + _dup.jobName : '') + (_dup.completed ? ' (completed)' : '') + '\n\nChange the job number (e.g. ' + _saveJobNum + 'A) and save again.');
+                        return;
+                    }
                 }
             }
         } catch(e) { console.warn('Duplicate check error:', e); }
@@ -25524,23 +25582,23 @@ if ('serviceWorker' in navigator && _swAllowed) {
                         </label>
                         <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
                             <input type="checkbox" class="surcharge-check" data-colour="${colour}" data-type="Standard" data-mult="${cm.Standard !== undefined ? cm.Standard : 0.05}" style="cursor:pointer; width:14px; height:14px;">
-                            <span>Std +${((cm.Standard !== undefined ? cm.Standard : 0.05)*100).toFixed(0)}%</span>
+                            <span>Std ${pwPct(cm.Standard !== undefined ? cm.Standard : 0.05)}</span>
                         </label>
                         <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
                             <input type="checkbox" class="surcharge-check" data-colour="${colour}" data-type="Light" data-mult="${cm.Light !== undefined ? cm.Light : 0.05}" style="cursor:pointer; width:14px; height:14px;">
-                            <span>Light +${((cm.Light !== undefined ? cm.Light : 0.05)*100).toFixed(0)}%</span>
+                            <span>Light ${pwPct(cm.Light !== undefined ? cm.Light : 0.05)}</span>
                         </label>
                         <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
                             <input type="checkbox" class="surcharge-check" data-colour="${colour}" data-type="Dark" data-mult="${cm.Dark !== undefined ? cm.Dark : 0.15}" style="cursor:pointer; width:14px; height:14px;">
-                            <span>Dark +${((cm.Dark !== undefined ? cm.Dark : 0.15)*100).toFixed(0)}%</span>
+                            <span>Dark ${pwPct(cm.Dark !== undefined ? cm.Dark : 0.15)}</span>
                         </label>
                         <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
                             <input type="checkbox" class="surcharge-check" data-colour="${colour}" data-type="ExtraTint" data-mult="${cm['Extra Tint'] !== undefined ? cm['Extra Tint'] : 0.3}" style="cursor:pointer; width:14px; height:14px;">
-                            <span>Tint +${((cm['Extra Tint'] !== undefined ? cm['Extra Tint'] : 0.3)*100).toFixed(0)}%</span>
+                            <span>Tint ${pwPct(cm['Extra Tint'] !== undefined ? cm['Extra Tint'] : 0.3)}</span>
                         </label>
                         <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
-                            <input type="checkbox" class="surcharge-check" data-colour="${colour}" data-type="Undercoat" data-mult="${cm.Undercoat || 0.8}" style="cursor:pointer; width:14px; height:14px;">
-                            <span>UC +${((cm.Undercoat||0.8)*100).toFixed(0)}%</span>
+                            <input type="checkbox" class="surcharge-check" data-colour="${colour}" data-type="Undercoat" data-mult="${(cm.Undercoat !== undefined && !isNaN(parseFloat(cm.Undercoat))) ? cm.Undercoat : 0.8}" style="cursor:pointer; width:14px; height:14px;">
+                            <span>UC ${pwPct((cm.Undercoat !== undefined && !isNaN(parseFloat(cm.Undercoat))) ? cm.Undercoat : 0.8)}</span>
                         </label>
                         <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
                             <input type="checkbox" class="surcharge-check" data-colour="${colour}" data-type="ColourMatch" data-mult="1.3" style="cursor:pointer; width:14px; height:14px;">
@@ -25831,16 +25889,17 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 label = `Clear Coat $${clearRate}/sqm`;
             } else if (type === 'Undercoat') {
                 // Undercoat: 80% of the profile-rated price (colourSubtotal already uses profile rate)
-                const ucRate = cm.Undercoat || 0.80;
+                // v1.16.466: use the setting as entered — 0 stays 0, a negative figure gives a discount
+                const ucRate = (cm.Undercoat !== undefined && !isNaN(parseFloat(cm.Undercoat))) ? parseFloat(cm.Undercoat) : 0.80;
                 amount = colourSubtotal * ucRate;
-                label = `Undercoat ${(ucRate*100).toFixed(0)}% of profile rate`;
+                label = `Undercoat ${pwPct(ucRate)} of profile rate`;
             } else if (type === 'ColourMatch') {
                 amount = chargesData.colourMatchFlatRate || 90;
                 label = `Colour Match $${amount.toFixed(2)}`;
             } else {
                 // Standard/Light/Dark/ExtraTint: percentage of colour subtotal
                 amount = colourSubtotal * mult;
-                label = `${type} +${(mult*100).toFixed(0)}%`;
+                label = `${type} ${pwPct(mult)}`;
             }
             
             colourSurcharges[colour].push({ type, amount, label });
@@ -32123,7 +32182,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
 
         (jobData.items || []).forEach(item => {
             const col = item.color || jobData.color || '';
-            const sqm = parseFloat(item.sqm) || 0;
+            const sqm = pwItemSqm(item);
             const fin = (item.finish || jobData.finish || '').toLowerCase();
             const rate = fin === 'matt' ? (parseFloat(CR.matt)||5) : fin === 'gloss' ? (parseFloat(CR.gloss)||5) : satRate;
             const litres = sqm / rate;
