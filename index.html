@@ -45,6 +45,7 @@ function pwRealDate(v){ // v1.16.466: true if v is a real calendar date (DD/MM/Y
   else { m = String(v||'').trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); if (!m) return false; y=+m[1]; mo=+m[2]; d=+m[3]; }
   var t = new Date(y, mo-1, d); return t.getFullYear()===y && t.getMonth()===mo-1 && t.getDate()===d && y >= 2000 && y <= 2100; }
 function pwClosest(t, sel){ try { if (t && t.nodeType !== 1) t = t.parentElement; return (t && t.closest) ? t.closest(sel) : null; } catch(e) { return null; } } // v1.16.470: event target can be the page itself or a text node (seen in the Facebook in-app browser) — e.target.closest threw
+function pwJobSchedFinish(j){ try { var t = (j && (j.scheduledFinish || (typeof getScheduledFinishDate === 'function' ? getScheduledFinishDate(j.dateReceived, j.timeline) : null))) || ''; if (!t) return null; var m = String(t).match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/); if (!m) return null; var y = +m[3]; if (y < 100) y += 2000; var d = new Date(y, +m[2]-1, +m[1]); return isNaN(d) ? null : d; } catch(e) { return null; } } // v1.16.472: a job's scheduled finish as a date (saved value, else worked out from received + timeline)
 function pwToday(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 window.pwToday = pwToday;
 </script>
@@ -82,7 +83,7 @@ window.pwToday = pwToday;
 </script>
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.471'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.472'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -3901,7 +3902,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.471</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.472</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-03-25</div>
                         </div>
                     </div>
@@ -4934,7 +4935,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.471</span><span style="color:#d4af37; font-weight:900;" id="versionDate"></span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.472</span><span style="color:#d4af37; font-weight:900;" id="versionDate"></span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);if(typeof tab==='function')tab('measure');setTimeout(function(){if(typeof startTour==='function')startTour();},300);" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -21391,7 +21392,7 @@ const firebaseConfig = {
             window._jbSort.dir = window._jbSort.dir === 'asc' ? 'desc' : 'asc';
         } else {
             window._jbSort.key = key;
-            const numKeys = ['totalParts','_estValue','totalSqm','_cts','jobNum','dateReceived','_closed'];
+            const numKeys = ['totalParts','_estValue','totalSqm','_cts','jobNum','dateReceived','_sched','_closed'];
             window._jbSort.dir = numKeys.includes(key) ? 'desc' : 'asc';
         }
         buildReportsRunning = false; // allow immediate rebuild
@@ -21788,6 +21789,7 @@ const firebaseConfig = {
                 let av = a[k], bv = b[k];
                 if (k === 'dateReceived') { av = parseReportDate(a.dateReceived)?.getTime()||0; bv = parseReportDate(b.dateReceived)?.getTime()||0; }
                 else if (k === '_closed') { av = pwJobCompletedOn(a)?.getTime()||0; bv = pwJobCompletedOn(b)?.getTime()||0; }
+                else if (k === '_sched') { av = pwJobSchedFinish(a)?.getTime()||0; bv = pwJobSchedFinish(b)?.getTime()||0; }
                 else if (k === 'color') { // v1.16.466: sort by the job's first colour (A–Z), as shown on its first row
                     const _fc = j => { const cs = (j.items||[]).map(it => (it.color || it.colour || '')).filter(Boolean).sort((x,y)=>x.localeCompare(y)); return (cs[0] || j.color || '').toLowerCase(); };
                     av = _fc(a); bv = _fc(b); }
@@ -21996,6 +21998,7 @@ const firebaseConfig = {
                     <th onclick="sortJobBreakdown('_cts')" style="padding:7px 8px; text-align:right; cursor:pointer; user-select:none;" title="Sort by CTS">CTS ${_jbSortArrow('_cts')}</th>
                     <th onclick="sortJobBreakdown('totalSqm')" style="padding:7px 8px; text-align:right; cursor:pointer; user-select:none;" title="Sort by SQM">SQM ${_jbSortArrow('totalSqm')}</th>
                     <th onclick="sortJobBreakdown('dateReceived')" style="padding:7px 8px; text-align:left; cursor:pointer; user-select:none;" title="Sort by date received">Received ${_jbSortArrow('dateReceived')}</th>
+                    <th onclick="sortJobBreakdown('_sched')" style="padding:7px 8px; text-align:left; cursor:pointer; user-select:none;" title="Scheduled finish date (from the job's schedule). Red = finished late or now overdue, green = finished on time.">Sched. Finish ${_jbSortArrow('_sched')}</th>
                     <th onclick="sortJobBreakdown('_closed')" style="padding:7px 8px; text-align:left; cursor:pointer; user-select:none;" title="Sort by date completed (closed)">Closed ${_jbSortArrow('_closed')}</th>
                     <th onclick="sortJobBreakdown('_workDays')" style="padding:7px 8px; text-align:right; cursor:pointer; user-select:none;" title="Working days from received to completed (excludes shop closures). Sort to find jobs that blew out the average.">Days ${_jbSortArrow('_workDays')}</th>
                 </tr></thead>
@@ -22068,6 +22071,16 @@ const firebaseConfig = {
                     <td style="padding:6px 8px; text-align:right; font-weight:900; color:#2c3e50;">${r.cts>0?'$'+r.cts.toFixed(0):'-'}</td>
                     <td style="padding:6px 8px; text-align:right; font-weight:900; color:#000;">${(r.sqm||0).toFixed(2)}</td>
                     <td style="padding:6px 8px; color:#000;">${(() => { const d = parseReportDate(j.dateReceived); return d && !isNaN(d) ? d.toLocaleDateString('en-AU', { day:'2-digit', month:'2-digit', year:'numeric' }) : (j.dateReceived || '   '); })()}</td>
+                    <td style="padding:6px 8px; white-space:nowrap;">${(() => {
+                        // v1.16.472: scheduled finish — red if it finished late or is overdue, green if finished on time
+                        const sd = pwJobSchedFinish(j); if (!sd) return '<span style="color:#bbb;">—</span>';
+                        const txt = sd.toLocaleDateString('en-AU', { day:'2-digit', month:'2-digit', year:'numeric' });
+                        const cd = pwJobCompletedOn(j); const today = new Date(); today.setHours(0,0,0,0);
+                        let col = '#000', w = '400', tip = 'Scheduled finish';
+                        if (j.completed && cd) { const c0 = new Date(cd); c0.setHours(0,0,0,0); if (c0 > sd) { col = '#c62828'; w = '900'; tip = 'Finished after the scheduled date'; } else { col = '#2e7d32'; w = '700'; tip = 'Finished on time'; } }
+                        else if (!j.completed && today > sd) { col = '#c62828'; w = '900'; tip = 'Overdue — past the scheduled finish'; }
+                        return '<span style="color:' + col + '; font-weight:' + w + ';" title="' + tip + '">' + txt + '</span>';
+                    })()}</td>
                     <td style="padding:6px 8px; color:${j.completed ? '#2e7d32' : '#bbb'}; font-weight:${j.completed ? '700' : '400'};">${_closedTxt}</td>
                     <td style="padding:6px 8px; text-align:right;">${r.first ? _daysCell : '<span style="color:#bbb;">″</span>'}</td>
                 </tr>`;}).join('');
@@ -22080,7 +22093,7 @@ const firebaseConfig = {
                     <td style="padding:7px 8px; text-align:right; font-weight:900; color:#2196f3;">${totalValue.toFixed(0)}</td>
                     <td style="padding:7px 8px; text-align:right; font-weight:900; color:#2c3e50;">${totalCtsRevenue>0?'$'+totalCtsRevenue.toFixed(0):'-'}</td>
                     <td style="padding:7px 8px; text-align:right; color:#000;">${totalSqm.toFixed(2)}</td>
-                    <td></td>
+                    <td></td><td></td>
                     <td style="padding:7px 8px; text-align:right; font-size:9px; color:#00838f;">avg</td>
                     <td style="padding:7px 8px; text-align:right; font-weight:900; color:#00838f;">${_avgDays !== null ? _avgDays + 'd' : '—'}</td>
                 </tr></tfoot>
