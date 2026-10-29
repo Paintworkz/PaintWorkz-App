@@ -83,7 +83,7 @@ window.pwToday = pwToday;
 </script>
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.472-dev'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.473-dev'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     const VERSION_KEY = 'paintworkz_version';
 
@@ -1677,7 +1677,7 @@ window.getTooltipKey = getTooltipKey;
 </script>
 </head>
 <body>
-<div id="devBanner">🚧 DEVELOPMENT VERSION — LIVE DATA — v1.16.472-dev (open in Incognito / separate browser) 🚧</div>
+<div id="devBanner">🚧 DEVELOPMENT VERSION — LIVE DATA — v1.16.473-dev (open in Incognito / separate browser) 🚧</div>
 
 
 <!-- COPYRIGHT NOTICE -->
@@ -3190,7 +3190,7 @@ const firebaseConfig = {
     <div style="display:flex; gap:8px; align-items:center;">
         <div id="freePlanHeaderBadge" style="display:none; flex-direction:column; align-items:flex-end; gap:1px;">
             <span id="freePlanHeaderText" style="font-size:9px; color:#d4af37; font-weight:900; white-space:nowrap;"></span>
-            <button onclick="window.open('https://paintworkzpro.com/#pricing','_blank')" style="background:#d4af37;color:#000;border:none;padding:1px 8px;border-radius:4px;font-weight:900;font-size:9px;cursor:pointer;white-space:nowrap;">Upgrade</button>
+            <button onclick="window.open('https://paintworkzpro.com.au/#pricing','_blank')" style="background:#d4af37;color:#000;border:none;padding:1px 8px;border-radius:4px;font-weight:900;font-size:9px;cursor:pointer;white-space:nowrap;">Upgrade</button>
         </div>
         <div id="goBackBtn" class="icon-btn" onclick="goBackJob()" style="display:none;" title="Exit without saving if no changes made">← Back</div>
         <div class="icon-btn" onclick="if(Date.now()-(window._pwModalClosedAt||0)<700)return;saveJob()">💾</div>
@@ -3904,7 +3904,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.472</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.473</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;">2026-03-25</div>
                         </div>
                     </div>
@@ -4836,7 +4836,7 @@ const firebaseConfig = {
                         </div>
                     </div>
                     <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                        <a href="https://paintworkzpro.com/pricing.html" target="_blank" style="display:inline-flex; align-items:center; gap:5px; background:#3a3a3c; color:#fff; padding:8px 12px; border-radius:6px; font-weight:900; font-size:10px; text-decoration:none;">🌐 Full Pricing Details</a>
+                        <a href="https://paintworkzpro.com.au/pricing.html" target="_blank" style="display:inline-flex; align-items:center; gap:5px; background:#3a3a3c; color:#fff; padding:8px 12px; border-radius:6px; font-weight:900; font-size:10px; text-decoration:none;">🌐 Full Pricing Details</a>
                         <a href="mailto:support@paintworkzpro.com.au" style="display:inline-flex; align-items:center; gap:5px; background:#3a3a3c; color:#fff; padding:8px 12px; border-radius:6px; font-weight:900; font-size:10px; text-decoration:none;">📧 Billing Support</a>
                     </div>
                     <p style="font-size:9px; color:#666; margin:10px 0 0 0;">Prices in AUD exc. GST. GST added at checkout. Payments processed securely by Paddle. Cancel anytime.</p>
@@ -4937,7 +4937,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.472</span><span style="color:#d4af37; font-weight:900;" id="versionDate"></span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.473</span><span style="color:#d4af37; font-weight:900;" id="versionDate"></span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);if(typeof tab==='function')tab('measure');setTimeout(function(){if(typeof startTour==='function')startTour();},300);" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -5468,19 +5468,59 @@ const firebaseConfig = {
 
     const FREE_JOB_LIMIT = 3;
 
+    // v1.16.473: the free plan counts every job ever saved (job # + client), not just the jobs still in
+    // History — deleting a job no longer frees a slot. The list is kept on the device and in the cloud
+    // (users/{uid}/appData/freeUsage) so it survives a new phone or a cleared browser.
+    function _pwFreeKey(j) {
+        return (String(j.jobNum || '').trim() + '|' + String(j.client || '').trim()).toLowerCase();
+    }
+    function _pwFreeCountable(j) {
+        if (!j) return false;
+        if (j.id && String(j.id).startsWith('demo-')) return false;          // sample jobs
+        const jn = String(j.jobNum || '');
+        if (jn === '1001' || jn === '1002' || jn === '1003') return false;   // sample job numbers
+        if (!j.jobNum && !j.client && !j.jobName) return false;             // empty placeholder
+        return true;
+    }
+    function _pwFreeLsKey() { const u = window.currentUser && window.currentUser.uid; return u ? 'pw_free_used_' + u : null; }
+    function _pwFreeStored() { const k = _pwFreeLsKey(); if (!k) return []; try { const v = JSON.parse(localStorage.getItem(k) || '[]'); return Array.isArray(v) ? v : []; } catch(e) { return []; } }
     function getFreeJobCount() {
         const history = JSON.parse(localStorage.getItem('jobHistory')) || [];
-        return history.filter(j => {
-            // Exclude demo jobs by ID prefix
-            if (j.id && j.id.startsWith('demo-')) return false;
-            // Exclude demo jobs by jobNum (1001-1003 are reserved for demo)
-            const jn = String(j.jobNum || '');
-            if (jn === '1001' || jn === '1002' || jn === '1003') return false;
-            // Exclude jobs with no jobNum and no meaningful data (empty placeholder jobs)
-            if (!j.jobNum && !j.client && !j.jobName) return false;
-            return true;
-        }).length;
+        const used = new Set(_pwFreeStored());
+        const before = used.size;
+        history.filter(_pwFreeCountable).forEach(j => used.add(_pwFreeKey(j)));
+        if (used.size !== before && getPlan() === 'free') {
+            const k = _pwFreeLsKey();
+            if (k) { try { localStorage.setItem(k, JSON.stringify([...used])); } catch(e) {} }
+            _pwFreeCloudSave([...used]);
+        }
+        return used.size;
     }
+    function _pwFreeCloudSave(list) {
+        clearTimeout(window._pwFreeSaveT);
+        window._pwFreeSaveT = setTimeout(function(){
+            try {
+                if (!window.currentUser || !window.firebaseDb || !window.setDoc || !window.doc) return;
+                window.setDoc(window.doc(window.firebaseDb, 'users', pwSafeUid(), 'appData', 'freeUsage'), { jobs: list, updated: new Date().toISOString() }, { merge: true }).catch(function(){});
+            } catch(e) {}
+        }, 800);
+    }
+    // Once per sign-in: merge the cloud list into this device's list
+    function _pwFreeCloudLoad() {
+        const u = window.currentUser && window.currentUser.uid;
+        if (!u || window._pwFreeLoadedFor === u || !window.firebaseDb || !window.getDoc || !window.doc) return;
+        window._pwFreeLoadedFor = u;
+        window.getDoc(window.doc(window.firebaseDb, 'users', pwSafeUid(), 'appData', 'freeUsage')).then(function(snap){
+            const cloud = (snap && snap.exists && snap.exists() && Array.isArray(snap.data().jobs)) ? snap.data().jobs : [];
+            const merged = new Set(_pwFreeStored()); const before = merged.size;
+            cloud.forEach(x => merged.add(x));
+            const k = _pwFreeLsKey();
+            if (k && merged.size !== before) { try { localStorage.setItem(k, JSON.stringify([...merged])); } catch(e) {} }
+            if (merged.size > cloud.length) _pwFreeCloudSave([...merged]);
+            if (typeof window.applyProLocks === 'function') window.applyProLocks();
+        }).catch(function(){ window._pwFreeLoadedFor = null; });
+    }
+    window.pwFreeCloudLoad = _pwFreeCloudLoad;
 
     function freeJobLimitReached() {
         if (getPlan() !== 'free') return false;
@@ -5511,7 +5551,7 @@ const firebaseConfig = {
             ? 'This feature requires a\n\n     Solo Plan     $49/mo'
             : 'This feature requires a\n\n    Pro Plan     $99/mo';
         if (confirm(msg + '\n\nOpen pricing page now?')) {
-            window.open('https://paintworkzpro.com/#pricing', '_blank');
+            window.open('https://paintworkzpro.com.au/#pricing', '_blank');
         }
     }
     window.showUpgradePrompt = showUpgradePrompt;
@@ -5552,6 +5592,7 @@ const firebaseConfig = {
         const addPartBtn = document.querySelector('.add-main-btn');
         const limitReached = freeJobLimitReached();
         const isFree = (plan === 'free');
+        if (isFree) _pwFreeCloudLoad(); // v1.16.473
 
         if (isFree && limitReached) {
             // Job limit hit     lock everything
@@ -15243,7 +15284,7 @@ const firebaseConfig = {
         if (_addingPart) return; // prevent double-fire
         _addingPart = true;
         setTimeout(function(){ _addingPart = false; }, 500);
-        if (!canCreateJobs()) { showUpgradePrompt('solo'); return; }
+        if (!canCreateJobs()) { showUpgradePrompt(freeJobLimitReached() ? 'job-limit' : 'solo'); return; } // v1.16.472: say it's the 3-job limit
         
         // Check for bulk colour change BEFORE adding part
         checkBulkColourChange();
@@ -33128,6 +33169,14 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
     const originalSetItem = localStorage.setItem;
     localStorage.setItem = function(key, value) {
         originalSetItem.call(this, key, value);
+        // v1.16.472: keep the free plan's "x/3 jobs used" up to date after every save, delete or sync
+        // (it was only worked out at sign-in, so it stayed at 0/3)
+        if (key === 'jobHistory' && window.currentUser) {
+            clearTimeout(window._pwFreeCountT);
+            window._pwFreeCountT = setTimeout(function(){
+                try { if (typeof window.getPlan === 'function' && window.getPlan() === 'free' && typeof window.applyProLocks === 'function') window.applyProLocks(); } catch(e) {}
+            }, 400);
+        }
         
         // Whenever jobHistory is updated, sync to Firebase
         // BUT skip if this write is coming FROM the cloud snapshot (avoid upload loop)
