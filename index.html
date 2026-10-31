@@ -49,6 +49,13 @@ function pwJobSchedFinish(j){ try { var t = (j && (j.scheduledFinish || (typeof 
 function pwTapStart(e){ try { var t = e.touches && e.touches[0]; window._pwTap = t ? { x: t.clientX, y: t.clientY, at: Date.now() } : null; } catch(_) {} } // v1.16.475: a tap only counts if the finger didn't move — swiping/scrolling over a button or chart cell no longer presses it
 function pwTapEnd(e, fn){ try { var s = window._pwTap; window._pwTap = null; var t = e.changedTouches && e.changedTouches[0]; if (!s || !t) return; if (Math.abs(t.clientX - s.x) > 10 || Math.abs(t.clientY - s.y) > 10 || Date.now() - s.at > 800) return; e.preventDefault(); window._lastPhaseTouch = Date.now(); fn(); } catch(_) {} }
 function pwBuildDateText(){ try { var p = String(window.PW_BUILD_DATE || '').split('-'); if (p.length !== 3) return ''; return 'Updated ' + new Date(+p[0], +p[1]-1, +p[2]).toLocaleDateString('en-AU', { day:'numeric', month:'short', year:'numeric' }); } catch(e) { return ''; } }
+// v1.16.477: job stages can be 0 days (e.g. a scuff-and-recoat skips Sand 1st + Undercoat). 0 means skipped;
+// the fallback is only used when a stage is missing, and it now matches the built-in default timeline.
+var PW_STAGE_KEYS = ['measuring','sanding1','undercoat','sanding2','topcoat','inspect','complete'];
+var PW_STAGE_DEFAULT = { measuring:1, sanding1:6, undercoat:2, sanding2:5, topcoat:3, inspect:2, complete:1 };
+function pwStageDays(tl, k){ var v = tl ? tl[k] : undefined; var n = (v === '' || v === null || v === undefined) ? NaN : Number(v); return (isFinite(n) && n >= 0) ? Math.round(n) : PW_STAGE_DEFAULT[k]; }
+function pwStageSkipped(job, k){ return !!(job && job.timeline && pwStageDays(job.timeline, k) === 0); }
+function pwPhaseDone(job, k){ return !!((job && job.phases && job.phases[k]) || pwStageSkipped(job, k)); }
 function pwToday(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 window.pwToday = pwToday;
 </script>
@@ -86,7 +93,7 @@ window.pwToday = pwToday;
 </script>
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.476'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.477'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     window.PW_BUILD_DATE = '2026-11-01'; // v1.16.476: the date this build was made — update with each build
     const VERSION_KEY = 'paintworkz_version';
@@ -3914,7 +3921,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.476</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.477</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;"></div>
                         </div>
                     </div>
@@ -4801,10 +4808,10 @@ const firebaseConfig = {
                             <div style="font-size:9px; color:#aaa; line-height:1.7; flex:1;">
                                 <div>✓ Up to 3 jobs</div>
                                 <div>✓ Mixing cards</div>
-                                <div>✓ View &amp; print jobs</div>
+                                <div>✓ Supply dockets &amp; labels</div>
+                                <div>✓ A3 schedule</div>
                                 <div>✓ Client database</div>
                                 <div style="color:#e57373;">✗ Quotes/invoices</div>
-                                <div style="color:#e57373;">✗ Supply dockets</div>
                                 <div style="color:#e57373;">✗ Pricing matrix</div>
                             </div>
                             <div style="margin-top:10px; text-align:center; font-size:9px; color:#666; padding:5px; border:1px solid #444; border-radius:6px;" id="freeJobCounter">Always free</div>
@@ -4818,8 +4825,8 @@ const firebaseConfig = {
                                 <div>✓ Everything in Free</div>
                                 <div>✓ Create &amp; edit jobs</div>
                                 <div>✓ Full measure sheet</div>
-                                <div>✓ Supply dockets</div>
-                                <div>✓ A3 schedule</div>
+                                <div>✓ Unlimited jobs</div>
+                                <div>✓ Cloud sync across devices</div>
                                 <div>✓ Paint formula library</div>
                                 <div style="font-size:9px;color:#888;font-style:italic;margin-top:4px;">Perfect for measuring & production — upgrade to Pro for quoting & invoicing</div>
                                 <div style="color:#e57373;">✗ Quotes/invoices</div>
@@ -4947,7 +4954,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.476</span><span style="color:#d4af37; font-weight:900;" id="versionDate"></span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.477</span><span style="color:#d4af37; font-weight:900;" id="versionDate"></span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);if(typeof tab==='function')tab('measure');setTimeout(function(){if(typeof startTour==='function')startTour();},300);" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -20567,8 +20574,8 @@ const firebaseConfig = {
             // ===== Compute completion date for a job =====
             function getCompletionDate(job) {
                 const start = parseAUDate(job.dateReceived) || new Date(schedStart);
-                const tl = job.timeline || { measuring:1, sanding1:4, undercoat:2, sanding2:3, topcoat:2, inspect:2, complete:1 };
-                const totalBiz = (tl.measuring||1)+(tl.sanding1||4)+(tl.undercoat||2)+(tl.sanding2||3)+(tl.topcoat||2)+(tl.inspect||2)+(tl.complete||1);
+                const tl = job.timeline || PW_STAGE_DEFAULT;
+                const totalBiz = PW_STAGE_KEYS.reduce((t, k) => t + pwStageDays(tl, k), 0); // v1.16.477: 0 = skipped stage
                 return addBizDays(start, totalBiz);
             }
 
@@ -20827,8 +20834,8 @@ const firebaseConfig = {
                 }
 
                 // compute per-phase working-day boundaries
-                var _jtl=_job2.timeline||{measuring:1,sanding1:4,undercoat:2,sanding2:3,topcoat:2,inspect:2,complete:1};
-                var _jdurs2=[_jtl.measuring||1,_jtl.sanding1||4,_jtl.undercoat||2,_jtl.sanding2||3,_jtl.topcoat||2,_jtl.inspect||2,_jtl.complete||1];
+                var _jtl=_job2.timeline||PW_STAGE_DEFAULT;
+                var _jdurs2=PW_STAGE_KEYS.map(function(k){ return pwStageDays(_jtl, k); }); // v1.16.477: 0 = skipped stage
                 // cumulative end working days per phase
                 var _jends=[], _cumul=0;
                 for (var _pi3=0; _pi3<7; _pi3++) { _cumul+=_jdurs2[_pi3]; _jends.push(_cumul); }
@@ -21615,8 +21622,8 @@ const firebaseConfig = {
             const parts = parseInt(job.totalParts) || 0;
             totalSqm += sqm;
             // Phase completion: if these tasks are ticked in schedule, skip those quantities
-            const _ucDone  = !!(job.phases && job.phases.undercoat);  // undercoat already applied
-            const _tcDone  = !!(job.phases && job.phases.topcoat);    // topcoat already applied
+            const _ucDone  = pwPhaseDone(job, 'undercoat');  // undercoat already applied (or skipped — v1.16.477)
+            const _tcDone  = pwPhaseDone(job, 'topcoat');    // topcoat already applied (or skipped)
             totalParts += parts;
             // Estimate job value from items
             var _jv=0;
@@ -21775,7 +21782,7 @@ const firebaseConfig = {
         // Undercoat: coloured sqm uses ucRate, clear sqm uses ucClearRate
         // ucPendingSqm excludes jobs where undercoat is already done (ticked in schedule)
         const ucPendingSqm = jobs.reduce((acc, j) => {
-            if (j.phases && j.phases.undercoat) return acc; // already done
+            if (pwPhaseDone(j, 'undercoat')) return acc; // already done, or skipped (v1.16.477)
             return acc + (parseFloat(j.totalSqm) || 0);
         }, 0);
         const colouredPendingSqm = ucPendingSqm - clearSqm;
@@ -23907,13 +23914,14 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 
                 // Calculate cumulative phase boundaries (durations, not end days)
                 // Since timeline values are DURATIONS, calculate running totals
-                const measuringDays = jobTimeline.measuring || 1;
-                const sanding1Days = jobTimeline.sanding1 || 4;
-                const undercoatDays = jobTimeline.undercoat || 2;
-                const sanding2Days = jobTimeline.sanding2 || 3;
-                const topCoatDays = jobTimeline.topcoat || 2;
-                const inspectDays = jobTimeline.inspect || 2;
-                const completeDays = jobTimeline.complete || 1;
+                // v1.16.477: a stage set to 0 is skipped (it gets no days on the chart)
+                const measuringDays = pwStageDays(jobTimeline, 'measuring');
+                const sanding1Days = pwStageDays(jobTimeline, 'sanding1');
+                const undercoatDays = pwStageDays(jobTimeline, 'undercoat');
+                const sanding2Days = pwStageDays(jobTimeline, 'sanding2');
+                const topCoatDays = pwStageDays(jobTimeline, 'topcoat');
+                const inspectDays = pwStageDays(jobTimeline, 'inspect');
+                const completeDays = pwStageDays(jobTimeline, 'complete');
                 
                 // Calculate running totals (cumulative end days)
                 const measuringEnd = measuringDays;
@@ -24023,34 +24031,34 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 
                 ganttHTML += '</div>';  // Close timeline bars row
                 ganttHTML += `<div style="display:flex; gap:8px; padding:4px 6px; background:transparent; flex-wrap:wrap; align-items:center;">
-                        <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
+${pwStageSkipped(job, 'measuring') ? '' : `                        <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
                             <input type="checkbox" ${job.phases && job.phases.measuring ? 'checked' : ''} onchange="toggleJobPhaseById(${pwQ(job.jobNum)}, ${pwQ(job.dateReceived)}, ${pwQ(job.client)}, 'measuring')" style="width:13px; height:13px; cursor:pointer;">
                             <span>M</span>
-                        </label>
-                        <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
+                        </label>`}
+${pwStageSkipped(job, 'sanding1') ? '' : `                        <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
                             <input type="checkbox" ${job.phases && job.phases.sanding1 ? 'checked' : ''} onchange="toggleJobPhaseById(${pwQ(job.jobNum)}, ${pwQ(job.dateReceived)}, ${pwQ(job.client)}, 'sanding1')" style="width:13px; height:13px; cursor:pointer;">
                             <span>S1</span>
-                        </label>
-                        <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
+                        </label>`}
+${pwStageSkipped(job, 'undercoat') ? '' : `                        <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
                             <input type="checkbox" ${job.phases && job.phases.undercoat ? 'checked' : ''} onchange="toggleJobPhaseById(${pwQ(job.jobNum)}, ${pwQ(job.dateReceived)}, ${pwQ(job.client)}, 'undercoat')" style="width:13px; height:13px; cursor:pointer;">
                             <span>U</span>
-                        </label>
-                        <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
+                        </label>`}
+${pwStageSkipped(job, 'sanding2') ? '' : `                        <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
                             <input type="checkbox" ${job.phases && job.phases.sanding2 ? 'checked' : ''} onchange="toggleJobPhaseById(${pwQ(job.jobNum)}, ${pwQ(job.dateReceived)}, ${pwQ(job.client)}, 'sanding2')" style="width:13px; height:13px; cursor:pointer;">
                             <span>S2</span>
-                        </label>
-                        <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
+                        </label>`}
+${pwStageSkipped(job, 'topcoat') ? '' : `                        <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
                             <input type="checkbox" ${job.phases && job.phases.topcoat ? 'checked' : ''} onchange="toggleJobPhaseById(${pwQ(job.jobNum)}, ${pwQ(job.dateReceived)}, ${pwQ(job.client)}, 'topcoat')" style="width:13px; height:13px; cursor:pointer;">
                             <span>T</span>
-                        </label>
-                        <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
+                        </label>`}
+${pwStageSkipped(job, 'inspect') ? '' : `                        <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
                             <input type="checkbox" ${job.phases && job.phases.inspect ? 'checked' : ''} onchange="toggleJobPhaseById(${pwQ(job.jobNum)}, ${pwQ(job.dateReceived)}, ${pwQ(job.client)}, 'inspect')" style="width:13px; height:13px; cursor:pointer;">
                             <span>I</span>
-                        </label>
-                        <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
+                        </label>`}
+${pwStageSkipped(job, 'complete') ? '' : `                        <label style="display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; cursor:pointer;">
                             <input type="checkbox" ${job.phases && job.phases.complete ? 'checked' : ''} onchange="toggleJobPhaseById(${pwQ(job.jobNum)}, ${pwQ(job.dateReceived)}, ${pwQ(job.client)}, 'complete')" style="width:13px; height:13px; cursor:pointer;">
                             <span>C</span>
-                        </label>
+                        </label>`}
                         <button onclick="markJobComplete(${originalIdx})" style="border:none; background:#34c759; color:#fff; padding:4px 10px; border-radius:4px; font-weight:900; font-size:9px; cursor:pointer;">    DONE</button>
                         </div>
                     </div>
@@ -24553,7 +24561,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
         }
         
         // Check if all phases are complete
-        if (!job.phases || !job.phases.measuring || !job.phases.sanding || !job.phases.topcoat || !job.phases.inspect || !job.phases.complete) {
+        if (!PW_STAGE_KEYS.every(k => pwPhaseDone(job, k))) { // v1.16.477: skipped stages count as done (was checking a 'sanding' stage that doesn't exist, so it always asked)
             if (!confirm('Not all phases are marked complete. Complete job anyway?')) {
                 return;
             }
@@ -28242,13 +28250,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
         
         // Sum all timeline days
         const totalDays = 
-            (jobTimeline.measuring || 1) +
-            (jobTimeline.sanding1 || 4) +
-            (jobTimeline.undercoat || 2) +
-            (jobTimeline.sanding2 || 3) +
-            (jobTimeline.topcoat || 2) +
-            (jobTimeline.inspect || 2) +
-            (jobTimeline.complete || 1);
+            PW_STAGE_KEYS.reduce((t, k) => t + pwStageDays(jobTimeline, k), 0); // v1.16.477: 0 = skipped stage
         
         // Add working days (skip weekends only, to match Gantt chart)
         const scheduled = new Date(received);
@@ -28283,18 +28285,18 @@ if ('serviceWorker' in navigator && _swAllowed) {
             if (_cEntry && _cEntry.defaultDays === 20) {
                 // Scale up to 20 days: add 5 days spread across sanding1, sanding2, topcoat
                 return Object.assign({}, base, {
-                    sanding1: (base.sanding1 || 4) + 2,
-                    sanding2: (base.sanding2 || 3) + 2,
-                    topcoat:  (base.topcoat  || 2) + 1,
+                    sanding1: pwStageDays(base, 'sanding1') + 2,
+                    sanding2: pwStageDays(base, 'sanding2') + 2,
+                    topcoat:  pwStageDays(base, 'topcoat') + 1,
                 });
             }
         } catch(e) {}
         // SQM trigger — jobs over 30m² get 25-day timeline
         if ((totalSqm || 0) > 30) {
             return Object.assign({}, base, {
-                sanding1: (base.sanding1 || 4) + 2,
-                sanding2: (base.sanding2 || 3) + 2,
-                topcoat:  (base.topcoat  || 2) + 1,
+                sanding1: pwStageDays(base, 'sanding1') + 2,
+                sanding2: pwStageDays(base, 'sanding2') + 2,
+                topcoat:  pwStageDays(base, 'topcoat') + 1,
             });
         }
         return base;
@@ -30467,37 +30469,37 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                 
                 <div style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
                     <label style="font-weight:900; font-size:12px; color:#333;">MEASURE (M)</label>
-                    <input type="number" inputmode="decimal" id="edit_measuring" value="${timelineEditData.measuring || 1}" min="1" max="30" oninput="updateTimelinePreview()" style="width:60px; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:14px; text-align:center; box-sizing:border-box;">
+                    <input type="number" inputmode="decimal" id="edit_measuring" value="${pwStageDays(timelineEditData, 'measuring')}" min="${timelineEditMode === 'default' ? 1 : 0}" max="30" oninput="updateTimelinePreview()" style="width:60px; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:14px; text-align:center; box-sizing:border-box;">
                 </div>
                 
                 <div style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
                     <label style="font-weight:900; font-size:12px; color:#333;">SAND 1ST COAT (S1)</label>
-                    <input type="number" inputmode="decimal" id="edit_sanding1" value="${timelineEditData.sanding1 || 4}" min="1" max="30" oninput="updateTimelinePreview()" style="width:60px; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:14px; text-align:center; box-sizing:border-box;">
+                    <input type="number" inputmode="decimal" id="edit_sanding1" value="${pwStageDays(timelineEditData, 'sanding1')}" min="${timelineEditMode === 'default' ? 1 : 0}" max="30" oninput="updateTimelinePreview()" style="width:60px; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:14px; text-align:center; box-sizing:border-box;">
                 </div>
                 
                 <div style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
                     <label style="font-weight:900; font-size:12px; color:#333;">UNDERCOAT (U)</label>
-                    <input type="number" inputmode="decimal" id="edit_undercoat" value="${timelineEditData.undercoat || 2}" min="1" max="30" oninput="updateTimelinePreview()" style="width:60px; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:14px; text-align:center; box-sizing:border-box;">
+                    <input type="number" inputmode="decimal" id="edit_undercoat" value="${pwStageDays(timelineEditData, 'undercoat')}" min="${timelineEditMode === 'default' ? 1 : 0}" max="30" oninput="updateTimelinePreview()" style="width:60px; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:14px; text-align:center; box-sizing:border-box;">
                 </div>
                 
                 <div style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
                     <label style="font-weight:900; font-size:12px; color:#333;">SAND 2ND COAT (S2)</label>
-                    <input type="number" inputmode="decimal" id="edit_sanding2" value="${timelineEditData.sanding2 || 3}" min="1" max="30" oninput="updateTimelinePreview()" style="width:60px; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:14px; text-align:center; box-sizing:border-box;">
+                    <input type="number" inputmode="decimal" id="edit_sanding2" value="${pwStageDays(timelineEditData, 'sanding2')}" min="${timelineEditMode === 'default' ? 1 : 0}" max="30" oninput="updateTimelinePreview()" style="width:60px; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:14px; text-align:center; box-sizing:border-box;">
                 </div>
                 
                 <div style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
                     <label style="font-weight:900; font-size:12px; color:#333;">TOP COAT (T)</label>
-                    <input type="number" inputmode="decimal" id="edit_topcoat" value="${timelineEditData.topcoat || 2}" min="1" max="30" oninput="updateTimelinePreview()" style="width:60px; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:14px; text-align:center; box-sizing:border-box;">
+                    <input type="number" inputmode="decimal" id="edit_topcoat" value="${pwStageDays(timelineEditData, 'topcoat')}" min="${timelineEditMode === 'default' ? 1 : 0}" max="30" oninput="updateTimelinePreview()" style="width:60px; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:14px; text-align:center; box-sizing:border-box;">
                 </div>
                 
                 <div style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
                     <label style="font-weight:900; font-size:12px; color:#333;">INSPECTION (I)</label>
-                    <input type="number" inputmode="decimal" id="edit_inspect" value="${timelineEditData.inspect || 2}" min="1" max="30" oninput="updateTimelinePreview()" style="width:60px; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:14px; text-align:center; box-sizing:border-box;">
+                    <input type="number" inputmode="decimal" id="edit_inspect" value="${pwStageDays(timelineEditData, 'inspect')}" min="${timelineEditMode === 'default' ? 1 : 0}" max="30" oninput="updateTimelinePreview()" style="width:60px; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:14px; text-align:center; box-sizing:border-box;">
                 </div>
                 
                 <div style="margin-bottom:20px; display:flex; justify-content:space-between; align-items:center;">
                     <label style="font-weight:900; font-size:12px; color:#333;">COMPLETION/DELIVERY (C)</label>
-                    <input type="number" inputmode="decimal" id="edit_complete" value="${timelineEditData.complete || 1}" min="1" max="30" oninput="updateTimelinePreview()" style="width:60px; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:14px; text-align:center; box-sizing:border-box;">
+                    <input type="number" inputmode="decimal" id="edit_complete" value="${pwStageDays(timelineEditData, 'complete')}" min="${timelineEditMode === 'default' ? 1 : 0}" max="30" oninput="updateTimelinePreview()" style="width:60px; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:14px; text-align:center; box-sizing:border-box;">
                 </div>
                 
                 <div id="timelinePreview" style="background:#e8f5e9; padding:12px; border-radius:6px; border-left:4px solid #34c759; margin-top:15px;">
@@ -30520,13 +30522,11 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
     }
 
     function updateTimelinePreview() {
-        const measuring = parseInt(document.getElementById('edit_measuring')?.value) || 1;
-        const sanding1 = parseInt(document.getElementById('edit_sanding1')?.value) || 4;
-        const undercoat = parseInt(document.getElementById('edit_undercoat')?.value) || 2;
-        const sanding2 = parseInt(document.getElementById('edit_sanding2')?.value) || 3;
-        const topcoat = parseInt(document.getElementById('edit_topcoat')?.value) || 2;
-        const inspect = parseInt(document.getElementById('edit_inspect')?.value) || 2;
-        const complete = parseInt(document.getElementById('edit_complete')?.value) || 1;
+        // v1.16.477: a job stage can be 0 (skipped); the shop defaults stay at 1 or more
+        const _min = timelineEditMode === 'default' ? 1 : 0;
+        const _rd = k => { const n = parseInt(document.getElementById('edit_' + k)?.value); return isNaN(n) ? PW_STAGE_DEFAULT[k] : Math.max(_min, n); };
+        const measuring = _rd('measuring'), sanding1 = _rd('sanding1'), undercoat = _rd('undercoat'), sanding2 = _rd('sanding2');
+        const topcoat = _rd('topcoat'), inspect = _rd('inspect'), complete = _rd('complete');
         
         const total = measuring + sanding1 + undercoat + sanding2 + topcoat + inspect + complete;
         
@@ -30548,13 +30548,12 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
     }
 
     function saveTimelineEdit() {
-        const measuring = parseInt(document.getElementById('edit_measuring').value);
-        const sanding1 = parseInt(document.getElementById('edit_sanding1').value);
-        const undercoat = parseInt(document.getElementById('edit_undercoat').value);
-        const sanding2 = parseInt(document.getElementById('edit_sanding2').value);
-        const topcoat = parseInt(document.getElementById('edit_topcoat').value);
-        const inspect = parseInt(document.getElementById('edit_inspect').value);
-        const complete = parseInt(document.getElementById('edit_complete').value);
+        // v1.16.477: job stages may be 0 (skipped); shop defaults must be 1 or more; a blank box keeps the default
+        const _min = timelineEditMode === 'default' ? 1 : 0;
+        const _rd = k => { const n = parseInt(document.getElementById('edit_' + k).value); return isNaN(n) ? PW_STAGE_DEFAULT[k] : Math.min(30, Math.max(_min, n)); };
+        const measuring = _rd('measuring'), sanding1 = _rd('sanding1'), undercoat = _rd('undercoat'), sanding2 = _rd('sanding2');
+        const topcoat = _rd('topcoat'), inspect = _rd('inspect'), complete = _rd('complete');
+        if (measuring + sanding1 + undercoat + sanding2 + topcoat + inspect + complete < 1) { notify('⚠️ At least one stage needs 1 day or more'); return; }
         
         const timeline = { measuring, sanding1, undercoat, sanding2, topcoat, inspect, complete };
         
@@ -30776,19 +30775,12 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         history.forEach((job, jobIdx) => {
             // Only count tasks for active jobs (not marked as completed)
             if (job.dateReceived && !job.completed) {
-                // 7 phases per job: measuring, sanding1, undercoat, sanding2, topcoat, sanding2, topcoat, inspect, complete
-                totalTasks += 7;
-                
-                // Count which phases are completed
-                if (job.phases) {
-                    if (job.phases.measuring) completedTasks++;
-                    if (job.phases.sanding1) completedTasks++;
-                    if (job.phases.undercoat) completedTasks++;
-                    if (job.phases.sanding2) completedTasks++;
-                    if (job.phases.topcoat) completedTasks++;
-                    if (job.phases.inspect) completedTasks++;
-                    if (job.phases.complete) completedTasks++;
-                }
+                // v1.16.477: 7 stages per job, minus any skipped (0-day) stages
+                PW_STAGE_KEYS.forEach(k => {
+                    if (pwStageSkipped(job, k)) return;
+                    totalTasks++;
+                    if (job.phases && job.phases[k]) completedTasks++;
+                });
             }
         });
         
