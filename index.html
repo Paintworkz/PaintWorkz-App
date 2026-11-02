@@ -93,9 +93,9 @@ window.pwToday = pwToday;
 </script>
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.477'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.478'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
-    window.PW_BUILD_DATE = '2026-11-01'; // v1.16.476: the date this build was made — update with each build
+    window.PW_BUILD_DATE = '2026-11-02'; // v1.16.476: the date this build was made — update with each build
     const VERSION_KEY = 'paintworkz_version';
 
     // Auto-update ALL version display elements as soon as DOM is ready
@@ -3921,7 +3921,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.477</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.478</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;"></div>
                         </div>
                     </div>
@@ -4954,7 +4954,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.477</span><span style="color:#d4af37; font-weight:900;" id="versionDate"></span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.478</span><span style="color:#d4af37; font-weight:900;" id="versionDate"></span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);if(typeof tab==='function')tab('measure');setTimeout(function(){if(typeof startTour==='function')startTour();},300);" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -25437,6 +25437,36 @@ ${pwStageSkipped(job, 'complete') ? '' : `                        <label style="
     let currentPDFData = null;
     let currentPDFFilename = 'document.pdf';
     
+    // v1.16.478: every preview button works from a real PDF file (Blob). Never point the app tab
+    // at a raw data: URL — on iPhone that navigated the whole app away (lost the sheet, re-login).
+    function pwIsIOS() { return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); }
+    function pwPdfName(n) { n = String(n || 'PaintWorkz_Document').replace(/\.pdf$/i, '').replace(/[\\/:*?"<>|]+/g, '_'); return (n || 'PaintWorkz_Document') + '.pdf'; }
+    function pwDataUriToBlob(uri) {
+        try {
+            if (!uri || typeof uri !== 'string' || uri.startsWith('blob:')) return null;
+            const b64 = uri.includes(',') ? uri.split(',')[1] : uri;
+            const bin = atob(b64);
+            const bytes = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+            return new Blob([bytes], { type: 'application/pdf' });
+        } catch (e) { return null; }
+    }
+    function pwCurrentPdfBlob() {
+        if (window._currentPdfBlob) return window._currentPdfBlob;
+        const b = pwDataUriToBlob(currentPDFData || window._currentPdfDataUri);
+        if (b) window._currentPdfBlob = b;
+        return b;
+    }
+    // Hand a Blob to the browser as a file download, without leaving the app
+    function pwDownloadBlob(blob, name) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = name; a.rel = 'noopener';
+        if (pwIsIOS()) a.target = '_blank';
+        document.body.appendChild(a); a.click();
+        setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 60000);
+    }
+
     function closePDFPreview() {
         window._pwModalClosedAt = Date.now(); // v1.16.469
         const modal = document.getElementById('pdfPreviewModal');
@@ -25449,6 +25479,7 @@ ${pwStageSkipped(job, 'complete') ? '' : `                        <label style="
             spinner.style.display = 'none';
         }
         currentPDFData = null;
+        window._currentPdfBlob = null;
         console.log('    Preview closed');
     }
 
@@ -25467,26 +25498,15 @@ ${pwStageSkipped(job, 'complete') ? '' : `                        <label style="
             window.open(url, '_blank');
             setTimeout(() => URL.revokeObjectURL(url), 60000);
         } catch(e) {
-            window.open(currentPDFData, '_blank');
+            notify('Could not open full screen — use SAVE instead'); // v1.16.478: no raw data: fallback
         }
     }
     
     function sharePDF() {
         if (!window._currentPdfDataUri) { notify('No PDF loaded'); return; }
-        var filename = (window._currentPdfFilename || 'PaintWorkz_Document') + '.pdf';
-        var isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
-
-        // Decode data URI to blob (always works since we switched all PDFs to datauristring)
-        function _getBlob() {
-            try {
-                var dataUri = window._currentPdfDataUri;
-                var b64 = dataUri.includes(',') ? dataUri.split(',')[1] : dataUri;
-                var byteStr = atob(b64);
-                var bytes = new Uint8Array(byteStr.length);
-                for (var i = 0; i < byteStr.length; i++) bytes[i] = byteStr.charCodeAt(i);
-                return new Blob([bytes], { type: 'application/pdf' });
-            } catch(e) { return null; }
-        }
+        var filename = pwPdfName(window._currentPdfFilename);
+        var isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || pwIsIOS();
+        function _getBlob() { return pwCurrentPdfBlob(); } // v1.16.478: also works for blob: previews
 
         if (isMobile && navigator.canShare) {
             // Mobile: use Web Share API — works properly on iOS/Android
@@ -25507,14 +25527,11 @@ ${pwStageSkipped(job, 'complete') ? '' : `                        <label style="
     }
 
     function _desktopSend(filename) {
-        // Step 1: Download the PDF with correct filename
-        var dataUri = window._currentPdfDataUri;
-        var a = document.createElement('a');
-        a.href = dataUri;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+        // Step 1: Download the PDF with correct filename (v1.16.478: as a real file, never a raw data: link)
+        var _b = pwCurrentPdfBlob();
+        if (_b) pwDownloadBlob(_b, filename);
+        else if (String(window._currentPdfDataUri || '').startsWith('blob:')) { var a = document.createElement('a'); a.href = window._currentPdfDataUri; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); }
+        else { alert('Could not prepare the PDF file. Close the preview and generate it again.'); return; }
 
         // Step 2: Open Outlook/mail client with pre-filled subject and body
         var subject = encodeURIComponent(filename.replace('.pdf','').replace(/_/g,' '));
@@ -25535,10 +25552,29 @@ ${pwStageSkipped(job, 'complete') ? '' : `                        <label style="
 
     function downloadCurrentPDF() {
         if (!currentPDFData) { alert('No PDF to download'); return; }
-        const link = document.createElement('a');
-        link.href = currentPDFData; // works for both blob: and data: URLs
-        link.download = currentPDFFilename || 'PaintWorkz_Document.pdf';
-        link.click();
+        const name = pwPdfName(currentPDFFilename || window._currentPdfFilename);
+        const blob = pwCurrentPdfBlob();
+        if (!blob) {
+            if (String(currentPDFData).startsWith('blob:')) { // still loading the file copy — blob: links are safe
+                const a = document.createElement('a'); a.href = currentPDFData; a.download = name; a.rel = 'noopener';
+                if (pwIsIOS()) a.target = '_blank';
+                document.body.appendChild(a); a.click(); a.remove(); return;
+            }
+            alert('Could not prepare the PDF file. Close the preview and generate it again.'); return;
+        }
+        // Phones: the share sheet (Save to Files / Drive / email). Stays inside the app.
+        const isMobile = pwIsIOS() || /Android|Mobi/i.test(navigator.userAgent);
+        if (isMobile && navigator.canShare && navigator.share) {
+            try {
+                const file = new File([blob], name, { type: 'application/pdf' });
+                if (navigator.canShare({ files: [file] })) {
+                    navigator.share({ files: [file], title: name.replace(/\.pdf$/i, '') })
+                        .catch(e => { if (!e || e.name !== 'AbortError') pwDownloadBlob(blob, name); });
+                    return;
+                }
+            } catch (e) {}
+        }
+        pwDownloadBlob(blob, name);
     }
 
     function printCurrentPDF() {
@@ -25577,11 +25613,9 @@ ${pwStageSkipped(job, 'complete') ? '' : `                        <label style="
             };
         } catch(e) {
             console.error('Print error:', e);
-            // Last resort     direct download
-            const a = document.createElement('a');
-            a.href = currentPDFData;
-            a.download = 'PaintWorkz-Print.pdf';
-            a.click();
+            // Last resort: save the file instead (v1.16.478: real file, never a raw data: link)
+            const _b = pwCurrentPdfBlob();
+            if (_b) pwDownloadBlob(_b, pwPdfName(currentPDFFilename)); else alert('Could not print this PDF. Try SAVE instead.');
         }
     }
     
@@ -25663,6 +25697,10 @@ ${pwStageSkipped(job, 'complete') ? '' : `                        <label style="
             
             currentPDFData = pdfDataUri;
             currentPDFFilename = filename;
+            window._currentPdfBlob = null; // v1.16.478
+            if (typeof pdfDataUri === 'string' && pdfDataUri.startsWith('blob:')) {
+                fetch(pdfDataUri).then(r => r.blob()).then(b => { if (currentPDFData === pdfDataUri) window._currentPdfBlob = new Blob([b], { type: 'application/pdf' }); }).catch(() => {});
+            }
             
             const pageContainer = document.getElementById('pdfPageContainer');
             pageContainer.innerHTML = '';
