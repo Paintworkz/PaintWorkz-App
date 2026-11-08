@@ -2126,6 +2126,7 @@ const firebaseConfig = {
                 if (loginScreen) loginScreen.style.display = 'none';
                 if (appContainer) appContainer.style.display = 'block';
                 // v1.16.479: after a reload, offer the unsaved measure sheet back (once per page load)
+                setTimeout(function(){ try { if (typeof window.pwPullDefaults === 'function') window.pwPullDefaults(); } catch(_e) {} }, 3000); // v1.16.479
                 if (!window._pwDraftBootChecked) {
                     window._pwDraftBootChecked = true;
                     setTimeout(function(){
@@ -3681,12 +3682,12 @@ const firebaseConfig = {
                             </div>
                         </div>
                         <div style="background:rgba(255,255,255,0.5); border-radius:6px; padding:8px; text-align:center;">
-                            <div style="font-size:9px; font-weight:900; color:#0d47a1; margin-bottom:4px;">Max mix per tin (L)</div>
+                            <div style="font-size:9px; font-weight:900; color:#0d47a1; margin-bottom:4px;">Max mix per tin (<span class="js-vol-unit">L</span>)</div>
                             <div style="display:flex; align-items:center; gap:3px; justify-content:center;">
                                 <input type="number" id="mixCapLitres" min="1" max="4" step="1" value="3"
                                     style="width:60px; padding:5px; border:1px solid #90caf9; border-radius:6px; font-size:12px; font-weight:900; text-align:center;"
                                     oninput="saveStockAlertThreshold()">
-                                <span style="font-size:9px; color:#666;">L</span>
+                                <span class="js-vol-unit" style="font-size:9px; color:#666;">L</span>
                             </div>
                         </div>
                     </div>
@@ -7052,6 +7053,7 @@ const firebaseConfig = {
             // v1.16.479: re-show converted inputs in the new units (stored values are never changed)
             try { if (typeof _applyUnitLabels === 'function') _applyUnitLabels(); } catch(e) {}
             try { if (typeof loadCoverageRates === 'function') loadCoverageRates(); } catch(e) {}
+            try { if (typeof pwLoadDefaultInputs === 'function') pwLoadDefaultInputs(); } catch(e) {}
             try { if (typeof loadStockSettings === 'function') loadStockSettings(); } catch(e) {}
             try { if (typeof renderStockTab === 'function' && document.getElementById('stockAlertThreshold')) renderStockTab(); } catch(e) {}
         }
@@ -7124,6 +7126,9 @@ const firebaseConfig = {
     // v1.16.479: paint volumes on the Imperial USA setting show in US gallons (UK + metric keep litres).
     // Display only — every stored value (formulas, stock, coverage, costs) stays in litres / m² per litre.
     var PW_GAL = 3.785411784;
+    // v1.16.479: report areas — stored m², shown sqft on imperial
+    function pwAreaN(m2) { m2 = parseFloat(m2) || 0; return isImperial() ? m2 * 10.7639 : m2; }
+    function pwAreaW()   { return isImperial() ? 'SQFT' : 'SQM'; }
     function pwUSVol()  { try { return getUnits() === 'IMPERIAL_US'; } catch(e) { return false; } }
     function pwVolU()   { return pwUSVol() ? 'gal' : 'L'; }
     function pwVolN(L)  { L = parseFloat(L) || 0; return pwUSVol() ? L / PW_GAL : L; }
@@ -7143,6 +7148,7 @@ const firebaseConfig = {
         if (kind === 'vol')  return pwUSVol() ? 1 / PW_GAL : 1;
         if (kind === 'cost') return pwUSVol() ? PW_GAL : 1;
         if (kind === 'cov')  return (isImperial() ? 10.7639 : 1) * (pwUSVol() ? PW_GAL : 1);
+        if (kind === 'len')  return isImperial() ? 1 / 25.4 : 1; // mm stored, inches shown
         return 1;
     }
     function pwInDisp(metric, kind, dp) {
@@ -8734,6 +8740,9 @@ const firebaseConfig = {
     }
 
     // ── PRINT FORMULA FROM DATABASE ──────────────────────────────────────────
+    // v1.16.479: the Print button in Edit Formula called printFormula(), which never existed
+    function printFormula(idx) { printFormulaFromDB(idx); }
+    window.printFormula = printFormula;
     function printFormulaFromDB(idx) {
         const f = paintDatabase[idx];
         if (!f) return;
@@ -13817,7 +13826,7 @@ const firebaseConfig = {
         });
         const jobs = Object.keys(best).map(k => best[k]).sort((a, b) => (b.timestamp||'') > (a.timestamp||'') ? 1 : -1);
         const get = async (col, name) => { try { const d = await window.getDoc(window.doc(window.firebaseDb, 'users', uid, col, name)); return d.exists() ? d.data() : null; } catch(e) { return null; } };
-        const names = ['paintFormulas','clientDatabase','masterMatrix','companySettings','additionalCharges','appColors','stockSettings2','stockLevels','coverageRates','defaultTimeline','shopClosures','adminAlerts','globalNotifications','ctsData'];
+        const names = ['paintFormulas','clientDatabase','masterMatrix','companySettings','additionalCharges','appColors','stockSettings2','stockLevels','coverageRates','defaultTimeline','shopClosures','adminAlerts','globalNotifications','ctsData','measureDefaults'];
         const appData = {}; for (const n of names) { const d = await get('appData', n); if (d) appData[n] = d; }
         const dp = await get('config', 'doorProfiles');
         const ls = { jobHistory: jobs };
@@ -13826,6 +13835,7 @@ const firebaseConfig = {
         if (dp && dp.doorProfiles) ls.doorProfiles = dp.doorProfiles;
         if (dp && dp.masterMatrix) ls.masterMatrix = dp.masterMatrix; else if (appData.masterMatrix && appData.masterMatrix.matrix) ls.masterMatrix = appData.masterMatrix.matrix;
         ['companySettings','additionalCharges','appColors'].forEach(n => { if (appData[n]) ls[n] = appData[n]; });
+        if (appData.measureDefaults) { const { lastUpdated: _mdl, ...md } = appData.measureDefaults; ls['paintworkz-defaults'] = md; } // v1.16.479
         // keep any photos that are only on this device
         try { Object.keys(localStorage).forEach(k => { if (k.startsWith('jobPhotos_')) { try { ls[k] = JSON.parse(localStorage.getItem(k)); } catch(e) {} } }); } catch(e) {}
         return {
@@ -15457,7 +15467,8 @@ const firebaseConfig = {
             (it.color || '') === _newColor && (it.brand || '') === (_newBrand || '') &&
             (it.finish || '') === (_newFinish || '') && (it.type || '') === (pType || '') &&
             String(it.thk || '') === String(thkStored || '') && !!it.isGlass === !!_newGlass &&
-            !!it.cts === !!_newCts && (it.desc || '') === desc.toUpperCase()
+            !!it.cts === !!_newCts && (it.desc || '') === desc.toUpperCase() &&
+            (mode !== 'SE' || (parseFloat(it.ser) || 100) === loadDefaultSettings().seReturn) // v1.16.479
         );
         if (existing) {
             const _addQty = parseInt(document.getElementById('qty').value) || 1;
@@ -15465,12 +15476,14 @@ const firebaseConfig = {
             notify("Qty updated: " + existing.desc + " now x" + existing.qty);
         } else {
             // v1.16.466: m² worked out from the part itself (the live box shows ft² in imperial)
-            const sqmValue = (function(){ try { return calculateItemSQM({ h: h, w: w, thk: thkStored, mode: mode, e: edges }).toFixed(3); } catch(e) { const el = document.getElementById('liveSq'); return el ? el.innerText : '0.000'; } })();
+            const _ser = mode === 'SE' ? loadDefaultSettings().seReturn : undefined; // v1.16.479
+            const sqmValue = (function(){ try { return calculateItemSQM({ h: h, w: w, thk: thkStored, mode: mode, e: edges, ser: _ser }).toFixed(3); } catch(e) { const el = document.getElementById('liveSq'); return el ? el.innerText : '0.000'; } })();
             
             items.push({
                 h, w, qty: (parseInt(document.getElementById('qty').value) || 1),
                 desc: desc.toUpperCase(), prof: prof, fm: fmState,
                 mode: mode, e: edges, sqm: sqmValue,
+                ...(_ser ? { ser: _ser } : {}), // v1.16.479: SE return this part was measured with
                 brand: document.getElementById('p-brand').value,
                 color: (document.getElementById('p-color').value || '').toUpperCase(),
                 code: (document.getElementById('p-code').value || '').toUpperCase(),
@@ -15503,7 +15516,7 @@ const firebaseConfig = {
         const thkEl = document.getElementById('thk');
         if (thkEl && !thkEl.value) {
             const defaults = loadDefaultSettings();
-            thkEl.value = defaults.thickness;
+            thkEl.value = pwDefThkShown(defaults.thickness); // v1.16.479: was 18 shown as 18 inches on imperial
         }
         
         // Focus on QTY for next entry — painter enters qty first, then dimensions
@@ -15596,14 +15609,16 @@ const firebaseConfig = {
             area *= 2;  // Double-sided = double the area
         }
         
-        // Load defaults for SE return
-        const defaults = loadDefaultSettings();
+        // v1.16.479 (Colin): each SE part keeps the return it was measured with (item.ser, mm).
+        // Parts saved before this have no ser and use 100 mm — the only value the app ever had,
+        // so old jobs never change when the default is changed in Admin.
+        const seReturn = parseFloat(item.ser) > 0 ? parseFloat(item.ser) : 100;
         
         // Add edge areas for SE mode
         if (mode === 'SE') {
             const eL = (edges[0] ? 1 : 0) + (edges[1] ? 1 : 0);  // Left edges
             const eS = (edges[2] ? 1 : 0) + (edges[3] ? 1 : 0);  // Side edges
-            area += ((eL * h) + (eS * w)) * defaults.seReturn;
+            area += ((eL * h) + (eS * w)) * seReturn;
         }
         
         // Add edge band area for all modes
@@ -16326,8 +16341,11 @@ const firebaseConfig = {
 
     function setEditEdgeConfig(index, edgeConfig) {
         if (items[index]) {
+            const _wasSE = items[index].mode === 'SE';
             items[index].mode = edgeConfig;
             items[index].edgeConfig = edgeConfig;
+            // v1.16.479: a part newly switched to SE takes today's default; an existing SE part keeps its return
+            if (edgeConfig === 'SE' && !_wasSE && !(parseFloat(items[index].ser) > 0)) items[index].ser = loadDefaultSettings().seReturn;
             // SE auto-selects E1 (LR) if no edges active
             if (edgeConfig === 'SE' && !items[index].e.some(Boolean)) {
                 items[index].e[0] = true;
@@ -19170,7 +19188,7 @@ const firebaseConfig = {
                 
                 doc.setFontSize(12);
                 doc.setFont(undefined, 'bold');
-                doc.text('SQ Metres', leftCol, y);
+                doc.text(isImperial() ? 'SQ Feet' : 'SQ Metres', leftCol, y); // v1.16.479
                 doc.text('Parts', (leftCol + rightCol) / 2, y);
                 doc.text('Paint Required', rightCol, y);
                 y += 6;
@@ -19178,7 +19196,7 @@ const firebaseConfig = {
                 doc.setFont(undefined, 'normal');
                 doc.setFontSize(14);
                 doc.setTextColor(200, 30, 30);
-                doc.text(colorSQM.toFixed(2) + ' m²', leftCol, y);
+                doc.text(isImperial() ? (colorSQM * 10.7639).toFixed(2) + ' sqft' : colorSQM.toFixed(2) + ' m²', leftCol, y);
                 doc.text(String(partCount), (leftCol + rightCol) / 2, y);
                 
                 // Calculate paint qty using coverage rate from settings
@@ -19555,12 +19573,12 @@ const firebaseConfig = {
                     doc.setFont(undefined,'normal');
                     doc.text(jobClient ? jobClient.substring(0, 40) : '', 20, _by); doc.text(dateReceived || '', 110, _by); _by += 8;
                     doc.setFont(undefined,'bold');
-                    doc.text('SQ Metres', 20, _by); doc.text('Parts', 65, _by); doc.text('Paint Required', 110, _by); _by += 5;
+                    doc.text(isImperial() ? 'SQ Feet' : 'SQ Metres', 20, _by); doc.text('Parts', 65, _by); doc.text('Paint Required', 110, _by); _by += 5;
                     doc.setFont(undefined,'normal'); doc.setTextColor(200,30,30);
                     const _bColorSQM = colorSQM > 0 ? colorSQM : _colorSQMPreview;
                     const _bPaintQty = (_bColorSQM / _covRate).toFixed(1);
                     const _bColorParts = (window.pdfItemsToUse && window.pdfItemsToUse.length > 0 ? window.pdfItemsToUse : items).filter(i=>(i.color||'').trim().toLowerCase()===color.toLowerCase()).reduce((s,i)=>s+(parseInt(i.qty)||1),0);
-                    doc.text(`${_bColorSQM.toFixed(2)} m²`, 20, _by);
+                    doc.text(isImperial() ? `${(_bColorSQM * 10.7639).toFixed(2)} sqft` : `${_bColorSQM.toFixed(2)} m²`, 20, _by);
                     doc.text(String(_bColorParts), 65, _by);
                     doc.text(`${pwVolTxt(_bPaintQty, ' L')}  (${pwCovS(_coveragePreview)})`, 110, _by);
                     doc.setTextColor(0,0,0); _by += 10;
@@ -20723,7 +20741,7 @@ const firebaseConfig = {
             doc.setFont(undefined, 'bold');
             doc.setFontSize(10);
             doc.setTextColor(255,255,255);
-            const headers = { num:'JOB #', client:'CLIENT', name:'JOB NAME', paint:'PAINT  (Brand / Colour / Finish)', parts:'PCS', sqm:'SQM', due:'DUE DATE' };
+            const headers = { num:'JOB #', client:'CLIENT', name:'JOB NAME', paint:'PAINT  (Brand / Colour / Finish)', parts:'PCS', sqm:(isImperial() ? 'SQFT' : 'SQM'), due:'DUE DATE' };
             for (const [k,label] of Object.entries(headers)) {
                 doc.text(label, col[k]+2, y+8);
             }
@@ -20804,7 +20822,7 @@ const firebaseConfig = {
 
                 // SQM — per colour if multi, total if single
                 const sqmVal = colourSqm !== undefined ? colourSqm : (job.totalSqm || job.totalSQM);
-                doc.text(sqmVal ? parseFloat(sqmVal).toFixed(1) : '', col.sqm+2, y+8.5);
+                doc.text(sqmVal ? (parseFloat(sqmVal) * (isImperial() ? 10.7639 : 1)).toFixed(1) : '', col.sqm+2, y+8.5); // v1.16.479
 
                 // Due date — bold green
                 const dueDate = job._dueDate || getCompletionDate(job);
@@ -21972,10 +21990,10 @@ const firebaseConfig = {
         <!-- KPI cards - up to 8 across -->
         <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(100px,1fr)); gap:10px; margin-bottom:18px;">
             ${kpiCard('       ', 'Jobs', jobs.length, '#2196f3')}
-            ${kpiCard('    ', 'Total SQM', totalSqm.toFixed(1) + ' ' + getAreaLabel(), '#4caf50')}
+            ${kpiCard('    ', 'Total ' + pwAreaW(), pwAreaN(totalSqm).toFixed(1) + ' ' + getAreaLabel(), '#4caf50')}
             ${kpiCard('    ', 'Parts', totalParts, '#ff9800')}
             ${kpiCard('    ', 'Colours', Object.keys(colourCount).length, '#9c27b0')}
-            ${kpiCard('    ', 'Undercoat SQM', undercoatSqm + ' ' + getAreaLabel(), '#795548')}
+            ${kpiCard('    ', 'Undercoat ' + pwAreaW(), pwAreaN(ucPendingSqm).toFixed(1) + ' ' + getAreaLabel(), '#795548')}
             ${kpiCard('    ', 'Est. Revenue', _fmtKpi(_totalEstVal), '#1565c0')}
             ${kpiCard('⏱', 'Avg Days/Job', _avgDaysKpi, '#00838f')}
             ${totalCtsRevenue > 0 ? kpiCard('✂️', 'CTS Revenue', _fmtKpi(totalCtsRevenue), '#2c3e50') : ''}
@@ -21986,7 +22004,7 @@ const firebaseConfig = {
         <!-- Row 1: Monthly SQM — full width -->
         <div style="margin-bottom:14px;">
             <div class="report-card">
-                <div class="report-card-title" style="display:flex;justify-content:space-between;align-items:center;">📈 Monthly SQM Completed</div>
+                <div class="report-card-title" style="display:flex;justify-content:space-between;align-items:center;">📈 Monthly ${pwAreaW()} Completed</div>
                 <canvas id="chartMonthlySqm" height="90"></canvas>
             </div>
         </div>
@@ -22006,11 +22024,11 @@ const firebaseConfig = {
         <!-- Row 3: Top Colours + Top Door Profiles — 50/50 -->
         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:14px; margin-bottom:14px;">
             <div class="report-card">
-                <div class="report-card-title" style="display:flex;justify-content:space-between;align-items:center;">🏆 Top Colours by SQM</div>
+                <div class="report-card-title" style="display:flex;justify-content:space-between;align-items:center;">🏆 Top Colours by ${pwAreaW()}</div>
                 <canvas id="chartColours" height="200"></canvas>
             </div>
             <div class="report-card">
-                <div class="report-card-title" style="display:flex;justify-content:space-between;align-items:center;">🚪 Top Door Profiles by SQM</div>
+                <div class="report-card-title" style="display:flex;justify-content:space-between;align-items:center;">🚪 Top Door Profiles by ${pwAreaW()}</div>
                 <canvas id="chartProfiles" height="200"></canvas>
             </div>
         </div>
@@ -22033,7 +22051,7 @@ const firebaseConfig = {
                     <tbody>
                         <tr style="border-bottom:1px solid #f0f0f0; background:#e8f5e9;">
                             <td style="padding:6px 8px; font-weight:900; color:#2e7d32;">Undercoat White</td>
-                            <td style="padding:6px 8px; text-align:right; font-weight:900; font-size:14px; color:#2e7d32;">${undercoatL}</td>
+                            <td style="padding:6px 8px; text-align:right; font-weight:900; font-size:14px; color:#2e7d32;">${pwUSVol() ? pwVolF(undercoatL) : undercoatL}</td>
                             <td style="padding:6px 8px; color:#888; font-size:9px;">uc · ${pwCovT(ucRate)}</td>
                         </tr>
                         <tr style="border-bottom:1px solid #f0f0f0;">
@@ -22068,7 +22086,7 @@ const firebaseConfig = {
                         </tr>
                         <tr style="border-bottom:1px solid #f0f0f0;">
                             <td style="padding:7px 10px; font-weight:700; color:#388e3c;">Clear U/C</td>
-                            <td style="padding:6px 8px; text-align:right; font-weight:900; font-size:15px; color:#388e3c;">${clearUcL}</td>
+                            <td style="padding:6px 8px; text-align:right; font-weight:900; font-size:15px; color:#388e3c;">${pwUSVol() ? pwVolF(clearUcL) : clearUcL}</td>
                             <td style="padding:7px 10px; color:#888; font-size:10px;">u/c · ${pwCovT(ucClearRate)}</td>
                         </tr>
                         <tr style="border-bottom:1px solid #f0f0f0; background:#fafafa;">
@@ -22102,7 +22120,7 @@ const firebaseConfig = {
         <!-- Row 6: SQM by Client + Jobs by Finish Type — 50/50 -->
         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:14px; margin-bottom:14px;">
             <div class="report-card">
-                <div class="report-card-title" style="display:flex;justify-content:space-between;align-items:center;">👤 SQM by Client</div>
+                <div class="report-card-title" style="display:flex;justify-content:space-between;align-items:center;">👤 ${pwAreaW()} by Client</div>
                 <canvas id="chartClients" height="130"></canvas>
             </div>
             <div class="report-card">
@@ -22160,7 +22178,7 @@ const firebaseConfig = {
                     <th onclick="sortJobBreakdown('totalParts')" style="padding:7px 8px; text-align:right; cursor:pointer; user-select:none;" title="Sort by Parts">Parts ${_jbSortArrow('totalParts')}</th>
                     <th onclick="sortJobBreakdown('_estValue')" style="padding:7px 8px; text-align:right; cursor:pointer; user-select:none;" title="Sort by Est. Value">Est. Value ${_jbSortArrow('_estValue')}</th>
                     <th onclick="sortJobBreakdown('_cts')" style="padding:7px 8px; text-align:right; cursor:pointer; user-select:none;" title="Sort by CTS">CTS ${_jbSortArrow('_cts')}</th>
-                    <th onclick="sortJobBreakdown('totalSqm')" style="padding:7px 8px; text-align:right; cursor:pointer; user-select:none;" title="Sort by SQM">SQM ${_jbSortArrow('totalSqm')}</th>
+                    <th onclick="sortJobBreakdown('totalSqm')" style="padding:7px 8px; text-align:right; cursor:pointer; user-select:none;" title="Sort by area">${pwAreaW()} ${_jbSortArrow('totalSqm')}</th>
                     <th onclick="sortJobBreakdown('dateReceived')" style="padding:7px 8px; text-align:left; cursor:pointer; user-select:none;" title="Sort by date received">Received ${_jbSortArrow('dateReceived')}</th>
                     <th onclick="sortJobBreakdown('_sched')" style="padding:7px 8px; text-align:left; cursor:pointer; user-select:none;" title="Scheduled finish date (from the job's schedule). Red = finished late or now overdue, green = finished on time.">Sched. Finish ${_jbSortArrow('_sched')}</th>
                     <th onclick="sortJobBreakdown('_closed')" style="padding:7px 8px; text-align:left; cursor:pointer; user-select:none;" title="Sort by date completed (closed)">Closed ${_jbSortArrow('_closed')}</th>
@@ -22233,7 +22251,7 @@ const firebaseConfig = {
                     <td style="padding:6px 8px; text-align:right; color:#000;">${r.parts}</td>
                     <td style="padding:6px 8px; text-align:right; font-weight:900; color:#2196f3;" title="${j._estFromCharges ? 'From the saved estimate total incl. charges (ex GST)' : 'Base price only — no charges applied yet (ex GST)'}${_multi ? ' — this colour\'s share of the job' : ''}">${(r.value||0).toFixed(0)}${j._estFromCharges ? '' : '<span style="color:#ff9500;">*</span>'}</td>
                     <td style="padding:6px 8px; text-align:right; font-weight:900; color:#2c3e50;">${r.cts>0?'$'+r.cts.toFixed(0):'-'}</td>
-                    <td style="padding:6px 8px; text-align:right; font-weight:900; color:#000;">${(r.sqm||0).toFixed(2)}</td>
+                    <td style="padding:6px 8px; text-align:right; font-weight:900; color:#000;">${pwAreaN(r.sqm||0).toFixed(2)}</td>
                     <td style="padding:6px 8px; color:#000;">${(() => { const d = parseReportDate(j.dateReceived); return d && !isNaN(d) ? d.toLocaleDateString('en-AU', { day:'2-digit', month:'2-digit', year:'numeric' }) : (j.dateReceived || '   '); })()}</td>
                     <td style="padding:6px 8px; white-space:nowrap;">${(() => {
                         // v1.16.472: scheduled finish — red if it finished late or is overdue, green if finished on time
@@ -22256,7 +22274,7 @@ const firebaseConfig = {
                     <td style="padding:7px 8px; text-align:right; color:#000;">${totalParts}</td>
                     <td style="padding:7px 8px; text-align:right; font-weight:900; color:#2196f3;">${totalValue.toFixed(0)}</td>
                     <td style="padding:7px 8px; text-align:right; font-weight:900; color:#2c3e50;">${totalCtsRevenue>0?'$'+totalCtsRevenue.toFixed(0):'-'}</td>
-                    <td style="padding:7px 8px; text-align:right; color:#000;">${totalSqm.toFixed(2)}</td>
+                    <td style="padding:7px 8px; text-align:right; color:#000;">${pwAreaN(totalSqm).toFixed(2)}</td>
                     <td></td><td></td>
                     <td style="padding:7px 8px; text-align:right; font-size:9px; color:#00838f;">avg</td>
                     <td style="padding:7px 8px; text-align:right; font-weight:900; color:#00838f;">${_avgDays !== null ? _avgDays + 'd' : '—'}</td>
@@ -22292,7 +22310,7 @@ const firebaseConfig = {
             </div>
             <div class="report-card">
                 <div class="report-card-title" style="display:flex;justify-content:space-between;align-items:center;">🎨 Tinter Usage This Period</div>
-                <div style="font-size:10px; color:#888; margin-bottom:8px;">Estimated grams used per tinter code based on job formulas and SQM</div>
+                <div style="font-size:10px; color:#888; margin-bottom:8px;">Estimated grams used per tinter code based on job formulas and ${pwAreaW()}</div>
                 <div id="tinterUsageReport" style="overflow-y:auto; max-height:200px;"></div>
             </div>
         </div>
@@ -22331,7 +22349,7 @@ const firebaseConfig = {
                         meta.data.forEach((bar, i) => {
                             const val = ds.data[i];
                             if (!val) return;
-                            const label = parseFloat(val).toFixed(1) + 'm  ';
+                            const label = parseFloat(val).toFixed(1) + getAreaLabel(); // v1.16.479: was a broken 'm' label; data is already in display units
                             ctx.save();
                             ctx.fillStyle = '#fff';
                             ctx.font = 'bold 9px sans-serif';
@@ -22353,18 +22371,18 @@ const firebaseConfig = {
                 const useWeekly = dayRange <= 91 && Object.keys(weeklyData).length > 1;
                 const wkKeys = Object.keys(weeklyData).sort();
                 const chartLabels = useWeekly ? wkKeys.map(k => weeklyData[k].label) : months;
-                const allData       = useWeekly ? wkKeys.map(k => +weeklyData[k].sqm.toFixed(2)) : months.map(m=>+monthlyData[m].sqm.toFixed(2));
-                const activeData    = useWeekly ? wkKeys.map(k => +((weeklyData[k].sqmActive||0).toFixed(2))) : months.map(m=>+(((monthlyData[m]||{sqmActive:0}).sqmActive||0).toFixed(2)));
-                const completedData = useWeekly ? wkKeys.map(k => +((weeklyData[k].sqmCompleted||0).toFixed(2))) : months.map(m=>+(((monthlyData[m]||{sqmCompleted:0}).sqmCompleted||0).toFixed(2)));
+                const allData       = useWeekly ? wkKeys.map(k => +pwAreaN(weeklyData[k].sqm).toFixed(2)) : months.map(m=>+pwAreaN(monthlyData[m].sqm).toFixed(2));
+                const activeData    = useWeekly ? wkKeys.map(k => +pwAreaN(weeklyData[k].sqmActive||0).toFixed(2)) : months.map(m=>+pwAreaN((monthlyData[m]||{sqmActive:0}).sqmActive||0).toFixed(2));
+                const completedData = useWeekly ? wkKeys.map(k => +pwAreaN(weeklyData[k].sqmCompleted||0).toFixed(2)) : months.map(m=>+pwAreaN((monthlyData[m]||{sqmCompleted:0}).sqmCompleted||0).toFixed(2));
 
                 const datasets = [];
                 if (_reportStatusFilter === 'all' || _reportStatusFilter === 'completed') {
-                    datasets.push({ label:'Completed SQM', data: _reportStatusFilter === 'all' ? completedData : allData,
+                    datasets.push({ label:'Completed ' + pwAreaW(), data: _reportStatusFilter === 'all' ? completedData : allData,
                         borderColor:'#34c759', backgroundColor:'rgba(52,199,89,0.12)',
                         borderWidth:2.5, fill:true, tension:0.35, pointRadius:4, pointBackgroundColor:'#34c759' });
                 }
                 if (_reportStatusFilter === 'all' || _reportStatusFilter === 'active') {
-                    datasets.push({ label:'Active SQM', data: _reportStatusFilter === 'all' ? activeData : allData,
+                    datasets.push({ label:'Active ' + pwAreaW(), data: _reportStatusFilter === 'all' ? activeData : allData,
                         borderColor:'#ff9500', backgroundColor:'rgba(255,149,0,0.10)',
                         borderWidth:2.5, fill:true, tension:0.35, pointRadius:4, pointBackgroundColor:'#ff9500',
                         borderDash: _reportStatusFilter === 'all' ? [5,3] : [] });
@@ -22459,7 +22477,7 @@ const firebaseConfig = {
                             </div>
                         </div>
                         <div style="text-align:right; flex-shrink:0;">
-                            <div style="font-size:15px; font-weight:900; color:${col}; line-height:1;">${c[1].toFixed(1)}</div>
+                            <div style="font-size:15px; font-weight:900; color:${col}; line-height:1;">${pwAreaN(c[1]).toFixed(1)}</div>
                             <div style="font-size:9px; color:${tileSub2}; margin-top:1px;">${getAreaLabel()}</div>
                         </div>
                     </div>`;
@@ -22476,7 +22494,7 @@ const firebaseConfig = {
                     plugins:[datalabelPlugin],
                     data:{
                         labels: topColours.map(c=>c[0]),
-                        datasets:[{ data: topColours.map(c=>+c[1].toFixed(2)),
+                        datasets:[{ data: topColours.map(c=>+pwAreaN(c[1]).toFixed(2)),
                             backgroundColor: palette, borderRadius:5 }]
                     }, options:{ indexAxis:'y', responsive:true, plugins:{legend:{display:false}},
                         scales:{ x:{ beginAtZero:true, ticks:{font:{size:11}, callback: v => v + ' ' + getAreaLabel()} }, y:{ ticks:{font:{size:11}, crossAlign:'far'} } } }
@@ -22490,7 +22508,7 @@ const firebaseConfig = {
                     plugins:[datalabelPlugin],
                     data:{
                         labels: topProfiles.map(p=>p[0]),
-                        datasets:[{ data: topProfiles.map(p=>+p[1].toFixed(2)),
+                        datasets:[{ data: topProfiles.map(p=>+pwAreaN(p[1]).toFixed(2)),
                             backgroundColor: palette.slice(2), borderRadius:5 }]
                     }, options:{ indexAxis:'y', responsive:true, plugins:{legend:{display:false}},
                         scales:{ x:{ beginAtZero:true, ticks:{font:{size:11}, callback: v => v + ' ' + getAreaLabel()} }, y:{ ticks:{font:{size:11}, crossAlign:'far'} } } }
@@ -22501,7 +22519,7 @@ const firebaseConfig = {
             if (topClients.length && co('chartClients')) {
                 new Chart(co('chartClients'), { type:'bar', plugins:[datalabelPlugin], data:{
                     labels: topClients.map(c=>c[0]),
-                    datasets:[{ data: topClients.map(c=>+c[1].toFixed(2)),
+                    datasets:[{ data: topClients.map(c=>+pwAreaN(c[1]).toFixed(2)),
                         backgroundColor: palette.slice(1), borderRadius:5 }]
                 }, options:{ responsive:true, plugins:{legend:{display:false}},
                     scales:{ y:{ beginAtZero:true, ticks:{font:{size:11}, callback: v => v + ' ' + getAreaLabel()} }, x:{ ticks:{font:{size:11}, maxRotation:30} } } }});
@@ -22515,7 +22533,7 @@ const firebaseConfig = {
                         chart.data.datasets.forEach((ds,di)=>{
                             chart.getDatasetMeta(di).data.forEach((bar,i)=>{
                                 const val=ds.data[i]; if(!val) return;
-                                const sqmVal = monthlyData[months[i]] ? monthlyData[months[i]].sqm.toFixed(1)+'m  ' : '';
+                                const sqmVal = monthlyData[months[i]] ? pwAreaN(monthlyData[months[i]].sqm).toFixed(1)+getAreaLabel() : '';
                                 ctx.save(); ctx.fillStyle='#fff'; ctx.font='bold 9px sans-serif';
                                 ctx.textAlign='center'; ctx.textBaseline='middle';
                                 ctx.fillText(val+' jobs', bar.x, bar.y+10);
@@ -22545,7 +22563,7 @@ const firebaseConfig = {
                             chart.getDatasetMeta(di).data.forEach((bar,i)=>{
                                 const val=ds.data[i]; if(!val) return;
                                 const cl=sortedCJ[i][0];
-                                const sqmVal = clientCount[cl] ? clientCount[cl].toFixed(1)+'m  ' : '';
+                                const sqmVal = clientCount[cl] ? pwAreaN(clientCount[cl]).toFixed(1)+getAreaLabel() : '';
                                 ctx.save(); ctx.fillStyle='#fff'; ctx.font='bold 9px sans-serif';
                                 ctx.textAlign='center'; ctx.textBaseline='middle';
                                 ctx.fillText(val+' jobs', bar.x, bar.y+10);
@@ -29668,6 +29686,53 @@ ${pwStageSkipped(job, 'complete') ? '' : `                        <label style="
     
     // ===== END TIMELINE SETTINGS FUNCTIONS =====
     
+    // v1.16.479: default thickness / SE return are stored in mm; show inches on imperial
+    function pwDefThkShown(mm) { return isImperial() ? +((parseFloat(mm) || 18) / 25.4).toFixed(3) : mm; }
+    function pwLoadDefaultInputs() {
+        const st = loadDefaultSettings();
+        pwSetIn(document.getElementById('defaultThickness'), st.thickness, 'len', 3);
+        pwSetIn(document.getElementById('defaultSEReturn'), st.seReturn, 'len', 3);
+    }
+    // v1.16.479: the SAVE DEFAULTS button called this but it never existed, so defaults could not be changed
+    function saveDefaultSettings() {
+        const cur = loadDefaultSettings();
+        const t = pwGetIn(document.getElementById('defaultThickness'), 'len');
+        const r = pwGetIn(document.getElementById('defaultSEReturn'), 'len');
+        const st = { thickness: (t > 0 ? +t.toFixed(2) : cur.thickness), seReturn: (r > 0 ? +r.toFixed(2) : cur.seReturn) };
+        localStorage.setItem('paintworkz-defaults', JSON.stringify(st));
+        // Cloud copy so every device and staff login uses the same defaults (Colin, 9 Nov)
+        if (window.currentUser && window.firebaseDb && window.doc && window.setDoc) {
+            try {
+                window.setDoc(window.doc(window.firebaseDb, 'users', pwSafeUid(), 'appData', 'measureDefaults'), { ...st, lastUpdated: new Date().toISOString() }, { merge: false })
+                    .catch(e => console.warn('Defaults cloud save failed:', e));
+            } catch(e) {}
+        }
+        pwLoadDefaultInputs();
+        const thkEl = document.getElementById('thk');
+        if (thkEl && st.thickness !== cur.thickness) thkEl.value = pwDefThkShown(st.thickness);
+        try { if (typeof render === 'function' && items && items.length) render(); } catch(e) {}
+        notify('✅ Defaults saved');
+    }
+    window.saveDefaultSettings = saveDefaultSettings;
+    // v1.16.479: bring this device's defaults into line with the account's (after login)
+    function pwPullDefaults() {
+        if (!(window.currentUser && window.firebaseDb && window.doc && window.getDoc)) return;
+        try {
+            const before = loadDefaultSettings();
+            window.getDoc(window.doc(window.firebaseDb, 'users', pwSafeUid(), 'appData', 'measureDefaults')).then(snap => {
+                if (!snap || !snap.exists()) return;
+                const d = snap.data() || {};
+                const st = { thickness: parseFloat(d.thickness) > 0 ? parseFloat(d.thickness) : 18, seReturn: parseFloat(d.seReturn) > 0 ? parseFloat(d.seReturn) : 100 };
+                localStorage.setItem('paintworkz-defaults', JSON.stringify(st));
+                pwLoadDefaultInputs();
+                // measure-tab thickness follows a changed default only while it still shows the old default
+                const thkEl = document.getElementById('thk');
+                if (thkEl && st.thickness !== before.thickness && String(thkEl.value) === String(pwDefThkShown(before.thickness))) thkEl.value = pwDefThkShown(st.thickness);
+            }).catch(() => {});
+        } catch(e) {}
+    }
+    window.pwPullDefaults = pwPullDefaults;
+    window.pwLoadDefaultInputs = pwLoadDefaultInputs;
     // Load default settings
     function loadDefaultSettings() {
         const settings = JSON.parse(localStorage.getItem('paintworkz-defaults')) || {};
@@ -30025,12 +30090,11 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         const thkInput = document.getElementById('defaultThickness');
         const seInput = document.getElementById('defaultSEReturn');
         
-        if (thkInput) thkInput.value = settings.thickness;
-        if (seInput) seInput.value = settings.seReturn;
+        pwLoadDefaultInputs(); // v1.16.479: inches on imperial (stored in mm)
         
         // Also set measure tab thickness field to default
         const measureThk = document.getElementById('thk');
-        if (measureThk) measureThk.value = settings.thickness;
+        if (measureThk) measureThk.value = pwDefThkShown(settings.thickness);
         
         console.log('    Default settings loaded:', settings);
     }
@@ -32247,7 +32311,9 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         const tintAlertGrams = parseFloat(document.getElementById('tintAlertGrams')?.value)      || 100;
         const _mcPctEl = document.getElementById('mixCapPct'), _mcLEl = document.getElementById('mixCapLitres');
         const mixCapPct    = _mcPctEl && _mcPctEl.value !== '' ? Math.max(0, parseFloat(_mcPctEl.value) || 0) : 12;
-        const mixCapLitres = _mcLEl && _mcLEl.value !== '' ? Math.min(4, Math.max(1, parseInt(_mcLEl.value) || 3)) : 3;
+        // v1.16.479: shown in gallons on Imperial USA; stored as whole litres 1–4 (untouched = unchanged)
+        const _mcRaw = _mcLEl && _mcLEl.value !== '' ? (pwUSVol() ? Math.round(pwGetIn(_mcLEl, 'vol')) : parseInt(_mcLEl.value)) : 3;
+        const mixCapLitres = _mcLEl && _mcLEl.value !== '' ? Math.min(4, Math.max(1, _mcRaw || 3)) : 3;
         const st = { ...getStockSettings(), alertLevel: threshold, darkTintThreshold: darkTint,
                      lightTintThreshold: lightTint, extraTintThreshold: extraTint, tintAlertGrams, mixCapPct, mixCapLitres };
         localStorage.setItem('pwStockSettings2', JSON.stringify(st));
@@ -32294,7 +32360,10 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         if (taEl) taEl.value = st.tintAlertGrams || 100;
         const _mcp = document.getElementById('mixCapPct'), _mcl = document.getElementById('mixCapLitres');
         if (_mcp) _mcp.value = st.mixCapPct !== undefined ? st.mixCapPct : 12;
-        if (_mcl) _mcl.value = st.mixCapLitres || 3;
+        if (_mcl) {
+            pwSetIn(_mcl, st.mixCapLitres || 3, 'vol', 2); // v1.16.479
+            _mcl.step = pwUSVol() ? '0.01' : '1'; _mcl.min = pwUSVol() ? '0.26' : '1'; _mcl.max = pwUSVol() ? '1.06' : '4';
+        }
 
         const _dm = document.body.dataset.theme === 'dark' ||
             (!document.body.dataset.theme && window.matchMedia('(prefers-color-scheme:dark)').matches);
