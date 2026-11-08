@@ -93,9 +93,9 @@ window.pwToday = pwToday;
 </script>
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.478-dev'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.479-dev'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
-    window.PW_BUILD_DATE = '2026-11-02'; // v1.16.476: the date this build was made — update with each build
+    window.PW_BUILD_DATE = '2026-11-09'; // v1.16.476: the date this build was made — update with each build
     const VERSION_KEY = 'paintworkz_version';
 
     // Auto-update ALL version display elements as soon as DOM is ready
@@ -1696,7 +1696,7 @@ window.getTooltipKey = getTooltipKey;
 </script>
 </head>
 <body>
-<div id="devBanner">🚧 DEVELOPMENT VERSION — LIVE DATA — v1.16.478-dev (open in Incognito / separate browser) 🚧</div>
+<div id="devBanner">🚧 DEVELOPMENT VERSION — LIVE DATA — v1.16.479-dev (open in Incognito / separate browser) 🚧</div>
 
 <!-- COPYRIGHT NOTICE -->
 <div id="copyrightBanner" style="display:none;">
@@ -2121,6 +2121,17 @@ const firebaseConfig = {
                 const appContainer = document.getElementById('appContainer');
                 if (loginScreen) loginScreen.style.display = 'none';
                 if (appContainer) appContainer.style.display = 'block';
+                // v1.16.479: after a reload, offer the unsaved measure sheet back (once per page load)
+                if (!window._pwDraftBootChecked) {
+                    window._pwDraftBootChecked = true;
+                    setTimeout(function(){
+                        try {
+                            var _m = document.getElementById('measure');
+                            var _onMeasure = !_m || _m.style.display !== 'none';
+                            if (_onMeasure && typeof window.pwOfferDraftRecovery === 'function') window.pwOfferDraftRecovery();
+                        } catch(_e) {}
+                    }, 4500);
+                }
                 const mh = document.getElementById('mainHeader');
                 const mn = document.getElementById('mainNavTabs');
                 if (mh) mh.style.display = 'flex';
@@ -3922,7 +3933,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.478</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.479</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;"></div>
                         </div>
                     </div>
@@ -4955,7 +4966,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.478</span><span style="color:#d4af37; font-weight:900;" id="versionDate"></span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.479</span><span style="color:#d4af37; font-weight:900;" id="versionDate"></span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);if(typeof tab==='function')tab('measure');setTimeout(function(){if(typeof startTour==='function')startTour();},300);" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -14361,35 +14372,22 @@ const firebaseConfig = {
     window.setCtsJobEdge = setCtsJobEdge;
     //        END CTS Pricing functions
 
-    function tab(t) {
-        document.querySelectorAll('.view-section, .nav-btn').forEach(x => x.classList.remove('active'));
-        document.getElementById(t).classList.add('active');
-        document.getElementById('btn-' + t).classList.add('active');
-        
-        // Restore container width when leaving admin pricing tab
-        if (t !== 'admin') {
-            const mc = document.querySelector('.container');
-            if (mc) { mc.style.maxWidth = ''; mc.style.width = ''; mc.style.padding = ''; }
-        } else {
-            // v1.16.453: returning to Admin — re-apply the width for whichever sub-tab is open (Reports = full width)
-            try {
-                const _act = document.querySelector('#admin .admin-tab-content.active');
-                const _sub = _act ? _act.id.replace(/^admin-tab-|-content$/g, '') : 'general';
-                if (typeof window.pwApplyAdminWidth === 'function') window.pwApplyAdminWidth(_sub);
-            } catch(e) {}
-        }
-        
-        // Populate paint brands dropdown when Measure tab is opened
-        if (t === 'measure') {
-            setTimeout(() => populatePaintBrandsDropdown(), 100);
-
-            // ── DRAFT RECOVERY CHECK ─────────────────────────────────────────
-            // If there's an unsaved draft with parts and the current measure sheet
-            // is empty, offer to restore it — protects against Corey's scenario
-            setTimeout(() => {
+    // v1.16.479: offer to bring back an unsaved measure sheet. Runs when Measure is opened and
+    // once after login/reload (the app opens on Measure without a tap, so the check never ran before).
+    function pwOfferDraftRecovery() {
                 try {
                     const _draft = JSON.parse(localStorage.getItem('pwUnsavedDraft') || 'null');
                     const _currentParts = items.length;
+                    // v1.16.479: no prompt when the draft is just a saved job that wasn't changed
+                    let _unchanged = false;
+                    try {
+                        if (_draft && _draft.editingJobId) {
+                            const _sig = a => JSON.stringify((a || []).map(i => [String(i.h), String(i.w), String(i.qty || 1), i.prof || '', i.type || '', i.mode || '', i.color || '', i.finish || '']));
+                            const _hj = (JSON.parse(localStorage.getItem('jobHistory') || '[]')).find(j => j.id === _draft.editingJobId);
+                            if (_hj && _sig(_hj.items) === _sig(_draft.items)) _unchanged = true;
+                        }
+                    } catch(_e) {}
+                    if (_unchanged) { localStorage.removeItem('pwUnsavedDraft'); return; }
                     if (_draft && _draft.partCount > 0 && _currentParts === 0) {
                         const _age = _draft.savedAt ? Math.round((Date.now() - new Date(_draft.savedAt)) / 60000) : 0;
                         const _recover = confirm(
@@ -14414,6 +14412,13 @@ const firebaseConfig = {
                             if (_draft.color)        { const el = document.getElementById('p-color'); if (el) el.value = _draft.color; }
                             if (_draft.brand)        { const el = document.getElementById('p-brand'); if (el) el.value = _draft.brand; }
                             if (_draft.finish)       { const el = document.getElementById('p-finish'); if (el) el.value = _draft.finish; }
+                            // v1.16.479: carry on editing the same saved job, so saving updates it (no duplicate)
+                            try {
+                                if (_draft.editingJobId) {
+                                    const _hj2 = (JSON.parse(localStorage.getItem('jobHistory') || '[]')).find(j => j.id === _draft.editingJobId);
+                                    if (_hj2) { currentEditingJobIndex = -1; currentEditingJobId = _hj2.id; window.currentLoadedJob = _hj2; }
+                                }
+                            } catch(_e) {}
                             render();
                             notify(`✅ ${_draft.partCount} parts recovered — fill in any missing fields and save`);
                         } else {
@@ -14421,7 +14426,33 @@ const firebaseConfig = {
                         }
                     }
                 } catch(e) {}
-            }, 400);
+    }
+    window.pwOfferDraftRecovery = pwOfferDraftRecovery;
+
+    function tab(t) {
+        document.querySelectorAll('.view-section, .nav-btn').forEach(x => x.classList.remove('active'));
+        document.getElementById(t).classList.add('active');
+        document.getElementById('btn-' + t).classList.add('active');
+        
+        // Restore container width when leaving admin pricing tab
+        if (t !== 'admin') {
+            const mc = document.querySelector('.container');
+            if (mc) { mc.style.maxWidth = ''; mc.style.width = ''; mc.style.padding = ''; }
+        } else {
+            // v1.16.453: returning to Admin — re-apply the width for whichever sub-tab is open (Reports = full width)
+            try {
+                const _act = document.querySelector('#admin .admin-tab-content.active');
+                const _sub = _act ? _act.id.replace(/^admin-tab-|-content$/g, '') : 'general';
+                if (typeof window.pwApplyAdminWidth === 'function') window.pwApplyAdminWidth(_sub);
+            } catch(e) {}
+        }
+        
+        // Populate paint brands dropdown when Measure tab is opened
+        if (t === 'measure') {
+            setTimeout(() => populatePaintBrandsDropdown(), 100);
+
+            // ── DRAFT RECOVERY CHECK (v1.16.479: shared with the after-reload check) ──
+            setTimeout(() => { pwOfferDraftRecovery(); }, 400);
             // ── END DRAFT RECOVERY ───────────────────────────────────────────
             // CRITICAL: Reload photos for current job - don't trust in-memory array
             try {
@@ -15540,6 +15571,7 @@ const firebaseConfig = {
                     code: document.getElementById('p-code')?.value || '',
                     finish: document.getElementById('p-finish')?.value || '',
                     partCount: items.reduce((s,i) => s + (parseInt(i.qty)||1), 0),
+                    editingJobId: (typeof currentEditingJobId !== 'undefined' ? currentEditingJobId : null) || null, // v1.16.479
                     savedAt: new Date().toISOString()
                 };
                 localStorage.setItem('pwUnsavedDraft', JSON.stringify(_draftData));
@@ -16478,7 +16510,7 @@ const firebaseConfig = {
         const qty = item.qty || 1;
         return {
             pricePerSqm: pricePerSqm,
-            lineCost: sqm * pricePerSqm * qty * mult
+            lineCost: pwLineTotal(profileBase || profile, item, sqm, pricePerSqm, qty, mult) // v1.16.479
         };
     }
     
@@ -16765,7 +16797,8 @@ const firebaseConfig = {
             Object.keys(matrix[tierName]).forEach(code=>{
                 const row=matrix[tierName][code];
                 if(!Array.isArray(row)) return;
-                const [name,matt,satin,semiG,gloss,clear]=row;
+                const [_plName,matt,satin,semiG,gloss,clear]=row;
+                const name = (row[6]==='lm'||row[6]==='each') ? _plName + ' (' + pwUnitLabel(row[6]) + ')' : _plName; // v1.16.479
                 const bg=rowIdx%2===0?(tierBg[tierName]||[248,248,248]):[255,255,255];
                 doc.setFillColor(...bg); doc.rect(lm,y,rm-lm,rH,'F');
                 const ac=tierAccent[tierName]||[120,120,120];
@@ -17175,13 +17208,14 @@ const firebaseConfig = {
                     const isClearPaint = (item.color || '').toLowerCase().includes('clear');
                     const finish = isClearPaint ? 'Clear' : rawFinish;
                     const pricePerSqm = getMatrixPrice(profileBase || profile, finish);
-                    const rowTotal = sqm * pricePerSqm * qty * _glassDoorMultiplier(item);
+                    const rowTotal = pwLineTotal(profileBase || profile, item, sqm, pricePerSqm, qty, _glassDoorMultiplier(item)); // v1.16.479: per m² / lineal / per part
                     colourTotal += rowTotal;
                     grandTotal += rowTotal;
                     
                     // Convert to imperial if needed for display
-                    const displayArea = isImperial() ? (sqm * 10.7639).toFixed(2) : sqm.toFixed(3);
-                    const displayRate = isImperial() ? (pricePerSqm / 10.7639).toFixed(2) : pricePerSqm.toFixed(0);
+                    const _pwU = getMatrixUnit(profileBase || profile); // v1.16.479
+                    const displayArea = _pwU !== 'sqm' ? pwUnitArea(item, _pwU) : (isImperial() ? (sqm * 10.7639).toFixed(2) : sqm.toFixed(3));
+                    const displayRate = _pwU !== 'sqm' ? pwUnitRate(pricePerSqm, _pwU) : (isImperial() ? (pricePerSqm / 10.7639).toFixed(2) : pricePerSqm.toFixed(0));
                     
                     // Data array now includes SQ/MTR column
                     const data = [qty, displayHeight, displayWidth, displayThickness, isMoulded, edgesDisplay, paintMode, panel, profile, displayArea, displayRate, rowTotal.toFixed(2)];
@@ -17681,13 +17715,14 @@ const firebaseConfig = {
                     const isClearPaint = (item.color || '').toLowerCase().includes('clear');
                     const finish = isClearPaint ? 'Clear' : rawFinish;
                     const pricePerSqm = getMatrixPrice(profileBase || profile, finish);
-                    const rowTotal = sqm * pricePerSqm * qty * _glassDoorMultiplier(item);
+                    const rowTotal = pwLineTotal(profileBase || profile, item, sqm, pricePerSqm, qty, _glassDoorMultiplier(item)); // v1.16.479: per m² / lineal / per part
                     colourTotal += rowTotal;
                     grandTotal += rowTotal;
                     
                     // Convert to imperial if needed for display
-                    const displayArea = isImperial() ? (sqm * 10.7639).toFixed(2) : sqm.toFixed(3);
-                    const displayRate = isImperial() ? (pricePerSqm / 10.7639).toFixed(2) : pricePerSqm.toFixed(0);
+                    const _pwU = getMatrixUnit(profileBase || profile); // v1.16.479
+                    const displayArea = _pwU !== 'sqm' ? pwUnitArea(item, _pwU) : (isImperial() ? (sqm * 10.7639).toFixed(2) : sqm.toFixed(3));
+                    const displayRate = _pwU !== 'sqm' ? pwUnitRate(pricePerSqm, _pwU) : (isImperial() ? (pricePerSqm / 10.7639).toFixed(2) : pricePerSqm.toFixed(0));
                     
                     // Data array now includes SQ/MTR column
                     const data = [qty, displayHeight, displayWidth, displayThickness, isMoulded, edgesDisplay, paintMode, panel, profile, displayArea, displayRate, rowTotal.toFixed(2)];
@@ -18185,13 +18220,14 @@ const firebaseConfig = {
                     const isClearPaint = (item.color || '').toLowerCase().includes('clear');
                     const finish = isClearPaint ? 'Clear' : rawFinish;
                     const pricePerSqm = getMatrixPrice(profileBase || profile, finish);
-                    const rowTotal = sqm * pricePerSqm * qty * _glassDoorMultiplier(item);
+                    const rowTotal = pwLineTotal(profileBase || profile, item, sqm, pricePerSqm, qty, _glassDoorMultiplier(item)); // v1.16.479: per m² / lineal / per part
                     colourTotal += rowTotal;
                     grandTotal += rowTotal;
                     
                     // Convert to imperial if needed for display
-                    const displayArea = isImperial() ? (sqm * 10.7639).toFixed(2) : sqm.toFixed(3);
-                    const displayRate = isImperial() ? (pricePerSqm / 10.7639).toFixed(2) : pricePerSqm.toFixed(0);
+                    const _pwU = getMatrixUnit(profileBase || profile); // v1.16.479
+                    const displayArea = _pwU !== 'sqm' ? pwUnitArea(item, _pwU) : (isImperial() ? (sqm * 10.7639).toFixed(2) : sqm.toFixed(3));
+                    const displayRate = _pwU !== 'sqm' ? pwUnitRate(pricePerSqm, _pwU) : (isImperial() ? (pricePerSqm / 10.7639).toFixed(2) : pricePerSqm.toFixed(0));
                     
                     // Data array now includes SQ/MTR column
                     const data = [qty, displayHeight, displayWidth, displayThickness, isMoulded, edgesDisplay, paintMode, panel, profile, displayArea, displayRate, rowTotal.toFixed(2)];
@@ -23741,6 +23777,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
     }
     
     function renderGanttChart(year, month) {
+        window._pwGanttLW = (window.innerWidth || 1024) < 600 ? 120 : 170; // v1.16.479: narrower job column on phones
         // Dark mode colour palette — computed once per render
         const _dm = document.body.dataset.theme === 'dark' ||
             (!document.body.dataset.theme && window.matchMedia('(prefers-color-scheme:dark)').matches);
@@ -23850,7 +23887,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
         if (curMonth) monthGroups.push({ key: curMonth, count: curCount });
         
         let ganttHTML = `<div id="ganttMonthRow" style="display:flex; gap:0; margin-bottom:0; position:sticky; top:0; background:${gc.bg}; z-index:11; min-height:22px; align-items:stretch;">`;
-        ganttHTML += `<div style="position:sticky; left:-15px; z-index:12; width:170px; min-width:170px; max-width:170px; font-weight:900; font-size:10px; padding:4px 6px; border-right:2px solid ${gc.borderMain}; color:${gc.textMuted}; line-height:1.2; background:${gc.headerBg}; box-sizing:border-box; display:flex; align-items:center;">MONTH</div>`;
+        ganttHTML += `<div style="position:sticky; left:-15px; z-index:12; width:${window._pwGanttLW}px; min-width:${window._pwGanttLW}px; max-width:${window._pwGanttLW}px; font-weight:900; font-size:10px; padding:4px 6px; border-right:2px solid ${gc.borderMain}; color:${gc.textMuted}; line-height:1.2; background:${gc.headerBg}; box-sizing:border-box; display:flex; align-items:center;">MONTH</div>`;
         ganttHTML += '<div style="display:flex; gap:0;">';
         monthGroups.forEach(({ key, count }) => {
             const [y, m] = key.split('-').map(Number);
@@ -23864,7 +23901,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
         ganttHTML += `<div id="ganttDateRow" style="display:flex; gap:0; margin-bottom:0; position:sticky; top:22px; background:${gc.bg}; z-index:10; border-bottom:2px solid ${gc.borderMain}; min-height:28px; align-items:stretch;">`;
         
         // Job names column - MUST MATCH job info width (170px) - EXACT same styling
-        ganttHTML += `<div style="position:sticky; left:-15px; z-index:12; width:170px; min-width:170px; max-width:170px; font-weight:900; font-size:10px; padding:6px 6px; border-right:2px solid ${gc.borderMain}; color:${gc.textPrimary}; line-height:1.2; background:${gc.headerBg}; box-sizing:border-box; display:flex; align-items:center;">DATE</div>`;
+        ganttHTML += `<div style="position:sticky; left:-15px; z-index:12; width:${window._pwGanttLW}px; min-width:${window._pwGanttLW}px; max-width:${window._pwGanttLW}px; font-weight:900; font-size:10px; padding:6px 6px; border-right:2px solid ${gc.borderMain}; color:${gc.textPrimary}; line-height:1.2; background:${gc.headerBg}; box-sizing:border-box; display:flex; align-items:center;">DATE</div>`;
         
         // Wrap date columns in container with exact calculated width
         ganttHTML += `<div style="width:${timelineWidth}px; min-width:${timelineWidth}px; max-width:${timelineWidth}px; display:flex; gap:0; min-height:28px;">`;
@@ -23939,7 +23976,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
                 const timelineWidth = allDays.length * 28;
                 ganttHTML += `<div style="margin-bottom:0; padding-bottom:0; display:flex; gap:0; background:${jobBgColor}; border:1px solid ${gc.borderMain}; border-bottom:2px solid ${gc.borderBold};">
                     <!-- Left Column: Job Info (v1.16.475: stays on screen when you scroll sideways — phones) -->
-                    <div style="position:sticky; left:-15px; z-index:6; width:170px; min-width:170px; max-width:170px; font-weight:900; font-size:10px; padding:6px 6px; border-right:2px solid ${gc.borderMain}; color:${gc.textPrimary}; line-height:1.2; background:${gc.headerBg}; box-sizing:border-box;">
+                    <div style="position:sticky; left:-15px; z-index:6; width:${window._pwGanttLW}px; min-width:${window._pwGanttLW}px; max-width:${window._pwGanttLW}px; font-weight:900; font-size:10px; padding:6px 6px; border-right:2px solid ${gc.borderMain}; color:${gc.textPrimary}; line-height:1.2; background:${gc.headerBg}; box-sizing:border-box;">
                         <div style="color:#d4af37; font-size:11px; font-weight:900;">#${job.jobNum} - ${job.jobName || 'Unnamed'}</div>
                         <div style="font-size:9px; color:${gc.textPrimary}; margin-top:2px; font-weight:900;">${job.client}</div>
                         <div style="font-size:7px; color:#2196f3; font-weight:900; margin-top:1px;">     ${parseFloat(job.totalSqm || 0).toFixed(2)} m  </div>
@@ -24148,13 +24185,13 @@ ${pwStageSkipped(job, 'complete') ? '' : `                        <label style="
                 stickyHdr.innerHTML = `
                     <div style="display:flex; flex-direction:column; background:${bg};">
                         <div style="display:flex; overflow:hidden; border-bottom:1px solid ${border};">
-                            <div id="stickyMonthLeft" style="width:170px; min-width:170px; flex-shrink:0;">${mLeft ? mLeft.outerHTML : ''}</div>
+                            <div id="stickyMonthLeft" style="width:${window._pwGanttLW||170}px; min-width:${window._pwGanttLW||170}px; flex-shrink:0;">${mLeft ? mLeft.outerHTML : ''}</div>
                             <div id="stickyMonthRight" style="overflow:hidden; flex:1;">
                                 <div id="stickyMonthInner" style="display:flex; will-change:transform;">${mRight ? mRight.innerHTML : ''}</div>
                             </div>
                         </div>
                         <div style="display:flex; overflow:hidden;">
-                            <div id="stickyDateLeft" style="width:170px; min-width:170px; flex-shrink:0;">${dLeft ? dLeft.outerHTML : ''}</div>
+                            <div id="stickyDateLeft" style="width:${window._pwGanttLW||170}px; min-width:${window._pwGanttLW||170}px; flex-shrink:0;">${dLeft ? dLeft.outerHTML : ''}</div>
                             <div id="stickyDateRight" style="overflow:hidden; flex:1;">
                                 <div id="stickyDateInner" style="display:flex; will-change:transform;">${dRight ? dRight.innerHTML : ''}</div>
                             </div>
@@ -24169,7 +24206,7 @@ ${pwStageSkipped(job, 'complete') ? '' : `                        <label style="
 
                 // Calculate exact offset by reading where the real date cells actually start
                 // vs where the sticky header's date section starts (right after 170px left col)
-                const stickyLeftCol = 170; // fixed left column width
+                const stickyLeftCol = window._pwGanttLW || 170; // left column width (v1.16.479: 120 on phones)
                 const realDateRow = document.getElementById('ganttDateRow');
                 let dateOffset = 0;
                 if (realDateRow && realDateRow.children[1]) {
@@ -25289,6 +25326,53 @@ ${pwStageSkipped(job, 'complete') ? '' : `                        <label style="
         }
         return 125; // absolute fallback
     }
+
+    // v1.16.479: pricing unit per profile row in the Price Matrix.
+    // 'sqm' = per m² (default), 'lm' = per lineal metre (part length), 'each' = per part.
+    // Stored as row[6]. A row without it is per m², so every existing matrix prices exactly as before.
+    function getMatrixUnit(profileName) {
+        const base = (profileName || '').replace(/\s*\(\d+\)\s*$/, '').trim().toLowerCase();
+        if (!base) return 'sqm';
+        for (const tier of Object.values(masterMatrix)) {
+            for (const row of Object.values(tier)) {
+                if (Array.isArray(row) && row[0] && row[0].trim().toLowerCase() === base) {
+                    return (row[6] === 'lm' || row[6] === 'each') ? row[6] : 'sqm';
+                }
+            }
+        }
+        return 'sqm';
+    }
+    window.getMatrixUnit = getMatrixUnit;
+    // Length of one part in metres = its longer side (h and w are always stored in mm)
+    function pwItemLengthM(item) {
+        const h = parseFloat(item && item.h) || 0, w = parseFloat(item && item.w) || 0;
+        return Math.max(h, w) / 1000;
+    }
+    // Line total for one measure-sheet line. 'sqm' is the original sum, unchanged.
+    // Double sided (DS) parts count twice on lineal and per-part lines, the same as they do in m².
+    function pwLineTotal(profileName, item, sqm, rate, qty, mult) {
+        const u = getMatrixUnit(profileName);
+        const sides = String((item && item.mode) || '').toUpperCase() === 'DS' ? 2 : 1;
+        if (u === 'lm') return pwItemLengthM(item) * sides * rate * qty * mult;
+        if (u === 'each') return sides * rate * qty * mult;
+        return sqm * rate * qty * mult;
+    }
+    // PDF columns for lineal / per-part lines (per m² lines keep their old display)
+    function pwUnitArea(item, u) {
+        const ds = String((item && item.mode) || '').toUpperCase() === 'DS';
+        if (u === 'each') return ds ? 'x2' : '-';
+        const m = pwItemLengthM(item) * (ds ? 2 : 1); // DS = both faces, like the m² column
+        return isImperial() ? (m * 3.28084).toFixed(2) : m.toFixed(2);
+    }
+    function pwUnitRate(rate, u) {
+        if (u === 'each') return rate.toFixed(0) + ' ea';
+        return isImperial() ? (rate / 3.28084).toFixed(2) + '/ft' : rate.toFixed(0) + '/lm';
+    }
+    function pwUnitLabel(u) {
+        if (u === 'lm') return isImperial() ? 'per lin ft' : 'per lin m';
+        if (u === 'each') return 'per part';
+        return 'per ' + getAreaLabel();
+    }
     
     // Always ensure defaults are saved
     localStorage.setItem('masterMatrix', JSON.stringify(masterMatrix));
@@ -26136,7 +26220,7 @@ ${pwStageSkipped(job, 'complete') ? '' : `                        <label style="
             const isClearPaint = (item.color || '').toLowerCase().includes('clear');
             const pricePerSqm = getMatrixPrice(profile, isClearPaint ? 'Clear' : (item.finish || 'Satin'));
             let _gm = 1; try { _gm = _glassDoorMultiplier(item) || 1; } catch(e) {} // v1.16.460: match the quote PDF (glass doors)
-            const itemTotal = sqm * pricePerSqm * qty * _gm;
+            const itemTotal = pwLineTotal(profile, item, sqm, pricePerSqm, qty, _gm); // v1.16.479
             const itemSqm = sqm * qty;
             
             const brand = item.brand || '';
@@ -27971,6 +28055,11 @@ ${pwStageSkipped(job, 'complete') ? '' : `                        <label style="
                             <div>
                                 <div style="font-weight:900; cursor:pointer;" onclick="editDoorName(${pwQ(tierName)}, ${code}, ${pwQ(profileName)})" title="Click to edit name">${profileName}</div>
                                 <div style="font-size:9px; color:#999;">(${code})</div>
+                                <select onchange="setMatrixUnit(${pwQ(tierName)}, ${code}, this.value)" title="How this profile is priced" style="margin-top:3px; font-size:9px; padding:2px; border:1px solid #ccc; border-radius:3px; max-width:110px;">
+                                    <option value="sqm"${(data[6] !== 'lm' && data[6] !== 'each') ? ' selected' : ''}>${pwUnitLabel('sqm')}</option>
+                                    <option value="lm"${data[6] === 'lm' ? ' selected' : ''}>${pwUnitLabel('lm')}</option>
+                                    <option value="each"${data[6] === 'each' ? ' selected' : ''}>${pwUnitLabel('each')}</option>
+                                </select>
                             </div>
                             <div style="display:flex; gap:4px;">
                                 <button onclick="editDoorTier(${pwQ(tierName)}, ${code}, ${pwQ(profileName)})" style="background:#2196f3; color:#fff; border:none; padding:4px 6px; border-radius:3px; font-weight:900; font-size:9px; cursor:pointer;" title="Change tier">T</button>
@@ -28135,6 +28224,21 @@ ${pwStageSkipped(job, 'complete') ? '' : `                        <label style="
         notify(`✓ "${doorName}" deleted`);
     }
     
+    // v1.16.479: change how one profile is priced (per m² / per lineal metre / per part)
+    function setMatrixUnit(tier, code, unit) {
+        const row = masterMatrix[tier] && masterMatrix[tier][code];
+        if (!Array.isArray(row)) return;
+        if (row.length === 5) row.push(110); // same Clear default as normaliseMasterMatrix
+        if (row.length < 6) return;
+        if (unit === 'lm' || unit === 'each') row[6] = unit;
+        else row.length = 6; // per m² = no marker, exactly like before
+        localStorage.setItem('masterMatrix', JSON.stringify(masterMatrix));
+        window._localProfilesTimestamp = Date.now();
+        syncMasterMatrixToFirestore();
+        notify('✅ ' + row[0] + ' now priced ' + pwUnitLabel(unit === 'lm' || unit === 'each' ? unit : 'sqm'));
+    }
+    window.setMatrixUnit = setMatrixUnit;
+
     function updatePricingMatrix(tier, code, priceIndex, val) {
         masterMatrix[tier][code][priceIndex + 1] = parseFloat(val);
         localStorage.setItem('masterMatrix', JSON.stringify(masterMatrix));
