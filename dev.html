@@ -7012,6 +7012,11 @@ const firebaseConfig = {
         return roundToPrecision(value, AdminSettings.precision);
     }
     
+    // v1.16.479: Measurement Precision (Admin → Global Settings) sets the decimals for area shown on the
+    // measure tab and on estimates / quotes / invoices. It was saved but never used (always 3 decimals).
+    // Display only — totals are still worked out from the exact figures.
+    function pwAreaDP() { var p = parseFloat((typeof AdminSettings !== 'undefined' && AdminSettings.precision) || 0.01); return p >= 0.1 ? 1 : (p >= 0.01 ? 2 : 3); }
+    function pwAreaShow(m2) { var v = parseFloat(m2) || 0; return (isImperial() ? v * 10.7639 : v).toFixed(pwAreaDP()); }
     function roundToPrecision(value, precision) {
         return Math.round(value / precision) * precision;
     }
@@ -7550,6 +7555,7 @@ const firebaseConfig = {
     function setPrecision(value) {
         AdminSettings.precision = parseFloat(value);
         saveAdminSettings();
+        try { if (typeof render === 'function' && typeof items !== 'undefined' && items.length) render(); } catch(e) {} // v1.16.479: show the new decimals now
         if (!window._pwPrefLoading) pwSavePrefsCloud({ precision: parseFloat(value) }); // v1.16.479
         notify(` Precision set to: ${value}`);
     }
@@ -14997,11 +15003,7 @@ const firebaseConfig = {
         const sqmVal = area / 1000000;
         const liveSqEl = document.getElementById('liveSq');
         if (liveSqEl) {
-            if (isImperial()) {
-                liveSqEl.innerText = (sqmVal * 10.7639).toFixed(2);
-            } else {
-                liveSqEl.innerText = sqmVal.toFixed(3);
-            }
+            liveSqEl.innerText = pwAreaShow(sqmVal); // v1.16.479: follows Measurement Precision
         }
     }
     
@@ -15880,7 +15882,7 @@ const firebaseConfig = {
                 </div>
                 <div class="pl-right">
                     <div class="pl-mode" style="color:${mC}; border-color:${mC}; background:${mC}20">${it.mode}</div>
-                    <div class="pl-sqm">${isImperial() ? (rowSqm*10.7639).toFixed(2) : rowSqm.toFixed(3)}<span style="font-size:9px; font-weight:700; color:#999;">${getAreaLabel()}</span></div>
+                    <div class="pl-sqm">${pwAreaShow(rowSqm)}<span style="font-size:9px; font-weight:700; color:#999;">${getAreaLabel()}</span></div>
                 </div>
                 <input type="checkbox" class="part-colour-cb" data-idx="${originalIndex}" style="width:18px;height:18px;cursor:pointer;flex-shrink:0;margin:0 2px;" title="Tick to change colour on this part"><button class="edit-btn" onclick="editItem(${originalIndex})" style="background:rgba(33,150,243,0.12); color:#2196f3; border:1px solid rgba(33,150,243,0.3); padding:6px 12px; border-radius:6px; font-weight:900; cursor:pointer; font-size:11px; white-space:nowrap; flex-shrink:0;"><span class="edit-btn-icon">✏️</span><span class="edit-btn-text" style="display:none;">✏️ Edit</span></button><button class="del-btn" onclick="deleteItem(${originalIndex})">✕</button>
             `;
@@ -15894,7 +15896,7 @@ const firebaseConfig = {
             l.appendChild(_rowDiv);
         });
         
-        if (document.getElementById('tA')) document.getElementById('tA').innerText = isImperial() ? (tA * 10.7639).toFixed(2) : tA.toFixed(3);
+        if (document.getElementById('tA')) document.getElementById('tA').innerText = pwAreaShow(tA);
         if (document.getElementById('tQ')) document.getElementById('tQ').innerText = tQ;
         _applyUnitLabels();
     }
@@ -17387,7 +17389,7 @@ const firebaseConfig = {
                     
                     // Convert to imperial if needed for display
                     const _pwU = getMatrixUnit(profileBase || profile); // v1.16.479
-                    const displayArea = _pwU !== 'sqm' ? pwUnitArea(item, _pwU) : (isImperial() ? (sqm * 10.7639).toFixed(2) : sqm.toFixed(3));
+                    const displayArea = _pwU !== 'sqm' ? pwUnitArea(item, _pwU) : pwAreaShow(sqm);
                     const displayRate = _pwU !== 'sqm' ? pwUnitRate(pricePerSqm, _pwU) : (isImperial() ? (pricePerSqm / 10.7639).toFixed(2) : pricePerSqm.toFixed(0));
                     
                     // Data array now includes SQ/MTR column
@@ -17522,7 +17524,7 @@ const firebaseConfig = {
                         (_ctsImp && it.w) ? convertToImperialPDFSafe(it.w).display : String(it.w||''),
                         _ctsImp ? convertToImperialPDFSafe(it.thk||18).display : String(it.thk||18),
                         profDisplay.substring(0,20),
-                        _ctsImp ? (sqm * 10.7639).toFixed(2) : sqm.toFixed(3),
+                        pwAreaShow(sqm),
                         _ctsImp ? (ppsm / 10.7639).toFixed(2) : ppsm.toFixed(0),
                         rowTotal.toFixed(2)];
                     var sx = x;
@@ -17902,7 +17904,7 @@ const firebaseConfig = {
                     
                     // Convert to imperial if needed for display
                     const _pwU = getMatrixUnit(profileBase || profile); // v1.16.479
-                    const displayArea = _pwU !== 'sqm' ? pwUnitArea(item, _pwU) : (isImperial() ? (sqm * 10.7639).toFixed(2) : sqm.toFixed(3));
+                    const displayArea = _pwU !== 'sqm' ? pwUnitArea(item, _pwU) : pwAreaShow(sqm);
                     const displayRate = _pwU !== 'sqm' ? pwUnitRate(pricePerSqm, _pwU) : (isImperial() ? (pricePerSqm / 10.7639).toFixed(2) : pricePerSqm.toFixed(0));
                     
                     // Data array now includes SQ/MTR column
@@ -18037,7 +18039,7 @@ const firebaseConfig = {
                         (_ctsImp && it.w) ? convertToImperialPDFSafe(it.w).display : String(it.w||''),
                         _ctsImp ? convertToImperialPDFSafe(it.thk||18).display : String(it.thk||18),
                         profDisplay.substring(0,20),
-                        _ctsImp ? (sqm * 10.7639).toFixed(2) : sqm.toFixed(3),
+                        pwAreaShow(sqm),
                         _ctsImp ? (ppsm / 10.7639).toFixed(2) : ppsm.toFixed(0),
                         rowTotal.toFixed(2)];
                     var sx = x;
@@ -18415,7 +18417,7 @@ const firebaseConfig = {
                     
                     // Convert to imperial if needed for display
                     const _pwU = getMatrixUnit(profileBase || profile); // v1.16.479
-                    const displayArea = _pwU !== 'sqm' ? pwUnitArea(item, _pwU) : (isImperial() ? (sqm * 10.7639).toFixed(2) : sqm.toFixed(3));
+                    const displayArea = _pwU !== 'sqm' ? pwUnitArea(item, _pwU) : pwAreaShow(sqm);
                     const displayRate = _pwU !== 'sqm' ? pwUnitRate(pricePerSqm, _pwU) : (isImperial() ? (pricePerSqm / 10.7639).toFixed(2) : pricePerSqm.toFixed(0));
                     
                     // Data array now includes SQ/MTR column
@@ -18550,7 +18552,7 @@ const firebaseConfig = {
                         (_ctsImp && it.w) ? convertToImperialPDFSafe(it.w).display : String(it.w||''),
                         _ctsImp ? convertToImperialPDFSafe(it.thk||18).display : String(it.thk||18),
                         profDisplay.substring(0,20),
-                        _ctsImp ? (sqm * 10.7639).toFixed(2) : sqm.toFixed(3),
+                        pwAreaShow(sqm),
                         _ctsImp ? (ppsm / 10.7639).toFixed(2) : ppsm.toFixed(0),
                         rowTotal.toFixed(2)];
                     var sx = x;
@@ -19074,7 +19076,7 @@ const firebaseConfig = {
             // Totals row
             y2 += 3;
             doc.setFont(undefined,'bold'); doc.setFontSize(9); doc.setTextColor(44,62,80);
-            const displayCtsArea = isImperial() ? (ctsDocketSqm * 10.7639).toFixed(2) : ctsDocketSqm.toFixed(3);
+            const displayCtsArea = pwAreaShow(ctsDocketSqm);
             doc.text('Total CTS ' + getAreaLabel().toUpperCase() + ': ' + displayCtsArea + ' ' + getAreaLabel(), margin2, y2);
             doc.text('Total CTS Parts: ' + ctsSupplyItems.reduce(function(s,it){return s+(it.qty||1);},0), margin2 + 90, y2);
         }
@@ -25707,7 +25709,7 @@ ${pwStageSkipped(job, 'complete') ? '' : `                        <label style="
                 return acc;
             }, { sqm: 0, total: 0 });
             
-            const displayTotalArea = isImperial() ? (totals.sqm * 10.7639).toFixed(2) : totals.sqm.toFixed(3);
+            const displayTotalArea = pwAreaShow(totals.sqm);
             doc.setFontSize(10).setFont(undefined, 'bold');
             doc.text(`Total ${getAreaLabel().toUpperCase()}: ${displayTotalArea}`, 14, finalY);
             doc.text(`Total (ex ${getTaxLabel()}): $${totals.total.toFixed(2)}`, 14, finalY + 6);
