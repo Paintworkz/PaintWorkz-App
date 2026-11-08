@@ -3537,7 +3537,7 @@ const firebaseConfig = {
                                 <div style="font-size:9px; font-weight:900; color:#999; text-align:center;">CODE</div>
                                 <div style="font-size:9px; font-weight:900; color:#999; text-align:center;">GRAMS</div>
                                 <div style="font-size:9px; font-weight:900; color:#1565c0; text-align:center;">ALT CODE</div>
-                                <div style="font-size:9px; font-weight:900; color:#1565c0; text-align:center;">FROM (L)</div>
+                                <div style="font-size:9px; font-weight:900; color:#1565c0; text-align:center;">FROM (<span class="js-vol-unit">L</span>)</div>
                                 <div style="font-size:9px; font-weight:900; color:#1565c0; text-align:center;">ALT GRAMS</div>
                                 <div></div>
                             </div>
@@ -3557,7 +3557,7 @@ const firebaseConfig = {
                                 <div style="font-size:9px; font-weight:900; color:#999; text-align:center;">CODE</div>
                                 <div style="font-size:9px; font-weight:900; color:#999; text-align:center;">GRAMS</div>
                                 <div style="font-size:9px; font-weight:900; color:#1565c0; text-align:center;">ALT CODE</div>
-                                <div style="font-size:9px; font-weight:900; color:#1565c0; text-align:center;">FROM (L)</div>
+                                <div style="font-size:9px; font-weight:900; color:#1565c0; text-align:center;">FROM (<span class="js-vol-unit">L</span>)</div>
                                 <div style="font-size:9px; font-weight:900; color:#1565c0; text-align:center;">ALT GRAMS</div>
                                 <div></div>
                             </div>
@@ -4056,6 +4056,10 @@ const firebaseConfig = {
                         <p style="font-size:10px; color:#999; margin-top:4px; margin-bottom:0;">Dark mode follows your iOS/Android system setting by default.</p>
                     </div>
                 </div>
+                <div style="margin-top:6px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                    <button onclick="pwSaveAllPrefs()" style="border:none; background:#34c759; color:#fff; padding:10px 15px; border-radius:6px; font-weight:900; font-size:11px; cursor:pointer;">✓ SAVE PREFERENCES</button>
+                    <span id="prefSaveAllStatus" style="font-size:10px; color:#2e7d32; font-weight:700;"></span>
+                </div>
                 </div><!-- END global-settings-container -->
 
                 <hr style="margin:30px 0; border:none; border-top:1px solid #ddd;">
@@ -4197,7 +4201,7 @@ const firebaseConfig = {
                             <p style="font-size:11px; color:#666; margin-bottom:14px;">Set stock alert thresholds and paint base costs for Reports profitability analysis.</p>
                             <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;">
                                 <div style="background:#fff3e0; border:2px solid #ff9800; border-radius:8px; padding:12px;">
-                                    <label style="font-size:11px; font-weight:900; color:#e65100; display:block; margin-bottom:6px;">⚠️ Low Stock Alert Level (L)</label>
+                                    <label style="font-size:11px; font-weight:900; color:#e65100; display:block; margin-bottom:6px;">⚠️ Low Stock Alert Level (<span class="js-vol-unit">L</span>)</label>
                                     <input type="number" inputmode="decimal" id="st_alertLevel" min="1" max="200" step="1" value="15" style="width:100%; padding:8px; border:1px solid #ffcc02; border-radius:6px; font-size:14px; font-weight:900; text-align:center; box-sizing:border-box; background:#fffde7;" oninput="saveStockSettings()">
                                     <div style="font-size:10px; color:#888; margin-top:4px; text-align:center;">Alert triggers when any base drops below this level</div>
                                 </div>
@@ -7049,50 +7053,96 @@ const firebaseConfig = {
         if (lsMap[key]) localStorage.setItem(lsMap[key], value);
 
         // Apply effect
-        if (key === 'units') { setUnits(value);
-            // v1.16.479: re-show converted inputs in the new units (stored values are never changed)
-            try { if (typeof _applyUnitLabels === 'function') _applyUnitLabels(); } catch(e) {}
-            try { if (typeof loadCoverageRates === 'function') loadCoverageRates(); } catch(e) {}
-            try { if (typeof pwLoadDefaultInputs === 'function') pwLoadDefaultInputs(); } catch(e) {}
-            try { if (typeof initializeAdditionalChargesForm === 'function' && document.getElementById('chargeClearFlat')) initializeAdditionalChargesForm(); } catch(e) {}
-            // reports drawn before the change would still be in the old units
-            try { var _ro = document.getElementById('reportsOutput'); if (_ro && _ro.innerHTML && typeof buildReportsNow === 'function') { window.buildReportsRunning = false; buildReportsNow(); } } catch(e) {}
-            try { if (typeof loadStockSettings === 'function') loadStockSettings(); } catch(e) {}
-            try { if (typeof renderStockTab === 'function' && document.getElementById('stockAlertThreshold')) renderStockTab(); } catch(e) {}
-        }
+        if (key === 'units') { setUnits(value); pwRefreshUnitViews(); }
         if (key === 'currency') { notify('💰 Currency: ' + value); }
         if (key === 'locale') { setLocale(value); }
         if (key === 'inchFmt') { setInchFormat(value); }
 
         // Save to Firebase under current user
-        try {
-            var user = window._currentUser;
-            if (!user) return;
-            var { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js');
-            var prefRef = doc(window._db, 'users', user.uid, 'settings', 'preferences');
-            var data = {};
-            data[key] = value;
-            await setDoc(prefRef, data, { merge: true });
-            var el = document.getElementById('prefSaveStatus');
-            if (el) { el.textContent = '✓ Saved to your account'; setTimeout(function(){ el.textContent=''; }, 2000); }
-        } catch(e) {
-            console.warn('Pref save failed:', e);
-        }
+        // v1.16.479: was window._currentUser, which is never set — so nothing was ever saved to the
+        // account and units/currency/language went back to metric/AUD after logging out and in.
+        var data = {}; data[key] = value;
+        var ok = await pwSavePrefsCloud(data);
+        var el = document.getElementById('prefSaveStatus');
+        if (el) { el.textContent = ok ? '✓ Saved to your account' : '⚠️ Saved on this device only — not signed in or offline'; setTimeout(function(){ el.textContent=''; }, 3000); }
     }
+
+    // v1.16.479: one place that saves preferences to users/{uid}/settings/preferences
+    function pwSavePrefsCloud(data) {
+        try {
+            var u = window.currentUser || window._currentUser, db = window.firebaseDb || window._db;
+            if (!u || !u.uid || !window.doc || !window.setDoc || !db) return Promise.resolve(false);
+            return window.setDoc(window.doc(db, 'users', u.uid, 'settings', 'preferences'), Object.assign({}, data, { lastUpdated: new Date().toISOString() }), { merge: true })
+                .then(function(){ return true; })
+                .catch(function(e){ console.warn('Pref save failed:', e); return false; });
+        } catch(e) { return Promise.resolve(false); }
+    }
+    window.pwSavePrefsCloud = pwSavePrefsCloud;
+    // SAVE PREFERENCES button: every global setting in one go
+    async function pwSaveAllPrefs() {
+        var g = function(id){ var el = document.getElementById(id); return el ? el.value : undefined; };
+        var data = {
+            units:    localStorage.getItem('pw_units')    || g('prefUnitsSelect') || 'METRIC',
+            inchFmt:  localStorage.getItem('pw_inchFmt')  || g('prefInchFmtSelect') || 'decimal',
+            currency: localStorage.getItem('pw_currency') || g('prefCurrencySelect') || 'AUD',
+            locale:   localStorage.getItem('pw_locale')   || g('prefLocaleSelect') || 'en-AU',
+            precision: (typeof AdminSettings !== 'undefined' && AdminSettings.precision) ? AdminSettings.precision : (parseFloat(g('globalPrecisionSelect')) || 0.01),
+            taxRateOverride: localStorage.getItem('taxRateOverride') || '',
+            theme:    localStorage.getItem('pwz_theme') || g('themeSelect') || 'auto'
+        };
+        var ok = await pwSavePrefsCloud(data);
+        var el = document.getElementById('prefSaveAllStatus');
+        if (el) { el.textContent = ok ? '✓ Saved to your account — these follow you to every device' : '⚠️ Could not reach your account — saved on this device only. Try again when online.'; setTimeout(function(){ el.textContent=''; }, 5000); }
+        notify(ok ? '✅ Preferences saved to your account' : '⚠️ Preferences saved on this device only');
+    }
+    window.pwSaveAllPrefs = pwSaveAllPrefs;
+
+    // v1.16.479: redraw everything that shows converted units (stored values are never changed)
+    function pwRefreshUnitViews() {
+        try { if (typeof _applyUnitLabels === 'function') _applyUnitLabels(); } catch(e) {}
+        try { if (typeof renderJobTasks === 'function' && document.getElementById('totalWorkload')) renderJobTasks(); } catch(e) {} // footer workload number (was left in m² until reload)
+        try { if (typeof loadCoverageRates === 'function' && document.getElementById('cr_satin')) loadCoverageRates(); } catch(e) {}
+        try { if (typeof loadStockSettings === 'function' && document.getElementById('st_costSatinWhite')) loadStockSettings(); } catch(e) {}
+        try { if (typeof renderStockTab === 'function' && document.getElementById('stockAlertThreshold')) renderStockTab(); } catch(e) {}
+        try { if (typeof pwLoadDefaultInputs === 'function') pwLoadDefaultInputs(); } catch(e) {}
+        try { if (typeof initializeAdditionalChargesForm === 'function' && document.getElementById('chargeClearFlat')) initializeAdditionalChargesForm(); } catch(e) {}
+        try { if (typeof render === 'function' && typeof items !== 'undefined' && items.length) render(); } catch(e) {}
+        try { var _ro = document.getElementById('reportsOutput'); if (_ro && _ro.innerHTML && typeof buildReportsNow === 'function') { window.buildReportsRunning = false; buildReportsNow(); } } catch(e) {}
+    }
+    window.pwRefreshUnitViews = pwRefreshUnitViews;
 
     async function loadUserPreferences(uid) {
         try {
-            var { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js');
-            var prefRef = doc(window._db, 'users', uid, 'settings', 'preferences');
-            var snap = await getDoc(prefRef);
+            if (!uid || !window.doc || !window.getDoc || !(window.firebaseDb || window._db)) return;
+            var prefRef = window.doc(window.firebaseDb || window._db, 'users', uid, 'settings', 'preferences');
+            var snap = await window.getDoc(prefRef);
             if (!snap.exists()) return;
             var prefs = snap.data();
-            if (prefs.units)    { localStorage.setItem('pw_units',    prefs.units);    _applyUnitLabels(); }
+            var _unitsBefore = localStorage.getItem('pw_units') || 'METRIC';
+            if (prefs.units)    { localStorage.setItem('pw_units', prefs.units); try { AdminSettings.units = prefs.units; saveAdminSettings(); } catch(e) {} }
             if (prefs.inchFmt)  { localStorage.setItem('pw_inchFmt',  prefs.inchFmt); }
             if (prefs.currency) { localStorage.setItem('pw_currency', prefs.currency); }
             if (prefs.locale)   { localStorage.setItem('pw_locale',   prefs.locale); if (typeof setLocale==='function') setLocale(prefs.locale); }
+            // v1.16.479: the other global settings come back too (logout clears them from the device)
+            window._pwPrefLoading = true;
+            try {
+                if (prefs.precision !== undefined && prefs.precision !== null && !isNaN(parseFloat(prefs.precision))) {
+                    try { AdminSettings.precision = parseFloat(prefs.precision); saveAdminSettings(); } catch(e) {}
+                    var _pe = document.getElementById('globalPrecisionSelect'); if (_pe) _pe.value = String(parseFloat(prefs.precision));
+                }
+                if (prefs.taxRateOverride !== undefined) {
+                    if (prefs.taxRateOverride === '' || prefs.taxRateOverride === null) localStorage.removeItem('taxRateOverride'); else localStorage.setItem('taxRateOverride', prefs.taxRateOverride);
+                    var _te = document.getElementById('taxRateOverride'); if (_te) _te.value = prefs.taxRateOverride || '';
+                }
+                if (prefs.theme) {
+                    localStorage.setItem('pwz_theme', prefs.theme);
+                    try { applyTheme(prefs.theme); } catch(e) {}
+                    var _th = document.getElementById('themeSelect'); if (_th) _th.value = prefs.theme;
+                }
+            } finally { window._pwPrefLoading = false; }
             // Sync dropdowns
             _syncPrefDropdowns();
+            if (prefs.units && prefs.units !== _unitsBefore) pwRefreshUnitViews(); else { try { _applyUnitLabels(); } catch(e) {} }
             console.log('✅ User preferences loaded from Firebase');
         } catch(e) {
             console.warn('Pref load failed:', e);
@@ -7179,6 +7229,17 @@ const firebaseConfig = {
         if (el.dataset && el.dataset.pwKind === kind && el.dataset.pwDisp !== undefined && raw === el.dataset.pwDisp && el.dataset.pwOrig !== '') return parseFloat(el.dataset.pwOrig);
         const f = pwConvF(kind);
         return f === 1 ? parseFloat(raw) : parseFloat(raw) / f;
+    }
+    // Alt-code "from" amount in a formula row → litres text for the formula (untouched = exactly as stored)
+    function pwAltIn(el) {
+        if (!el) return '';
+        const v = String(el.value || '').trim();
+        if (!v) return '';
+        if (!pwUSVol()) return v;
+        const raw = String(el.value || '').trim();
+        if (el.dataset && el.dataset.pwDisp !== undefined && raw === el.dataset.pwDisp && el.dataset.pwOrig !== '') return String(parseFloat(el.dataset.pwOrig)); // untouched
+        const l = pwGetIn(el, 'vol');
+        return isNaN(l) ? '' : String(Math.round(l * 2) / 2); // typed in gal → nearest 0.5 L (thresholds are 0.5 L steps)
     }
     function pwInAttrs(metric, kind, dp, metricShown) {
         const d = pwConvF(kind) === 1 ? metricShown : pwInDisp(metric, kind, dp);
@@ -7489,6 +7550,7 @@ const firebaseConfig = {
     function setPrecision(value) {
         AdminSettings.precision = parseFloat(value);
         saveAdminSettings();
+        if (!window._pwPrefLoading) pwSavePrefsCloud({ precision: parseFloat(value) }); // v1.16.479
         notify(` Precision set to: ${value}`);
     }
 
@@ -7520,6 +7582,7 @@ const firebaseConfig = {
             localStorage.setItem('taxRateOverride', rate);
             notify(` Tax rate override set to: ${rate}%`);
         }
+        if (!window._pwPrefLoading) pwSavePrefsCloud({ taxRateOverride: (isNaN(rate) || value === '') ? '' : String(rate) }); // v1.16.479
     }
     
     function getTaxRateOverride() {
@@ -7885,6 +7948,7 @@ const firebaseConfig = {
     function setTheme(val) {
         localStorage.setItem('pwz_theme', val);
         applyTheme(val);
+        if (!window._pwPrefLoading) pwSavePrefsCloud({ theme: val }); // v1.16.479
         notify('    Appearance updated');
     }
 
@@ -9218,7 +9282,7 @@ const firebaseConfig = {
             <input type="text" placeholder="e.g. ITE303" value="${code}" style="padding:5px; border:1px solid #ddd; border-radius:4px; font-size:11px; font-family:monospace; box-sizing:border-box; width:100%;">
             <input type="number" inputmode="decimal" placeholder="g" step="0.01" value="${grams}" style="padding:5px; border:1px solid #ddd; border-radius:4px; font-size:11px; text-align:right; box-sizing:border-box; width:100%;">
             <input type="text" placeholder="Alt code" value="${altCode}" style="padding:5px; border:1px solid #90caf9; border-radius:4px; font-size:11px; font-family:monospace; background:#f0f7ff; box-sizing:border-box; width:100%;">
-            <input type="number" inputmode="decimal" placeholder="L" step="0.5" value="${altThreshold}" style="padding:5px; border:1px solid #90caf9; border-radius:4px; font-size:11px; text-align:right; background:#f0f7ff; box-sizing:border-box; width:100%;" oninput="syncAltThreshold(this)" title="Typing here fills all rows with same litre amount">
+            <input type="number" inputmode="decimal" placeholder="${pwVolU()}" step="${pwUSVol() ? '0.01' : '0.5'}" ${(altThreshold !== '' && altThreshold != null) ? pwInAttrs(altThreshold, 'vol', 2, altThreshold) : 'value=""'} style="padding:5px; border:1px solid #90caf9; border-radius:4px; font-size:11px; text-align:right; background:#f0f7ff; box-sizing:border-box; width:100%;" oninput="syncAltThreshold(this)" title="Typing here fills all rows with same litre amount">
             <input type="number" inputmode="decimal" placeholder="g" step="0.01" value="${altGrams}" style="padding:5px; border:1px solid #90caf9; border-radius:4px; font-size:11px; text-align:right; background:#f0f7ff; box-sizing:border-box; width:100%;" title="Grams to use with alt code">
             <button type="button" onclick="this.closest('[data-tinter-idx]').remove()" style="padding:0; width:28px; height:28px; border:none; background:#ff3b30; color:#fff; border-radius:4px; font-size:14px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center;">X</button>
         `;
@@ -9245,7 +9309,7 @@ const firebaseConfig = {
             const code = inputs[0].value.trim();
             const grams = inputs[1].value.trim();
             const altCode = inputs[2].value.trim();
-            const altThresh = inputs[3].value.trim();
+            const altThresh = pwAltIn(inputs[3]); // v1.16.479: gallons on Imperial USA, saved as litres
             const altGrams = inputs[4].value.trim();
             if (code && grams) {
                 if (altCode && altThresh) {
@@ -9284,7 +9348,7 @@ const firebaseConfig = {
             <input type="text" placeholder="e.g. ITE303" value="${code}" style="padding:5px; border:1px solid #ddd; border-radius:4px; font-size:11px; font-family:monospace; box-sizing:border-box; width:100%;">
             <input type="number" inputmode="decimal" placeholder="g" step="0.01" value="${grams}" style="padding:5px; border:1px solid #ddd; border-radius:4px; font-size:11px; text-align:right; box-sizing:border-box; width:100%;">
             <input type="text" placeholder="Alt code" value="${altCode}" style="padding:5px; border:1px solid #90caf9; border-radius:4px; font-size:11px; font-family:monospace; background:#f0f7ff; box-sizing:border-box; width:100%;">
-            <input type="number" inputmode="decimal" placeholder="L" step="0.5" value="${altThreshold}" style="padding:5px; border:1px solid #90caf9; border-radius:4px; font-size:11px; text-align:right; background:#f0f7ff; box-sizing:border-box; width:100%;" oninput="syncAltThreshold(this)" title="Typing here fills all rows with same litre amount">
+            <input type="number" inputmode="decimal" placeholder="${pwVolU()}" step="${pwUSVol() ? '0.01' : '0.5'}" ${(altThreshold !== '' && altThreshold != null) ? pwInAttrs(altThreshold, 'vol', 2, altThreshold) : 'value=""'} style="padding:5px; border:1px solid #90caf9; border-radius:4px; font-size:11px; text-align:right; background:#f0f7ff; box-sizing:border-box; width:100%;" oninput="syncAltThreshold(this)" title="Typing here fills all rows with same litre amount">
             <input type="number" inputmode="decimal" placeholder="g" step="0.01" value="${altGrams}" style="padding:5px; border:1px solid #90caf9; border-radius:4px; font-size:11px; text-align:right; background:#f0f7ff; box-sizing:border-box; width:100%;" title="Grams to use with alt code">
             <button type="button" onclick="this.closest('[data-edit-tinter-row]').remove()" style="padding:0; width:28px; height:28px; border:none; background:#ff3b30; color:#fff; border-radius:4px; font-size:14px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center;">X</button>
         `;
@@ -9301,7 +9365,7 @@ const firebaseConfig = {
             const code = inputs[0].value.trim();
             const grams = inputs[1].value.trim();
             const altCode = inputs[2].value.trim();
-            const altThresh = inputs[3].value.trim();
+            const altThresh = pwAltIn(inputs[3]); // v1.16.479: gallons on Imperial USA, saved as litres
             const altGrams = inputs[4].value.trim();
             if (code && grams) {
                 lines.push(altCode && altThresh
@@ -9333,7 +9397,7 @@ const firebaseConfig = {
             <input type="text" placeholder="e.g. XB6930" value="${code}" style="padding:5px; border:1px solid #ddd; border-radius:4px; font-size:11px; font-family:monospace; box-sizing:border-box; width:100%;">
             <input type="number" inputmode="decimal" placeholder="g" step="0.01" value="${grams}" style="padding:5px; border:1px solid #ddd; border-radius:4px; font-size:11px; text-align:right; box-sizing:border-box; width:100%;">
             <input type="text" placeholder="Alt code" value="${altCode}" style="padding:5px; border:1px solid #90caf9; border-radius:4px; font-size:11px; font-family:monospace; background:#f0f7ff; box-sizing:border-box; width:100%;">
-            <input type="number" inputmode="decimal" placeholder="L" step="0.5" value="${altThreshold}" style="padding:5px; border:1px solid #90caf9; border-radius:4px; font-size:11px; text-align:right; background:#f0f7ff; box-sizing:border-box; width:100%;" oninput="syncAltThreshold(this)" title="Typing here fills all rows with same litre amount">
+            <input type="number" inputmode="decimal" placeholder="${pwVolU()}" step="${pwUSVol() ? '0.01' : '0.5'}" ${(altThreshold !== '' && altThreshold != null) ? pwInAttrs(altThreshold, 'vol', 2, altThreshold) : 'value=""'} style="padding:5px; border:1px solid #90caf9; border-radius:4px; font-size:11px; text-align:right; background:#f0f7ff; box-sizing:border-box; width:100%;" oninput="syncAltThreshold(this)" title="Typing here fills all rows with same litre amount">
             <input type="number" inputmode="decimal" placeholder="g" step="0.01" value="${altGrams}" style="padding:5px; border:1px solid #90caf9; border-radius:4px; font-size:11px; text-align:right; background:#f0f7ff; box-sizing:border-box; width:100%;" title="Grams to use with alt code">
             <button type="button" onclick="this.closest('[data-edit-base-row]').remove()" style="padding:0; width:28px; height:28px; border:none; background:#ff3b30; color:#fff; border-radius:4px; font-size:14px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center;">X</button>
         `;
@@ -9350,7 +9414,7 @@ const firebaseConfig = {
             const code = inputs[0].value.trim();
             const grams = inputs[1].value.trim();
             const altCode = inputs[2].value.trim();
-            const altThresh = inputs[3].value.trim();
+            const altThresh = pwAltIn(inputs[3]); // v1.16.479: gallons on Imperial USA, saved as litres
             const altGrams = inputs[4].value.trim();
             if (code && grams) {
                 lines.push(altCode && altThresh
@@ -9382,7 +9446,7 @@ const firebaseConfig = {
             <input type="text" placeholder="e.g. XB6930" value="${code}" style="padding:5px; border:1px solid #ddd; border-radius:4px; font-size:11px; font-family:monospace; box-sizing:border-box; width:100%;">
             <input type="number" inputmode="decimal" placeholder="g" step="0.01" value="${grams}" style="padding:5px; border:1px solid #ddd; border-radius:4px; font-size:11px; text-align:right; box-sizing:border-box; width:100%;">
             <input type="text" placeholder="Alt code" value="${altCode}" style="padding:5px; border:1px solid #90caf9; border-radius:4px; font-size:11px; font-family:monospace; background:#f0f7ff; box-sizing:border-box; width:100%;">
-            <input type="number" inputmode="decimal" placeholder="L" step="0.5" value="${altThreshold}" style="padding:5px; border:1px solid #90caf9; border-radius:4px; font-size:11px; text-align:right; background:#f0f7ff; box-sizing:border-box; width:100%;" oninput="syncAltThreshold(this)" title="Typing here fills all rows with same litre amount">
+            <input type="number" inputmode="decimal" placeholder="${pwVolU()}" step="${pwUSVol() ? '0.01' : '0.5'}" ${(altThreshold !== '' && altThreshold != null) ? pwInAttrs(altThreshold, 'vol', 2, altThreshold) : 'value=""'} style="padding:5px; border:1px solid #90caf9; border-radius:4px; font-size:11px; text-align:right; background:#f0f7ff; box-sizing:border-box; width:100%;" oninput="syncAltThreshold(this)" title="Typing here fills all rows with same litre amount">
             <input type="number" inputmode="decimal" placeholder="g" step="0.01" value="${altGrams}" style="padding:5px; border:1px solid #90caf9; border-radius:4px; font-size:11px; text-align:right; background:#f0f7ff; box-sizing:border-box; width:100%;" title="Grams when alt code triggers">
             <button type="button" onclick="this.closest('[data-base-code-row]').remove()" style="padding:0; width:28px; height:28px; border:none; background:#ff3b30; color:#fff; border-radius:4px; font-size:14px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center;">X</button>
         `;
@@ -9404,7 +9468,7 @@ const firebaseConfig = {
         }
         // Auto-fill alt threshold columns for each litre step
         if (litres >= 2 && mainGrams && !inputs[3].value) {
-            inputs[3].value = '2'; // threshold: 2L
+            pwSetIn(inputs[3], 2, 'vol', 2); // threshold: 2L (shown in gal on Imperial USA)
         }
         if (litres >= 2 && mainGrams && !inputs[4].value) {
             // Alt grams = mainGrams scaled to 2L (mainGrams is per 1L)
@@ -9421,7 +9485,7 @@ const firebaseConfig = {
             const code = inputs[0].value.trim();
             const grams = parseFloat(inputs[1].value) || 0;
             const altCode = inputs[2].value.trim();
-            const altThresh = parseFloat(inputs[3].value) || 0;
+            const altThresh = parseFloat(pwAltIn(inputs[3])) || 0; // v1.16.479
             const altGrams = parseFloat(inputs[4].value) || 0;
             if (code && grams > 0) {
                 const entry = { code, grams };
@@ -9686,7 +9750,7 @@ const firebaseConfig = {
                     <div style="font-size:9px; font-weight:900; color:#999; text-align:center;">CODE</div>
                     <div style="font-size:9px; font-weight:900; color:#999; text-align:center;">GRAMS</div>
                     <div style="font-size:9px; font-weight:900; color:#1565c0; text-align:center;">ALT CODE</div>
-                    <div style="font-size:9px; font-weight:900; color:#1565c0; text-align:center;">FROM (L)</div>
+                    <div style="font-size:9px; font-weight:900; color:#1565c0; text-align:center;">FROM (${pwVolU()})</div>
                     <div style="font-size:9px; font-weight:900; color:#1565c0; text-align:center;">ALT GRAMS</div>
                     <div></div>
                 </div>
@@ -9704,7 +9768,7 @@ const firebaseConfig = {
                     <div style="font-size:9px; font-weight:900; color:#999; text-align:center;">CODE</div>
                     <div style="font-size:9px; font-weight:900; color:#999; text-align:center;">GRAMS</div>
                     <div style="font-size:9px; font-weight:900; color:#1565c0; text-align:center;">ALT CODE <span style="font-weight:400;">(large qty)</span></div>
-                    <div style="font-size:9px; font-weight:900; color:#1565c0; text-align:center;">FROM (L)</div>
+                    <div style="font-size:9px; font-weight:900; color:#1565c0; text-align:center;">FROM (${pwVolU()})</div>
                     <div></div>
                 </div>
                 <div id="editTintersRows"></div>
