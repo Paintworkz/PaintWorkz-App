@@ -7106,6 +7106,8 @@ const firebaseConfig = {
     function pwRefreshUnitViews() {
         try { if (typeof _applyUnitLabels === 'function') _applyUnitLabels(); } catch(e) {}
         try { if (typeof renderJobTasks === 'function' && document.getElementById('totalWorkload')) renderJobTasks(); } catch(e) {} // footer workload number (was left in m² until reload)
+        try { var _ls = document.getElementById('liveSq'); if (_ls && typeof up === 'function') up(); } catch(e) {}
+        try { if (typeof renderHistory === 'function' && document.getElementById('history-list')) renderHistory(); } catch(e) {}
         try { if (typeof loadCoverageRates === 'function' && document.getElementById('cr_satin')) loadCoverageRates(); } catch(e) {}
         try { if (typeof loadStockSettings === 'function' && document.getElementById('st_costSatinWhite')) loadStockSettings(); } catch(e) {}
         try { if (typeof renderStockTab === 'function' && document.getElementById('stockAlertThreshold')) renderStockTab(); } catch(e) {}
@@ -7132,7 +7134,9 @@ const firebaseConfig = {
             window._pwPrefLoading = true;
             try {
                 if (prefs.precision !== undefined && prefs.precision !== null && !isNaN(parseFloat(prefs.precision))) {
-                    try { AdminSettings.precision = parseFloat(prefs.precision); saveAdminSettings(); } catch(e) {}
+                    var _precChanged = false;
+                    try { _precChanged = AdminSettings.precision !== parseFloat(prefs.precision); AdminSettings.precision = parseFloat(prefs.precision); saveAdminSettings(); } catch(e) {}
+                    if (_precChanged) { try { pwRefreshUnitViews(); } catch(e) {} } // v1.16.479: show the saved decimals straight after login
                     var _pe = document.getElementById('globalPrecisionSelect'); if (_pe) _pe.value = String(parseFloat(prefs.precision));
                 }
                 if (prefs.taxRateOverride !== undefined) {
@@ -7555,7 +7559,9 @@ const firebaseConfig = {
     function setPrecision(value) {
         AdminSettings.precision = parseFloat(value);
         saveAdminSettings();
-        try { if (typeof render === 'function' && typeof items !== 'undefined' && items.length) render(); } catch(e) {} // v1.16.479: show the new decimals now
+        try { if (typeof pwRefreshUnitViews === 'function') pwRefreshUnitViews(); } catch(e) {} // v1.16.479: show the new decimals everywhere now
+        try { if (typeof render === 'function') render(); } catch(e) {}
+        try { var _gc = document.getElementById('ganttChart'); if (_gc && _gc.innerHTML && typeof renderScheduleCalendarNow === 'function') renderScheduleCalendarNow(); } catch(e) {}
         if (!window._pwPrefLoading) pwSavePrefsCloud({ precision: parseFloat(value) }); // v1.16.479
         notify(` Precision set to: ${value}`);
     }
@@ -10880,7 +10886,7 @@ const firebaseConfig = {
             
             const totSqmEl = document.getElementById('tA');
             const totPartsEl = document.getElementById('tQ');
-            if (totSqmEl) totSqmEl.innerText = '0.000';
+            if (totSqmEl) totSqmEl.innerText = pwAreaShow(0);
             if (totPartsEl) totPartsEl.innerText = '0';
             
             // Reset job mode flags
@@ -11595,7 +11601,7 @@ const firebaseConfig = {
             // Clear totals
             const totSqmEl = document.getElementById('tA');
             if (totSqmEl) {
-                totSqmEl.innerText = '0.000';
+                totSqmEl.innerText = pwAreaShow(0);
                 console.log('    Cleared total SQM (m  )');
             }
             
@@ -12121,7 +12127,7 @@ const firebaseConfig = {
                 </div>
                 <div style="display:flex; gap:15px; padding:10px 0; border-top:1px solid #eee; border-bottom:1px solid #eee; margin-bottom:10px; position:relative; z-index:1;">
                     <div style="flex:1; text-align:center;">
-                        <div style="font-size:16px; font-weight:900; color:var(--gs);">${isImperial() ? ((parseFloat(job.totalSqm) || 0) * 10.7639).toFixed(1) : (job.totalSqm || '0.000')}</div>
+                        <div style="font-size:16px; font-weight:900; color:var(--gs);">${pwAreaShow(job.totalSqm || 0)}</div>
                         <div style="font-size:9px; color:#999; font-weight:700;">${getAreaLabel().toUpperCase()}</div>
                     </div>
                     <div style="flex:1; text-align:center;">
@@ -13079,7 +13085,7 @@ const firebaseConfig = {
 
         const restore = () => {
             Object.entries(saved).forEach(([id, val]) => { const el = document.getElementById(id); if (el) el.value = val; });
-            if (tAEl) tAEl.innerText = savedTA || '0.000';
+            if (tAEl) tAEl.innerText = savedTA || pwAreaShow(0);
             if (tQEl) tQEl.innerText = savedTQ || '0';
             if (totEl) totEl.innerText = savedTot || '0.000';
             window.currentLoadedJob = savedLoadedJob;
@@ -24178,7 +24184,7 @@ if ('serviceWorker' in navigator && _swAllowed) {
                     <div style="position:sticky; left:-15px; z-index:6; width:${window._pwGanttLW}px; min-width:${window._pwGanttLW}px; max-width:${window._pwGanttLW}px; font-weight:900; font-size:10px; padding:6px 6px; border-right:2px solid ${gc.borderMain}; color:${gc.textPrimary}; line-height:1.2; background:${gc.headerBg}; box-sizing:border-box;">
                         <div style="color:#d4af37; font-size:11px; font-weight:900;">#${job.jobNum} - ${job.jobName || 'Unnamed'}</div>
                         <div style="font-size:9px; color:${gc.textPrimary}; margin-top:2px; font-weight:900;">${job.client}</div>
-                        <div style="font-size:7px; color:#2196f3; font-weight:900; margin-top:1px;">     ${parseFloat(job.totalSqm || 0).toFixed(2)} m  </div>
+                        <div style="font-size:7px; color:#2196f3; font-weight:900; margin-top:1px;">     ${pwAreaShow(job.totalSqm || 0)} ${getAreaLabel()}</div>
                         <button onclick="editJobTimeline(${originalIdx})" id="${originalIdx===0?'ganttFirstEditBtn':''}" style="font-size:8px; padding:2px 4px; border:none; background:#2196f3; color:#fff; border-radius:2px; cursor:pointer; margin-top:1px; width:100%;">       Edit</button>
                     </div>
                     
@@ -29050,7 +29056,7 @@ ${pwStageSkipped(job, 'complete') ? '' : `                        <label style="
                 // ── Detail rows ───────────────────────────────
                 doc.setFont(undefined,'normal'); doc.setFontSize(8); doc.setTextColor(50,50,50);
                 doc.text(`Date: ${dateRec}`, x+5, nameY+9);
-                const displayLabelArea = isBlank ? '' : (isImperial() ? (parseFloat(totalSqm) * 10.7639).toFixed(2) : parseFloat(totalSqm).toFixed(2));
+                const displayLabelArea = isBlank ? '' : pwAreaShow(totalSqm);
                 doc.text(isBlank ? `Parts:        ${getAreaLabel().toUpperCase()}:` : `Parts: ${totalParts}   ${getAreaLabel().toUpperCase()}: ${displayLabelArea}`, x+5, nameY+16);
 
                 // ── Colours (blue bold) ───────────────────────
@@ -29061,7 +29067,7 @@ ${pwStageSkipped(job, 'complete') ? '' : `                        <label style="
 
                 // ── QR bottom right (skip on blank) ───────────
                 if (!isBlank) try {
-                    const _dispSqm3 = isImperial() ? (parseFloat(totalSqm) * 10.7639).toFixed(2) + 'sqft' : parseFloat(totalSqm).toFixed(2) + 'sqm';
+                    const _dispSqm3 = pwAreaShow(totalSqm) + (isImperial() ? 'sqft' : 'sqm');
                     const _mouldedCount = safeItems.filter(i => {
                         const p = (i.prof||'').toLowerCase();
                         return !p.includes('plain') && !p.includes('flat') && !p.includes('101') && !p.includes('benchtop') && !p.includes('600');
@@ -29088,7 +29094,7 @@ ${pwStageSkipped(job, 'complete') ? '' : `                        <label style="
             } else if (is10) {
                 // ── 10-label layout — 99×57mm (LM5102 / Avery L7173) ──
                 doc.setFont(undefined,'bold'); doc.setFontSize(9); doc.setTextColor(0,0,0);
-                const displayLabelArea10 = isBlank ? '' : (isImperial() ? (parseFloat(totalSqm) * 10.7639).toFixed(2) : parseFloat(totalSqm).toFixed(2));
+                const displayLabelArea10 = isBlank ? '' : pwAreaShow(totalSqm);
                 const _dateLine10 = isBlank ? `Date:          Parts:          ${getAreaLabel()}:` : `Date: ${dateRec}  |  Parts: ${totalParts}  ${getAreaLabel()}: ${displayLabelArea10}`;
                 doc.text(_dateLine10, x+5, nameY+9, { maxWidth: lw - 28 });
 
@@ -29100,7 +29106,7 @@ ${pwStageSkipped(job, 'complete') ? '' : `                        <label style="
 
                 // ── QR bottom right (skip on blank) ───────────
                 if (!isBlank) try {
-                    const _dispSqm10 = isImperial() ? (parseFloat(totalSqm) * 10.7639).toFixed(2) + 'sqft' : parseFloat(totalSqm).toFixed(2) + 'sqm';
+                    const _dispSqm10 = pwAreaShow(totalSqm) + (isImperial() ? 'sqft' : 'sqm');
                     const _p10 = new URLSearchParams({ job: jobNum, client: client, sqm: _dispSqm10, parts: totalParts, colour: colours.slice(0,2).join(', ') });
                     const _qrText10 = `https://app.paintworkzpro.com.au/?${_p10.toString()}`;
                     const qrDataUrl = generateQRDataURL(_qrText10, 200);
@@ -29119,7 +29125,7 @@ ${pwStageSkipped(job, 'complete') ? '' : `                        <label style="
                 doc.setFont(undefined,'bold'); doc.setFontSize(6.5); doc.setTextColor(0,100,180);
                 doc.text(colours[0]?.substring(0,22)||'', x+5, nameY+13);
                 if (!isBlank) try {
-                    const _dispSqm4 = isImperial() ? (parseFloat(totalSqm) * 10.7639).toFixed(2) + 'sqft' : parseFloat(totalSqm).toFixed(2) + 'sqm';
+                    const _dispSqm4 = pwAreaShow(totalSqm) + (isImperial() ? 'sqft' : 'sqm');
                     const _p4 = new URLSearchParams({ job: jobNum, client: client, sqm: _dispSqm4, parts: totalParts, colour: colours[0]||'' });
                     const _qrText4 = `https://app.paintworkzpro.com.au/?${_p4.toString()}`;
                     const qrDataUrl = generateQRDataURL(_qrText4, 150);
@@ -29219,11 +29225,11 @@ ${pwStageSkipped(job, 'complete') ? '' : `                        <label style="
 
         // QR code top right (encodes job info) — skip entirely on blank
         if (!isBlank) try {
-            const displayQrArea = isImperial() ? (parseFloat(totalSqm) * 10.7639).toFixed(2) : parseFloat(totalSqm).toFixed(2);
+            const displayQrArea = pwAreaShow(totalSqm);
             const _brands = [...new Set(safeItems.map(i => i.brand).filter(Boolean))];
             const _codes  = [...new Set(safeItems.map(i => i.code).filter(Boolean))];
             const _finishes = [...new Set(safeItems.map(i => i.finish).filter(Boolean))];
-            const _dispSqm5 = isImperial() ? (parseFloat(totalSqm) * 10.7639).toFixed(2) + 'sqft' : parseFloat(totalSqm).toFixed(2) + 'sqm';
+            const _dispSqm5 = pwAreaShow(totalSqm) + (isImperial() ? 'sqft' : 'sqm');
             const _p5 = new URLSearchParams({
                 job: jobNum, client: client,
                 sqm: _dispSqm5, parts: totalParts,
@@ -29258,7 +29264,7 @@ ${pwStageSkipped(job, 'complete') ? '' : `                        <label style="
         doc.text('TOTAL ' + pwAreaW(), col1, infoY+22);
         doc.text('PAINT BRAND', col2, infoY+22);
         doc.setFontSize(18); doc.setFont(undefined, 'bold'); doc.setTextColor(0,0,0);
-        doc.text(isBlank ? '' : ((isImperial() ? (parseFloat(totalSqm) * 10.7639).toFixed(2) : totalSqm) + ' ' + getAreaLabel()), col1, infoY+32); // v1.16.479: was m² with a sqft label
+        doc.text(isBlank ? '' : (pwAreaShow(totalSqm) + ' ' + getAreaLabel()), col1, infoY+32); // v1.16.479: was m² with a sqft label
         doc.text(isBlank ? '' : (brands.join(' / ') || '—'), col2, infoY+32);
 
         // Colour section
@@ -31180,7 +31186,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         
         if (document.getElementById('totalActiveJobs')) document.getElementById('totalActiveJobs').innerText = activeJobs;
         if (document.getElementById('totalTasks')) document.getElementById('totalTasks').innerText = `${completedTasks}/${totalTasks}`;
-        const displayWorkload = isImperial() ? (totalSqm * 10.7639).toFixed(1) : totalSqm.toFixed(1);
+        const displayWorkload = pwAreaShow(totalSqm); // v1.16.479: follows Measurement Precision
         if (document.getElementById('totalWorkload')) document.getElementById('totalWorkload').innerText = displayWorkload + ' ' + getAreaLabel();
         
     }
