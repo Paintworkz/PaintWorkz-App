@@ -93,7 +93,7 @@ window.pwToday = pwToday;
 </script>
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.482-dev'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.483-dev'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     window.PW_BUILD_DATE = '2026-11-09'; // v1.16.476: the date this build was made — update with each build
     const VERSION_KEY = 'paintworkz_version';
@@ -1700,7 +1700,7 @@ window.getTooltipKey = getTooltipKey;
 </script>
 </head>
 <body>
-<div id="devBanner">🚧 DEVELOPMENT VERSION — LIVE DATA — v1.16.482-dev (open in Incognito / separate browser) 🚧</div>
+<div id="devBanner">🚧 DEVELOPMENT VERSION — LIVE DATA — v1.16.483-dev (open in Incognito / separate browser) 🚧</div>
 
 <!-- COPYRIGHT NOTICE -->
 <div id="copyrightBanner" style="display:none;">
@@ -3774,7 +3774,7 @@ const firebaseConfig = {
                 </div>
                 <div style="margin-bottom:14px;">
                     <label style="font-size:10px; font-weight:900; color:#adadb8; display:block; margin-bottom:6px;">LABEL SHEET SIZE</label>
-                    <select id="jobLabelSizeSelect" onchange="document.getElementById('jobLabelQtyInput').value = this.value" style="background:#2c2c2e; color:#f2f2f7; border:1px solid #48484a; border-radius:6px; padding:8px 12px; font-size:13px; font-weight:700; width:100%;">
+                    <select id="jobLabelSizeSelect" onchange="document.getElementById('jobLabelQtyInput').value = (this.selectedOptions[0] && this.selectedOptions[0].dataset.count) || this.value" style="background:#2c2c2e; color:#f2f2f7; border:1px solid #48484a; border-radius:6px; padding:8px 12px; font-size:13px; font-weight:700; width:100%;">
                         <option value="8">8 per A4 — 99×68mm (Avery L7165)</option>
                         <option value="10">10 per A4 — 99×57mm (LM5102 / Avery L7173)</option>
                         <option value="14">14 per A4 — 99×38mm (Avery L7163)</option>
@@ -3944,7 +3944,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.482</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.483</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;"></div>
                         </div>
                     </div>
@@ -4023,6 +4023,13 @@ const firebaseConfig = {
                                 <option value="en-AU">English (AU) — Australian</option>
                                 <option value="en-US">English (US) — American</option>
                                 <option value="en-GB">English (UK) — British</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display:block; font-weight:900; font-size:10px; color:#9fa8da; margin-bottom:5px;">📄 PAPER SIZE</label>
+                            <select id="prefPaperSelect" onchange="savePreference('paper',this.value)" style="width:100%; padding:9px; border:1px solid #3949ab; border-radius:6px; font-size:12px; font-weight:700; background:#1c2163; color:#fff;">
+                                <option value="a4">A4 (AU / NZ / UK / Europe)</option>
+                                <option value="letter">US Letter (USA / Canada)</option>
                             </select>
                         </div>
                     </div>
@@ -4981,7 +4988,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.482</span><span style="color:#d4af37; font-weight:900;" id="versionDate"></span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.483</span><span style="color:#d4af37; font-weight:900;" id="versionDate"></span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);if(typeof tab==='function')tab('measure');setTimeout(function(){if(typeof startTour==='function')startTour();},300);" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -7060,7 +7067,7 @@ const firebaseConfig = {
     // ── USER PREFERENCES (Firebase-backed, per user account) ─────────────────
     async function savePreference(key, value) {
         // Apply immediately
-        var lsMap = {units:'pw_units', inchFmt:'pw_inchFmt', currency:'pw_currency', locale:'pw_locale'};
+        var lsMap = {units:'pw_units', inchFmt:'pw_inchFmt', currency:'pw_currency', locale:'pw_locale', paper:'pw_paper'};
         if (lsMap[key]) localStorage.setItem(lsMap[key], value);
 
         // Apply effect
@@ -7068,6 +7075,7 @@ const firebaseConfig = {
         if (key === 'currency') { notify('💰 Currency: ' + value); try { pwApplyPlanPrices(); } catch(e) {} }
         if (key === 'locale') { setLocale(value); }
         if (key === 'inchFmt') { setInchFormat(value); }
+        if (key === 'paper') { try { pwApplyPaperUI(); } catch(e) {} notify('📄 Paper size: ' + (value === 'letter' ? 'US Letter' : 'A4')); }
 
         // Save to Firebase under current user
         // v1.16.479: was window._currentUser, which is never set — so nothing was ever saved to the
@@ -7097,6 +7105,7 @@ const firebaseConfig = {
             inchFmt:  localStorage.getItem('pw_inchFmt')  || g('prefInchFmtSelect') || 'decimal',
             currency: localStorage.getItem('pw_currency') || g('prefCurrencySelect') || 'AUD',
             locale:   localStorage.getItem('pw_locale')   || g('prefLocaleSelect') || 'en-AU',
+            paper:    pwPaper(),
             precision: (typeof AdminSettings !== 'undefined' && AdminSettings.precision) ? AdminSettings.precision : (parseFloat(g('globalPrecisionSelect')) || 0.01),
             taxRateOverride: localStorage.getItem('taxRateOverride') || '',
             theme:    localStorage.getItem('pwz_theme') || g('themeSelect') || 'auto'
@@ -7135,6 +7144,7 @@ const firebaseConfig = {
             if (prefs.units)    { localStorage.setItem('pw_units', prefs.units); try { AdminSettings.units = prefs.units; saveAdminSettings(); } catch(e) {} }
             if (prefs.inchFmt)  { localStorage.setItem('pw_inchFmt',  prefs.inchFmt); }
             if (prefs.currency) { localStorage.setItem('pw_currency', prefs.currency); }
+            if (prefs.paper === 'letter' || prefs.paper === 'a4') { localStorage.setItem('pw_paper', prefs.paper); }
             if (prefs.locale)   { localStorage.setItem('pw_locale',   prefs.locale); if (typeof setLocale==='function') setLocale(prefs.locale); }
             // v1.16.479: the other global settings come back too (logout clears them from the device)
             window._pwPrefLoading = true;
@@ -7170,6 +7180,7 @@ const firebaseConfig = {
             prefInchFmtSelect: localStorage.getItem('pw_inchFmt')  || 'decimal',
             prefCurrencySelect:localStorage.getItem('pw_currency') || 'AUD',
             prefLocaleSelect:  localStorage.getItem('pw_locale')   || 'en-AU',
+            prefPaperSelect:   pwPaper(),
             globalUnitsSelect: localStorage.getItem('pw_units')    || 'METRIC',
             globalCurrencySelect:localStorage.getItem('pw_currency')|| 'AUD',
             globalInchFormatSelect:localStorage.getItem('pw_inchFmt')||'decimal',
@@ -7308,6 +7319,111 @@ const firebaseConfig = {
             document.querySelectorAll('.js-plan-link').forEach(function(el){ el.href = 'https://paintworkzpro.com.au' + p.site + 'pricing.html'; });
         } catch(e) {}
     }
+    // v1.16.483: US Letter paper. Every PDF is still laid out as before (A4 / A3); when the shop prints on
+    // US Letter the finished pages are scaled onto Letter (A3 schedule → Tabloid 11×17) at output time.
+    // Label sheets use real US Letter Avery layouts instead (5164 / 5163 / 5162). Display/print only.
+    function pwPaper() {
+        try {
+            var p = localStorage.getItem('pw_paper');
+            if (p === 'letter' || p === 'a4') return p;
+            var c = getCurrencyCode();
+            if (c === 'USD' || c === 'CAD' || getUnits() === 'IMPERIAL_US') return 'letter';
+        } catch(e) {}
+        return 'a4';
+    }
+    function pwLetterize(d) {
+        try {
+            if (!d || d.__pwLetter || window.batchCapturing || pwPaper() !== 'letter') return;
+            d.__pwLetter = true;
+            var near = function(a, b){ return Math.abs(a - b) < 1.5; };
+            var n = d.internal.getNumberOfPages();
+            for (var p = 1; p <= n; p++) {
+                var info = d.internal.getPageInfo(p), mb = info && info.pageContext && info.pageContext.mediaBox;
+                if (!mb) continue;
+                var W = mb.topRightX - mb.bottomLeftX, H = mb.topRightY - mb.bottomLeftY, T = null;
+                if (near(W, 595.28) && near(H, 841.89)) T = [612, 792];        // A4 portrait  → Letter
+                else if (near(W, 841.89) && near(H, 595.28)) T = [792, 612];   // A4 landscape → Letter landscape
+                else if (near(W, 841.89) && near(H, 1190.55)) T = [792, 1224]; // A3 portrait  → Tabloid
+                else if (near(W, 1190.55) && near(H, 841.89)) T = [1224, 792]; // A3 landscape → Tabloid landscape
+                if (!T) continue;                                              // label sheets etc. left alone
+                var sc = Math.min(T[0] / W, T[1] / H), tx = (T[0] - W * sc) / 2, ty = T[1] - H * sc;
+                var pg = d.internal.pages[p];
+                if (!pg || !pg.unshift) continue;
+                pg.unshift('q', sc.toFixed(6) + ' 0 0 ' + sc.toFixed(6) + ' ' + tx.toFixed(3) + ' ' + ty.toFixed(3) + ' cm');
+                pg.push('Q');
+                ['mediaBox', 'cropBox', 'bleedBox', 'trimBox', 'artBox'].forEach(function(k){
+                    var b = info.pageContext[k]; if (b) { b.topRightX = b.bottomLeftX + T[0]; b.topRightY = b.bottomLeftY + T[1]; }
+                });
+            }
+        } catch(e) { console.warn('Letter conversion skipped:', e); }
+    }
+    function pwHookJsPDF() {
+        try {
+            if (!window.jspdf || !window.jspdf.jsPDF || window.jspdf.jsPDF.__pwHooked) return;
+            var Orig = window.jspdf.jsPDF;
+            var Hooked = function() {
+                var d = new (Function.prototype.bind.apply(Orig, [null].concat([].slice.call(arguments))))();
+                try {
+                    var o = d.output, sv = d.save;
+                    d.output = function() { pwLetterize(d); return o.apply(d, arguments); };
+                    d.save = function() { pwLetterize(d); return sv.apply(d, arguments); };
+                } catch(e) {}
+                return d;
+            };
+            Object.getOwnPropertyNames(Orig).forEach(function(k){
+                if (['length', 'name', 'prototype', 'arguments', 'caller'].indexOf(k) < 0) { try { Hooked[k] = Orig[k]; } catch(e) {} }
+            });
+            Hooked.prototype = Orig.prototype;
+            Hooked.__pwHooked = true;
+            window.jspdf.jsPDF = Hooked;
+        } catch(e) { console.warn('jsPDF hook failed:', e); }
+    }
+    document.addEventListener('DOMContentLoaded', pwHookJsPDF);
+    window.addEventListener('load', pwHookJsPDF);
+    pwHookJsPDF();
+    // Label sheets: A4 Avery layouts as before; on US Letter the same choices use US Avery sheets.
+    var PW_LABEL_A4 = {
+        8:  { cols:2, rows:4, lw:99.1, lh:67.7, mt:8.0, ml:5.7, gap:0,   colGap:0   },
+        10: { cols:2, rows:5, lw:95.0, lh:55.0, mt:5.2, ml:6.7, gap:4.5, colGap:7.6 },
+        14: { cols:2, rows:7, lw:99.1, lh:38.1, mt:8.0, ml:5.7, gap:0,   colGap:0   },
+        21: { cols:3, rows:7, lw:63.5, lh:38.1, mt:8.0, ml:7.2, gap:2.5, colGap:2.5 },
+        24: { cols:3, rows:8, lw:64.6, lh:33.9, mt:8.0, ml:4.6, gap:2.5, colGap:2.5 }
+    };
+    var PW_LABEL_LETTER = {
+        8:  { cols:2, rows:3, lw:101.6, lh:84.7, mt:12.7, ml:4.0, gap:0, colGap:4.8, name:'6 per Letter — 4 × 3⅓ in (Avery 5164)' },
+        10: { cols:2, rows:5, lw:101.6, lh:50.8, mt:12.7, ml:4.0, gap:0, colGap:4.8, name:'10 per Letter — 4 × 2 in (Avery 5163)' },
+        14: { cols:2, rows:7, lw:101.6, lh:33.9, mt:21.2, ml:4.0, gap:0, colGap:4.8, name:'14 per Letter — 4 × 1⅓ in (Avery 5162)' }
+    };
+    function pwLabelSheet(sizeVal) {
+        if (pwPaper() === 'letter') {
+            var k = PW_LABEL_LETTER[sizeVal] ? sizeVal : (sizeVal === 21 || sizeVal === 24 ? 14 : 8);
+            return { size: k, cfg: PW_LABEL_LETTER[k], format: 'letter', tight: k === 10 };
+        }
+        var a = PW_LABEL_A4[sizeVal] ? sizeVal : 8;
+        return { size: a, cfg: PW_LABEL_A4[a], format: a === 10 ? [210, 330] : 'a4', tight: false };
+    }
+    function pwApplyPaperUI() {
+        try {
+            var letter = pwPaper() === 'letter';
+            ['labelSizeSelect', 'jobLabelSizeSelect'].forEach(function(id){
+                var sel = document.getElementById(id); if (!sel) return;
+                [].forEach.call(sel.options, function(op){
+                    if (!op.dataset.a4) op.dataset.a4 = op.textContent;
+                    var L = PW_LABEL_LETTER[op.value];
+                    op.textContent = letter && L ? L.name : op.dataset.a4;
+                    op.hidden = letter && !L; op.disabled = letter && !L;
+                    op.dataset.count = letter && L ? (L.cols * L.rows) : op.value;
+                });
+                if (letter && !PW_LABEL_LETTER[sel.value]) sel.value = '14';
+            });
+            var q = document.getElementById('jobLabelQtyInput'), js = document.getElementById('jobLabelSizeSelect');
+            if (q && js && js.selectedOptions && js.selectedOptions[0] && String(q.value) === js.value) q.value = js.selectedOptions[0].dataset.count || js.value;
+            var ps = document.getElementById('prefPaperSelect'); if (ps) ps.value = pwPaper();
+            var pc = document.querySelector('#form-part-labels p'); if (pc) pc.textContent = letter ? 'US Letter label sheets (Avery 5164 / 5163 / 5162)' : 'A4 adhesive label sheets';
+        } catch(e) {}
+    }
+    window.pwPaper = pwPaper; window.pwLetterize = pwLetterize; window.pwLabelSheet = pwLabelSheet; window.pwApplyPaperUI = pwApplyPaperUI;
+
     function pwOpenPricing() { window.open('https://paintworkzpro.com.au' + pwPlanInfo().site + '#pricing', '_blank'); }
     window.pwPlanInfo = pwPlanInfo; window.pwApplyPlanPrices = pwApplyPlanPrices; window.pwOpenPricing = pwOpenPricing;
     try { pwApplyPlanPrices(); } catch(e) {}
@@ -7500,6 +7616,7 @@ const firebaseConfig = {
     // Apply unit labels to measure sheet inputs dynamically
     function _applyUnitLabels() {
         try { pwApplyPlanPrices(); } catch(e) {} // v1.16.482
+        try { pwApplyPaperUI(); } catch(e) {} // v1.16.483
         // v1.16.479: paint volume / coverage / cost labels
         try {
             document.querySelectorAll('.js-vol-unit').forEach(function(sp){ sp.textContent = pwVolU(); });
@@ -29026,7 +29143,7 @@ ${pwStageSkipped(job, 'complete') ? '' : `                        <label style="
 
         const { jsPDF } = window.jspdf;
         // For 10-up: use exact A4 size, force zero margins so viewer doesn't clip labels 9&10
-        const _pageFormat = sizeVal === 10 ? [210, 330] : 'a4';
+        const _pageFormat = pwLabelSheet(sizeVal).format;
         const doc = new jsPDF({ unit:'mm', format:_pageFormat, compress:true, userUnit:1 });
         if (sizeVal === 10) { try { doc.setProperties({ margins: { top:0, bottom:0, left:0, right:0 } }); } catch(e){} }
 
@@ -29041,16 +29158,12 @@ ${pwStageSkipped(job, 'complete') ? '' : `                        <label style="
         const colours    = [...new Set(safeItems.map(i => i.color||i.colour).filter(Boolean))];
         const logoData   = window._companyLogoDataUri || localStorage.getItem('companyLogo');
 
-        const configs = {
-            8:  { cols:2, rows:4, lw:99.1, lh:67.7, mt:8.0, ml:5.7, gap:0,   colGap:0   },
-            10: { cols:2, rows:5, lw:95.0, lh:55.0, mt:5.2, ml:6.7, gap:4.5, colGap:7.6 },
-            14: { cols:2, rows:7, lw:99.1, lh:38.1, mt:8.0, ml:5.7, gap:0,   colGap:0   },
-            21: { cols:3, rows:7, lw:63.5, lh:38.1, mt:8.0, ml:7.2, gap:2.5, colGap:2.5 },
-            24: { cols:3, rows:8, lw:64.6, lh:33.9, mt:8.0, ml:4.6, gap:2.5, colGap:2.5 },
-        };
-        const cfg = configs[sizeVal] || configs[8];
-        const is8 = sizeVal === 8;
-        const is10 = sizeVal === 10;
+        // v1.16.483: sheet layout from pwLabelSheet() — A4 Avery as before, or US Letter Avery on Letter paper
+        const _sheet = pwLabelSheet(sizeVal);
+        const cfg = _sheet.cfg;
+        const is8 = _sheet.size === 8;
+        const is10 = _sheet.size === 10;
+        const _tight = _sheet.tight;
 
         for (let i = 0; i < qty; i++) {
             const col = i % cfg.cols;
@@ -29135,7 +29248,7 @@ ${pwStageSkipped(job, 'complete') ? '' : `                        <label style="
 
                 // ── Colours (blue bold) ───────────────────────
                 doc.setFont(undefined,'bold'); doc.setFontSize(12); doc.setTextColor(0,100,180);
-                colours.slice(0,2).forEach((c,ci) => {
+                colours.slice(0, _tight ? 1 : 2).forEach((c,ci) => {
                     doc.text(c.substring(0,26), x+5, nameY+18+(ci*8));
                 });
 
@@ -29402,22 +29515,17 @@ ${pwStageSkipped(job, 'complete') ? '' : `                        <label style="
 
         if (!selected.length) { notify('⚠️ No parts selected — tick at least one'); return; }
 
-        const sizeVal = parseInt(document.getElementById('labelSizeSelect')?.value || '8');
-        // Label dimensions in mm for jsPDF (A4 = 210×297mm)
-        const configs = {
-            8:  { cols:2, rows:4, lw:99.1, lh:67.7, mt:8.0, ml:5.7, gap:0,   colGap:0   },
-            10: { cols:2, rows:5, lw:95.0, lh:55.0, mt:5.2, ml:6.7, gap:4.5, colGap:7.6 },
-            14: { cols:2, rows:7, lw:99.1, lh:38.1, mt:8.0, ml:5.7, gap:0,   colGap:0   },
-            21: { cols:3, rows:7, lw:63.5, lh:38.1, mt:8.0, ml:7.2, gap:2.5, colGap:2.5 },
-            24: { cols:3, rows:8, lw:64.6, lh:33.9, mt:8.0, ml:4.6, gap:2.5, colGap:2.5 },
-        };
-        const cfg = configs[sizeVal] || configs[8];
+        // v1.16.483: sheet layout from pwLabelSheet() — A4 Avery as before, or US Letter Avery on Letter paper
+        const _sheet = pwLabelSheet(parseInt(document.getElementById('labelSizeSelect')?.value || '8'));
+        const sizeVal = _sheet.size;
+        const cfg = _sheet.cfg;
         const is10 = sizeVal === 10;
+        const _tight = _sheet.tight;
 
         if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) { notify('PDF library not loaded — wait a moment and try again'); return; }
         const { jsPDF } = window.jspdf;
         // For 10-up: use exact A4 size, force zero margins so viewer doesn't clip labels 9&10
-        const _pageFormat = sizeVal === 10 ? [210, 330] : 'a4';
+        const _pageFormat = _sheet.format;
         const doc = new jsPDF({ unit:'mm', format:_pageFormat, compress:true, userUnit:1 });
         if (sizeVal === 10) { try { doc.setProperties({ margins: { top:0, bottom:0, left:0, right:0 } }); } catch(e){} }
         const jobNum = document.getElementById('jN')?.value || '';
@@ -29581,8 +29689,8 @@ ${pwStageSkipped(job, 'complete') ? '' : `                        <label style="
 
                 // ── URL under QR — bold and readable ─────────
                 doc.setFontSize(6); doc.setFont(undefined, 'bold'); doc.setTextColor(60,60,60);
-                doc.text(`${i+1}/${totalLabels}`, x + 5, y + lh - 2.5);
-                doc.text('paintworkzpro.com.au', x + lw - 25, y + lh - 2.5);
+                if (_tight) { doc.text(`${i+1}/${totalLabels}  paintworkzpro.com.au`, x + lw - 34, y + lh - 1.6); }
+                else { doc.text(`${i+1}/${totalLabels}`, x + 5, y + lh - 2.5); doc.text('paintworkzpro.com.au', x + lw - 25, y + lh - 2.5); }
             } else {
                 doc.setFontSize(8.5); doc.setFont(undefined, 'bold'); doc.setTextColor(0,0,0);
                 const descLines = doc.splitTextToSize(desc, textMaxW);
@@ -31548,10 +31656,10 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                     // v1.16.480: new account from the US website starts on inches / sqft / gallons / USD / US spelling.
                     // v1.16.481: same for the UK, NZ and Canada pages. Only at account creation — existing accounts are never changed.
                     var _pwRegions = {
-                        us: { units: 'IMPERIAL_US', currency: 'USD', locale: 'en-US', inchFmt: 'fractional', label: 'US website (set to Imperial USA + USD)' },
+                        us: { units: 'IMPERIAL_US', currency: 'USD', locale: 'en-US', inchFmt: 'fractional', paper: 'letter', label: 'US website (set to Imperial USA + USD)' },
                         uk: { units: 'METRIC',      currency: 'GBP', locale: 'en-AU', label: 'UK website (set to Metric + GBP)' },
                         nz: { units: 'METRIC',      currency: 'NZD', locale: 'en-AU', label: 'NZ website (set to Metric + NZD)' },
-                        ca: { units: 'IMPERIAL_UK', currency: 'CAD', locale: 'en-AU', inchFmt: 'fractional', label: 'Canada website (set to Imperial UK — inches + litres — and CAD)' }
+                        ca: { units: 'IMPERIAL_UK', currency: 'CAD', locale: 'en-AU', inchFmt: 'fractional', paper: 'letter', label: 'Canada website (set to Imperial UK — inches + litres — and CAD)' }
                     };
                     var _pwRegion = null;
                     try { _pwRegion = _pwRegions[sessionStorage.getItem('pw_signup_region')] || null; } catch(e) {}
@@ -31559,6 +31667,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                         try {
                             var _rPrefs = { units: _pwRegion.units, currency: _pwRegion.currency, locale: _pwRegion.locale, lastUpdated: new Date().toISOString() };
                             if (_pwRegion.inchFmt) _rPrefs.inchFmt = _pwRegion.inchFmt;
+                            if (_pwRegion.paper) { _rPrefs.paper = _pwRegion.paper; localStorage.setItem('pw_paper', _pwRegion.paper); }
                             localStorage.setItem('pw_units', _rPrefs.units); localStorage.setItem('pw_currency', _rPrefs.currency);
                             localStorage.setItem('pw_locale', _rPrefs.locale); if (_rPrefs.inchFmt) localStorage.setItem('pw_inchFmt', _rPrefs.inchFmt);
                             try { if (typeof setUnits === 'function') setUnits(_rPrefs.units); } catch(e) {}
