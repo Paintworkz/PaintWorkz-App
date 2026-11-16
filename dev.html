@@ -93,7 +93,7 @@ window.pwToday = pwToday;
 </script>
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.483-dev'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.484-dev'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     window.PW_BUILD_DATE = '2026-11-09'; // v1.16.476: the date this build was made — update with each build
     const VERSION_KEY = 'paintworkz_version';
@@ -1700,7 +1700,7 @@ window.getTooltipKey = getTooltipKey;
 </script>
 </head>
 <body>
-<div id="devBanner">🚧 DEVELOPMENT VERSION — LIVE DATA — v1.16.483-dev (open in Incognito / separate browser) 🚧</div>
+<div id="devBanner">🚧 DEVELOPMENT VERSION — LIVE DATA — v1.16.484-dev (open in Incognito / separate browser) 🚧</div>
 
 <!-- COPYRIGHT NOTICE -->
 <div id="copyrightBanner" style="display:none;">
@@ -1883,7 +1883,7 @@ window.getTooltipKey = getTooltipKey;
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
         import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, reauthenticateWithCredential, EmailAuthProvider, sendPasswordResetEmail, confirmPasswordReset, verifyPasswordResetCode } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js";
-        import { getFirestore, collection, doc, setDoc, addDoc, getDoc, onSnapshot, getDocs, deleteDoc, updateDoc, query, where } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
+        import { getFirestore, collection, doc, setDoc, addDoc, getDoc, onSnapshot, getDocs, deleteDoc, updateDoc, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
         
         // ─────────────────────────────────────────────────────────────────
 // FIREBASE API KEY SECURITY
@@ -1947,6 +1947,8 @@ const firebaseConfig = {
         window.getDocs = getDocs;
         window.fsQuery = query;   // v1.16.447 (referrals)
         window.fsWhere = where;
+        window.fsOrderBy = orderBy; // v1.16.484 (login history: latest 50 only)
+        window.fsLimit = limit;
         
         // Auth functions
         window.createUserWithEmailAndPassword = (email, password) => createUserWithEmailAndPassword(auth, email, password);
@@ -3944,7 +3946,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.483</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.484</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;"></div>
                         </div>
                     </div>
@@ -4979,6 +4981,7 @@ const firebaseConfig = {
                             <a href="mailto:support@paintworkzpro.com.au?subject=Feature%20Request%20-%20PaintWorkz%20Pro&body=Describe%20your%20feature%20idea%20here..." style="display:inline-flex;align-items:center;gap:6px;background:#007aff;color:#fff;border:none;padding:10px 16px;border-radius:6px;font-weight:900;font-size:11px;cursor:pointer;text-decoration:none;">💡 Feature Request</a>
                         </div>
                         <p style="margin:0; font-size:10px; color:#888;">Include your device type and what you were doing when the issue occurred. Screenshots welcome.</p>
+                        <p class="staff-hidden" style="margin:10px 0 0; font-size:11px; color:#555;">Enjoying PaintWorkz Pro? <a href="https://paintworkzpro.com.au/review.html" target="_blank" rel="noopener" style="color:#b8860b; font-weight:900;">⭐ Leave a review</a></p>
                     </div>
                 </div>
 
@@ -4988,7 +4991,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.483</span><span style="color:#d4af37; font-weight:900;" id="versionDate"></span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.484</span><span style="color:#d4af37; font-weight:900;" id="versionDate"></span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);if(typeof tab==='function')tab('measure');setTimeout(function(){if(typeof startTour==='function')startTour();},300);" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -6727,7 +6730,15 @@ const firebaseConfig = {
             if (!_lhUid) { containers.forEach(c => c.innerHTML = '<p style="color:#ff6b6b;font-size:12px;padding:12px;">⚠️ UID not available — try again in a moment.</p>'); return; }
             console.log('loadLoginHistory: uid=', _lhUid, 'email=', window.currentUser?.email);
             const col = window.collection(window.firebaseDb, 'users', _lhUid, 'loginHistory');
-            const snap = await window.getDocs(col);
+            // v1.16.484: only the latest 50 are shown — fetch just those (was reading every login, 998+ on the shop account)
+            let snap, _lhLimited = false;
+            try {
+                if (window.fsQuery && window.fsOrderBy && window.fsLimit) {
+                    snap = await window.getDocs(window.fsQuery(col, window.fsOrderBy('loginTime', 'desc'), window.fsLimit(50)));
+                    _lhLimited = true;
+                }
+            } catch(_lq) { console.warn('loginHistory latest-50 query failed, reading all:', _lq); }
+            if (!snap) snap = await window.getDocs(col);
             console.log('loginHistory docs:', snap.size);
             const entries = [];
             snap.forEach(d => entries.push(d.data()));
@@ -6753,7 +6764,7 @@ const firebaseConfig = {
                     '<div style="font-size:11px;color:#636366;margin-top:3px;">' + dt + ' &bull; ' + browser + ' &bull; ' + (e.device||'desktop') + '</div>' +
                     '</div></div>';
             }).join('');
-            const html = rows + '<p style="font-size:10px;color:#636366;text-align:center;padding:8px;">' + entries.length + ' login records for ' + window.currentUser.email + '</p>';
+            const html = rows + '<p style="font-size:10px;color:#636366;text-align:center;padding:8px;">' + entries.length + (_lhLimited && entries.length >= 50 ? ' most recent logins' : ' login records') + ' for ' + window.currentUser.email + '</p>';
             containers.forEach(c => c.innerHTML = html);
         } catch(e) {
             console.error('loginHistory error:', e);
@@ -7367,6 +7378,13 @@ const firebaseConfig = {
                     var o = d.output, sv = d.save;
                     d.output = function() { pwLetterize(d); return o.apply(d, arguments); };
                     d.save = function() { pwLetterize(d); return sv.apply(d, arguments); };
+                    // v1.16.484: the built-in PDF fonts can't show "²" / "³" (job stickers printed "m" instead of "m²").
+                    // Every PDF goes through here, so swap them for plain 2 / 3 ("m2") on the way in.
+                    var _sup = function(t) { if (typeof t === 'string') return t.replace(/\u00B2/g, '2').replace(/\u00B3/g, '3'); if (Array.isArray(t)) return t.map(_sup); return t; };
+                    ['text', 'splitTextToSize', 'getTextWidth', 'getStringUnitWidth'].forEach(function(fn) {
+                        var f0 = d[fn];
+                        if (typeof f0 === 'function') d[fn] = function() { var a = [].slice.call(arguments); a[0] = _sup(a[0]); return f0.apply(d, a); };
+                    });
                 } catch(e) {}
                 return d;
             };
@@ -8476,11 +8494,28 @@ const firebaseConfig = {
         }
     }, 500);
 
-    function getPaintFormula(colorName) {
-        const formula = paintDatabase.find(f => 
-            f.color.toLowerCase() === colorName.toLowerCase()
-        );
-        return formula || null;
+    // v1.16.484: the same colour can be saved in more than one finish (e.g. ALABASTER matt on XB6910 and
+    // ALABASTER satin on XB6930). Lookups used to match the colour NAME only and always took whichever came
+    // first. Match colour + finish (+ brand), falling back to colour only. A part with no finish = Satin.
+    function pwFindFormula(list, color, finish, brand) {
+        const L = Array.isArray(list) ? list : [];
+        const norm = v => String(v == null ? '' : v).toLowerCase().replace(/[^a-z0-9]/g, '');
+        const c = String(color == null ? '' : color).toLowerCase().trim();
+        if (!c) return undefined;
+        const hits = L.filter(f => f && String(f.color || f.colour || '').toLowerCase().trim() === c);
+        if (hits.length <= 1) return hits[0];
+        const fin = norm(finish) || 'satin';
+        const finOf = f => ((Array.isArray(f.finishes) && f.finishes.length) ? f.finishes : [f.finish || 'Satin']).map(norm);
+        let pool = hits.filter(f => finOf(f).includes(fin));
+        if (!pool.length) pool = hits;
+        const br = norm(brand);
+        if (br && pool.length > 1) { const p2 = pool.filter(f => norm(f.brand) === br); if (p2.length) pool = p2; }
+        return pool[0];
+    }
+    window.pwFindFormula = pwFindFormula;
+
+    function getPaintFormula(colorName, finish, brand) {
+        return pwFindFormula(paintDatabase, colorName, finish, brand) || null;
     }
 
     function addOrUpdateFormula(formulaData) {
@@ -12015,6 +12050,39 @@ const firebaseConfig = {
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
         
         const _justArchivedIds = new Set(); // Track only jobs archived THIS session
+
+        // v1.16.484: a job should never sit in Archives unless it's completed (Colin, 16 Nov).
+        // Found on the shop account: archived jobs whose "completed" tick had been lost while their completion
+        // date survived (old sync issue). Put the tick back and keep the original date; if there's no date at
+        // all, take the job out of Archives so it shows as active. Quotes / On Hold are archived on purpose.
+        try {
+            const _repairNow = new Date().toISOString();
+            const _repaired = [];
+            history.forEach(job => {
+                if (!job.archived || job.completed) return;
+                if (job.jobStatus === 'quote' || job.jobStatus === 'hold') return;
+                if (job.completedDate || job.dateCompleted) {
+                    job.completed = true;
+                    job.completedChangedAt = _repairNow;
+                    pwRegistrySet(job, true, _repairNow);
+                    console.log(`🔧 Job #${job.jobNum}: archived but not ticked complete — tick restored (completed ${job.dateCompleted || job.completedDate})`);
+                } else {
+                    job.archived = false;
+                    console.log(`🔧 Job #${job.jobNum}: archived but never completed — moved back to active jobs`);
+                }
+                job.lastModified = _repairNow;
+                if (!job.editHistory) job.editHistory = [];
+                job.editHistory.push({ timestamp: _repairNow, userId: (pwSafeUid() || ''), userName: 'PaintWorkz (auto repair)', action: job.completed ? 'completed' : 'reopened',
+                    parts: job.totalParts, sqm: job.totalSqm, changes: job.completed ? 'Completed tick restored (was archived without it)' : 'Taken out of Archives (never completed)' });
+                _repaired.push(job);
+            });
+            if (_repaired.length) {
+                localStorage.setItem('jobHistory', JSON.stringify(history));
+                window._lastCompletedToggleTime = Date.now();
+                _repaired.forEach(job => { try { pwPushCompletionToCloud(job); } catch(e) { console.warn('Repair cloud write:', e); } });
+            }
+        } catch(e) { console.warn('Archive repair error:', e); }
+
         history.forEach(job => {
             if (!job.completed || job.archived) return;
             
@@ -13089,6 +13157,7 @@ const firebaseConfig = {
             job.completed = false;
             job.completedDate = null;
             job.dateCompleted = null;
+            job.archived = false; // v1.16.484: a reopened job is active again — never left sitting in Archives
             job.completedChangedAt = _reopenNow; // v1.16.444: deliberate action stamp
             job.lastModified = _reopenNow;
             if (!job.editHistory) job.editHistory = [];
@@ -16396,7 +16465,7 @@ const firebaseConfig = {
                         
                         <div style="margin-bottom:10px;">
                             <label style="display:block; font-weight:900; margin-bottom:4px; font-size:11px; color:#666;">Colour</label>
-                            <input type="text" id="editColorInput" list="editColorSuggest" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:12px;box-sizing:border-box;text-transform:uppercase;" placeholder="Type colour name" autocomplete="off" value="${pwA(item.color||'')}" oninput="(function(el){var c=(el.value||'').trim().toLowerCase();var db=window.paintDatabase||JSON.parse(localStorage.getItem('paintFormulas')||'[]');var f=db.find(function(x){return (x.color||'').toLowerCase()===c;});if(f){var ci=document.getElementById('editCodeInput');var bi=document.getElementById('editBrandInput');var fi=document.getElementById('editFinishInput');if(ci){var code=(f.code||'').toUpperCase();var col=(f.color||'').toUpperCase();var prod=f.product||'';ci.value=prod?code+' - '+col+' ('+prod+')':code+' - '+col;}if(bi&&f.brand)bi.value=f.brand;if(fi&&f.finish)fi.value=f.finish;}})(this)"><datalist id="editColorSuggest">${sortedColors.map(function(cc){return '<option value="'+cc+'">';}).join('')}</datalist>
+                            <input type="text" id="editColorInput" list="editColorSuggest" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:12px;box-sizing:border-box;text-transform:uppercase;" placeholder="Type colour name" autocomplete="off" value="${pwA(item.color||'')}" oninput="(function(el){var c=(el.value||'').trim().toLowerCase();var db=window.paintDatabase||JSON.parse(localStorage.getItem('paintFormulas')||'[]');var _fi0=document.getElementById('editFinishInput');var _bi0=document.getElementById('editBrandInput');var f=(typeof pwFindFormula==='function')?pwFindFormula(db,c,_fi0&&_fi0.value,_bi0&&_bi0.value):db.find(function(x){return (x.color||'').toLowerCase()===c;});if(f){var ci=document.getElementById('editCodeInput');var bi=document.getElementById('editBrandInput');var fi=document.getElementById('editFinishInput');if(ci){var code=(f.code||'').toUpperCase();var col=(f.color||'').toUpperCase();var prod=f.product||'';ci.value=prod?code+' - '+col+' ('+prod+')':code+' - '+col;}if(bi&&f.brand)bi.value=f.brand;if(fi&&f.finish)fi.value=f.finish;}})(this)"><datalist id="editColorSuggest">${sortedColors.map(function(cc){return '<option value="'+cc+'">';}).join('')}</datalist>
                         </div>
                         
                         <div style="margin-bottom:10px;">
@@ -19266,6 +19335,7 @@ const firebaseConfig = {
             // Get paint data - use FIRST ITEM'S BRAND (all items should have same brand per part logic)
             const paintBrand = (items[0]?.brand) || document.getElementById('p-brand')?.value || 'Dulux';
             const paintFinish = (items[0]?.finish) || document.getElementById('p-finish')?.value || 'Satin';
+            const _mcBrand0 = paintBrand, _mcFinish0 = paintFinish; // v1.16.484
             
             // Get unique colors from items in measure tab (same logic as shop label)
             const uniqueColors = new Set();
@@ -19297,9 +19367,13 @@ const firebaseConfig = {
             // Create one PDF document for all colors
             const doc = new jsPDF('p', 'mm', 'a4');
             let colorPageCount = 0;
-            
+
             // Generate one page per color
             colors.forEach((color, colorIndex) => {
+                // v1.16.484: this colour's own brand + finish, so the right formula (matt vs satin) is used
+                const _mcItem = items.find(i => (i.color || '').trim().toLowerCase() === color.toLowerCase());
+                const paintBrand = (_mcItem && _mcItem.brand) || _mcBrand0;
+                const paintFinish = (_mcItem && _mcItem.finish) || _mcFinish0;
                 
                 if (colorPageCount > 0) {
                     // Add new page for each additional color
@@ -19343,7 +19417,7 @@ const firebaseConfig = {
 
                 // Calculate batches NOW so header shows e.g. "4L" or "4L + 3L"
                 // v1.16.447: tint-heavy colours mix in smaller batches (e.g. 3 L) so they fit the tin
-                const _mixMaxL = (function(){ try { return pwMaxMixLitres(paintDatabase.find(f => f.color && f.color.toLowerCase() === color.toLowerCase())); } catch(e) { return 4; } })();
+                const _mixMaxL = (function(){ try { return pwMaxMixLitres(pwFindFormula(paintDatabase, color, paintFinish, paintBrand)); } catch(e) { return 4; } })();
                 function _getBatchesEarly(litres) {
                     const batches = [];
                     let remaining = Math.ceil(litres);
@@ -19388,9 +19462,7 @@ const firebaseConfig = {
                 y += 8;
                 
                 // Lookup formula for this color (used in tint formula section below)
-                const formula = paintDatabase.find(f => 
-                    f.color && f.color.toLowerCase() === color.toLowerCase()
-                );
+                const formula = pwFindFormula(paintDatabase, color, paintFinish, paintBrand); // v1.16.484: colour + finish
                 
                 // ===== CALCULATE SQM FOR THIS COLOR ONLY =====
                 let colorSQM = 0;
@@ -20315,9 +20387,7 @@ const firebaseConfig = {
                 // Uses baseColor field (e.g. "White", "Black") — only shows when tinted UC needed
                 try {
                     const _formulas = JSON.parse(localStorage.getItem('paintFormulas') || '[]');
-                    const _matchFormula = _formulas.find(f =>
-                        (f.color || '').toLowerCase().trim() === color.toLowerCase().trim()
-                    );
+                    const _matchFormula = pwFindFormula(_formulas, color, colorFinish, colorBrand); // v1.16.484
                     if (_matchFormula) {
                         const _baseColor = (_matchFormula.baseColor || '').trim();
                         const _baseType  = (_matchFormula.baseType  || '').trim();
@@ -21902,10 +21972,7 @@ const firebaseConfig = {
             console.log('  Sample whiteBase:', JSON.stringify(paintDB[0].whiteBase));
         }
 
-        const getFormula = (colorName) => {
-            const q = (colorName || '').toLowerCase().trim();
-            return paintDB.find(f => (f.color || '').toLowerCase().trim() === q);
-        };
+        const getFormula = (colorName, fin, brand) => pwFindFormula(paintDB, colorName, fin, brand); // v1.16.484
 
         // Filter jobs in range + status + client
         populateClientFilter();
@@ -21993,7 +22060,7 @@ const firebaseConfig = {
                 (j.items || []).forEach(it => {
                     const col = it.color || j.color || '';
                     if (!col || col.toLowerCase().includes('clear')) return;
-                    const f = (typeof getFormula === 'function') ? getFormula(col) : null;
+                    const f = (typeof getFormula === 'function') ? getFormula(col, it.finish || j.finish, it.brand || j.brand) : null;
                     const wb = f ? (f.whiteBase || f.baseTinters || []) : [];
                     const be = wb.find(b => (b.code||'').toUpperCase().startsWith('XB')) || wb.find(b => (b.altCode||'').toUpperCase().startsWith('XB'));
                     const raw = be ? ((be.code||'').toUpperCase().startsWith('XB') ? be.code : be.altCode) : null;
@@ -22108,7 +22175,7 @@ const firebaseConfig = {
                     if (!_tcDone) { const _clrLitres = iSqm / clrRate; clearPaintLitres += _clrLitres; }
                     if (!_ucDone) clearSqm += iSqm;
                 } else {
-                    const formula = getFormula(col);
+                    const formula = getFormula(col, item.finish || job.finish, item.brand || job.brand);
                     const _wb = formula ? (formula.whiteBase || formula.baseTinters || []) : [];
                     const baseEntry = _wb.find(b => (b.code||'').toUpperCase().startsWith('XB')) || _wb.find(b => (b.altCode||'').toUpperCase().startsWith('XB'));
                     const rawCode = baseEntry ? ((baseEntry.code||'').toUpperCase().startsWith('XB') ? baseEntry.code : baseEntry.altCode) : null;
@@ -22143,7 +22210,7 @@ const firebaseConfig = {
                     if (!_tcDone) { const _clrLitres2 = sqm / clrRate; clearPaintLitres += _clrLitres2; }
                     if (!_ucDone) clearSqm += sqm;
                 } else {
-                    const formula = getFormula(col);
+                    const formula = getFormula(col, job.finish, job.brand);
                     const _wb2 = formula ? (formula.whiteBase || formula.baseTinters || []) : [];
                     const baseEntry2 = _wb2.find(b => (b.code||'').toUpperCase().startsWith('XB')) || _wb2.find(b => (b.altCode||'').toUpperCase().startsWith('XB'));
                     const rawCode2 = baseEntry2 ? ((baseEntry2.code||'').toUpperCase().startsWith('XB') ? baseEntry2.code : baseEntry2.altCode) : null;
@@ -22264,10 +22331,10 @@ const firebaseConfig = {
         <!-- KPI cards - up to 8 across -->
         <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(100px,1fr)); gap:10px; margin-bottom:18px;">
             ${kpiCard('       ', 'Jobs', jobs.length, '#2196f3')}
-            ${kpiCard('    ', 'Total ' + pwAreaW(), pwAreaN(totalSqm).toFixed(1) + ' ' + getAreaLabel(), '#4caf50')}
+            ${kpiCard('    ', 'Total ' + pwAreaW(), pwAreaShow(totalSqm) + ' ' + getAreaLabel(), '#4caf50')}
             ${kpiCard('    ', 'Parts', totalParts, '#ff9800')}
             ${kpiCard('    ', 'Colours', Object.keys(colourCount).length, '#9c27b0')}
-            ${kpiCard('    ', 'Undercoat ' + pwAreaW(), pwAreaN(ucPendingSqm).toFixed(1) + ' ' + getAreaLabel(), '#795548')}
+            ${kpiCard('    ', 'Undercoat ' + pwAreaW(), pwAreaShow(ucPendingSqm) + ' ' + getAreaLabel(), '#795548')}
             ${kpiCard('    ', 'Est. Revenue', _fmtKpi(_totalEstVal), '#1565c0')}
             ${kpiCard('⏱', 'Avg Days/Job', _avgDaysKpi, '#00838f')}
             ${totalCtsRevenue > 0 ? kpiCard('✂️', 'CTS Revenue', _fmtKpi(totalCtsRevenue), '#2c3e50') : ''}
@@ -23084,7 +23151,7 @@ const firebaseConfig = {
                         const fin = (item.finish || job.finish || '').toLowerCase();
                         const rate = fin === 'matt' ? (parseFloat(CR3.matt)||5) : fin === 'gloss' ? (parseFloat(CR3.gloss)||5) : (parseFloat(CR3.satin)||5);
                         const litres = sqm / rate;
-                        const formula = paintDB3.find(f => (f.color||'').toLowerCase().trim() === col.toLowerCase().trim());
+                        const formula = pwFindFormula(paintDB3, col, fin, item.brand || job.brand); // v1.16.484
                         if (!formula || !formula.colourants) return;
                         formula.colourants.forEach(c => {
                             if (!c.code) return;
@@ -23248,7 +23315,7 @@ const firebaseConfig = {
         const _matR = parseFloat(CR2.matt)       || 5;
         const _clrR = parseFloat(CR2.clear)      || 5;
         const paintDB2 = JSON.parse(localStorage.getItem('paintFormulas') || '[]');
-        const getF2 = col => paintDB2.find(f => (f.color||'').toLowerCase().trim() === (col||'').toLowerCase().trim());
+        const getF2 = (col, fin, br) => pwFindFormula(paintDB2, col, fin, br); // v1.16.484
 
         // Start from current stock levels
         const stock = JSON.parse(localStorage.getItem('pwStockLevels') || '{}');
@@ -23280,7 +23347,7 @@ const firebaseConfig = {
                         stock['Undercoat'] = (parseFloat(stock['Undercoat'])||0) - sqm / _ucR;
 
                         // Try to find the base code from formula
-                        const f2 = getF2(col);
+                        const f2 = getF2(col, fin, item.brand || job.brand);
                         const wb = f2 ? (f2.whiteBase || f2.baseTinters || []) : [];
                         const be = wb.find(b => (b.code||'').toUpperCase().startsWith('XB')) ||
                                    wb.find(b => (b.altCode||'').toUpperCase().startsWith('XB'));
@@ -23327,7 +23394,7 @@ const firebaseConfig = {
                 const fin = (item.finish || job.finish || '').toLowerCase();
                 const _r = fin==='matt'?_matR : fin==='gloss'?_glsR : _satR;
                 const litres = sqm / _r;
-                const formula = getF2(col);
+                const formula = getF2(col, fin, item.brand || job.brand);
                 if (!formula || !formula.colourants) return;
                 formula.colourants.forEach(c => {
                     if (!c.code || !c.amount) return;
@@ -23392,7 +23459,7 @@ const firebaseConfig = {
             const f1=JSON.parse(localStorage.getItem('paintFormulas')||'[]'); if(f1.length) return f1;
             return JSON.parse(localStorage.getItem('paintFormulaDB')||'[]');
         })();
-        const getF2 = col => paintDB2.find(f=>(f.color||'').toLowerCase().trim()===(col||'').toLowerCase().trim());
+        const getF2 = (col, fin, br) => pwFindFormula(paintDB2, col, fin, br); // v1.16.484
         const stock = JSON.parse(localStorage.getItem('pwStockLevels') || '{}');
         const deduct = (key, litres) => { stock[key] = Math.max(0, (parseFloat(stock[key])||0) - litres); };
 
@@ -23404,7 +23471,7 @@ const firebaseConfig = {
                 deduct('Clear',   sqm / _clrR);
                 deduct('ClearUC', sqm / _ucCR);
             } else {
-                const f2 = getF2(col);
+                const f2 = getF2(col, fin, item.brand || jobData.brand);
                 const wb = f2 ? (f2.whiteBase || f2.baseTinters || []) : [];
                 const be = wb.find(b=>(b.code||'').toUpperCase().startsWith('XB')) || wb.find(b=>(b.altCode||'').toUpperCase().startsWith('XB'));
                 const rc = be ? ((be.code||'').toUpperCase().startsWith('XB') ? be.code : be.altCode) : null;
@@ -31313,7 +31380,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         // Count phases ONLY for ACTIVE (non-completed) jobs
         history.forEach((job, jobIdx) => {
             // Only count tasks for active jobs (not marked as completed)
-            if (job.dateReceived && !job.completed) {
+            if (job.dateReceived && !job.completed && !job.archived) { // v1.16.484: archived = filed away
                 // v1.16.477: 7 stages per job, minus any skipped (0-day) stages
                 PW_STAGE_KEYS.forEach(k => {
                     if (pwStageSkipped(job, k)) return;
@@ -31324,8 +31391,9 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         });
         
         // Update summary
-        const activeJobs = history.filter(j => !j.completed && (!j.jobStatus || j.jobStatus === 'job')).length;
-        const totalSqm = history.filter(j => !j.completed && (!j.jobStatus || j.jobStatus === 'job')).reduce((sum, j) => sum + parseFloat(j.totalSqm || 0), 0);
+        // v1.16.484: skip archived jobs — same as Reports "Active"
+        const activeJobs = history.filter(j => !j.completed && !j.archived && (!j.jobStatus || j.jobStatus === 'job')).length;
+        const totalSqm = history.filter(j => !j.completed && !j.archived && (!j.jobStatus || j.jobStatus === 'job')).reduce((sum, j) => sum + parseFloat(j.totalSqm || 0), 0);
         
         if (document.getElementById('totalActiveJobs')) document.getElementById('totalActiveJobs').innerText = activeJobs;
         if (document.getElementById('totalTasks')) document.getElementById('totalTasks').innerText = `${completedTasks}/${totalTasks}`;
@@ -32076,6 +32144,13 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                         const _ls = JSON.parse(localStorage.getItem('jobHistory') || '[]');
                         const _nowArc = new Set(_ls.filter(j => j.archived).map(j => String(j.id || j.jobNum)));
                         safeJobs.forEach(j => { if (!j.archived && _nowArc.has(String(j.id || j.jobNum))) j.archived = true; });
+                        // v1.16.484: carry over the archive repair (tick restored / taken out of Archives)
+                        const _lsByKey = new Map(_ls.map(j => [String(j.id || j.jobNum), j]));
+                        safeJobs.forEach(j => {
+                            const l = _lsByKey.get(String(j.id || j.jobNum)); if (!l) return;
+                            if (j.archived && !l.archived) j.archived = false;
+                            if (!j.completed && l.completed) { j.completed = true; j.completedDate = l.completedDate; j.dateCompleted = l.dateCompleted; j.completedChangedAt = l.completedChangedAt; }
+                        });
                         _act = safeJobs.filter(j => !j.archived);
                         _arcd = safeJobs.filter(j => j.archived);
                     }
@@ -32940,12 +33015,12 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         const extraThreshold = parseFloat(st.extraTintThreshold || 400);
         const formulas = JSON.parse(localStorage.getItem('paintFormulas') || '[]');
         const CR = JSON.parse(localStorage.getItem('pwCoverageRates') || '{}');
-        const getFormula = col => formulas.find(f => (f.color||'').toLowerCase().trim() === (col||'').toLowerCase().trim());
+        const getFormula = (col, fin, br) => pwFindFormula(formulas, col, fin, br); // v1.16.484
 
         let totalGrams = 0;
         (_list || items || []).forEach(item => {
             const col = item.color || '';
-            const formula = getFormula(col);
+            const formula = getFormula(col, item.finish, item.brand);
             if (!formula || !formula.colourants) return;
             const fin = (item.finish || '').toLowerCase();
             const rate = fin === 'matt' ? (parseFloat(CR.matt)||5) : fin === 'gloss' ? (parseFloat(CR.gloss)||5) : (parseFloat(CR.satin)||5);
@@ -32972,7 +33047,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         const jobKey2 = String(jobData.jobNum || jobData.id || '');
         if (!jobKey2 || deductedJobs2[jobKey2 + '_tint']) return;
         const formulas = JSON.parse(localStorage.getItem('paintFormulas') || '[]');
-        const getF = col => formulas.find(f => (f.color||'').toLowerCase().trim() === (col||'').toLowerCase().trim());
+        const getF = (col, fin, br) => pwFindFormula(formulas, col, fin, br); // v1.16.484
         const CR = JSON.parse(localStorage.getItem('pwCoverageRates') || '{}');
         const satRate = parseFloat(CR.satin) || 5;
         const levels = getStockLevels();
@@ -32983,7 +33058,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             const fin = (item.finish || jobData.finish || '').toLowerCase();
             const rate = fin === 'matt' ? (parseFloat(CR.matt)||5) : fin === 'gloss' ? (parseFloat(CR.gloss)||5) : satRate;
             const litres = sqm / rate;
-            const formula = getF(col);
+            const formula = getF(col, fin, item.brand || jobData.brand);
             if (!formula || !formula.colourants) return;
             formula.colourants.forEach(c => {
                 if (!c.code) return;
@@ -33845,9 +33920,38 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                     const _rowsHtml = _rows.map(([label, val]) =>
                         `<div style="display:flex;gap:10px;margin-bottom:7px;align-items:baseline;">
                             <span style="font-size:10px;color:#d4af37;font-weight:900;min-width:76px;text-transform:uppercase;letter-spacing:.5px;flex-shrink:0;">${label}</span>
-                            <span style="font-size:13px;color:#fff;font-weight:600;flex:1;line-height:1.4;">${val}</span>
+                            <span style="font-size:13px;color:#fff;font-weight:600;flex:1;line-height:1.4;">${pwA(val)}</span>
                         </div>`
                     ).join('');
+
+                    // v1.16.484: job-level QR on a phone that has this job → list every part, not just the summary
+                    let _partsHtml = '';
+                    try {
+                        if (!_qpa) {
+                            const _hist = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+                            const _qjRaw = String(p.get('job') || '').trim();
+                            const _qclRaw = String(p.get('client') || '').trim().toLowerCase();
+                            const _job = _hist.find(j => String(j.jobNum == null ? '' : j.jobNum).trim() === _qjRaw && (!_qclRaw || String(j.client || '').trim().toLowerCase() === _qclRaw));
+                            const _its = (_job && Array.isArray(_job.items)) ? _job.items : [];
+                            if (_its.length) {
+                                const _u = (typeof getUnitLabel === 'function') ? getUnitLabel() : 'mm';
+                                const _dim = v => (typeof mmToDisplay === 'function') ? mmToDisplay(v) : v;
+                                const _lines = _its.map(it => {
+                                    const _desc = it.desc || it.type || 'Part';
+                                    const _size = (it.h && it.w) ? (_dim(it.h) + ' × ' + _dim(it.w) + ' ' + _u) : '';
+                                    const _meta = [it.prof || it.profile, it.color, it.finish].filter(Boolean).join(' · ');
+                                    return `<div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid #2a2a2a;font-size:12px;color:#fff;">
+                                        <span style="color:#d4af37;font-weight:900;min-width:28px;">${pwA(parseInt(it.qty) || 1)}×</span>
+                                        <span style="flex:1;line-height:1.35;"><b>${pwA(_desc)}</b>${_size ? ' — ' + pwA(_size) : ''}${_meta ? `<br><span style="color:#999;font-size:11px;">${pwA(_meta)}</span>` : ''}</span>
+                                    </div>`;
+                                }).join('');
+                                const _totQty = _its.reduce((s2, it) => s2 + (parseInt(it.qty) || 1), 0);
+                                _partsHtml = `<div style="font-size:10px;font-weight:900;color:#d4af37;letter-spacing:1px;margin:0 0 6px;">ALL PARTS (${_totQty})</div><div style="max-height:42vh;overflow-y:auto;margin-bottom:16px;-webkit-overflow-scrolling:touch;">${_lines}</div>`;
+                            } else if (!_job) {
+                                _partsHtml = '<div style="font-size:11px;color:#888;margin:-6px 0 14px;">Log in to PaintWorkz Pro on this phone to see every part.</div>';
+                            }
+                        }
+                    } catch(_pe) { console.warn('QR parts list:', _pe); }
 
                     // Full-screen overlay — covers login UI, uses pulse background
                     const overlay = document.createElement('div');
@@ -33860,11 +33964,12 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                     overlay.style.animation = 'appBgPulse 30s ease-in-out infinite';
 
                     overlay.innerHTML = `
-                        <div style="background:#1c1c1e;border:2px solid #d4af37;border-radius:20px;padding:24px;max-width:360px;width:100%;box-shadow:0 12px 48px rgba(0,0,0,0.8);font-family:-apple-system,sans-serif;">
+                        <div style="background:#1c1c1e;border:2px solid #d4af37;border-radius:20px;padding:24px;max-width:360px;width:100%;max-height:92vh;overflow-y:auto;box-sizing:border-box;box-shadow:0 12px 48px rgba(0,0,0,0.8);font-family:-apple-system,sans-serif;">
                             <div style="font-size:10px;font-weight:900;color:#d4af37;letter-spacing:2px;margin-bottom:8px;">📋 JOB DETAILS</div>
-                            <div style="font-size:22px;font-weight:900;color:#fff;margin-bottom:2px;">Job #${_qj}</div>
-                            ${_qcl ? `<div style="font-size:13px;color:#aaa;margin-bottom:14px;font-weight:500;">${_qcl}</div>` : '<div style="margin-bottom:14px;"></div>'}
+                            <div style="font-size:22px;font-weight:900;color:#fff;margin-bottom:2px;">Job #${pwA(_qj)}</div>
+                            ${_qcl ? `<div style="font-size:13px;color:#aaa;margin-bottom:14px;font-weight:500;">${pwA(_qcl)}</div>` : '<div style="margin-bottom:14px;"></div>'}
                             <div style="border-top:1px solid #2a2a2a;padding-top:14px;margin-bottom:16px;">${_rowsHtml}</div>
+                            ${_partsHtml}
                             <button onclick="document.getElementById('qrScanOverlay').remove();window.history.replaceState({},'',window.location.pathname);" 
                                 style="width:100%;padding:14px;background:#d4af37;color:#000;border:none;border-radius:12px;font-weight:900;font-size:15px;cursor:pointer;letter-spacing:.5px;">
                                 Got it
@@ -33875,7 +33980,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                     // Remove the instant dark cover now that proper overlay is showing
                     const _ic = document.getElementById('qrInstantCover');
                     if (_ic) _ic.remove();
-                    setTimeout(() => { const o = document.getElementById('qrScanOverlay'); if (o) o.remove(); }, 60000);
+                    setTimeout(() => { const o = document.getElementById('qrScanOverlay'); if (o) o.remove(); }, _partsHtml.indexOf('ALL PARTS') >= 0 ? 300000 : 60000); // v1.16.484: 5 min when the parts list shows
                 }, 600);
             }
         } catch(e) { console.warn('QR param handler error:', e); }
