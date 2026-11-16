@@ -4,7 +4,7 @@ Web-based job management application for spray shops and cabinet & joinery finis
 
 **Live app:** [app.paintworkzpro.com.au](https://app.paintworkzpro.com.au)
 **Marketing site:** [paintworkzpro.com.au](https://paintworkzpro.com.au) (regional sites for AU, US, UK & Ireland, NZ and Canada)
-**Current version:** v1.16.483
+**Current version:** v1.16.484
 
 ---
 
@@ -21,7 +21,7 @@ PaintWorkz Pro handles the full spray shop workflow from measurement through to 
 - **Reports & KPIs** — area painted, turnaround days, top colours, client breakdown and estimated margin
 - **Staff logins** — separate logins that hide pricing from the shop floor
 - **Client database** — client management and job history
-- **Photo library** — job photo documentation with damage markup
+- **Job photos** — take photos on a job and link them to a part (e.g. damage that arrived with the parts)
 - **Cloud sync** — jobs and settings sync across devices via Firebase Firestore, and keep working if the signal drops
 
 ### International
