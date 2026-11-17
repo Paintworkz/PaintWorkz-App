@@ -93,7 +93,7 @@ window.pwToday = pwToday;
 </script>
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.484'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.485'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     window.PW_BUILD_DATE = '2026-11-09'; // v1.16.476: the date this build was made — update with each build
     const VERSION_KEY = 'paintworkz_version';
@@ -3290,15 +3290,15 @@ const firebaseConfig = {
                 <div style="display:flex; gap:8px; margin-bottom:8px;">
                     <div style="flex:1">
                         <label>Brand</label>
-                        <select id="p-brand" style="height:35px; font-size:12px;">
+                        <select id="p-brand" style="height:35px; font-size:12px;" onchange="pwOfferApplyPaint('auto')">
                             <option>Wattyl</option>
                         </select>
                     </div>
                     <div style="flex:1">
                         <label>Color Name <span class="pw-help">?<span class="pw-help-tip">The paint colour name — e.g. Lexicon, Vivid White, Hog Bristle. Type it to pull up matching formula from your database.</span></span></label>
                         <div style="display:flex; gap:4px; align-items:stretch;">
-                            <input type="text" id="p-color" placeholder="e.g. Lexicon" style="height:35px; font-size:12px; flex:1;" autocomplete="off" spellcheck="false" lang="en-AU" oninput="openPaintFormulaSearch()" onblur="checkBulkColourChange()">
-                            <button onclick="checkBulkColourChange()" style="background:#2196f3; color:#fff; border:none; padding:0 8px; border-radius:4px; font-size:10px; font-weight:900; cursor:pointer; white-space:nowrap; height:35px; align-self:stretch; box-sizing:border-box; min-width:32px;" title="Apply to ALL parts">↻</button>
+                            <input type="text" id="p-color" placeholder="e.g. Lexicon" style="height:35px; font-size:12px; flex:1;" autocomplete="off" spellcheck="false" lang="en-AU" oninput="openPaintFormulaSearch()" onblur="setTimeout(function(){var m=document.getElementById('paintFormulaModal');if(m&&m.style.display&&m.style.display!=='none')return;checkBulkColourChange();},400)">
+                            <button onclick="pwOfferApplyPaint('button')" style="background:#2196f3; color:#fff; border:none; padding:0 8px; border-radius:4px; font-size:10px; font-weight:900; cursor:pointer; white-space:nowrap; height:35px; align-self:stretch; box-sizing:border-box; min-width:32px;" title="Apply to ALL parts">↻</button>
                             <button onclick="applyColourToSelected()" style="background:#9c27b0; color:#fff; border:none; padding:0 8px; border-radius:4px; font-size:10px; font-weight:900; cursor:pointer; white-space:nowrap; height:35px; align-self:stretch; box-sizing:border-box; min-width:32px;" title="Apply colour to ticked parts only">✓</button>
                         </div>
                     </div>
@@ -3310,7 +3310,7 @@ const firebaseConfig = {
                     </div>
                     <div style="flex:1">
                         <label>Finish</label>
-                        <select id="p-finish" style="height:35px; font-size:12px;">
+                        <select id="p-finish" style="height:35px; font-size:12px;" onchange="pwOfferApplyPaint('auto')">
                             <option>Satin</option><option>Gloss</option><option>Matt</option><option>Semi Gloss</option>
                         </select>
                     </div>
@@ -3945,7 +3945,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.484</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.485</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;"></div>
                         </div>
                     </div>
@@ -4990,7 +4990,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.484</span><span style="color:#d4af37; font-weight:900;" id="versionDate"></span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.485</span><span style="color:#d4af37; font-weight:900;" id="versionDate"></span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);if(typeof tab==='function')tab('measure');setTimeout(function(){if(typeof startTour==='function')startTour();},300);" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -8532,135 +8532,405 @@ const firebaseConfig = {
     let selectedFormula = null;
     let previousJobColour = ''; // Track previous colour for bulk replacement
 
-    function applyColourToSelected() {
-        const newColour = (document.getElementById('p-color')?.value || '').trim().toUpperCase();
-        const newCode = (document.getElementById('p-code')?.value || '').trim().toUpperCase();
-        const newFinish = (document.getElementById('p-finish')?.value || '').trim();
-        const newBrand = (document.getElementById('p-brand')?.value || '').trim();
-        if (!newColour) { notify('Enter a colour first'); return; }
-        const checked = document.querySelectorAll('.part-colour-cb:checked');
-        if (checked.length === 0) { notify('Tick the parts you want to change first'); return; }
-        checked.forEach(cb => {
-            const idx = parseInt(cb.dataset.idx);
-            if (items[idx]) {
-                items[idx].color = newColour;
-                if (newBrand) items[idx].brand = newBrand;
-                if (newCode) items[idx].code = newCode;
-                if (newFinish) items[idx].finish = newFinish;
-            }
+    // v1.16.485: one clear flow for changing a job's paint (colour, finish, brand, formula).
+    // Before: the "apply to all parts" prompt only fired when the colour NAME changed, so a finish-only change
+    // (e.g. ALABASTER satin → matt) never asked, the ↻ button did nothing, and it fired on blur — often before
+    // a picked formula had landed. Now: compare against the parts themselves, ask once per change, in-app prompt.
+    function pwPaintSpec() {
+        return {
+            color: (document.getElementById('p-color')?.value || '').trim().toUpperCase(),
+            code: (document.getElementById('p-code')?.value || '').trim().toUpperCase(),
+            finish: (document.getElementById('p-finish')?.value || '').trim(),
+            brand: (document.getElementById('p-brand')?.value || '').trim()
+        };
+    }
+    function pwPaintKey(s) { return [s.color, s.finish, s.brand].join('|').toLowerCase(); } // formula text is derived from these
+    function pwPartDiffers(it, s) {
+        const n = v => String(v == null ? '' : v).trim().toLowerCase();
+        if (n(it.color || it.colour) !== n(s.color)) return true;
+        if (s.finish && n(it.finish || 'Satin') !== n(s.finish)) return true;
+        if (s.brand && n(it.brand) !== n(s.brand)) return true;
+        return false;
+    }
+    // Remember what the job was loaded / last applied with, so loading a job never asks
+    function pwPaintMarkAsked() { try { window._pwPaintAsked = pwPaintKey(pwPaintSpec()); } catch(e) {} }
+
+    function pwApplyPaintTo(indices, isAll) {
+        const s = pwPaintSpec();
+        if (!s.color) { notify('Enter a colour first'); return; }
+        let n = 0;
+        indices.forEach(i => {
+            const it = items[i]; if (!it) return;
+            it.color = s.color;
+            if (s.brand) it.brand = s.brand;
+            if (s.code) it.code = s.code;
+            if (s.finish) it.finish = s.finish;
+            n++;
         });
-        notify(`✅ Updated ${checked.length} selected part${checked.length > 1 ? 's' : ''}`);
+        previousJobColour = s.color;
+        window._pwPaintAsked = pwPaintKey(s);
+        document.querySelectorAll('.part-colour-cb:checked').forEach(cb => { cb.checked = false; });
+        notify(`✅ ${n} part${n === 1 ? '' : 's'} changed to ${s.color}${s.finish ? ' · ' + s.finish : ''}`);
         render();
         saveData();
-        // CRITICAL: Write directly to Firestore — don't rely on syncJobsToFirebase
+        // Write straight to Firestore so the live listener can't put the old colour back
         if (currentEditingJobId && window.firebaseDb && window.doc && window.updateDoc) {
-            const _selSyncUid = pwSafeUid();
-            if (_selSyncUid) {
-                // Mark confirmed IMMEDIATELY — don't wait for async .then()
-                // This closes the snapshot revert window between click and write confirmation
+            const syncUid = pwSafeUid();
+            if (syncUid) {
                 if (!window._firebaseConfirmedJobs) window._firebaseConfirmedJobs = {};
                 window._firebaseConfirmedJobs[currentEditingJobId] = Date.now();
-                // Also index by jobNum for robustness (in case id/jobNum mismatch)
-                const _activeJobNum2 = document.getElementById('jN')?.value;
-                if (_activeJobNum2) window._firebaseConfirmedJobs[String(_activeJobNum2)] = Date.now();
-
-                const _selRef = window.doc(window.firebaseDb, 'users', _selSyncUid, 'jobs', pwEditingDocId());
-                const _selColors = [...new Set(items.map(i => i.color || i.colour).filter(Boolean))];
+                const _jn = document.getElementById('jN')?.value;
+                if (_jn) window._firebaseConfirmedJobs[String(_jn)] = Date.now();
+                const jobRef = window.doc(window.firebaseDb, 'users', syncUid, 'jobs', pwEditingDocId());
+                const _allPartColors = [...new Set(items.map(i => i.color || i.colour).filter(Boolean))];
+                const updateData = { items: items, colors: _allPartColors.join(', ') || s.color, lastModified: new Date().toISOString() };
+                if (isAll) {
+                    updateData.color = s.color;
+                    if (s.brand) updateData.brand = s.brand;
+                    if (s.code) updateData.code = s.code;
+                    if (s.finish) updateData.finish = s.finish;
+                }
                 window._pwCloudTouchedDuringEdit = true; // v1.16.467
-                window.updateDoc(_selRef, {
-                    items: items,
-                    color: newColour,
-                    colors: _selColors.join(', ') || newColour,
-                    lastModified: new Date().toISOString()
-                })
-                .then(() => console.log('✅ Selected parts colour synced to Firestore'))
-                .catch(e => console.warn('Selected colour sync failed:', e));
+                window.updateDoc(jobRef, updateData)
+                    .then(() => console.log('✅ Paint change synced to Firestore via', syncUid))
+                    .catch(e => console.warn('Paint change sync failed:', e));
             }
         }
     }
 
-    function checkBulkColourChange() {
-        const newColour = (document.getElementById('p-color')?.value || '').trim().toUpperCase();
-        const newColourUpper = newColour;
-
-        // If no colour entered or no parts, nothing to do
-        if (!newColour || items.length === 0) {
-            previousJobColour = newColourUpper;
+    // trigger: 'auto' (formula picked / finish or brand changed / before adding a part) asks once per change;
+    //          'button' (↻) always asks if anything differs.
+    function pwOfferApplyPaint(trigger) {
+        const s = pwPaintSpec();
+        if (!s.color || !items || items.length === 0) { pwPaintMarkAsked(); return; }
+        const key = pwPaintKey(s);
+        if (trigger !== 'button' && window._pwPaintAsked === key) return;
+        const diff = [];
+        items.forEach((it, i) => { if (pwPartDiffers(it, s)) diff.push(i); });
+        if (diff.length === 0) {
+            window._pwPaintAsked = key;
+            if (trigger === 'button') notify('All parts already use ' + s.color + (s.finish ? ' · ' + s.finish : ''));
             return;
         }
+        if (document.getElementById('pwPaintAsk')) return; // already showing
+        window._pwPaintAsked = key; // ask once per change
+        const ticked = Array.from(document.querySelectorAll('.part-colour-cb:checked')).map(cb => parseInt(cb.dataset.idx)).filter(i => !isNaN(i) && items[i]);
+        const all = items.map((_, i) => i);
+        const ov = document.createElement('div');
+        ov.id = 'pwPaintAsk';
+        ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:100050;display:flex;align-items:center;justify-content:center;padding:16px;';
+        const btn = (id, label, sub, bg, fg, disabled) => `<button id="${id}" ${disabled ? 'disabled' : ''} style="width:100%;margin-top:8px;padding:12px 14px;border-radius:10px;border:none;background:${disabled ? '#3a3a3a' : bg};color:${disabled ? '#777' : fg};font-weight:900;font-size:14px;text-align:left;cursor:${disabled ? 'default' : 'pointer'};">${label}<span style="display:block;font-weight:600;font-size:11px;opacity:.8;margin-top:2px;">${sub}</span></button>`;
+        ov.innerHTML = `<div style="background:#1c1c1e;border:2px solid #d4af37;border-radius:16px;padding:20px;max-width:360px;width:100%;font-family:-apple-system,sans-serif;color:#fff;box-shadow:0 12px 40px rgba(0,0,0,.7);">
+            <div style="font-size:11px;font-weight:900;color:#d4af37;letter-spacing:1px;">CHANGE PAINT ON THIS JOB?</div>
+            <div style="font-size:20px;font-weight:900;margin:6px 0 2px;">${pwA(s.color)}</div>
+            <div style="font-size:12px;color:#aaa;">${pwA([s.finish, s.brand].filter(Boolean).join(' · '))}${s.code ? '<br>' + pwA(s.code) : ''}</div>
+            <div style="font-size:12px;color:#ddd;margin:12px 0 4px;">${diff.length} of ${items.length} part${items.length === 1 ? '' : 's'} use a different colour or finish.</div>
+            ${btn('pwPaintAll', 'All parts (' + items.length + ')', 'Change every part on the job', '#d4af37', '#000', false)}
+            ${btn('pwPaintTicked', 'Ticked parts (' + ticked.length + ')', ticked.length ? 'Only the parts you ticked' : 'Tick parts in the list first', '#9c27b0', '#fff', ticked.length === 0)}
+            ${btn('pwPaintNew', 'Just new parts', 'Leave existing parts as they are', '#2c2c2e', '#fff', false)}
+        </div>`;
+        document.body.appendChild(ov);
+        const close = () => { const o = document.getElementById('pwPaintAsk'); if (o) o.remove(); };
+        document.getElementById('pwPaintAll').onclick = () => { close(); pwApplyPaintTo(all, true); };
+        const tb = document.getElementById('pwPaintTicked'); if (tb && ticked.length) tb.onclick = () => { close(); pwApplyPaintTo(ticked, false); };
+        document.getElementById('pwPaintNew').onclick = () => { close(); notify('New parts will use ' + s.color + (s.finish ? ' · ' + s.finish : '')); };
+        ov.addEventListener('click', e => { if (e.target === ov) close(); });
+    }
 
-        // If colour hasn't changed from tracking, nothing to do (onblur auto-call)
-        if (newColourUpper === previousJobColour) {
-            return;
+    // Purple ✓ button: apply to the ticked parts straight away
+    function applyColourToSelected() {
+        const s = pwPaintSpec();
+        if (!s.color) { notify('Enter a colour first'); return; }
+        const ticked = Array.from(document.querySelectorAll('.part-colour-cb:checked')).map(cb => parseInt(cb.dataset.idx)).filter(i => !isNaN(i) && items[i]);
+        if (ticked.length === 0) { notify('Tick the parts you want to change first'); return; }
+        pwApplyPaintTo(ticked, false);
+    }
+
+    // Kept for existing callers (colour box blur, before adding a part)
+    function checkBulkColourChange() { pwOfferApplyPaint('auto'); }
+
+    // ═══ v1.16.485: PUBLIC DOCKET — scan a label's QR on ANY phone (no login) to see the job's parts ═══
+    // When a label with a QR prints, a read-only copy of the job's supply docket (no prices) is saved to
+    // Firestore at publicDockets/{random code}. The code goes in the QR as &d=… and stays the same for the job,
+    // so reprinting refreshes it. Needs the publicDockets rule in Firebase; until then the QR falls back to the
+    // old summary. Saving the job also refreshes its docket if it already has one.
+    function pwDocketTokens() { try { return JSON.parse(localStorage.getItem('pw_pub_tokens') || '{}'); } catch(e) { return {}; } }
+    function pwDocketKey(job, client) { return String(job || '').trim() + '|' + String(client || '').trim().toLowerCase(); }
+    function pwDocketToken(job, client, create) {
+        const key = pwDocketKey(job, client);
+        if (!String(job || '').trim()) return '';
+        const map = pwDocketTokens();
+        if (!map[key] && create) {
+            const a = new Uint8Array(15); (window.crypto || window.msCrypto).getRandomValues(a);
+            map[key] = Array.from(a, b => 'abcdefghijkmnpqrstuvwxyz23456789'[b % 32]).join('');
+            try { localStorage.setItem('pw_pub_tokens', JSON.stringify(map)); } catch(e) {}
         }
-
-        // Ask user if they want to update all parts
-        const newBrandPreview = (document.getElementById('p-brand')?.value || '').trim();
-        const newCodePreview = (document.getElementById('p-code')?.value || '').trim();
-        const confirmed = confirm(
-            `Apply new colour to ALL ${items.length} part${items.length > 1 ? 's' : ''}?\n\n` +
-            `Colour: ${newColour}\n` +
-            (newBrandPreview ? `Brand: ${newBrandPreview}\n` : '') +
-            (newCodePreview ? `Formula: ${newCodePreview}\n` : '') +
-            `\nThis updates every part on the job.\nOK to apply, Cancel to keep existing.`
-        );
-        
-        if (confirmed) {
-            // Replace colour in all matching parts (use uppercase from input)
-            let replacedCount = 0;
-            
-            // Update ALL items with new colour, brand, code and finish
-            const newCode = (document.getElementById('p-code')?.value || '').trim().toUpperCase();
-            const newFinish = (document.getElementById('p-finish')?.value || '').trim();
-            const newBrand = (document.getElementById('p-brand')?.value || '').trim();
-            
-            items.forEach(item => {
-                item.color = newColour;
-                if (newBrand) item.brand = newBrand;
-                if (newCode) item.code = newCode;
-                if (newFinish) item.finish = newFinish;
-                replacedCount++;
+        return map[key] || '';
+    }
+    const _pwDocketLast = {};
+    function pwPublishDocket(token, job, client, extra) {
+        try {
+            if (!token || !window.firebaseDb || !window.doc || !window.setDoc || !window.currentUser) return;
+            if (_pwDocketLast[token] && Date.now() - _pwDocketLast[token] < 4000) return; // once per print run
+            _pwDocketLast[token] = Date.now();
+            const parts = (window.pdfItemsToUse && window.pdfItemsToUse.length) ? window.pdfItemsToUse : (typeof items !== 'undefined' ? items : []);
+            if (!parts || !parts.length) return;
+            const hist = JSON.parse(localStorage.getItem('jobHistory') || '[]');
+            const rec = hist.find(j => String(j.jobNum || '').trim() === String(job).trim() && String(j.client || '').trim().toLowerCase() === String(client || '').trim().toLowerCase()) || {};
+            let cs = {}; try { cs = (typeof companySettings !== 'undefined' && companySettings && Object.keys(companySettings).length) ? companySettings : JSON.parse(localStorage.getItem('companySettings') || '{}'); } catch(e) {}
+            let logo = ''; try { logo = localStorage.getItem('companyLogo') || ''; if (logo.length > 350000 || !/^data:image\//.test(logo)) logo = ''; } catch(e) {}
+            const u = (typeof getUnitLabel === 'function') ? getUnitLabel() : 'mm';
+            const dim = v => (typeof mmToDisplay === 'function') ? String(mmToDisplay(v)) : String(v);
+            const area = v => (typeof pwAreaShow === 'function') ? pwAreaShow(v) : (parseFloat(v) || 0).toFixed(2);
+            const al = (typeof getAreaLabel === 'function') ? getAreaLabel() : 'm²';
+            const edgeTxt = it => { const e = it.e; if (!Array.isArray(e)) return ''; const L = (e[0] ? 1 : 0) + (e[1] ? 1 : 0), Sh = (e[2] ? 1 : 0) + (e[3] ? 1 : 0); return [L ? L + 'L' : '', Sh ? Sh + 'S' : ''].filter(Boolean).join(' '); }; // E1/E2 long, E3/E4 short
+            const colours = {};
+            let totQty = 0, totArea = 0;
+            const P = parts.map(it => {
+                const q = parseInt(it.qty) || 1; totQty += q;
+                const a = parseFloat(it.sqm) || 0; totArea += a;
+                const col = (it.color || it.colour || '').toString().toUpperCase();
+                const fin = it.finish || 'Satin';
+                const ck = col + '|' + fin;
+                colours[ck] = colours[ck] || { c: col, f: fin, b: it.brand || '', n: 0 };
+                colours[ck].n += q;
+                return {
+                    q, d: String(it.desc || it.type || 'Part').slice(0, 60), t: String(it.type || ''),
+                    s: (it.h && it.w) ? dim(it.h) + ' × ' + dim(it.w) + (it.thk ? ' × ' + dim(it.thk) : '') + ' ' + u : '',
+                    p: String(it.prof || it.profile || '').slice(0, 40), c: col, f: fin,
+                    m: String(it.mode || '').toUpperCase(),
+                    e: edgeTxt(it), g: !!(it.isGlass || it.glass), a: area(a)
+                };
             });
-            
-            notify(`✅ Updated ${replacedCount} part${replacedCount > 1 ? 's' : ''} — colour, brand & formula applied`);
-            render();
-            saveData();
+            const data = {
+                v: 1, dataUid: pwSafeUid() || '', ownerUid: window.currentUser.uid, updatedAt: new Date().toISOString(),
+                shop: { name: String(cs.name || cs.businessName || '').slice(0, 80), phone: String(cs.phone || '').slice(0, 30), email: String(cs.email || '').slice(0, 80), logo },
+                job: {
+                    num: String(job), client: String(client || ''), name: String(rec.jobName || rec.name || document.getElementById('jNm')?.value || '').slice(0, 80),
+                    received: String(rec.dateReceived || document.getElementById('dRec')?.value || ''), sched: String((extra && extra.sched) || rec.scheduledFinish || ''),
+                    colours: Object.values(colours)
+                },
+                areaUnit: al, totals: { qty: totQty, lines: P.length, area: area(totArea) }, parts: P
+            };
+            window.setDoc(window.doc(window.firebaseDb, 'publicDockets', token), data)
+                .then(() => { console.log('🔗 Public docket updated:', token); try { localStorage.setItem('pw_pub_ok', '1'); } catch(e) {} })
+                .catch(e => console.warn('Public docket not saved (add the publicDockets rule in Firebase):', e && e.code || e));
+        } catch(e) { console.warn('pwPublishDocket:', e); }
+    }
+    // Used by every label QR: adds the docket code and saves the docket
+    function pwQrUrl(params) {
+        try {
+            const job = params.get('job'), client = params.get('client') || (document.getElementById('cli')?.value || '');
+            const t = pwDocketToken(job, client, true);
+            if (t) { params.set('d', t); pwPublishDocket(t, job, client, { sched: params.get('sched') || '' }); }
+        } catch(e) {}
+        return 'https://app.paintworkzpro.com.au/?' + params.toString();
+    }
+    // Saving a job that already has a docket refreshes it
+    function pwRefreshDocketOnSave() {
+        try {
+            const job = document.getElementById('jN')?.value, client = document.getElementById('cli')?.value || '';
+            const t = pwDocketToken(job, client, false);
+            if (t && !(window.pdfItemsToUse && window.pdfItemsToUse.length)) pwPublishDocket(t, job, client, {});
+        } catch(e) {}
+    }
 
-            // CRITICAL: Write colour change to Firestore immediately so onSnapshot can't revert it
-            // Just updating currentJob in saveData() isn't enough — the cloud copy still has old colour
-            if (currentEditingJobId && window.firebaseDb && window.doc && window.updateDoc) {
-                // Use resolvedDataUid — set during loadAllDataFromFirebase when the correct UID is known.
-                // paint_workz stores data under a fixed UID that differs from auth UID,
-                // so window.currentUser.uid alone gives the wrong Firestore path.
-                const syncUid = pwSafeUid();
-                if (syncUid) {
-                    const jobRef = window.doc(window.firebaseDb, 'users', syncUid, 'jobs', pwEditingDocId());
-                    // Build colors (plural) field from all unique part colours — this is what history cards display
-                    const _allPartColors = [...new Set(items.map(i => i.color || i.colour).filter(Boolean))];
-                    const updateData = {
-                        items: items,
-                        color: newColour,
-                        colors: _allPartColors.join(', ') || newColour, // history card display field
-                        lastModified: new Date().toISOString()
-                    };
-                    if (newBrand) updateData.brand = newBrand;
-                    if (newCode) updateData.code = newCode;
-                    if (newFinish) updateData.finish = newFinish;
-                    // Mark confirmed IMMEDIATELY before async write completes
-                    if (!window._firebaseConfirmedJobs) window._firebaseConfirmedJobs = {};
-                    window._firebaseConfirmedJobs[currentEditingJobId] = Date.now();
-                    if (newColour) window._firebaseConfirmedJobs[String(document.getElementById('jN')?.value||'')] = Date.now();
-                    window._pwCloudTouchedDuringEdit = true; // v1.16.467
-                    window.updateDoc(jobRef, updateData)
-                        .then(() => console.log('✅ Colour change synced to Firestore via', syncUid))
-                        .catch(e => console.warn('Colour sync failed:', e));
+    // Landing page for a scanned QR with &d=… — returns true if it showed the docket
+    async function pwShowPublicDocket(token, opt) {
+        if (!/^[a-z0-9]{10,40}$/.test(token || '')) return false;
+        for (let i = 0; i < 40 && !(window.getDoc && window.doc && window.firebaseDb); i++) await new Promise(r => setTimeout(r, 150));
+        if (!(window.getDoc && window.doc && window.firebaseDb)) return false;
+        let D;
+        try {
+            const snap = await window.getDoc(window.doc(window.firebaseDb, 'publicDockets', token));
+            if (!snap.exists()) return false;
+            D = snap.data();
+        } catch(e) { console.warn('Public docket read failed:', e && e.code || e); return false; }
+        if (!D || !Array.isArray(D.parts)) return false;
+        const E = v => pwA(v == null ? '' : v);
+        const J = D.job || {}, S = D.shop || {}, T = D.totals || {};
+        const hp = String((opt && opt.part) || '').trim().toLowerCase();
+        const upd = (() => { try { return new Date(D.updatedAt).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }); } catch(e) { return ''; } })();
+        const chips = (J.colours || []).map(c => `<span class="pwd-chip"><i></i>${E(c.c)} <b>${E(c.f)}</b>${c.b ? ' · ' + E(c.b) : ''}</span>`).join('');
+        // group parts by colour + finish
+        const groups = {};
+        D.parts.forEach(p => { const k = p.c + '|' + p.f; (groups[k] = groups[k] || { c: p.c, f: p.f, list: [] }).list.push(p); });
+        const multi = Object.keys(groups).length > 1;
+        let n = 0;
+        const partsHtml = Object.values(groups).map(g => `
+            ${multi ? `<div class="pwd-group">${E(g.c)} · ${E(g.f)}</div>` : ''}
+            ${g.list.map(p => { n++; const hi = hp && p.d.toLowerCase() === hp; return `
+            <div class="pwd-part${hi ? ' hi' : ''}" style="animation-delay:${Math.min(n * 35, 900)}ms">
+                <div class="pwd-q">${E(p.q)}<small>×</small></div>
+                <div class="pwd-pm">
+                    <div class="pwd-pd">${E(p.d)}${p.g ? ' <span class="pwd-tag">GLASS</span>' : ''}${hi ? ' <span class="pwd-tag gold">THIS PART</span>' : ''}</div>
+                    <div class="pwd-ps">${E(p.s)}</div>
+                    <div class="pwd-pk">${[p.p, p.m, p.e ? 'Edges ' + p.e : ''].filter(Boolean).map(E).join(' · ')}</div>
+                </div>
+                <div class="pwd-pa">${E(p.a)}<small>${E(D.areaUnit || '')}</small></div>
+            </div>`; }).join('')}`).join('');
+        const shopTop = (S.logo || S.name) ? `<div class="pwd-shop">${S.logo ? `<img src="${E(S.logo)}" alt="">` : ''}<div><div class="pwd-sn">${E(S.name)}</div>${S.phone ? `<a href="tel:${E(String(S.phone).replace(/[^0-9+]/g, ''))}">${E(S.phone)}</a>` : ''}</div></div>` : '';
+        const old = document.getElementById('pwDocket'); if (old) old.remove();
+        const ov = document.createElement('div');
+        ov.id = 'pwDocket';
+        ov.innerHTML = `<style>
+            #pwDocket{position:fixed;inset:0;z-index:100100;overflow-y:auto;-webkit-overflow-scrolling:touch;background:#0b0b0d;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
+            #pwDocket *{box-sizing:border-box}
+            .pwd-bar{height:6px;background:linear-gradient(90deg,#ff3b30,#ff9500,#ffcc00,#34c759,#5ac8fa,#007aff,#af52de);background-size:200% 100%;animation:pwdSlide 6s linear infinite}
+            @keyframes pwdSlide{to{background-position:200% 0}}
+            .pwd-wrap{max-width:560px;margin:0 auto;padding:18px 16px 40px}
+            .pwd-brand{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+            .pwd-logo{font-weight:900;font-size:15px;letter-spacing:.5px;background:#1c1c1e;border:1.5px solid #d4af37;border-radius:10px;padding:6px 12px;color:#d4af37;box-shadow:0 0 18px rgba(212,175,55,.25)}
+            .pwd-logo span{color:#fff}
+            .pwd-live{font-size:10px;font-weight:800;letter-spacing:1.5px;color:#34c759;display:flex;align-items:center;gap:6px}
+            .pwd-live:before{content:'';width:7px;height:7px;border-radius:50%;background:#34c759;box-shadow:0 0 0 0 rgba(52,199,89,.7);animation:pwdPulse 1.8s infinite}
+            @keyframes pwdPulse{70%{box-shadow:0 0 0 8px rgba(52,199,89,0)}100%{box-shadow:0 0 0 0 rgba(52,199,89,0)}}
+            .pwd-shop{display:flex;align-items:center;gap:12px;background:#151517;border:1px solid #2a2a2e;border-radius:14px;padding:12px 14px;margin-bottom:14px}
+            .pwd-shop img{width:52px;height:52px;object-fit:contain;border-radius:10px;background:#fff;padding:4px}
+            .pwd-sn{font-weight:800;font-size:15px}
+            .pwd-shop a{color:#d4af37;font-size:13px;text-decoration:none;font-weight:700}
+            .pwd-hero{position:relative;overflow:hidden;border-radius:18px;padding:20px;background:radial-gradient(120% 140% at 100% 0%,rgba(212,175,55,.22),transparent 55%),linear-gradient(160deg,#1d1d20,#121214);border:1px solid #3a3320;box-shadow:0 10px 40px rgba(0,0,0,.5);animation:pwdUp .5s ease both}
+            .pwd-hero:after{content:'';position:absolute;top:0;left:-60%;width:40%;height:100%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.07),transparent);animation:pwdShine 3.5s ease-in-out 0.6s infinite}
+            @keyframes pwdShine{to{left:130%}}
+            @keyframes pwdUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+            .pwd-k{font-size:10px;font-weight:900;letter-spacing:2px;color:#d4af37}
+            .pwd-jn{font-size:38px;font-weight:900;line-height:1.05;margin:4px 0 2px;letter-spacing:-.5px}
+            .pwd-cl{font-size:15px;color:#ddd;font-weight:600}
+            .pwd-nm{font-size:13px;color:#999;margin-top:2px}
+            .pwd-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+            .pwd-chip{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:#eee;background:#232326;border:1px solid #34343a;border-radius:999px;padding:5px 10px}
+            .pwd-chip i{width:9px;height:9px;border-radius:50%;background:linear-gradient(135deg,#f5d87a,#d4af37)}
+            .pwd-chip b{color:#d4af37}
+            .pwd-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px}
+            .pwd-stat{background:rgba(0,0,0,.35);border:1px solid #2c2c30;border-radius:12px;padding:10px;text-align:center}
+            .pwd-stat b{display:block;font-size:22px;font-weight:900;color:#fff}
+            .pwd-stat span{font-size:9px;font-weight:800;letter-spacing:1.2px;color:#999;text-transform:uppercase}
+            .pwd-dates{display:flex;gap:16px;margin-top:12px;font-size:12px;color:#bbb}
+            .pwd-dates b{color:#fff}
+            .pwd-h{display:flex;justify-content:space-between;align-items:baseline;margin:22px 2px 8px}
+            .pwd-h div{font-size:11px;font-weight:900;letter-spacing:2px;color:#d4af37}
+            .pwd-h span{font-size:11px;color:#777}
+            .pwd-group{font-size:11px;font-weight:800;color:#aaa;margin:14px 2px 6px;letter-spacing:.5px}
+            .pwd-part{display:flex;align-items:center;gap:12px;background:#151517;border:1px solid #26262a;border-radius:14px;padding:12px;margin-bottom:8px;animation:pwdUp .45s ease both}
+            .pwd-part.hi{border-color:#d4af37;box-shadow:0 0 0 1px #d4af37,0 0 24px rgba(212,175,55,.25)}
+            .pwd-q{min-width:44px;height:44px;border-radius:12px;background:linear-gradient(145deg,#f5d87a,#c99a24);color:#111;font-weight:900;font-size:19px;display:flex;align-items:center;justify-content:center}
+            .pwd-q small{font-size:11px;margin-left:1px}
+            .pwd-pm{flex:1;min-width:0}
+            .pwd-pd{font-weight:800;font-size:14px}
+            .pwd-ps{font-size:13px;color:#ddd;margin-top:2px}
+            .pwd-pk{font-size:11px;color:#888;margin-top:2px}
+            .pwd-pa{text-align:right;font-weight:800;font-size:13px;color:#d4af37;white-space:nowrap}
+            .pwd-pa small{display:block;font-size:9px;color:#777;font-weight:700}
+            .pwd-tag{font-size:9px;font-weight:900;letter-spacing:1px;background:#2a2a30;color:#9ad;border-radius:5px;padding:2px 5px;vertical-align:middle}
+            .pwd-tag.gold{background:#d4af37;color:#111}
+            .pwd-foot{margin-top:26px;text-align:center;border-top:1px solid #222;padding-top:18px}
+            .pwd-foot p{font-size:11px;color:#777;margin:0 0 12px}
+            .pwd-cta{display:inline-block;background:linear-gradient(90deg,#d4af37,#f5d87a);color:#111;font-weight:900;font-size:13px;border-radius:999px;padding:11px 18px;text-decoration:none;box-shadow:0 6px 20px rgba(212,175,55,.3)}
+            .pwd-open{display:block;margin:12px auto 0;background:none;border:none;color:#888;font-size:12px;text-decoration:underline;cursor:pointer}
+        </style>
+        <div class="pwd-bar"></div>
+        <div class="pwd-wrap">
+            <div class="pwd-brand"><div class="pwd-logo">PaintWorkz <span>Pro</span></div><div class="pwd-live">LIVE DOCKET</div></div>
+            ${shopTop}
+            <div class="pwd-hero">
+                <div class="pwd-k">SUPPLY DOCKET</div>
+                <div class="pwd-jn">Job #${E(J.num)}</div>
+                <div class="pwd-cl">${E(J.client)}</div>
+                ${J.name ? `<div class="pwd-nm">${E(J.name)}</div>` : ''}
+                ${chips ? `<div class="pwd-chips">${chips}</div>` : ''}
+                <div class="pwd-stats">
+                    <div class="pwd-stat"><b>${E(T.qty)}</b><span>Parts</span></div>
+                    <div class="pwd-stat"><b>${E(T.area)}</b><span>${E(D.areaUnit || '')}</span></div>
+                    <div class="pwd-stat"><b>${E((J.colours || []).length || 1)}</b><span>Colour${(J.colours || []).length === 1 ? '' : 's'}</span></div>
+                </div>
+                ${(J.received || J.sched) ? `<div class="pwd-dates">${J.received ? `<div>Received <b>${E(J.received)}</b></div>` : ''}${J.sched ? `<div>Due <b>${E(J.sched)}</b></div>` : ''}</div>` : ''}
+            </div>
+            <div class="pwd-h"><div>EVERY PART</div><span>${E(T.lines)} line${T.lines === 1 ? '' : 's'}</span></div>
+            ${partsHtml}
+            <div class="pwd-foot">
+                <p>Live docket${upd ? ' · updated ' + E(upd) : ''}</p>
+                <a class="pwd-cta" href="https://paintworkzpro.com.au/" target="_blank" rel="noopener">Made with PaintWorkz Pro — spray shop software →</a>
+                <button class="pwd-open" onclick="document.getElementById('pwDocket').remove()">Shop staff? Open PaintWorkz Pro</button>
+            </div>
+        </div>`;
+        document.body.appendChild(ov);
+        const hiEl = ov.querySelector('.pwd-part.hi'); if (hiEl) setTimeout(() => hiEl.scrollIntoView({ behavior: 'smooth', block: 'center' }), 700);
+        return true;
+    }
+
+    // ═══ v1.16.485: PHOTO MARKUP — draw on a job photo (pen, arrow, circle) to show damage ═══
+    // Saves the marked-up picture as a NEW photo linked to the same part, so the original is never changed.
+    function pwMarkupPhoto(photoId) {
+        const photo = jobPhotos.find(p => String(p.id) === String(photoId));
+        if (!photo) return;
+        const img = new Image();
+        img.onload = () => {
+            const MAX = 1600, sc = Math.min(1, MAX / Math.max(img.width, img.height));
+            const W = Math.round(img.width * sc), H = Math.round(img.height * sc);
+            const ov = document.createElement('div');
+            ov.id = 'pwMarkup';
+            ov.style.cssText = 'position:fixed;inset:0;z-index:100060;background:#0b0b0d;display:flex;flex-direction:column;font-family:-apple-system,sans-serif;touch-action:none;';
+            const tb = (id, label) => `<button data-t="${id}" style="flex:1;min-width:58px;padding:10px 6px;border-radius:10px;border:2px solid #333;background:#1c1c1e;color:#fff;font-weight:900;font-size:13px;cursor:pointer;">${label}</button>`;
+            const cb = c => `<button data-c="${c}" style="width:34px;height:34px;border-radius:50%;border:3px solid #333;background:${c};cursor:pointer;flex-shrink:0;"></button>`;
+            ov.innerHTML = `
+                <div style="display:flex;gap:6px;padding:10px;background:#151517;border-bottom:1px solid #2a2a2e;flex-wrap:wrap;align-items:center;">
+                    ${tb('pen', '✏️ Pen')}${tb('arrow', '➜ Arrow')}${tb('circle', '◯ Circle')}
+                    <div style="display:flex;gap:6px;margin-left:4px;">${cb('#ff3b30')}${cb('#ffcc00')}${cb('#ffffff')}</div>
+                </div>
+                <div id="pwMkStage" style="flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:8px;"><canvas id="pwMkCanvas" width="${W}" height="${H}" style="max-width:100%;max-height:100%;border-radius:8px;box-shadow:0 6px 30px rgba(0,0,0,.6);touch-action:none;"></canvas></div>
+                <div style="display:flex;gap:8px;padding:10px 10px calc(10px + env(safe-area-inset-bottom));background:#151517;border-top:1px solid #2a2a2e;">
+                    <button id="pwMkUndo" style="flex:1;padding:12px;border-radius:10px;border:none;background:#2c2c2e;color:#fff;font-weight:900;">↶ Undo</button>
+                    <button id="pwMkCancel" style="flex:1;padding:12px;border-radius:10px;border:none;background:#2c2c2e;color:#fff;font-weight:900;">Cancel</button>
+                    <button id="pwMkSave" style="flex:1.4;padding:12px;border-radius:10px;border:none;background:linear-gradient(90deg,#d4af37,#f5d87a);color:#111;font-weight:900;">✓ Save copy</button>
+                </div>`;
+            document.body.appendChild(ov);
+            const cv = document.getElementById('pwMkCanvas'), ctx = cv.getContext('2d');
+            let tool = 'circle', colour = '#ff3b30', shapes = [], cur = null;
+            const lw = Math.max(4, Math.round(Math.max(W, H) / 220));
+            const setActive = () => {
+                ov.querySelectorAll('[data-t]').forEach(b => { b.style.borderColor = b.dataset.t === tool ? '#d4af37' : '#333'; b.style.background = b.dataset.t === tool ? '#2a2412' : '#1c1c1e'; });
+                ov.querySelectorAll('[data-c]').forEach(b => { b.style.borderColor = b.dataset.c === colour ? '#d4af37' : '#333'; });
+            };
+            const drawShape = s => {
+                ctx.strokeStyle = s.c; ctx.fillStyle = s.c; ctx.lineWidth = lw; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+                ctx.shadowColor = 'rgba(0,0,0,.55)'; ctx.shadowBlur = lw;
+                if (s.t === 'pen') { ctx.beginPath(); s.p.forEach((pt, i) => i ? ctx.lineTo(pt[0], pt[1]) : ctx.moveTo(pt[0], pt[1])); ctx.stroke(); }
+                else if (s.t === 'circle') { const cx = (s.a[0] + s.b[0]) / 2, cy = (s.a[1] + s.b[1]) / 2; ctx.beginPath(); ctx.ellipse(cx, cy, Math.max(4, Math.abs(s.b[0] - s.a[0]) / 2), Math.max(4, Math.abs(s.b[1] - s.a[1]) / 2), 0, 0, Math.PI * 2); ctx.stroke(); }
+                else if (s.t === 'arrow') {
+                    const [x1, y1] = s.a, [x2, y2] = s.b, ang = Math.atan2(y2 - y1, x2 - x1), hl = lw * 4.5;
+                    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+                    ctx.beginPath(); ctx.moveTo(x2, y2); ctx.lineTo(x2 - hl * Math.cos(ang - 0.45), y2 - hl * Math.sin(ang - 0.45)); ctx.lineTo(x2 - hl * Math.cos(ang + 0.45), y2 - hl * Math.sin(ang + 0.45)); ctx.closePath(); ctx.fill();
                 }
-            }
-        }
-        
-        // Update tracking for next change (always uppercase for comparison)
-        previousJobColour = newColourUpper;
-        console.log('   Updated previousJobColour to:', previousJobColour);
+                ctx.shadowBlur = 0;
+            };
+            const redraw = () => { ctx.drawImage(img, 0, 0, W, H); shapes.forEach(drawShape); if (cur) drawShape(cur); };
+            const pos = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; };
+            cv.addEventListener('pointerdown', e => { e.preventDefault(); cv.setPointerCapture(e.pointerId); const p = pos(e); cur = tool === 'pen' ? { t: 'pen', c: colour, p: [p] } : { t: tool, c: colour, a: p, b: p }; redraw(); });
+            cv.addEventListener('pointermove', e => { if (!cur) return; e.preventDefault(); const p = pos(e); if (cur.t === 'pen') cur.p.push(p); else cur.b = p; redraw(); });
+            const end = () => { if (!cur) return; const ok = cur.t === 'pen' ? cur.p.length > 1 : (Math.abs(cur.b[0] - cur.a[0]) + Math.abs(cur.b[1] - cur.a[1]) > 6); if (ok) shapes.push(cur); cur = null; redraw(); };
+            cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+            ov.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tool = b.dataset.t; setActive(); });
+            ov.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { colour = b.dataset.c; setActive(); });
+            document.getElementById('pwMkUndo').onclick = () => { shapes.pop(); redraw(); };
+            document.getElementById('pwMkCancel').onclick = () => ov.remove();
+            document.getElementById('pwMkSave').onclick = async () => {
+                if (!shapes.length) { notify('Draw on the photo first'); return; }
+                const data = cv.toDataURL('image/jpeg', 0.82);
+                const np = { id: Date.now(), data, timestamp: new Date().toLocaleString('en-AU'), linkedPart: photo.linkedPart || null, markedUpFrom: photo.id };
+                jobPhotos.push(np);
+                ov.remove();
+                try {
+                    const jn = document.getElementById('jN')?.value || '';
+                    if (!jn || jn === '_pending') await photoDB.savePhotos('_pending', jobPhotos);
+                    else { await photoDB.savePhotos(jn, jobPhotos); syncPhotosToFirebase(jn, jobPhotos).catch(e => console.warn('Photo Firebase sync error:', e)); }
+                } catch(e) { console.warn('Markup save error:', e); }
+                renderPhotoGallery();
+                notify('✅ Marked-up copy saved' + (np.linkedPart ? ' — linked to ' + np.linkedPart : ''));
+            };
+            setActive(); redraw();
+        };
+        img.onerror = () => notify('Could not open that photo');
+        img.src = photo.data;
     }
 
     function openPaintFormulaSearch() {
@@ -9317,6 +9587,7 @@ const firebaseConfig = {
         
         closePaintFormulaModal();
         saveData(); // Save current job
+        setTimeout(() => pwOfferApplyPaint('auto'), 60); // v1.16.485: ask once the picked formula has landed
     }
 
     function closePaintFormulaModal() {
@@ -10510,6 +10781,7 @@ const firebaseConfig = {
 
     // LOCAL STORAGE
     function saveData() {
+        try { clearTimeout(window._pwDocketSaveT); window._pwDocketSaveT = setTimeout(pwRefreshDocketOnSave, 2500); } catch(e) {} // v1.16.485
         const jobData = {
             items: items,
             client: document.getElementById('cli').value,
@@ -11865,6 +12137,7 @@ const firebaseConfig = {
         const _set = (id, v) => { const el = document.getElementById(id); if (el && v !== undefined && v !== null) el.value = v; };
         _set('jNm', saved.jobName); _set('dRec', saved.dateReceived); _set('p-brand', saved.brand); _set('p-color', saved.color); _set('p-finish', saved.finish); _set('p-code', saved.code);
         try { if (typeof previousJobColour !== 'undefined') previousJobColour = String(saved.color || '').toUpperCase(); } catch(e) {}
+        try { setTimeout(pwPaintMarkAsked, 0); } catch(e) {} // v1.16.485
         try { const js = document.getElementById('jobStatus'); if (js) { js.value = saved.jobStatus || 'job'; if (typeof updateJobStatusStyle === 'function') updateJobStatusStyle(); } } catch(e) {}
         if (window._pwCloudTouchedDuringEdit && window.firebaseDb && window.doc && window.setDoc && window.currentUser) {
             const _id = pwJobDocId(saved);
@@ -12677,6 +12950,7 @@ const firebaseConfig = {
         
         // Initialize colour tracking for bulk replacement
         previousJobColour = (job.color || (items[0]?.color) || '').trim().toUpperCase();
+        try { pwPaintMarkAsked(); } catch(e) {} // v1.16.485
         
         // Store original data to detect changes
         jobDataBeforeLoad = JSON.stringify({
@@ -15570,7 +15844,7 @@ const firebaseConfig = {
         _lp.forEach((photo, idx) => {
             var _sec=photo.linkedPart?"Part: "+photo.linkedPart:"General";
             if(_sec!==_lastSec){html+='<div style="font-size:9px;font-weight:900;color:#888;margin:4px 0 2px;">'+_sec+'</div>';_lastSec=_sec;}
-            var _plabel=photo.linkedPart?'<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(212,175,55,0.92);color:#1a1a1a;font-size:8px;font-weight:900;padding:2px 4px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📷 '+photo.linkedPart+'</div>':'' ;
+            var _mk=photo.markedUpFrom?'<div style="position:absolute;top:2px;left:2px;background:#d4af37;color:#111;font-size:9px;font-weight:900;padding:1px 4px;border-radius:3px;">✏️</div>':'';var _plabel=_mk+(photo.linkedPart?'<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(212,175,55,0.92);color:#1a1a1a;font-size:8px;font-weight:900;padding:2px 4px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📷 '+photo.linkedPart+'</div>':'');
 
             html += `
                 <div style="position:relative; cursor:pointer; border-radius:6px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,0.1); height:80px;">
@@ -15603,6 +15877,7 @@ const firebaseConfig = {
         
         const modal = document.createElement('div');
         modal.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.9); z-index:9999; display:flex; align-items:center; justify-content:center; padding:20px;';
+        modal.className = 'pw-photo-view'; // v1.16.485
         modal.onclick = () => modal.remove();
         
         modal.innerHTML = `
@@ -15610,6 +15885,7 @@ const firebaseConfig = {
                 <img src="${photo.data}" style="width:100%; height:auto; max-height:70vh; object-fit:contain; border-radius:8px 8px 0 0;">
                 <div style="padding:15px; text-align:center;">
                     <p style="margin:0 0 10px 0; color:#666; font-size:12px;">${photo.timestamp}</p>
+                    <button onclick="event.stopPropagation(); this.closest('.pw-photo-view').remove(); pwMarkupPhoto(${pwQ(photo.id)})" style="background:#d4af37; color:#111; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-weight:bold; margin-right:8px;">✏️ Mark up</button>
                     <button onclick="this.parentElement.parentElement.remove()" style="background:#007AFF; color:#fff; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-weight:bold;">Close</button>
                 </div>
             </div>
@@ -20206,7 +20482,7 @@ const firebaseConfig = {
                         parts: allColourParts.reduce((a,b)=>a+b,0),
                         sched: scheduledFinish || ''
                     });
-                    const qrText = `https://app.paintworkzpro.com.au/?${_shopQrParams.toString()}`;
+                    const qrText = pwQrUrl(_shopQrParams);
 
                     const qrDataUrl = generateQRDataURL(qrText, 300);
                     if (qrDataUrl) {
@@ -29296,7 +29572,7 @@ ${pwStageSkipped(job, 'complete') ? '' : `                        <label style="
                         colour: colours.slice(0,2).join(', '),
                         brand: _brands3[0]||'', code: _codes3[0]||''
                     });
-                    const _qrText3 = `https://app.paintworkzpro.com.au/?${_p3.toString()}`;
+                    const _qrText3 = pwQrUrl(_p3);
                     const qrDataUrl = generateQRDataURL(_qrText3, 250);
                     if (qrDataUrl) doc.addImage(qrDataUrl,'PNG', x+lw-26, y+lh-27, 24, 24);
                 } catch(e) {}
@@ -29322,7 +29598,7 @@ ${pwStageSkipped(job, 'complete') ? '' : `                        <label style="
                 if (!isBlank) try {
                     const _dispSqm10 = pwAreaShow(totalSqm) + (isImperial() ? 'sqft' : 'sqm');
                     const _p10 = new URLSearchParams({ job: jobNum, client: client, sqm: _dispSqm10, parts: totalParts, colour: colours.slice(0,2).join(', ') });
-                    const _qrText10 = `https://app.paintworkzpro.com.au/?${_p10.toString()}`;
+                    const _qrText10 = pwQrUrl(_p10);
                     const qrDataUrl = generateQRDataURL(_qrText10, 200);
                     if (qrDataUrl) doc.addImage(qrDataUrl,'PNG', x+lw-22, y+lh-26, 20, 20);
                 } catch(e) {}
@@ -29341,7 +29617,7 @@ ${pwStageSkipped(job, 'complete') ? '' : `                        <label style="
                 if (!isBlank) try {
                     const _dispSqm4 = pwAreaShow(totalSqm) + (isImperial() ? 'sqft' : 'sqm');
                     const _p4 = new URLSearchParams({ job: jobNum, client: client, sqm: _dispSqm4, parts: totalParts, colour: colours[0]||'' });
-                    const _qrText4 = `https://app.paintworkzpro.com.au/?${_p4.toString()}`;
+                    const _qrText4 = pwQrUrl(_p4);
                     const qrDataUrl = generateQRDataURL(_qrText4, 150);
                     if (qrDataUrl) doc.addImage(qrDataUrl,'PNG', x+lw-18, y+lh-19, 16, 16);
                 } catch(e) {}
@@ -29452,7 +29728,7 @@ ${pwStageSkipped(job, 'complete') ? '' : `                        <label style="
                 code: _codes.slice(0,2).join(', '),
                 finish: _finishes.slice(0,2).join(', ')
             });
-            const _qrText5 = `https://app.paintworkzpro.com.au/?${_p5.toString()}`;
+            const _qrText5 = pwQrUrl(_p5);
             const qrDataUrl = generateQRDataURL(_qrText5, 400);
             if (qrDataUrl) { doc.addImage(qrDataUrl, 'PNG', pw-70, 55, 55, 55); }
             doc.setFontSize(6); doc.setTextColor(150,150,150);
@@ -29711,7 +29987,7 @@ ${pwStageSkipped(job, 'complete') ? '' : `                        <label style="
                         ..._itemBrand && {brand: _itemBrand},
                         ..._itemCode  && {code: _itemCode}
                     });
-                    const _qrText1 = `https://app.paintworkzpro.com.au/?${_p6.toString()}`;
+                    const _qrText1 = pwQrUrl(_p6);
                     const _unused1 = [_qrText1].join('\n');
                     const qrDataUrl = generateQRDataURL(_qrText1, 300);
                     // QR: 30x30mm bottom-right
@@ -29748,7 +30024,7 @@ ${pwStageSkipped(job, 'complete') ? '' : `                        <label style="
                         part: desc, dim: `${rawH}x${rawW}x${rawThk}mm`,
                         qty: _itemQty10, colour: colour, finish: finish
                     });
-                    const _qrText10 = `https://app.paintworkzpro.com.au/?${_p10.toString()}`;
+                    const _qrText10 = pwQrUrl(_p10);
                     const qrDataUrl = generateQRDataURL(_qrText10, 220);
                     if (qrDataUrl) { doc.addImage(qrDataUrl, 'PNG', x + lw - 25, y + lh - 26, 22, 22); }
                 } catch(e) {}
@@ -29771,7 +30047,7 @@ ${pwStageSkipped(job, 'complete') ? '' : `                        <label style="
                 // QR code bottom right — plain text
                 try {
                     const _p7 = new URLSearchParams({ job: jobNum, colour: colour, dim: `${rawH}x${rawW}mm` });
-                    const _qrText2 = `https://app.paintworkzpro.com.au/?${_p7.toString()}`;
+                    const _qrText2 = pwQrUrl(_p7);
                     const qrDataUrl = generateQRDataURL(_qrText2, 150);
                     if (qrDataUrl) { doc.addImage(qrDataUrl, 'PNG', x + lw - 18, y + lh - 19, 16, 16); }
                 } catch(e) {
@@ -31496,6 +31772,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         
         closePaintFormulaModal();
         notify(` Selected: ${formula.color} - Code: ${formula.formula}`);
+        setTimeout(() => pwOfferApplyPaint('auto'), 60); // v1.16.485
     }
 
 
@@ -33903,7 +34180,8 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                 const _qpaintFin = _isDate ? '' : _rawFin.replace(/\|/g,', ');
                 const _qdueDate  = _isDate ? _rawFin : _qsched;
 
-                setTimeout(() => {
+                const _qd = p.get('d') || ''; // v1.16.485: public docket code
+                const _pwShowQrSummary = () => setTimeout(() => {
                     const _rows = [
                         _qpa         ? ['Part',       _qpa + (_qdm ? ' — ' + _qdm : '')] : null,
                         _qco         ? ['Colour',     _qco] : null,
@@ -33981,6 +34259,10 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                     if (_ic) _ic.remove();
                     setTimeout(() => { const o = document.getElementById('qrScanOverlay'); if (o) o.remove(); }, _partsHtml.indexOf('ALL PARTS') >= 0 ? 300000 : 60000); // v1.16.484: 5 min when the parts list shows
                 }, 600);
+                // v1.16.485: QR with a docket code → branded full docket on any phone, no login; otherwise the summary
+                if (_qd && typeof pwShowPublicDocket === 'function') {
+                    pwShowPublicDocket(_qd, { part: _qpa, dim: _qdm }).then(ok => { if (!ok) _pwShowQrSummary(); }).catch(() => _pwShowQrSummary());
+                } else _pwShowQrSummary();
             }
         } catch(e) { console.warn('QR param handler error:', e); }
     });
