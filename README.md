@@ -4,7 +4,7 @@ Web-based job management application for spray shops and cabinet & joinery finis
 
 **Live app:** [app.paintworkzpro.com.au](https://app.paintworkzpro.com.au)
 **Marketing site:** [paintworkzpro.com.au](https://paintworkzpro.com.au) (regional sites for AU, US, UK & Ireland, NZ and Canada)
-**Current version:** v1.16.484
+**Current version:** v1.16.485
 
 ---
 
@@ -21,7 +21,7 @@ PaintWorkz Pro handles the full spray shop workflow from measurement through to 
 - **Reports & KPIs** — area painted, turnaround days, top colours, client breakdown and estimated margin
 - **Staff logins** — separate logins that hide pricing from the shop floor
 - **Client database** — client management and job history
-- **Job photos** — take photos on a job and link them to a part (e.g. damage that arrived with the parts)
+- **Job photos** — take photos on a job, link them to a part, and mark them up (pen, arrow, circle) to show damage
 - **Cloud sync** — jobs and settings sync across devices via Firebase Firestore, and keep working if the signal drops
 
 ### International
@@ -30,6 +30,7 @@ PaintWorkz Pro handles the full spray shop workflow from measurement through to 
 - Paper size A4 or US Letter, including US Avery label sheets (5164 / 5163 / 5162)
 - Sign-ups from a regional website (`?region=us|uk|nz|ca`) start with that region's settings
 - In-app plan prices follow the shop's currency
+- **Label QR codes:** scanning a label on any phone (no login) opens a branded, read-only supply docket for the job (no prices)
 
 ---
 
