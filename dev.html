@@ -93,7 +93,7 @@ window.pwToday = pwToday;
 </script>
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.485-dev'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.486-dev'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     window.PW_BUILD_DATE = '2026-11-09'; // v1.16.476: the date this build was made — update with each build
     const VERSION_KEY = 'paintworkz_version';
@@ -1700,7 +1700,7 @@ window.getTooltipKey = getTooltipKey;
 </script>
 </head>
 <body>
-<div id="devBanner">🚧 DEVELOPMENT VERSION — LIVE DATA — v1.16.485-dev (open in Incognito / separate browser) 🚧</div>
+<div id="devBanner">🚧 DEVELOPMENT VERSION — LIVE DATA — v1.16.486-dev (open in Incognito / separate browser) 🚧</div>
 
 <!-- COPYRIGHT NOTICE -->
 <div id="copyrightBanner" style="display:none;">
@@ -3946,7 +3946,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.485</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.486</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;"></div>
                         </div>
                     </div>
@@ -4991,7 +4991,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.485</span><span style="color:#d4af37; font-weight:900;" id="versionDate"></span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.486</span><span style="color:#d4af37; font-weight:900;" id="versionDate"></span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);if(typeof tab==='function')tab('measure');setTimeout(function(){if(typeof startTour==='function')startTour();},300);" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -8906,10 +8906,19 @@ const firebaseConfig = {
             };
             const redraw = () => { ctx.drawImage(img, 0, 0, W, H); shapes.forEach(drawShape); if (cur) drawShape(cur); };
             const pos = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; };
-            cv.addEventListener('pointerdown', e => { e.preventDefault(); cv.setPointerCapture(e.pointerId); const p = pos(e); cur = tool === 'pen' ? { t: 'pen', c: colour, p: [p] } : { t: tool, c: colour, a: p, b: p }; redraw(); });
+            cv.addEventListener('touchstart', e => e.preventDefault(), { passive: false }); // v1.16.486: no scroll / zoom while drawing
+            cv.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+            cv.addEventListener('pointerdown', e => { e.preventDefault(); try { cv.setPointerCapture(e.pointerId); } catch(_c) {} const p = pos(e); cur = tool === 'pen' ? { t: 'pen', c: colour, p: [p] } : { t: tool, c: colour, a: p, b: p }; redraw(); });
             cv.addEventListener('pointermove', e => { if (!cur) return; e.preventDefault(); const p = pos(e); if (cur.t === 'pen') cur.p.push(p); else cur.b = p; redraw(); });
             const end = () => { if (!cur) return; const ok = cur.t === 'pen' ? cur.p.length > 1 : (Math.abs(cur.b[0] - cur.a[0]) + Math.abs(cur.b[1] - cur.a[1]) > 6); if (ok) shapes.push(cur); cur = null; redraw(); };
             cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+            // v1.16.486: phones without pointer events → touch fallback
+            if (!window.PointerEvent) {
+                const tp = e => { const t = e.touches[0] || e.changedTouches[0]; return pos({ clientX: t.clientX, clientY: t.clientY }); };
+                cv.addEventListener('touchstart', e => { const p = tp(e); cur = tool === 'pen' ? { t: 'pen', c: colour, p: [p] } : { t: tool, c: colour, a: p, b: p }; redraw(); }, { passive: false });
+                cv.addEventListener('touchmove', e => { if (!cur) return; const p = tp(e); if (cur.t === 'pen') cur.p.push(p); else cur.b = p; redraw(); }, { passive: false });
+                cv.addEventListener('touchend', end);
+            }
             ov.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tool = b.dataset.t; setActive(); });
             ov.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { colour = b.dataset.c; setActive(); });
             document.getElementById('pwMkUndo').onclick = () => { shapes.pop(); redraw(); };
@@ -12903,46 +12912,8 @@ const firebaseConfig = {
         // Photos stored in IndexedDB (larger quota than localStorage)
         console.log('%c🔄 LOADING JOB FROM HISTORY', 'background:#ff9500;color:#fff;font-weight:900;padding:4px;', 'Job#:', job.jobNum);
         jobPhotos=[];
-        // Load photos asynchronously - don't render gallery until photos are loaded
-        (async () => {
-            try {
-                // Always load from Firestore first — it's the source of truth across devices
-                // Then merge with local IndexedDB (catches any not yet synced)
-                const localPhotos = await photoDB.getPhotos(job.jobNum || '') || [];
-                let cloudPhotos = [];
-                try {
-                    cloudPhotos = await loadPhotosFromFirebase(job.jobNum) || [];
-                } catch(fbErr) { console.warn('Firebase photo load error:', fbErr); }
-
-                if (cloudPhotos.length > 0) {
-                    // Cloud is source of truth — use cloud photos only
-                    // Deduplicate by ID just in case
-                    const seen = new Set();
-                    jobPhotos = cloudPhotos.filter(p => {
-                        const k = String(p.id);
-                        if (seen.has(k)) return false;
-                        seen.add(k); return true;
-                    });
-                    // Cache to IndexedDB
-                    await photoDB.savePhotos(job.jobNum, jobPhotos);
-                    console.log('%c✅ ' + jobPhotos.length + ' photos from Firestore (job ' + job.jobNum + ')', 'background:#2196f3;color:#fff;font-weight:900;padding:4px;');
-                } else if (localPhotos.length > 0) {
-                    // No cloud photos yet — use local, sync them up
-                    const seen2 = new Set();
-                    jobPhotos = localPhotos.filter(p => { const k=String(p.id); if(seen2.has(k))return false; seen2.add(k); return true; });
-                    console.log('%c✅ ' + jobPhotos.length + ' photos from local IndexedDB', 'background:#ff9500;color:#fff;font-weight:900;padding:4px;');
-                    // Sync to cloud in background
-                    syncPhotosToFirebase(job.jobNum, jobPhotos).catch(()=>{});
-                } else {
-                    jobPhotos = [];
-                }
-                renderPhotoGallery();
-                updatePhotoTargetIndicator();
-            } catch(_pe) {
-                console.error('%c❌ PHOTO LOAD ERROR', 'background:#ff3b30;color:#fff;font-weight:900;padding:4px;', _pe.message);
-                renderPhotoGallery();
-            }
-        })();
+        window._pwPhotosJob = '';
+        pwLoadPhotosForJob(job.jobNum || ''); // v1.16.486: shared loader (cloud + this device)
         // Get brand from first item if it exists, otherwise from job.brand
         document.getElementById('p-brand').value = (items[0]?.brand) || job.brand || 'Dulux';
         document.getElementById('p-color').value = job.color || (items[0]?.color) || '';
@@ -15119,28 +15090,13 @@ const firebaseConfig = {
             // ── DRAFT RECOVERY CHECK (v1.16.479: shared with the after-reload check) ──
             setTimeout(() => { pwOfferDraftRecovery(); }, 400);
             // ── END DRAFT RECOVERY ───────────────────────────────────────────
-            // CRITICAL: Reload photos for current job - don't trust in-memory array
+            // v1.16.486: keep the photos already loaded for this job; only load if it's a different job.
+            // (Before: re-read an old localStorage key that no longer holds photos and wiped the list.)
             try {
-                const jobNum = document.getElementById('jN')?.value;
-                if (jobNum) {
-                    const saved = localStorage.getItem(`jobPhotos_${jobNum}`);
-                    if (saved) {
-                        jobPhotos = JSON.parse(saved);
-                        console.log(`Photos reloaded on tab switch: ${jobPhotos.length} photos for job ${jobNum}`);
-                    } else {
-                        jobPhotos = [];
-                        console.log(`No photos found for job ${jobNum}`);
-                    }
-                } else {
-                    jobPhotos = [];
-                }
-                renderPhotoGallery();
-                updatePhotoTargetIndicator();
-            } catch(e) {
-                console.error('Photo reload error:', e);
-                jobPhotos = [];
-                renderPhotoGallery();
-            }
+                const jobNum = String(document.getElementById('jN')?.value || '').trim();
+                if (jobNum && window._pwPhotosJob !== jobNum) pwLoadPhotosForJob(jobNum);
+                else { renderPhotoGallery(); updatePhotoTargetIndicator(); }
+            } catch(e) { console.error('Photo reload error:', e); renderPhotoGallery(); }
         }
 
         // Render charges history panel when forms tab opens
@@ -15886,7 +15842,7 @@ const firebaseConfig = {
                 <img src="${photo.data}" style="width:100%; height:auto; max-height:70vh; object-fit:contain; border-radius:8px 8px 0 0;">
                 <div style="padding:15px; text-align:center;">
                     <p style="margin:0 0 10px 0; color:#666; font-size:12px;">${photo.timestamp}</p>
-                    <button onclick="event.stopPropagation(); this.closest('.pw-photo-view').remove(); pwMarkupPhoto(${pwQ(photo.id)})" style="background:#d4af37; color:#111; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-weight:bold; margin-right:8px;">✏️ Mark up</button>
+                    <button onclick="event.stopPropagation(); this.closest('.pw-photo-view').remove(); pwMarkupPhoto(${pwQ(photo.id)})" style="background:#d4af37; color:#111; border:none; padding:10px 18px; border-radius:8px; cursor:pointer; font-weight:900; font-size:14px; margin:0 8px 8px 0;">✏️ Mark up</button>
                     <button onclick="this.parentElement.parentElement.remove()" style="background:#007AFF; color:#fff; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-weight:bold;">Close</button>
                 </div>
             </div>
@@ -15972,6 +15928,39 @@ const firebaseConfig = {
         }
     }
     
+    // v1.16.486: ONE photo loader for a job (cloud first, then this device), used everywhere.
+    // Before: opening a job loaded photos properly, but switching to the Measure tab then re-read an OLD
+    // localStorage key that no longer holds photos and wiped the list — so photos vanished on reopen.
+    let _pwPhotoLoadSeq = 0;
+    async function pwLoadPhotosForJob(jobNum) {
+        const seq = ++_pwPhotoLoadSeq;
+        jobNum = String(jobNum || '').trim();
+        if (!jobNum) { jobPhotos = []; window._pwPhotosJob = ''; renderPhotoGallery(); try { updatePhotoTargetIndicator(); } catch(e) {} return; }
+        try {
+            const localPhotos = await photoDB.getPhotos(jobNum) || [];
+            let cloudPhotos = [];
+            try { cloudPhotos = await loadPhotosFromFirebase(jobNum) || []; } catch(fbErr) { console.warn('Firebase photo load error:', fbErr); }
+            if (seq !== _pwPhotoLoadSeq) return; // a newer load started (another job opened) — drop this one
+            const dedupe = arr => { const seen = new Set(); return arr.filter(p => { const k = String(p.id); if (seen.has(k)) return false; seen.add(k); return true; }); };
+            let list;
+            if (cloudPhotos.length > 0) {
+                list = dedupe(cloudPhotos); // cloud is the source of truth (same rule as before)
+                await photoDB.savePhotos(jobNum, list);
+            } else if (localPhotos.length > 0) {
+                list = dedupe(localPhotos);
+                syncPhotosToFirebase(jobNum, list).catch(() => {});
+            } else list = [];
+            if (seq !== _pwPhotoLoadSeq) return;
+            jobPhotos = list;
+            window._pwPhotosJob = jobNum;
+            console.log('📸 ' + list.length + ' photo(s) loaded for job ' + jobNum);
+        } catch(e) {
+            console.error('Photo load error:', e && e.message || e);
+        }
+        renderPhotoGallery();
+        try { updatePhotoTargetIndicator(); } catch(e) {}
+    }
+
     async function loadJobPhotosForCurrentJobNum() {
         const jobNum = document.getElementById('jN')?.value;
         console.log('%c🔄 LOADING PHOTOS', 'background:#ff9500;color:#fff;font-weight:900;padding:4px;', 'Job#:', jobNum || 'NONE');
@@ -15982,15 +15971,7 @@ const firebaseConfig = {
             console.log('%c⚠️ NO JOB NUMBER', 'background:#ff9500;color:#fff;font-weight:900;padding:4px;', 'Photos cleared');
             return;
         }
-        try {
-            const photos = await photoDB.getPhotos(jobNum);
-            jobPhotos = photos || [];
-            renderPhotoGallery();
-        } catch(e) {
-            console.error('%c❌ LOAD ERROR', 'background:#ff3b30;color:#fff;font-weight:900;padding:4px;', e.message);
-            jobPhotos = [];
-            renderPhotoGallery();
-        }
+        await pwLoadPhotosForJob(jobNum); // v1.16.486
     }
 
     let _addingPart = false;
