@@ -93,7 +93,7 @@ window.pwToday = pwToday;
 </script>
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.486'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.487'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     window.PW_BUILD_DATE = '2026-11-09'; // v1.16.476: the date this build was made — update with each build
     const VERSION_KEY = 'paintworkz_version';
@@ -3945,7 +3945,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.486</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.487</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;"></div>
                         </div>
                     </div>
@@ -4990,7 +4990,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.486</span><span style="color:#d4af37; font-weight:900;" id="versionDate"></span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.487</span><span style="color:#d4af37; font-weight:900;" id="versionDate"></span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);if(typeof tab==='function')tab('measure');setTimeout(function(){if(typeof startTour==='function')startTour();},300);" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -8858,8 +8858,10 @@ const firebaseConfig = {
         return true;
     }
 
-    // ═══ v1.16.485: PHOTO MARKUP — draw on a job photo (pen, arrow, circle) to show damage ═══
+    // ═══ PHOTO MARKUP (v1.16.485, reworked v1.16.487) — draw / write notes on a job photo ═══
     // Saves the marked-up picture as a NEW photo linked to the same part, so the original is never changed.
+    // v1.16.487: opens straight from the ✏️ on each thumbnail; Pen first; line and text size follow the SCREEN
+    // (were thin on phones); smooth pen lines; Text tool for notes; bigger photo area.
     function pwMarkupPhoto(photoId) {
         const photo = jobPhotos.find(p => String(p.id) === String(photoId));
         if (!photo) return;
@@ -8869,59 +8871,103 @@ const firebaseConfig = {
             const W = Math.round(img.width * sc), H = Math.round(img.height * sc);
             const ov = document.createElement('div');
             ov.id = 'pwMarkup';
-            ov.style.cssText = 'position:fixed;inset:0;z-index:100060;background:#0b0b0d;display:flex;flex-direction:column;font-family:-apple-system,sans-serif;touch-action:none;';
-            const tb = (id, label) => `<button data-t="${id}" style="flex:1;min-width:58px;padding:10px 6px;border-radius:10px;border:2px solid #333;background:#1c1c1e;color:#fff;font-weight:900;font-size:13px;cursor:pointer;">${label}</button>`;
-            const cb = c => `<button data-c="${c}" style="width:34px;height:34px;border-radius:50%;border:3px solid #333;background:${c};cursor:pointer;flex-shrink:0;"></button>`;
+            ov.style.cssText = 'position:fixed;inset:0;z-index:100060;background:#0b0b0d;display:flex;flex-direction:column;font-family:-apple-system,sans-serif;touch-action:none;user-select:none;-webkit-user-select:none;';
+            const tb = (id, ic, label) => `<button data-t="${id}" style="flex:1;min-width:0;padding:8px 2px;border-radius:10px;border:2px solid #333;background:#1c1c1e;color:#fff;font-weight:900;font-size:11px;cursor:pointer;line-height:1.2;"><span style="display:block;font-size:20px;">${ic}</span>${label}</button>`;
+            const cb = c => `<button data-c="${c}" aria-label="colour" style="width:30px;height:30px;border-radius:50%;border:3px solid #333;background:${c};cursor:pointer;flex-shrink:0;"></button>`;
             ov.innerHTML = `
-                <div style="display:flex;gap:6px;padding:10px;background:#151517;border-bottom:1px solid #2a2a2e;flex-wrap:wrap;align-items:center;">
-                    ${tb('pen', '✏️ Pen')}${tb('arrow', '➜ Arrow')}${tb('circle', '◯ Circle')}
-                    <div style="display:flex;gap:6px;margin-left:4px;">${cb('#ff3b30')}${cb('#ffcc00')}${cb('#ffffff')}</div>
+                <div style="display:flex;gap:6px;padding:8px;padding-top:calc(8px + env(safe-area-inset-top));background:#151517;border-bottom:1px solid #2a2a2e;align-items:center;">
+                    ${tb('pen', '✏️', 'Pen')}${tb('arrow', '➜', 'Arrow')}${tb('circle', '◯', 'Circle')}${tb('text', 'Aa', 'Note')}
+                    <div style="display:flex;flex-direction:column;gap:4px;margin-left:2px;">${cb('#ff3b30')}${cb('#ffcc00')}</div>
+                    <div style="display:flex;flex-direction:column;gap:4px;">${cb('#ffffff')}${cb('#34c759')}</div>
                 </div>
-                <div id="pwMkStage" style="flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:8px;"><canvas id="pwMkCanvas" width="${W}" height="${H}" style="max-width:100%;max-height:100%;border-radius:8px;box-shadow:0 6px 30px rgba(0,0,0,.6);touch-action:none;"></canvas></div>
-                <div style="display:flex;gap:8px;padding:10px 10px calc(10px + env(safe-area-inset-bottom));background:#151517;border-top:1px solid #2a2a2e;">
-                    <button id="pwMkUndo" style="flex:1;padding:12px;border-radius:10px;border:none;background:#2c2c2e;color:#fff;font-weight:900;">↶ Undo</button>
-                    <button id="pwMkCancel" style="flex:1;padding:12px;border-radius:10px;border:none;background:#2c2c2e;color:#fff;font-weight:900;">Cancel</button>
-                    <button id="pwMkSave" style="flex:1.4;padding:12px;border-radius:10px;border:none;background:linear-gradient(90deg,#d4af37,#f5d87a);color:#111;font-weight:900;">✓ Save copy</button>
+                <div id="pwMkHint" style="text-align:center;font-size:12px;color:#aaa;padding:6px 8px 0;">Draw with your finger</div>
+                <div id="pwMkStage" style="flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:6px;min-height:0;"><canvas id="pwMkCanvas" width="${W}" height="${H}" style="max-width:100%;max-height:100%;border-radius:6px;box-shadow:0 6px 30px rgba(0,0,0,.6);touch-action:none;"></canvas></div>
+                <div style="display:flex;gap:8px;padding:8px 8px calc(8px + env(safe-area-inset-bottom));background:#151517;border-top:1px solid #2a2a2e;">
+                    <button id="pwMkUndo" style="flex:1;padding:13px 6px;border-radius:10px;border:none;background:#2c2c2e;color:#fff;font-weight:900;font-size:14px;">↶ Undo</button>
+                    <button id="pwMkCancel" style="flex:1;padding:13px 6px;border-radius:10px;border:none;background:#2c2c2e;color:#fff;font-weight:900;font-size:14px;">Cancel</button>
+                    <button id="pwMkSave" style="flex:1.5;padding:13px 6px;border-radius:10px;border:none;background:linear-gradient(90deg,#d4af37,#f5d87a);color:#111;font-weight:900;font-size:14px;">✓ Save</button>
                 </div>`;
             document.body.appendChild(ov);
             const cv = document.getElementById('pwMkCanvas'), ctx = cv.getContext('2d');
-            let tool = 'circle', colour = '#ff3b30', shapes = [], cur = null;
-            const lw = Math.max(4, Math.round(Math.max(W, H) / 220));
+            const hint = document.getElementById('pwMkHint');
+            let tool = 'pen', colour = '#ff3b30', shapes = [], cur = null;
+            const scr = () => { const r = cv.getBoundingClientRect(); return r.width ? W / r.width : 1; }; // canvas px per screen px
+            const hints = { pen: 'Draw with your finger', arrow: 'Drag from the tail to the point', circle: 'Drag across the spot to circle it', text: 'Tap where the note should go' };
             const setActive = () => {
-                ov.querySelectorAll('[data-t]').forEach(b => { b.style.borderColor = b.dataset.t === tool ? '#d4af37' : '#333'; b.style.background = b.dataset.t === tool ? '#2a2412' : '#1c1c1e'; });
-                ov.querySelectorAll('[data-c]').forEach(b => { b.style.borderColor = b.dataset.c === colour ? '#d4af37' : '#333'; });
+                ov.querySelectorAll('[data-t]').forEach(b => { const on = b.dataset.t === tool; b.style.borderColor = on ? '#d4af37' : '#333'; b.style.background = on ? '#2a2412' : '#1c1c1e'; });
+                ov.querySelectorAll('[data-c]').forEach(b => { b.style.borderColor = b.dataset.c === colour ? '#d4af37' : '#333'; b.style.transform = b.dataset.c === colour ? 'scale(1.12)' : ''; });
+                if (hint) hint.textContent = hints[tool] || '';
             };
             const drawShape = s => {
+                const lw = s.w;
                 ctx.strokeStyle = s.c; ctx.fillStyle = s.c; ctx.lineWidth = lw; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-                ctx.shadowColor = 'rgba(0,0,0,.55)'; ctx.shadowBlur = lw;
-                if (s.t === 'pen') { ctx.beginPath(); s.p.forEach((pt, i) => i ? ctx.lineTo(pt[0], pt[1]) : ctx.moveTo(pt[0], pt[1])); ctx.stroke(); }
-                else if (s.t === 'circle') { const cx = (s.a[0] + s.b[0]) / 2, cy = (s.a[1] + s.b[1]) / 2; ctx.beginPath(); ctx.ellipse(cx, cy, Math.max(4, Math.abs(s.b[0] - s.a[0]) / 2), Math.max(4, Math.abs(s.b[1] - s.a[1]) / 2), 0, 0, Math.PI * 2); ctx.stroke(); }
-                else if (s.t === 'arrow') {
-                    const [x1, y1] = s.a, [x2, y2] = s.b, ang = Math.atan2(y2 - y1, x2 - x1), hl = lw * 4.5;
-                    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
-                    ctx.beginPath(); ctx.moveTo(x2, y2); ctx.lineTo(x2 - hl * Math.cos(ang - 0.45), y2 - hl * Math.sin(ang - 0.45)); ctx.lineTo(x2 - hl * Math.cos(ang + 0.45), y2 - hl * Math.sin(ang + 0.45)); ctx.closePath(); ctx.fill();
+                ctx.shadowColor = 'rgba(0,0,0,.6)'; ctx.shadowBlur = lw * 0.8;
+                if (s.t === 'pen') {
+                    const P = s.p; ctx.beginPath(); ctx.moveTo(P[0][0], P[0][1]);
+                    if (P.length < 3) { P.forEach(pt => ctx.lineTo(pt[0], pt[1])); }
+                    else { for (let i = 1; i < P.length - 1; i++) { const mx = (P[i][0] + P[i + 1][0]) / 2, my = (P[i][1] + P[i + 1][1]) / 2; ctx.quadraticCurveTo(P[i][0], P[i][1], mx, my); } ctx.lineTo(P[P.length - 1][0], P[P.length - 1][1]); }
+                    ctx.stroke();
+                } else if (s.t === 'circle') {
+                    const cx = (s.a[0] + s.b[0]) / 2, cy = (s.a[1] + s.b[1]) / 2;
+                    ctx.beginPath(); ctx.ellipse(cx, cy, Math.max(lw * 2, Math.abs(s.b[0] - s.a[0]) / 2), Math.max(lw * 2, Math.abs(s.b[1] - s.a[1]) / 2), 0, 0, Math.PI * 2); ctx.stroke();
+                } else if (s.t === 'arrow') {
+                    const [x1, y1] = s.a, [x2, y2] = s.b, ang = Math.atan2(y2 - y1, x2 - x1), hl = lw * 4;
+                    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - Math.cos(ang) * hl * 0.6, y2 - Math.sin(ang) * hl * 0.6); ctx.stroke();
+                    ctx.beginPath(); ctx.moveTo(x2, y2); ctx.lineTo(x2 - hl * Math.cos(ang - 0.5), y2 - hl * Math.sin(ang - 0.5)); ctx.lineTo(x2 - hl * Math.cos(ang + 0.5), y2 - hl * Math.sin(ang + 0.5)); ctx.closePath(); ctx.fill();
+                } else if (s.t === 'text') {
+                    ctx.shadowBlur = 0;
+                    ctx.font = `900 ${s.fs}px -apple-system, Arial, sans-serif`;
+                    const pad = s.fs * 0.35, tw = ctx.measureText(s.s).width;
+                    let x = Math.min(Math.max(s.x, 0), W - tw - pad * 2), y = Math.min(Math.max(s.y - s.fs * 0.7, 0), H - s.fs - pad * 2);
+                    ctx.fillStyle = 'rgba(0,0,0,.72)';
+                    const r = s.fs * 0.3, bw = tw + pad * 2, bh = s.fs + pad * 2;
+                    ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + bw, y, x + bw, y + bh, r); ctx.arcTo(x + bw, y + bh, x, y + bh, r); ctx.arcTo(x, y + bh, x, y, r); ctx.arcTo(x, y, x + bw, y, r); ctx.closePath(); ctx.fill();
+                    ctx.fillStyle = s.c; ctx.textBaseline = 'top'; ctx.fillText(s.s, x + pad, y + pad * 1.05);
                 }
                 ctx.shadowBlur = 0;
             };
             const redraw = () => { ctx.drawImage(img, 0, 0, W, H); shapes.forEach(drawShape); if (cur) drawShape(cur); };
             const pos = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; };
-            cv.addEventListener('touchstart', e => e.preventDefault(), { passive: false }); // v1.16.486: no scroll / zoom while drawing
+            // in-app note box (no browser pop-ups)
+            const askNote = (p) => {
+                const box = document.createElement('div');
+                box.style.cssText = 'position:fixed;inset:0;z-index:100070;background:rgba(0,0,0,.55);display:flex;align-items:flex-start;justify-content:center;padding:70px 16px 16px;';
+                box.innerHTML = `<div style="background:#1c1c1e;border:2px solid #d4af37;border-radius:14px;padding:14px;width:100%;max-width:380px;">
+                    <div style="font-size:11px;font-weight:900;color:#d4af37;letter-spacing:1px;margin-bottom:8px;">ADD A NOTE</div>
+                    <input id="pwMkNote" maxlength="60" placeholder="e.g. Chip on edge" style="width:100%;box-sizing:border-box;padding:12px;font-size:16px;border-radius:8px;border:1px solid #444;background:#111;color:#fff;">
+                    <div style="display:flex;gap:8px;margin-top:10px;"><button id="pwMkNoteX" style="flex:1;padding:11px;border:none;border-radius:8px;background:#2c2c2e;color:#fff;font-weight:900;">Cancel</button><button id="pwMkNoteOk" style="flex:1.4;padding:11px;border:none;border-radius:8px;background:#d4af37;color:#111;font-weight:900;">Add</button></div></div>`;
+                document.body.appendChild(box);
+                const inp = document.getElementById('pwMkNote'); setTimeout(() => inp.focus(), 50);
+                const done = ok => { const v = (inp.value || '').trim(); box.remove(); if (ok && v) { shapes.push({ t: 'text', c: colour, x: p[0], y: p[1], s: v.toUpperCase(), fs: Math.round(20 * scr()) }); redraw(); } };
+                document.getElementById('pwMkNoteOk').onclick = () => done(true);
+                document.getElementById('pwMkNoteX').onclick = () => done(false);
+                inp.addEventListener('keydown', e => { if (e.key === 'Enter') done(true); });
+            };
+            const start = p => {
+                if (tool === 'text') { askNote(p); return; }
+                const w = Math.max(3, Math.round(5 * scr())); // ~5 screen pixels, whatever the photo size
+                cur = tool === 'pen' ? { t: 'pen', c: colour, w, p: [p] } : { t: tool, c: colour, w, a: p, b: p };
+                redraw();
+            };
+            const move = p => { if (!cur) return; if (cur.t === 'pen') { const l = cur.p[cur.p.length - 1]; if (Math.hypot(p[0] - l[0], p[1] - l[1]) > cur.w * 0.4) cur.p.push(p); } else cur.b = p; redraw(); };
+            const end = () => { if (!cur) return; const ok = cur.t === 'pen' ? cur.p.length > 1 : (Math.abs(cur.b[0] - cur.a[0]) + Math.abs(cur.b[1] - cur.a[1]) > cur.w * 2); if (ok) shapes.push(cur); cur = null; redraw(); };
+            cv.addEventListener('touchstart', e => e.preventDefault(), { passive: false }); // no scroll / zoom while drawing
             cv.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
-            cv.addEventListener('pointerdown', e => { e.preventDefault(); try { cv.setPointerCapture(e.pointerId); } catch(_c) {} const p = pos(e); cur = tool === 'pen' ? { t: 'pen', c: colour, p: [p] } : { t: tool, c: colour, a: p, b: p }; redraw(); });
-            cv.addEventListener('pointermove', e => { if (!cur) return; e.preventDefault(); const p = pos(e); if (cur.t === 'pen') cur.p.push(p); else cur.b = p; redraw(); });
-            const end = () => { if (!cur) return; const ok = cur.t === 'pen' ? cur.p.length > 1 : (Math.abs(cur.b[0] - cur.a[0]) + Math.abs(cur.b[1] - cur.a[1]) > 6); if (ok) shapes.push(cur); cur = null; redraw(); };
-            cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
-            // v1.16.486: phones without pointer events → touch fallback
-            if (!window.PointerEvent) {
+            if (window.PointerEvent) {
+                cv.addEventListener('pointerdown', e => { e.preventDefault(); try { cv.setPointerCapture(e.pointerId); } catch(_c) {} start(pos(e)); });
+                cv.addEventListener('pointermove', e => { if (!cur) return; e.preventDefault(); move(pos(e)); });
+                cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+            } else {
                 const tp = e => { const t = e.touches[0] || e.changedTouches[0]; return pos({ clientX: t.clientX, clientY: t.clientY }); };
-                cv.addEventListener('touchstart', e => { const p = tp(e); cur = tool === 'pen' ? { t: 'pen', c: colour, p: [p] } : { t: tool, c: colour, a: p, b: p }; redraw(); }, { passive: false });
-                cv.addEventListener('touchmove', e => { if (!cur) return; const p = tp(e); if (cur.t === 'pen') cur.p.push(p); else cur.b = p; redraw(); }, { passive: false });
+                cv.addEventListener('touchstart', e => start(tp(e)), { passive: false });
+                cv.addEventListener('touchmove', e => move(tp(e)), { passive: false });
                 cv.addEventListener('touchend', end);
+                cv.addEventListener('mousedown', e => start(pos(e))); cv.addEventListener('mousemove', e => move(pos(e))); cv.addEventListener('mouseup', end);
             }
             ov.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tool = b.dataset.t; setActive(); });
             ov.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { colour = b.dataset.c; setActive(); });
             document.getElementById('pwMkUndo').onclick = () => { shapes.pop(); redraw(); };
-            document.getElementById('pwMkCancel').onclick = () => ov.remove();
+            document.getElementById('pwMkCancel').onclick = () => { if (shapes.length && !confirm('Discard your markup?')) return; ov.remove(); };
             document.getElementById('pwMkSave').onclick = async () => {
                 if (!shapes.length) { notify('Draw on the photo first'); return; }
                 const data = cv.toDataURL('image/jpeg', 0.82);
@@ -15800,12 +15846,13 @@ const firebaseConfig = {
         _lp.forEach((photo, idx) => {
             var _sec=photo.linkedPart?"Part: "+photo.linkedPart:"General";
             if(_sec!==_lastSec){html+='<div style="font-size:9px;font-weight:900;color:#888;margin:4px 0 2px;">'+_sec+'</div>';_lastSec=_sec;}
-            var _mk=photo.markedUpFrom?'<div style="position:absolute;top:2px;left:2px;background:#d4af37;color:#111;font-size:9px;font-weight:900;padding:1px 4px;border-radius:3px;">✏️</div>':'';var _plabel=_mk+(photo.linkedPart?'<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(212,175,55,0.92);color:#1a1a1a;font-size:8px;font-weight:900;padding:2px 4px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📷 '+photo.linkedPart+'</div>':'');
+            var _mk=photo.markedUpFrom?'<div style="position:absolute;inset:0;border:3px solid #d4af37;border-radius:6px;pointer-events:none;"></div>':'';var _plabel=_mk+(photo.linkedPart?'<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(212,175,55,0.92);color:#1a1a1a;font-size:8px;font-weight:900;padding:2px 4px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📷 '+photo.linkedPart+'</div>':'');
 
             html += `
                 <div style="position:relative; cursor:pointer; border-radius:6px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,0.1); height:80px;">
                     <img src="${photo.data}" style="width:100%; height:100%; object-fit:cover;" onclick="viewPhoto(${pwQ(photo.id)})">
                     <div style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; font-size:8px; padding:2px 4px; border-radius:3px;">${_lp.length}</div>${_plabel}
+                    <button onclick="event.stopPropagation(); pwMarkupPhoto(${pwQ(photo.id)})" title="Mark up" style="position:absolute; top:3px; left:3px; background:#d4af37; border:none; color:#111; width:28px; height:28px; border-radius:7px; font-size:14px; line-height:28px; padding:0; cursor:pointer; box-shadow:0 1px 4px rgba(0,0,0,.4);">✏️</button>
                     <button onclick="deletePhoto(${pwQ(photo.id)})" style="position:absolute; bottom:2px; right:2px; background:#ff3b30; border:none; color:#fff; padding:2px 4px; border-radius:3px; font-size:9px; cursor:pointer;">X</button>
                 </div>
             `;
