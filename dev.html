@@ -93,7 +93,7 @@ window.pwToday = pwToday;
 </script>
 <script>
 (function() {
-    window.CURRENT_VERSION = 'v1.16.488-dev'; // global so all scripts can access it
+    window.CURRENT_VERSION = 'v1.16.489-dev'; // global so all scripts can access it
     const CURRENT_VERSION = window.CURRENT_VERSION;
     window.PW_BUILD_DATE = '2026-11-09'; // v1.16.476: the date this build was made — update with each build
     const VERSION_KEY = 'paintworkz_version';
@@ -1700,7 +1700,7 @@ window.getTooltipKey = getTooltipKey;
 </script>
 </head>
 <body>
-<div id="devBanner">🚧 DEVELOPMENT VERSION — LIVE DATA — v1.16.488-dev (open in Incognito / separate browser) 🚧</div>
+<div id="devBanner">🚧 DEVELOPMENT VERSION — LIVE DATA — v1.16.489-dev (open in Incognito / separate browser) 🚧</div>
 
 <!-- COPYRIGHT NOTICE -->
 <div id="copyrightBanner" style="display:none;">
@@ -3613,11 +3613,11 @@ const firebaseConfig = {
                     <h4 style="margin:0; font-weight:900; font-size:14px;">📦 Paint Stock Ledger</h4>
                     <div style="display:flex; gap:8px;">
                         <button onclick="loadStockFromFirebase().then(()=>{try{renderStockTab();}catch(e){}});notify('✅ Stock synced');" style="background:#2196f3; color:#fff; border:none; padding:8px 12px; border-radius:8px; font-weight:900; font-size:11px; cursor:pointer;">🔄 Sync</button>
-                        <button onclick="bulkRecalcStockFromHistory()" style="background:#ff9500; color:#fff; border:none; padding:8px 12px; border-radius:8px; font-weight:900; font-size:11px; cursor:pointer;">⚡ Recalc All Jobs</button>
                         <button onclick="openReceiveStock()" style="background:#34c759; color:#fff; border:none; padding:8px 14px; border-radius:8px; font-weight:900; font-size:12px; cursor:pointer;">+ Receive Stock</button>
                     </div>
                 </div>
-                <p style="font-size:11px; color:#666; margin-bottom:14px;">Live stock levels. Updated automatically when jobs complete. Tap <strong>+ Receive Stock</strong> when a delivery arrives.</p>
+                <p style="font-size:11px; color:#666; margin-bottom:8px;"><strong>On shelf</strong> = what's in the tins now (type a number to correct it). It drops when a coat is ticked done or the job is completed. <strong>Booked</strong> = open jobs not sprayed yet. <strong>Available</strong> = what's left after those jobs. Tap <strong>+ Receive Stock</strong> when a delivery arrives.</p>
+                <div id="stockStatusBox" style="margin-bottom:14px;"></div>
 
                 <!-- Alert thresholds row 1: Litres + Tint alert -->
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
@@ -3947,7 +3947,7 @@ const firebaseConfig = {
                             <p style="margin:0; font-size:11px; color:#666;">Current installed version</p>
                         </div>
                         <div style="text-align:right;">
-                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.488</div>
+                            <div id="adminVersionDisplay" style="font-size:18px; font-weight:900; color:#2196f3; margin-bottom:3px;">v1.16.489</div>
                             <div id="adminVersionDate" style="font-size:10px; color:#666;"></div>
                         </div>
                     </div>
@@ -4993,7 +4993,7 @@ const firebaseConfig = {
                         <strong style="color:#333; font-weight:900;">PaintWorkz Pro</strong><br>
                         <span style="color:#999;"><strong>Created &amp; Owned by Colin Bedford</strong></span><br>
                         <span style="color:#999;">14 February 2026</span><br><br>
-                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.488</span><span style="color:#d4af37; font-weight:900;" id="versionDate"></span>
+                        <span style="color:#d4af37; font-weight:900;" id="versionDisplay">v1.16.489</span><span style="color:#d4af37; font-weight:900;" id="versionDate"></span>
                         <button onclick="startTour()" style="margin-left:12px; background:none; border:1px solid #d4af37; color:#d4af37; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">🗺️ Tour</button>
                         <button onclick="const uid=window.currentUser?window.currentUser.uid:'anon';localStorage.removeItem('pw_tour_done_'+uid);if(typeof tab==='function')tab('measure');setTimeout(function(){if(typeof startTour==='function')startTour();},300);" style="margin-left:6px; background:none; border:1px solid #999; color:#999; padding:3px 10px; border-radius:6px; font-size:9px; font-weight:900; cursor:pointer; vertical-align:middle;">↺ Reset Tour</button>
                     </p>
@@ -12024,13 +12024,9 @@ const firebaseConfig = {
         // Stock should leave the shelf when work is committed, not when quoting/parking.
         // (If a quote later converts to a job, the deduct-once guard lets it deduct then,
         //  since it was never deducted while it was a quote.)
-        const _jStat = jobData.jobStatus || 'job';
-        if (_jStat === 'job') {
-            try { deductStockForJob(jobData); } catch(e) { console.warn('Stock deduct error:', e); }
-            try { deductTinterStockForJob(jobData); } catch(e) { console.warn('Tinter deduct error:', e); }
-        } else {
-            console.log('⏭️ Skipping stock deduction — job status is "' + _jStat + '" (quote/hold)');
-        }
+        // v1.16.489: paint now comes off the shelf when it leaves the tin (coat ticked done / job
+        // completed) and open jobs BOOK their paint. Saving checks there's enough for this job.
+        try { pwStockAfterJobSave(jobData); } catch(e) { console.warn('Stock check error:', e); }
         // Also persist to IndexedDB for full history
         try { pwDB.saveJob(jobData); } catch(e) { console.warn('IndexedDB save error:', e); }
         // Clear parked charges — don't bleed into next job
@@ -17162,7 +17158,7 @@ const firebaseConfig = {
         const critical = alerts.filter(a => a.negative);
         const low = alerts.filter(a => !a.negative);
         const lines = [
-            ...critical.map(a => ` ${a.label}: SHORT by ${pwVolTxt(Math.abs(a.remaining).toFixed(1), 'L', Math.abs(a.remaining))}`),
+            ...critical.map(a => ` ${a.label}: SHORT by ${a.grams ? Math.round(Math.abs(a.remaining)) + 'g' : pwVolTxt(Math.abs(a.remaining).toFixed(1), 'L', Math.abs(a.remaining))} for open jobs`), // v1.16.489
             ...low.map(a => ` ${a.label}: LOW - only ${pwVolTxt(a.onHand, 'L')} on hand`)
         ].join('\n');
 
@@ -22478,8 +22474,8 @@ const firebaseConfig = {
                 const _crItem = _finItem === 'matt' ? matRate : _finItem === 'gloss' ? glsRate : satRate;
                 const paintLitres = iSqm / _crItem;
                 if (col.toLowerCase().includes('clear')) {
-                    if (!_tcDone) { const _clrLitres = iSqm / clrRate; clearPaintLitres += _clrLitres; }
-                    if (!_ucDone) clearSqm += iSqm;
+                    { const _clrLitres = iSqm / clrRate; clearPaintLitres += _clrLitres; } // v1.16.489: whole job (was skipping ticked coats)
+                    if (!(typeof pwStageSkipped === 'function' && pwStageSkipped(job, 'undercoat'))) clearSqm += iSqm;
                 } else {
                     const formula = getFormula(col, item.finish || job.finish, item.brand || job.brand);
                     const _wb = formula ? (formula.whiteBase || formula.baseTinters || []) : [];
@@ -22500,7 +22496,7 @@ const firebaseConfig = {
                             // Satin, Semi Gloss, or unknown     use raw code as-is (satin series)
                             baseCode = rawCode.toUpperCase();
                         }
-                        if (!_tcDone) baseCodeLitres[baseCode] = (baseCodeLitres[baseCode] || 0) + paintLitres;
+                        baseCodeLitres[baseCode] = (baseCodeLitres[baseCode] || 0) + paintLitres; // v1.16.489
                     }
                     // No formula = not counted (colour not yet in paint database)
                 }
@@ -22513,8 +22509,8 @@ const firebaseConfig = {
                 const _crJob = _finJob === 'matt' ? matRate : _finJob === 'gloss' ? glsRate : satRate;
                 const paintLitres = sqm / _crJob;
                 if (col.toLowerCase().includes('clear')) {
-                    if (!_tcDone) { const _clrLitres2 = sqm / clrRate; clearPaintLitres += _clrLitres2; }
-                    if (!_ucDone) clearSqm += sqm;
+                    { const _clrLitres2 = sqm / clrRate; clearPaintLitres += _clrLitres2; } // v1.16.489
+                    if (!(typeof pwStageSkipped === 'function' && pwStageSkipped(job, 'undercoat'))) clearSqm += sqm;
                 } else {
                     const formula = getFormula(col, job.finish, job.brand);
                     const _wb2 = formula ? (formula.whiteBase || formula.baseTinters || []) : [];
@@ -22532,7 +22528,7 @@ const firebaseConfig = {
                         } else {
                             baseCode2 = rawCode2.toUpperCase();
                         }
-                        if (!_tcDone) baseCodeLitres[baseCode2] = (baseCodeLitres[baseCode2] || 0) + paintLitres;
+                        baseCodeLitres[baseCode2] = (baseCodeLitres[baseCode2] || 0) + paintLitres; // v1.16.489
                     }
                 }
             }
@@ -22549,8 +22545,8 @@ const firebaseConfig = {
         // Undercoat: coloured sqm uses ucRate, clear sqm uses ucClearRate
         // ucPendingSqm excludes jobs where undercoat is already done (ticked in schedule)
         const ucPendingSqm = jobs.reduce((acc, j) => {
-            if (pwPhaseDone(j, 'undercoat')) return acc; // already done, or skipped (v1.16.477)
-            return acc + (parseFloat(j.totalSqm) || 0);
+            if (typeof pwStageSkipped === 'function' && pwStageSkipped(j, 'undercoat')) return acc; // no undercoat stage on this job
+            return acc + (parseFloat(j.totalSqm) || 0); // v1.16.489: whole job (was skipping ticked undercoats)
         }, 0);
         const colouredPendingSqm = ucPendingSqm - clearSqm;
         const colouredSqm  = totalSqm - clearSqm;
@@ -22685,7 +22681,8 @@ const firebaseConfig = {
 
             <!-- LEFT: Paint Used table -->
             <div class="report-card" style="padding:10px;">
-              <div style="font-size:10px; font-weight:900; color:#555; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px; padding-bottom:4px; border-bottom:1px solid #ddd;">🪣 Paint Used This Period</div>
+              <div style="font-size:10px; font-weight:900; color:#555; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:2px;">🪣 Paint Used This Period</div>
+              <div style="font-size:9px; color:#888; margin-bottom:8px; padding-bottom:4px; border-bottom:1px solid #ddd;">${_reportStatusFilter === 'completed' ? 'Jobs completed in this period' : _reportStatusFilter === 'active' ? 'Paint these open jobs will use' : 'Jobs in this period'} · stock levels are in Database → Stock</div>
               <div style="overflow-x:auto;">
                 <table style="width:100%; border-collapse:collapse; font-size:12px;">
                     <thead>
@@ -22751,16 +22748,6 @@ const firebaseConfig = {
               </div>
             </div>
 
-              <!-- RIGHT: Stock on hand -->
-              <div class="report-card" style="padding:10px;">
-                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                      <div class="report-card-title" style="margin-bottom:0; font-size:12px;">📦 Stock On Hand</div>
-                      <button onclick="saveStockLevels()" style="padding:4px 12px; border:none; border-radius:5px; background:#4caf50; color:#fff; font-weight:900; font-size:10px; cursor:pointer;">💾 Save</button>
-                  </div>
-                  <div id="stocktakeGrid" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:5px; margin-bottom:10px;"></div>
-                  <div style="font-size:9px; font-weight:900; color:#e65100; text-transform:uppercase; margin-bottom:5px; margin-top:4px;">⚠️ Alerts</div>
-                  <div id="stockAlertsList" style="display:grid; grid-template-columns:1fr; gap:4px; font-size:11px;"></div>
-              </div>
 
         </div><!-- end paint quantities + stocktake grid -->
 
@@ -23228,78 +23215,7 @@ const firebaseConfig = {
                     scales:{ y:{ beginAtZero:true, ticks:{stepSize:1, font:{size:10}} }, x:{ ticks:{font:{size:10}, maxRotation:30} } } }});
             }
 
-            //        Stocktake grid render — compact, readable                                                                         
-            const stockKeys = ['XB6930','XB6931','XB6960','XB6961','XB6910','XB6911','Clear','ClearUC','Undercoat'];
-            const stockLabels = {
-                'XB6930':'Satin White (XB6930)', 'XB6931':'Satin Deep (XB6931)',
-                'XB6960':'Gloss White (XB6960)', 'XB6961':'Gloss Deep (XB6961)',
-                'XB6910':'Matt White (XB6910)',  'XB6911':'Matt Deep (XB6911)',
-                'Clear':'Clear Coat', 'ClearUC':'Clear U/C', 'Undercoat':'Undercoat White'
-            };
-            const stockReq = {
-                'XB6930': +(baseCodeLitres['XB6930']||0).toFixed(1),
-                'XB6931': +(baseCodeLitres['XB6931']||0).toFixed(1),
-                'XB6960': +(baseCodeLitres['XB6960']||0).toFixed(1),
-                'XB6961': +(baseCodeLitres['XB6961']||0).toFixed(1),
-                'XB6910': +(baseCodeLitres['XB6910']||0).toFixed(1),
-                'XB6911': +(baseCodeLitres['XB6911']||0).toFixed(1),
-                'Clear':  +clearPaintLitres.toFixed(1),
-                'ClearUC':+parseFloat(clearUcL),
-                'Undercoat': +(baseCodeLitres['Undercoat']||0).toFixed(1),
-            };
-            const savedStock = JSON.parse(localStorage.getItem('pwStockLevels') || '{}');
-            const stSettings = { ...JSON.parse(localStorage.getItem('pwStockSettings') || '{}'), ...JSON.parse(localStorage.getItem('pwStockSettings2') || '{}') };
-            const alertLevel = parseFloat(stSettings.alertLevel) || 15;
-            const stockGrid = document.getElementById('stocktakeGrid');
-            const alertsList = document.getElementById('stockAlertsList');
-            const alerts = [];
-            if (stockGrid) {
-                stockGrid.innerHTML = stockKeys.map(k => {
-                    const onHand = parseFloat(savedStock[k] || 0);
-                    const needed = stockReq[k] || 0;
-                    const remaining = onHand - needed;
-                    const low = onHand > 0 && onHand <= alertLevel;
-                    const negative = remaining < 0;
-                    const color = negative ? '#d32f2f' : low ? '#f57f17' : '#2e7d32';
-                    const bg = negative ? '#ffebee' : low ? '#fff8e1' : '#f9fbe7';
-                    if (low || negative) alerts.push({ label: stockLabels[k], onHand, needed, remaining, negative });
-                    // Dark mode aware colours for stock grid
-                    const _sdm = document.body.dataset.theme === 'dark' || (!document.body.dataset.theme && window.matchMedia('(prefers-color-scheme:dark)').matches);
-                    const cellBg = _sdm ? (negative ? '#3a0808' : low ? '#2a1f00' : '#1a2a1a') : bg;
-                    const cellTxt = _sdm ? '#f2f2f7' : '#333';
-                    const mutedTxt = _sdm ? '#8e8e93' : '#666';
-                    return `<div style="background:${cellBg}; border:1px solid ${color}60; border-left:3px solid ${color}; border-radius:6px; padding:7px 10px; display:flex; align-items:center; gap:8px;">
-                        <div style="flex:1; min-width:0;">
-                            <div style="font-size:9px; font-weight:900; color:${color}; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${stockLabels[k]}</div>
-                            <div style="font-size:10px; color:${mutedTxt}; margin-top:2px;">Need: <strong style="color:${cellTxt};">${pwVolTxt(Math.round(needed*10)/10, 'L', needed)}</strong> <span style="font-weight:900; color:${color};">${remaining >= 0 ? '+' : ''}${pwVolTxt(remaining.toFixed(1), 'L', remaining)}</span></div>
-                        </div>
-                        <div style="display:flex; align-items:center; gap:3px; flex-shrink:0;">
-                            <input type="number" inputmode="decimal" data-stock-key="${k}" ${pwInAttrs(onHand, 'vol', 2, Math.round(onHand*10)/10)} min="0" step="0.5"
-                                style="width:72px; padding:3px 4px; border:1px solid ${color}60; border-radius:4px; font-size:12px; font-weight:900; text-align:center; background:${_sdm ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.8)'}; color:${cellTxt};">
-                            <span style="font-size:9px; color:${mutedTxt};">${pwVolU()}</span>
-                        </div>
-                    </div>`;
-                }).join('');
-                stockGrid.querySelectorAll('[data-stock-key]').forEach(inp => { inp.onchange = () => saveStockLevels(); });
-            }
-            if (alertsList) {
-                alertsList.innerHTML = alerts.length === 0
-                    ? '<div style="color:#4caf50; font-weight:900; text-align:center; padding:10px; font-size:12px;">✅ All stock OK</div>'
-                    : alerts.map(a => `<div style="background:var(--modal-bg,#fff); border-radius:6px; padding:6px 8px; margin-bottom:4px; border-left:3px solid ${a.negative ? '#d32f2f' : '#ff9800'};">
-                        <div style="font-weight:900; font-size:10px; color:${a.negative ? '#d32f2f' : '#e65100'};">${a.negative ? '🔴' : '⚠️'} ${a.label}</div>
-                        <div style="font-size:10px; color:#666; margin-top:2px;">On hand: ${pwVolTxt(a.onHand, 'L')} · Needed: ${pwVolTxt(a.needed, 'L')} · <strong style="color:${a.negative ? '#d32f2f' : '#e65100'};">${a.negative ? 'SHORT' : 'LOW'} ${pwVolTxt(Math.abs(a.remaining).toFixed(1), 'L', Math.abs(a.remaining))}</strong></div>
-                    </div>`).join('');
-
-                if (alerts.length > 0) {
-                    showStockAlertNotification(alerts);
-                    const criticalItems = alerts.filter(a => a.negative).map(a => a.label).join(', ');
-                    const lowItems = alerts.filter(a => !a.negative).map(a => a.label).join(', ');
-                    let stockMsg = '⚠️ PAINT STOCK ALERT: ';
-                    if (criticalItems) stockMsg += `SHORT - ${criticalItems}. `;
-                    if (lowItems) stockMsg += `LOW - ${lowItems}.`;
-                    addAdminAlert('STOCK_LOW', stockMsg.trim(), { stockAlerts: alerts.map(a => ({ label: a.label, onHand: a.onHand, needed: a.needed, negative: a.negative })) });
-                }
-            }
+            // v1.16.489: stock check removed from the report — see Database → Stock (on shelf / booked / available)
 
             // Estimate chart     per-client real job value from calculateLinePrice
             setTimeout(() => {
@@ -23598,6 +23514,7 @@ const firebaseConfig = {
     }
 
     function bulkRecalcStockFromHistory() {
+        notify('Stock now keeps itself up to date — do a stocktake in Database → Stock if the numbers are off.', 4000); return; // v1.16.489: removed
         const history = JSON.parse(localStorage.getItem('jobHistory') || '[]');
         if (history.length === 0) { notify('No job history found'); return; }
 
@@ -32758,6 +32675,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                         if (firebaseTimestamp > localTimestamp) {
                             // Firebase is newer - use it
                             localStorage.setItem('pwStockLevels', JSON.stringify(sd.levels));
+                            if (sd.used && sd.used.v === 2) localStorage.setItem('pwStockUsed', JSON.stringify(sd.used)); // v1.16.489
                             localStorage.setItem('pwStockLevels_meta', JSON.stringify({savedAt: sd.savedAt}));
                             console.log('✅ Stock levels loaded from Firebase (newer)');
                         } else {
@@ -32930,17 +32848,347 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
     }
 
     function setStockLevels(levels) {
+        // v1.16.489: saves the time too, so the newest copy wins on every device. Typing or receiving
+        // stock means this shop tracks stock, so warnings switch on.
+        const u = pwStockUsedGet(); if (u && !u.inUse) { u.inUse = true; pwStockSave(levels, u); return; }
+        pwStockSave(levels, null);
+    }
+
+    // ================================================================
+    // v1.16.489: STOCK — three numbers per base / tinter
+    //   ON SHELF  = what is physically in the tins (pwStockLevels). It only drops when paint
+    //               actually leaves the tin: undercoat ticked done, topcoat ticked done, or the
+    //               job completed. Stocktake / Receive Stock set or add to it.
+    //   BOOKED    = paint for open jobs that hasn't been sprayed yet (worked out live from the
+    //               jobs, so editing a job only changes the difference — never the whole amount again).
+    //   AVAILABLE = on shelf − booked. Early warnings come from this.
+    // What has already come off the shelf is kept per job + coat in pwStockUsed
+    // ({ v:2, jobs:{ jobNum:{ fp, uc:{key:L}, tc:{key:L} } } }), saved with the levels in one
+    // cloud doc so every device agrees. Settings changes (coverage, formulas) never rewrite
+    // finished jobs: a job is only recounted when the job itself changes (its fingerprint).
+    // ================================================================
+    function pwStockJobKey(j) { return String((j && (j.jobNum || j.id)) || '').trim(); }
+    function pwStockR2(v) { return Math.round((parseFloat(v) || 0) * 100) / 100; }
+    function pwStockUsedGet() { try { const u = JSON.parse(localStorage.getItem('pwStockUsed') || 'null'); return (u && u.v === 2 && u.jobs) ? u : null; } catch(e) { return null; } }
+    function pwStockCtx() {
+        const CR = JSON.parse(localStorage.getItem('pwCoverageRates') || '{}');
+        const f1 = JSON.parse(localStorage.getItem('paintFormulas') || '[]');
+        return {
+            R: { uc: parseFloat(CR.undercoat) || 8, ucc: parseFloat(CR.clearUc) || 8, sat: parseFloat(CR.satin) || 5,
+                 gls: parseFloat(CR.gloss) || 5, mat: parseFloat(CR.matt) || 5, clr: parseFloat(CR.clear) || 5 },
+            F: f1.length ? f1 : JSON.parse(localStorage.getItem('paintFormulaDB') || '[]')
+        };
+    }
+    // Real jobs only (not quotes / on hold). Skipped stages use no paint at all.
+    function pwStockJobState(j) {
+        const real = (j.jobStatus || 'job') === 'job';
+        const done = !!(j.completed || j.archived);
+        const ucSkip = typeof pwStageSkipped === 'function' && pwStageSkipped(j, 'undercoat');
+        const tcSkip = typeof pwStageSkipped === 'function' && pwStageSkipped(j, 'topcoat');
+        const ph = j.phases || {};
+        return { real, done, ucSkip, tcSkip,
+                 uc: real && !ucSkip && (done || !!ph.undercoat),
+                 tc: real && !tcSkip && (done || !!ph.topcoat) };
+    }
+    // Fingerprint of everything in a job that changes how much paint it takes
+    function pwStockJobFp(j) {
+        const parts = (j.items || []).map(it => [pwItemSqm(it).toFixed(4), (it.color || j.color || '').trim().toLowerCase(),
+            (it.finish || j.finish || '').toLowerCase(), (it.brand || j.brand || '').toLowerCase()].join('~'));
+        const s = parts.length ? parts.join('|') : [(parseFloat(j.totalSqm) || 0).toFixed(4), (j.color || '').toLowerCase(), (j.finish || '').toLowerCase()].join('~');
+        let h = 5381; for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
+        return h.toString(36) + '.' + s.length;
+    }
+    // Paint one job takes, split by coat. Same maths the app has always used:
+    // m² ÷ coverage; base from the colour's formula (finish picks the satin/gloss/matt series);
+    // tinters = formula grams per litre × litres; clear jobs use Clear U/C + Clear Coat.
+    function pwJobPaintNeeds(job, ctx, st) {
+        ctx = ctx || pwStockCtx(); st = st || pwStockJobState(job);
+        const R = ctx.R, out = { uc: {}, tc: {}, noFormula: 0 };
+        const add = (ph, k, v) => { if (v > 0) out[ph][k] = (out[ph][k] || 0) + v; };
+        const part = (sqm, col, fin, brand) => {
+            if (!(sqm > 0)) return;
+            col = String(col || '').trim(); fin = String(fin || '').toLowerCase();
+            if (col.toLowerCase().includes('clear')) {
+                if (!st.ucSkip) add('uc', 'ClearUC', sqm / R.ucc);
+                if (!st.tcSkip) add('tc', 'Clear', sqm / R.clr);
+                return;
+            }
+            if (!st.ucSkip) add('uc', 'Undercoat', sqm / R.uc);
+            if (st.tcSkip) return;
+            const L = sqm / (fin === 'matt' ? R.mat : fin === 'gloss' ? R.gls : R.sat);
+            const f = col ? pwFindFormula(ctx.F, col, fin, brand) : null;
+            const wb = f ? (f.whiteBase || f.baseTinters || []) : [];
+            const be = wb.find(b => (b.code || '').toUpperCase().startsWith('XB')) || wb.find(b => (b.altCode || '').toUpperCase().startsWith('XB'));
+            const rc = be ? String(((be.code || '').toUpperCase().startsWith('XB') ? be.code : be.altCode) || '').toUpperCase() : '';
+            if (!rc) { out.noFormula++; return; }
+            const deep = ['XB6931', 'XB6911', 'XB6961'].includes(rc) || parseInt(rc.slice(-1)) % 2 === 1;
+            add('tc', fin === 'matt' ? (deep ? 'XB6911' : 'XB6910') : fin === 'gloss' ? (deep ? 'XB6961' : 'XB6960') : rc, L);
+            (f.colourants || []).forEach(c => { if (c && c.code) add('tc', 'tint_' + String(c.code).toUpperCase().trim(), (parseFloat(c.amount) || 0) * L); });
+        };
+        const items = job.items || [];
+        if (items.length) items.forEach(it => part(pwItemSqm(it), it.color || job.color, it.finish || job.finish, it.brand || job.brand));
+        else part(parseFloat(job.totalSqm) || 0, job.color, job.finish, job.brand);
+        return out;
+    }
+    function pwStockRoundMap(m) { const o = {}; Object.keys(m || {}).forEach(k => { const v = pwStockR2(m[k]); if (v) o[k] = v; }); return o; }
+    // One entry per job number (newest copy wins if the list ever holds two)
+    function pwStockJobs() {
+        let hist = [];
+        try { hist = JSON.parse(localStorage.getItem('jobHistory') || '[]'); } catch(e) { hist = []; }
+        const map = new Map();
+        const ts = j => String(j.lastModified || j.updatedAt || j.timestamp || j.savedAt || '');
+        (Array.isArray(hist) ? hist : []).forEach(j => {
+            const k = pwStockJobKey(j); if (!k) return;
+            const prev = map.get(k);
+            if (!prev || ts(j) >= ts(prev)) map.set(k, j);
+        });
+        return [...map.entries()];
+    }
+    function pwStockSave(levels, used, push) {
+        const savedAt = new Date().toISOString();
         localStorage.setItem('pwStockLevels', JSON.stringify(levels));
-        // Sync to Firestore
+        if (used) localStorage.setItem('pwStockUsed', JSON.stringify(used));
+        localStorage.setItem('pwStockLevels_meta', JSON.stringify({ savedAt }));
+        if (push === false) return;
         if (window.currentUser && window.firebaseDb && window.doc && window.setDoc) {
             try {
-                const targetUid = pwSafeUid();
-                const ref = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'stockLevels');
-                window.setDoc(ref, { levels, savedAt: new Date().toISOString() }, { merge: true })
+                const data = { levels, savedAt };
+                const u = used || pwStockUsedGet(); if (u) data.used = u;
+                window.setDoc(window.doc(window.firebaseDb, 'users', pwSafeUid(), 'appData', 'stockLevels'), data, { merge: true })
                     .catch(e => console.warn('Stock sync error:', e));
             } catch(e) {}
         }
     }
+    // Take the cloud copy if it is newer than this device's (levels + what's been used, together)
+    async function pwStockPull() {
+        if (!(window.currentUser && window.firebaseDb && window.getDoc && window.doc)) return false;
+        try {
+            const snap = await window.getDoc(window.doc(window.firebaseDb, 'users', pwSafeUid(), 'appData', 'stockLevels'));
+            if (!snap.exists()) return false;
+            const sd = snap.data() || {};
+            const loc = JSON.parse(localStorage.getItem('pwStockLevels_meta') || '{}');
+            const lt = loc.savedAt ? new Date(loc.savedAt).getTime() : 0;
+            const ft = sd.savedAt ? new Date(sd.savedAt).getTime() : 0;
+            if (ft > lt && sd.levels) {
+                localStorage.setItem('pwStockLevels', JSON.stringify(sd.levels));
+                if (sd.used && sd.used.v === 2) localStorage.setItem('pwStockUsed', JSON.stringify(sd.used));
+                localStorage.setItem('pwStockLevels_meta', JSON.stringify({ savedAt: sd.savedAt }));
+                return true;
+            }
+        } catch(e) { console.warn('Stock pull error:', e && e.message); }
+        return false;
+    }
+    // Bring the shelf up to date with the jobs. Safe to run any number of times.
+    function pwStockReconcile() {
+        const ctx = pwStockCtx();
+        const jobs = pwStockJobs();
+        const levels = getStockLevels();
+        let used = pwStockUsedGet();
+        if (!used) {
+            // First run on 1.16.489: everything already sprayed is treated as already off the shelf
+            // (the shelf numbers are NOT changed). The Stock tab then asks for one stocktake.
+            used = { v: 2, jobs: {}, baseAt: new Date().toISOString(), needStocktake: true,
+                     inUse: Object.keys(levels).some(k => (parseFloat(levels[k]) || 0) > 0) }; // shop already tracks stock
+            jobs.forEach(([k, j]) => {
+                const st = pwStockJobState(j); if (!st.uc && !st.tc) return;
+                const n = pwJobPaintNeeds(j, ctx, st); const e = { fp: pwStockJobFp(j) };
+                if (st.uc) e.uc = pwStockRoundMap(n.uc);
+                if (st.tc) e.tc = pwStockRoundMap(n.tc);
+                used.jobs[k] = e;
+            });
+            pwStockSave(levels, used);
+            return { changed: true, baseline: true };
+        }
+        let changed = false;
+        jobs.forEach(([k, j]) => {
+            const st = pwStockJobState(j);
+            const rec = used.jobs[k] || {};
+            const fp = pwStockJobFp(j);
+            const sameJob = rec.fp === fp;
+            let n = null;
+            ['uc', 'tc'].forEach(ph => {
+                const had = rec[ph] || null;
+                if (!st[ph]) {
+                    if (had) { // un-ticked / reopened / turned into a quote: the paint goes back on the shelf
+                        Object.keys(had).forEach(key => { levels[key] = pwStockR2((parseFloat(levels[key]) || 0) + had[key]); });
+                        delete rec[ph]; changed = true;
+                    }
+                    return;
+                }
+                if (had && sameJob) return; // already off the shelf, job unchanged
+                n = n || pwJobPaintNeeds(j, ctx, st);
+                const want = pwStockRoundMap(n[ph]);
+                const keys = new Set([...Object.keys(want), ...Object.keys(had || {})]);
+                keys.forEach(key => {
+                    const d = (want[key] || 0) - ((had && had[key]) || 0);
+                    if (Math.abs(d) >= 0.005) levels[key] = pwStockR2((parseFloat(levels[key]) || 0) - d);
+                });
+                rec[ph] = want; changed = true;
+            });
+            if (rec.uc || rec.tc) {
+                if (rec.fp !== fp) { rec.fp = fp; changed = true; }
+                used.jobs[k] = rec;
+            } else if (used.jobs[k]) { delete used.jobs[k]; changed = true; }
+        });
+        // A job deleted from the list keeps its record: paint that was used stays used.
+        if (changed) pwStockSave(levels, used);
+        return { changed, baseline: false };
+    }
+    // Pull first (another device may have just used paint), then reconcile, then warn
+    let _pwStockBusy = null;
+    function pwStockReconcileSafe() {
+        if (_pwStockBusy) return _pwStockBusy;
+        _pwStockBusy = (async () => {
+            try {
+                await pwStockPull();
+                const r = pwStockReconcile();
+                try { pwStockCheckAlerts(); } catch(e) {}
+                try { const sub = document.getElementById('sub-stock'); if (sub && sub.style.display !== 'none') renderStockTab(); } catch(e) {}
+                return r;
+            } catch(e) { console.warn('Stock reconcile error:', e && e.message); return null; }
+            finally { setTimeout(() => { _pwStockBusy = null; }, 0); }
+        })();
+        return _pwStockBusy;
+    }
+    function pwStockQueue(ms) {
+        if (!window._pwStockReady) return;
+        clearTimeout(window._pwStockT);
+        window._pwStockT = setTimeout(() => { pwStockReconcileSafe(); }, ms == null ? 1500 : ms);
+    }
+    // Booked + available for every base and tinter, with which jobs booked it
+    function pwStockAvailability() {
+        const ctx = pwStockCtx();
+        const levels = getStockLevels();
+        const used = pwStockUsedGet() || { jobs: {} };
+        const booked = {}, by = {};
+        let noFormula = 0;
+        pwStockJobs().forEach(([k, j]) => {
+            const st = pwStockJobState(j);
+            if (!st.real || st.done) return;
+            const rec = used.jobs[k] || {};
+            const n = pwJobPaintNeeds(j, ctx, st);
+            ['uc', 'tc'].forEach(ph => {
+                if (rec[ph] || (ph === 'uc' ? st.ucSkip : st.tcSkip)) return; // already off the shelf / not needed
+                Object.keys(n[ph]).forEach(key => {
+                    booked[key] = (booked[key] || 0) + n[ph][key];
+                    (by[key] = by[key] || {})[k] = (by[key][k] || 0) + n[ph][key];
+                });
+            });
+            if (!rec.tc && !st.tcSkip) noFormula += n.noFormula;
+        });
+        const keys = new Set([...Object.keys(levels), ...Object.keys(booked)]);
+        const avail = {};
+        keys.forEach(key => { avail[key] = (parseFloat(levels[key]) || 0) - (booked[key] || 0); });
+        return { levels, booked, avail, by, noFormula };
+    }
+    function pwStockLabel(key) {
+        const b = STOCK_BASES.find(x => x.key === key);
+        return b ? b.label : (key.startsWith('tint_') ? 'Tinter ' + key.slice(5) : key);
+    }
+    function pwStockAmt(key, v) {
+        v = parseFloat(v) || 0;
+        return key.startsWith('tint_') ? Math.round(v) + 'g' : pwVolTxt(v.toFixed(1), 'L', v);
+    }
+    // A shop that has never entered any stock isn't using this — no warnings for them
+    function pwStockInUse() {
+        const u = pwStockUsedGet();
+        if (u) return !!(u.inUse || u.countedAt);
+        const lv = getStockLevels(); return Object.keys(lv).some(k => (parseFloat(lv[k]) || 0) > 0);
+    }
+    // Early warnings: SHORT = open jobs need more than is on the shelf; LOW = under your alert level
+    function pwStockCheckAlerts() {
+        if (!pwStockInUse()) return [];
+        const a = pwStockAvailability();
+        const st = getStockSettings();
+        const alertL = parseFloat(st.alertLevel || 15);
+        const tintAlert = parseFloat(st.tintAlertGrams || 100);
+        const list = [];
+        STOCK_BASES.forEach(b => {
+            const av = a.avail[b.key] || 0, shelf = parseFloat(a.levels[b.key]) || 0;
+            if (!shelf && !a.booked[b.key]) return; // not stocked, not needed
+            if (av < -0.05) list.push({ key: b.key, label: b.label, onHand: pwVolF(av), remaining: av, negative: true });
+            else if (av < alertL) list.push({ key: b.key, label: b.label, onHand: pwVolF(av), remaining: av, negative: false });
+        });
+        Object.keys(a.avail).filter(k => k.startsWith('tint_')).forEach(k => {
+            const av = a.avail[k], shelf = parseFloat(a.levels[k]) || 0;
+            if (av < -0.5 && a.booked[k]) list.push({ key: k, label: pwStockLabel(k), onHand: Math.round(av) + 'g', remaining: av, negative: true, grams: true });
+            else if (shelf > 0 && av < tintAlert) list.push({ key: k, label: pwStockLabel(k), onHand: Math.round(av) + 'g', remaining: av, negative: false, grams: true });
+        });
+        // Only speak up when something changed (or once a day), so it never nags
+        const sig = list.map(x => x.key + (x.negative ? '!' : '') + (x.grams ? Math.round(x.remaining / 50) : Math.round(x.remaining))).join(',');
+        let last = {}; try { last = JSON.parse(localStorage.getItem('pwStockAlertSig') || '{}'); } catch(e) {}
+        const today = (typeof pwToday === 'function') ? pwToday() : new Date().toDateString();
+        if (list.length && (last.sig !== sig || last.day !== today)) {
+            localStorage.setItem('pwStockAlertSig', JSON.stringify({ sig, day: today }));
+            const shortL = list.filter(x => x.negative), lowL = list.filter(x => !x.negative);
+            let msg = '⚠️ PAINT STOCK: ';
+            if (shortL.length) msg += 'SHORT for open jobs - ' + shortL.map(x => x.label + ' ' + pwStockAmt(x.key, -x.remaining)).join(', ') + '. ';
+            if (lowL.length) msg += 'LOW - ' + lowL.map(x => x.label).join(', ') + '.';
+            try { addAdminAlert('STOCK_LOW', msg.trim(), { stockAlerts: list.map(x => ({ label: x.label, available: x.remaining, negative: x.negative })) }); } catch(e) {}
+            if (shortL.length) { try { showStockAlertNotification(shortL, true); } catch(e) {} }
+        } else if (!list.length && last.sig) {
+            localStorage.removeItem('pwStockAlertSig');
+        }
+        return list;
+    }
+    // After a job is saved: does the shop have enough for it? Warn before it gets to the booth.
+    async function pwStockAfterJobSave(jobData) {
+        try {
+            if (!window._pwStockReady) return;
+            await pwStockReconcileSafe();
+            const st = pwStockJobState(jobData);
+            if (!st.real || st.done || !pwStockInUse()) return;
+            const k = pwStockJobKey(jobData); if (!k) return;
+            const a = pwStockAvailability();
+            const mine = {};
+            Object.keys(a.by).forEach(key => { if (a.by[key][k]) mine[key] = a.by[key][k]; });
+            const short = Object.keys(mine).filter(key => a.avail[key] < (key.startsWith('tint_') ? -0.5 : -0.05));
+            let warned = {}; try { warned = JSON.parse(localStorage.getItem('pwStockWarned') || '{}'); } catch(e) {}
+            const sig = short.map(key => key + ':' + (key.startsWith('tint_') ? Math.round(-a.avail[key] / 50) : Math.round(-a.avail[key] * 2))).sort().join(',');
+            if (!short.length) { if (warned[k]) { delete warned[k]; localStorage.setItem('pwStockWarned', JSON.stringify(warned)); } return; }
+            if (warned[k] === sig) return; // already told them about exactly this
+            warned[k] = sig; localStorage.setItem('pwStockWarned', JSON.stringify(warned));
+            pwStockShortModal(k, short.map(key => ({ key, need: mine[key], shelf: parseFloat(a.levels[key]) || 0, booked: a.booked[key] || 0, short: -a.avail[key] })));
+        } catch(e) { console.warn('Stock check error:', e && e.message); }
+    }
+    function pwStockShortModal(jobKey, rows) {
+        const old = document.getElementById('pwStockShortModal'); if (old) old.remove();
+        const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+        const ov = document.createElement('div');
+        ov.id = 'pwStockShortModal';
+        ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100001;display:flex;align-items:center;justify-content:center;padding:16px;';
+        ov.innerHTML = `<div style="background:#1c1c1e;border:2px solid #ff9500;border-radius:16px;padding:18px;max-width:380px;width:100%;font-family:-apple-system,sans-serif;color:#fff;box-shadow:0 12px 40px rgba(0,0,0,.7);">
+            <div style="font-size:16px;font-weight:900;margin-bottom:4px;">🪣 Not enough paint for Job #${esc(jobKey)}</div>
+            <div style="font-size:12px;color:#bbb;margin-bottom:12px;">Counting every open job that isn't sprayed yet. Order before it gets to the booth.</div>
+            ${rows.map(r => `<div style="background:#2c2c2e;border-left:4px solid #ff3b30;border-radius:8px;padding:9px 11px;margin-bottom:6px;">
+                <div style="font-weight:900;font-size:13px;">${esc(pwStockLabel(r.key))}: <span style="color:#ff6b60;">short ${esc(pwStockAmt(r.key, r.short))}</span></div>
+                <div style="font-size:11px;color:#aaa;margin-top:2px;">This job needs ${esc(pwStockAmt(r.key, r.need))} · on shelf ${esc(pwStockAmt(r.key, r.shelf))} · all open jobs need ${esc(pwStockAmt(r.key, r.booked))}</div>
+            </div>`).join('')}
+            <button type="button" id="pwStockShortOk" style="width:100%;margin-top:8px;min-height:44px;border:none;border-radius:10px;background:#ff9500;color:#111;font-weight:900;font-size:14px;cursor:pointer;">Got it</button>
+        </div>`;
+        document.body.appendChild(ov);
+        ov.querySelector('#pwStockShortOk').onclick = () => ov.remove();
+        ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
+    }
+    // Stocktake done: the shelf numbers are right as of now
+    function pwStockCountsDone() {
+        const used = pwStockUsedGet();
+        if (used) { delete used.needStocktake; used.countedAt = new Date().toISOString(); pwStockSave(getStockLevels(), used); }
+        try { localStorage.removeItem('pwStockAlertSig'); } catch(e) {}
+        renderStockTab();
+        try { pwStockCheckAlerts(); } catch(e) {}
+        notify('✅ Stocktake saved — stock now tracks itself');
+    }
+    window.pwJobPaintNeeds = pwJobPaintNeeds;
+    window.pwStockReconcile = pwStockReconcile;
+    window.pwStockReconcileSafe = pwStockReconcileSafe;
+    window.pwStockAvailability = pwStockAvailability;
+    window.pwStockCheckAlerts = pwStockCheckAlerts;
+    window.pwStockAfterJobSave = pwStockAfterJobSave;
+    window.pwStockCountsDone = pwStockCountsDone;
+    window.pwStockQueue = pwStockQueue;
+    window.pwStockJobFp = pwStockJobFp;
+
 
     function getStockSettings() {
         return JSON.parse(localStorage.getItem('pwStockSettings2') || '{}');
@@ -33024,6 +33272,8 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         const levels  = getStockLevels();
         const st      = getStockSettings();
         const alertL  = st.alertLevel || 15;
+        let _A = { booked: {}, avail: {}, by: {}, noFormula: 0 };
+        try { _A = pwStockAvailability(); } catch(e) {} // v1.16.489
 
         // Load saved thresholds into UI
         const atEl = document.getElementById('stockAlertThreshold');
@@ -33057,19 +33307,22 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             let html = '';
             STOCK_BASES.forEach(base => {
                 const qty = parseFloat(levels[base.key] || 0);
-                const isLow = qty < alertL;
-                const pct = Math.min(100, (qty / (base.drumSize * 2)) * 100);
-                const barCol = isLow ? '#ff3b30' : qty < alertL * 2 ? '#ff9500' : '#34c759';
+                const bk = _A.booked[base.key] || 0;               // v1.16.489
+                const av = qty - bk;
+                const isLow = av < alertL;
+                const pct = Math.max(0, Math.min(100, (av / (base.drumSize * 2)) * 100));
+                const barCol = av < -0.05 ? '#ff3b30' : isLow ? '#ff3b30' : av < alertL * 2 ? '#ff9500' : '#34c759';
                 html += `<div style="display:flex; align-items:center; gap:10px; padding:10px; margin-bottom:6px; background:${isLow ? (_dm ? '#2a1010' : '#fff5f5') : rowBg}; border:1px solid ${isLow ? '#ff3b30' : border}; border-radius:8px; border-left:4px solid ${barCol};">
                     <div style="flex:1; min-width:0;">
                         <div style="font-size:11px; font-weight:900; color:${textCol}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${base.label}</div>
+                        <div style="font-size:10px; color:${mutedCol}; margin-top:2px;">Booked <strong style="color:${textCol};">${pwVolTxt(bk.toFixed(1), 'L', bk)}</strong> · Available <strong style="color:${av < -0.05 ? '#ff3b30' : isLow ? '#ff9500' : '#34c759'};">${av < -0.05 ? 'SHORT ' + pwVolTxt((-av).toFixed(1), 'L', -av) : pwVolTxt(av.toFixed(1), 'L', av)}</strong></div>
                         <div style="height:4px; background:${_dm ? '#48484a' : '#eee'}; border-radius:2px; margin-top:4px;">
                             <div style="width:${pct.toFixed(0)}%; height:100%; background:${barCol}; border-radius:2px; transition:width 0.3s;"></div>
                         </div>
                     </div>
                     <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
                         ${isLow ? '<span style="font-size:16px;" title="Low stock">⚠️</span>' : ''}
-                        <input type="number" min="0" step="0.1"
+                        <input type="number" step="0.1" title="On shelf"
                             data-stock-key="${base.key}"
                             ${pwInAttrs(qty, 'vol', 2, qty.toFixed(1))}
                             style="width:80px; padding:6px; border:1px solid ${border}; border-radius:6px; font-size:13px; font-weight:900; text-align:right; background:${_dm ? '#3a3a3c' : '#fff'}; color:${textCol};"
@@ -33115,7 +33368,8 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                 tintKeys.forEach(code => {
                     const tintKey = 'tint_' + code;
                     const qty = parseFloat(levels[tintKey] || 0);
-                    const isLow = qty > 0 && qty < tintAlert;
+                    const tbk = _A.booked[tintKey] || 0, tav = qty - tbk; // v1.16.489
+                    const isLow = (qty > 0 && tav < tintAlert) || (tbk > 0 && tav < -0.5);
                     const barCol = isLow ? '#ff3b30' : (qty > 0 && qty < tintAlert * 2) ? '#ff9500' : '#9c27b0';
                     const pct = Math.min(100, (qty / 1000) * 100);
 
@@ -33157,6 +33411,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                                     oninput="saveTinterName(${pwQ(code)}, this.value)"
                                     onchange="saveTinterName(${pwQ(code)}, this.value)">
                             </div>
+                            ${tbk > 0 ? `<div style="font-size:9px; color:${tintTxt}; opacity:0.9; margin-top:1px; text-shadow:0 1px 2px rgba(0,0,0,0.4);">Booked ${Math.round(tbk)}g · ${tav < -0.5 ? '<strong>SHORT ' + Math.round(-tav) + 'g</strong>' : 'Available ' + Math.round(tav) + 'g'}</div>` : ''}
                             <div style="height:3px; background:rgba(0,0,0,0.2); border-radius:2px; margin-top:3px;">
                                 <div style="width:${pct.toFixed(0)}%; height:100%; background:${barCol}; border-radius:2px; transition:width 0.3s;"></div>
                             </div>
@@ -33175,6 +33430,30 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                 });
                 tintsEl.innerHTML = html;
             }
+        }
+
+        // v1.16.489: status box — first stocktake prompt + anything short for open jobs
+        const sb = document.getElementById('stockStatusBox');
+        if (sb) {
+            const used = (typeof pwStockUsedGet === 'function') ? pwStockUsedGet() : null;
+            const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+            let h = '';
+            if (used && used.needStocktake) {
+                h += `<div style="background:rgba(255,149,0,0.14); border:2px solid #ff9500; border-radius:10px; padding:12px; margin-bottom:8px; color:inherit;">
+                    <div style="font-weight:900; font-size:13px; margin-bottom:4px; color:#ff9500;">📋 One stocktake to start</div>
+                    <div style="font-size:11px; line-height:1.45;">Stock works a new way from this version. Type what's <strong>physically in the tins</strong> for each base and tinter below, then tap the button. After that it keeps itself up to date.</div>
+                    <button type="button" onclick="pwStockCountsDone()" style="margin-top:8px; min-height:40px; padding:0 14px; border:none; border-radius:8px; background:#ff9500; color:#111; font-weight:900; font-size:12px; cursor:pointer;">✅ Counts are right</button>
+                </div>`;
+            }
+            const shortKeys = Object.keys(_A.avail || {}).filter(k => (_A.booked[k] || 0) > 0 && _A.avail[k] < (k.startsWith('tint_') ? -0.5 : -0.05));
+            if (shortKeys.length) {
+                h += `<div style="background:rgba(255,59,48,0.12); border:2px solid #ff3b30; border-radius:10px; padding:12px; color:inherit;">
+                    <div style="font-weight:900; font-size:13px; margin-bottom:6px; color:#ff3b30;">🛒 Short for open jobs — order before spraying</div>
+                    ${shortKeys.map(k => { const jobs = Object.keys(_A.by[k] || {}); return `<div style="font-size:11px; margin-bottom:4px;"><strong>${esc(pwStockLabel(k))}</strong>: short ${esc(pwStockAmt(k, -_A.avail[k]))} <span style="opacity:0.75;">· booked by #${jobs.slice(0, 5).map(esc).join(', #')}${jobs.length > 5 ? ' +' + (jobs.length - 5) : ''}</span></div>`; }).join('')}
+                </div>`;
+            }
+            if (_A.noFormula > 0) h += `<div style="font-size:10px; color:#888; margin-top:6px;">${_A.noFormula} part${_A.noFormula > 1 ? 's' : ''} on open jobs ${_A.noFormula > 1 ? 'have' : 'has'} a colour with no formula, so ${_A.noFormula > 1 ? 'their' : 'its'} base isn't counted.</div>`;
+            sb.innerHTML = h;
         }
     }
 
@@ -33392,6 +33671,7 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
 
     // ---- LOW STOCK ALERTS ----
     function checkStockAlerts() {
+        try { if (typeof pwStockCheckAlerts === 'function') { pwStockCheckAlerts(); return; } } catch(e) {} // v1.16.489
         const levels  = getStockLevels();
         const st      = getStockSettings();
         const alertL  = parseFloat(st.alertLevel || 15);
@@ -33435,20 +33715,8 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
         }
         try {
             const targetUid = pwSafeUid();
-            const ref = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'stockLevels');
-            const snap = await window.getDoc(ref);
-            if (snap.exists()) {
-                const data = snap.data();
-                if (data.levels && Object.keys(data.levels).length > 0) {
-                    // Merge: never let Firestore zeros overwrite good local values
-                    const _loc = JSON.parse(localStorage.getItem('pwStockLevels') || '{}');
-                    const _mrg = {};
-                    const _ks = new Set([...Object.keys(data.levels), ...Object.keys(_loc)]);
-                    _ks.forEach(k => { _mrg[k] = Math.max(parseFloat(data.levels[k]||0), parseFloat(_loc[k]||0)); });
-                    localStorage.setItem('pwStockLevels', JSON.stringify(_mrg));
-                    console.log('✅ Stock levels loaded from Firestore');
-                }
-            }
+            // v1.16.489: newest copy wins, levels and what's been used together
+            await pwStockPull();
             // Load stock settings
             const ref2 = window.doc(window.firebaseDb, 'users', targetUid, 'appData', 'stockSettings2');
             const snap2 = await window.getDoc(ref2);
@@ -33470,6 +33738,9 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
                 const local = JSON.parse(localStorage.getItem('pwStockDeducted') || '{}');
                 localStorage.setItem('pwStockDeducted', JSON.stringify({ ...local, ...remote }));
             }
+            // v1.16.489: stock is in step with the cloud — from now on it tracks the jobs
+            window._pwStockReady = true;
+            pwStockQueue(300);
         } catch(e) { console.warn('loadStockFromFirebase error:', e.message); }
     }
     // ================================================================
@@ -34144,6 +34415,9 @@ Answer concisely and practically. Focus on painting, cabinet finishing, job pric
             }, 400);
         }
         
+        // v1.16.489: keep paint stock in step with the jobs (coat ticked, completed, edited, synced)
+        if (key === 'jobHistory') { try { if (typeof pwStockQueue === 'function') pwStockQueue(); } catch(e) {} }
+
         // Whenever jobHistory is updated, sync to Firebase
         // BUT skip if this write is coming FROM the cloud snapshot (avoid upload loop)
         if (key === 'jobHistory' && window.currentUser && !window._syncingFromCloud) {
